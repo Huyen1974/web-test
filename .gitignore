@@ -236,3 +236,4 @@ deployment_logs/
 
 # Docker
 docker-compose.override.yml
+!/.cursor/**
