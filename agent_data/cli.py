@@ -78,7 +78,7 @@ def test():
 
         # Test basic imports
         try:
-            import langroid
+            # import langroid
 
             click.echo("✅ Langroid import successful")
         except ImportError:

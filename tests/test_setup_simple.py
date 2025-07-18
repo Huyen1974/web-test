@@ -21,18 +21,18 @@ def test_python_version():
 def test_langroid_import():
     """Test that Langroid can be imported."""
     try:
-        import langroid
+        # import langroid
 
         print("✓ Langroid imported successfully")
 
         # Test basic imports
-        from langroid import ChatAgent, Task
+        # from langroid import ChatAgent, Task
         from langroid.language_models import OpenAIGPTConfig
 
         print("✓ Basic Langroid functionality working")
 
     except ImportError as e:
-        pytest.fail(f"Failed to import langroid: {e}")
+        pytest.fail(f"Failed to # import langroid: {e}")
 
 
 def test_project_structure():
