@@ -8,25 +8,25 @@ main:
           - workflow_id: "dummy_agent_data_workflow"
           - start_time: ${time.format(sys.now())}
           - query: ${default(map.get(input, "query"), "test query")}
-    
+
     - log_start:
         call: sys.log
         args:
           text: ${"Starting Agent Data Workflow at " + start_time}
           severity: INFO
-    
+
     - process_query:
         assign:
           - processed_query: ${text.trim(query)}
           - response: "Dummy agent processed your query successfully"
           - confidence: 0.85
-    
+
     - log_processing:
         call: sys.log
         args:
           text: ${"Processed query: " + processed_query}
           severity: INFO
-    
+
     - return_result:
         return:
           workflow_id: ${workflow_id}
@@ -34,4 +34,4 @@ main:
           response: ${response}
           confidence: ${confidence}
           execution_time: ${time.format(sys.now())}
-          status: "completed" 
+          status: "completed"

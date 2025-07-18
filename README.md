@@ -163,4 +163,4 @@ For support and questions, please:
 
 ---
 
-Built with ❤️ using [Langroid](https://github.com/langroid/langroid) and Google Cloud Platform. 
+Built with ❤️ using [Langroid](https://github.com/langroid/langroid) and Google Cloud Platform.

@@ -2,11 +2,11 @@
 Agent Data Langroid Server - FastAPI server for agent data operations
 """
 
+import logging
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Dict, Any, Optional
-import logging
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -37,12 +37,12 @@ class HealthResponse(BaseModel):
 
 class MessageRequest(BaseModel):
     message: str
-    session_id: Optional[str] = None
+    session_id: str | None = None
 
 
 class MessageResponse(BaseModel):
     response: str
-    session_id: Optional[str] = None
+    session_id: str | None = None
 
 
 @app.get("/", response_model=HealthResponse)

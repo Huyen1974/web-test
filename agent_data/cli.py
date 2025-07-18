@@ -3,8 +3,8 @@
 Agent Data Langroid CLI - Command Line Interface for agent data operations
 """
 
+
 import click
-from typing import Optional
 
 
 @click.group()
@@ -22,6 +22,7 @@ def serve(host: str, port: int, reload: bool):
     """Start the Agent Data API server."""
     try:
         import uvicorn
+
         from agent_data.server import app
 
         click.echo(f"Starting Agent Data server on {host}:{port}")

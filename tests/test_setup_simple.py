@@ -2,9 +2,10 @@
 Simple setup tests for Agent Data Langroid project.
 """
 
-import pytest
-import sys
 import os
+import sys
+
+import pytest
 
 
 def test_python_version():

@@ -2,9 +2,10 @@
 Unit tests for agent_data package functionality.
 """
 
-import pytest
-import sys
 import os
+import sys
+
+import pytest
 
 # Add the project root to sys.path for reliable imports
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -19,6 +20,7 @@ class TestAgentDataCore:
     def test_package_import(self):
         """Test that agent_data package can be imported."""
         import importlib
+
         import agent_data
 
         # Force reload to get fresh module
@@ -30,6 +32,7 @@ class TestAgentDataCore:
     def test_get_version(self):
         """Test get_version function."""
         import importlib
+
         import agent_data
 
         importlib.reload(agent_data)
@@ -40,6 +43,7 @@ class TestAgentDataCore:
     def test_check_dependencies(self):
         """Test dependency checking."""
         import importlib
+
         import agent_data
 
         importlib.reload(agent_data)
@@ -53,6 +57,7 @@ class TestAgentDataCore:
     def test_get_info(self):
         """Test get_info function."""
         import importlib
+
         import agent_data
 
         importlib.reload(agent_data)
@@ -102,6 +107,7 @@ class TestAgentDataExtended:
     def test_langroid_availability(self):
         """Test langroid availability detection."""
         import importlib
+
         import agent_data
 
         importlib.reload(agent_data)
@@ -113,6 +119,7 @@ class TestAgentDataExtended:
     def test_check_dependencies_detailed(self):
         """Test dependency checking in detail."""
         import importlib
+
         import agent_data
 
         importlib.reload(agent_data)
@@ -135,6 +142,7 @@ class TestAgentDataExtended:
     def test_get_info_structure(self):
         """Test get_info returns proper structure."""
         import importlib
+
         import agent_data
 
         importlib.reload(agent_data)
@@ -165,7 +173,7 @@ class TestCLIExtended:
 
     def test_cli_commands_exist(self):
         """Test that CLI commands are properly defined."""
-        from agent_data.cli import main, serve, info, test
+        from agent_data.cli import info, main, serve, test
 
         # Check commands are callable
         assert callable(main)
@@ -175,7 +183,7 @@ class TestCLIExtended:
 
     def test_cli_click_decorators(self):
         """Test that commands have proper click decorators."""
-        from agent_data.cli import main, serve, info, test
+        from agent_data.cli import info, main, serve, test
 
         # Check main is a click group
         assert hasattr(main, "__click_params__")

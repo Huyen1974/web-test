@@ -5,10 +5,10 @@ resource "google_artifact_registry_repository" "agent_data_docker_repo" {
   repository_id = "agent-data-${var.environment}"
   description   = "Agent Data ${title(var.environment)} Docker Repository"
   format        = "DOCKER"
-  
+
   labels = {
     environment = var.environment
     project     = "agent-data-langroid"
     managed_by  = "terraform"
   }
-} 
+}
