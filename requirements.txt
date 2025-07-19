@@ -243,7 +243,7 @@ jsonschema-specifications==2025.4.1
     # via jsonschema
 justext==3.0.2
     # via trafilatura
-langroid==0.58.3
+langroid==0.58.0
     # via agent-data-langroid (pyproject.toml)
 log-symbols==0.0.14
     # via halo
@@ -418,7 +418,7 @@ rank-bm25==0.2.2
     # via langroid
 rapidfuzz==3.13.0
     # via thefuzz
-redis==5.3.0
+redis==3.5.3
     # via
     #   fakeredis
     #   langroid
@@ -577,3 +577,5 @@ yarl==1.20.1
 
 # The following packages are considered to be unsafe in a requirements file:
 # setuptools
+slowapi==0.1.5
+    # via agent-data-langroid (pyproject.toml)
