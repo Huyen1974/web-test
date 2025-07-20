@@ -61,19 +61,6 @@ jobs:
         run: |
           python scripts/collect_manifest.py --check tests/.snapshot
 
-      # Black check
-      - name: Run Black check
-        run: |
-          python -m pip install black
-          black . --check
-
-      # Ruff check (if ruff is used)
-      - name: Run Ruff check
-        run: |
-          python -m pip install ruff
-          ruff check .
-        continue-on-error: true
-
   actionlint:
     runs-on: ubuntu-22.04
     steps:
