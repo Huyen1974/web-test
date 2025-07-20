@@ -40,4 +40,4 @@ repos:
         entry: python scripts/collect_manifest.py --check tests/.snapshot
         language: system
         pass_filenames: false
-        stages: [commit]
+        stages: [pre-commit]
