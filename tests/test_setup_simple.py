@@ -46,7 +46,7 @@ def test_project_structure():
         "terraform",
         "functions",
         "containers",
-        "workflows",
+        ".github/workflows",
     ]
 
     missing_dirs = []
