@@ -88,7 +88,9 @@ cyclopts==3.22.2
 dateparser==1.2.2
     # via htmldate
 deprecated==1.2.18
-    # via pygithub
+    # via
+    #   limits
+    #   pygithub
 distro==1.9.0
     # via
     #   cerebras-cloud-sdk
@@ -245,6 +247,8 @@ justext==3.0.2
     # via trafilatura
 langroid==0.58.0
     # via agent-data-langroid (pyproject.toml)
+limits==5.4.0
+    # via slowapi
 log-symbols==0.0.14
     # via halo
 lxml[html-clean]==5.4.0
@@ -298,6 +302,7 @@ openapi-pydantic==0.5.1
     # via fastmcp
 packaging==25.0
     # via
+    #   limits
     #   onnxruntime
     #   pytest
     #   pytest-rerunfailures
@@ -418,8 +423,9 @@ rank-bm25==0.2.2
     # via langroid
 rapidfuzz==3.13.0
     # via thefuzz
-redis==3.5.3
+redis==5.3.0
     # via
+    #   agent-data-langroid (pyproject.toml)
     #   fakeredis
     #   langroid
 referencing==0.36.2
@@ -473,6 +479,8 @@ six==1.17.0
     #   halo
     #   markdownify
     #   python-dateutil
+slowapi==0.1.9
+    # via agent-data-langroid (pyproject.toml)
 smmap==5.0.2
     # via gitdb
 sniffio==1.3.1
@@ -530,6 +538,7 @@ typing-extensions==4.14.1
     #   fastapi
     #   google-genai
     #   groq
+    #   limits
     #   openai
     #   pydantic
     #   pydantic-core
@@ -577,5 +586,3 @@ yarl==1.20.1
 
 # The following packages are considered to be unsafe in a requirements file:
 # setuptools
-slowapi==0.1.5
-    # via agent-data-langroid (pyproject.toml)

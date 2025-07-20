@@ -1,22 +1,58 @@
 name: Lint Only
 on:
   push:
-    paths:
-      - "**.py"
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
+
+      # Install pip-tools
+      - name: Install pip-tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install 'pip-tools==7.*'
+
+      # Compile lockfile (CP0.1 check)
+      - name: Compile lockfile and check consistency
+        run: |
+          pip-compile --no-upgrade pyproject.toml
+          git diff --exit-code requirements.txt
+
+      # Import assertion script (CP0.9 check)
+      - name: Verify dependency versions
+        run: |
+          pip install -r requirements.txt
+          python -c "
+          import langroid, slowapi, redis, pkg_resources, sys
+          from packaging.version import Version as V
+          assert pkg_resources.get_distribution('langroid').version=='0.58.0'
+          assert pkg_resources.get_distribution('slowapi').version=='0.1.9'
+          assert V('5.0.1')<=V(redis.__version__)<V('6.0.0')
+          print('✓ deps OK')
+          "
+
+      # Black check
       - name: Run Black check
         run: |
-          python -m pip install --upgrade pip black
+          python -m pip install black
           black . --check
+
+      # Ruff check (if ruff is used)
+      - name: Run Ruff check
+        run: |
+          python -m pip install ruff
+          ruff check .
+        continue-on-error: true
+
   actionlint:
     runs-on: ubuntu-latest
     steps:

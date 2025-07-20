@@ -24,7 +24,9 @@ classifiers = [
 
 dependencies = [
     # Core Langroid framework with extras
-    "langroid==0.58.3",
+    "langroid==0.58.0",
+    "slowapi==0.1.9",
+    "redis>=5.0.1,<6.0.0",
 
     # Web framework and API
     "fastapi>=0.104.1",
