@@ -27,7 +27,6 @@ def test_langroid_import():
 
         # Test basic imports
         # from langroid import ChatAgent, Task
-        from langroid.language_models import OpenAIGPTConfig
 
         print("✓ Basic Langroid functionality working")
 

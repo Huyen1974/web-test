@@ -23,8 +23,6 @@ def serve(host: str, port: int, reload: bool):
     try:
         import uvicorn
 
-        from agent_data.server import app
-
         click.echo(f"Starting Agent Data server on {host}:{port}")
         uvicorn.run(
             "agent_data.server:app",

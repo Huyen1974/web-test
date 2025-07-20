@@ -60,7 +60,7 @@ async def root():
         )
     except Exception as e:
         logger.error(f"Health check failed: {e}")
-        raise HTTPException(status_code=500, detail="Service unhealthy")
+        raise HTTPException(status_code=500, detail="Service unhealthy") from e
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -81,7 +81,7 @@ async def chat(request: MessageRequest):
         return MessageResponse(response=response, session_id=request.session_id)
     except Exception as e:
         logger.error(f"Chat endpoint failed: {e}")
-        raise HTTPException(status_code=500, detail="Chat processing failed")
+        raise HTTPException(status_code=500, detail="Chat processing failed") from e
 
 
 @app.get("/info")
@@ -93,7 +93,7 @@ async def info():
         return get_info()
     except Exception as e:
         logger.error(f"Info endpoint failed: {e}")
-        raise HTTPException(status_code=500, detail="Unable to get system info")
+        raise HTTPException(status_code=500, detail="Unable to get system info") from e
 
 
 if __name__ == "__main__":
