@@ -8,6 +8,7 @@ import sys
 import pytest
 
 
+@pytest.mark.unit
 def test_python_version():
     """Test that Python version is compatible."""
     version_info = sys.version_info
@@ -18,6 +19,7 @@ def test_python_version():
     ), f"Python <3.13 required for Langroid, got {version_info}"
 
 
+@pytest.mark.unit
 def test_langroid_import():
     """Test that Langroid can be imported."""
     try:
@@ -34,6 +36,7 @@ def test_langroid_import():
         pytest.fail(f"Failed to # import langroid: {e}")
 
 
+@pytest.mark.unit
 def test_project_structure():
     """Test that basic project structure exists."""
     expected_dirs = [
@@ -55,6 +58,7 @@ def test_project_structure():
         pytest.fail(f"Missing project directories: {missing_dirs}")
 
 
+@pytest.mark.unit
 def test_configuration_files():
     """Test that required configuration files exist."""
     required_files = [

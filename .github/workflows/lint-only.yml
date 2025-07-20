@@ -56,6 +56,11 @@ jobs:
       - name: unit tests
         run: pytest
 
+      # Manifest drift check (CP0.4)
+      - name: manifest drift check (CP0.4)
+        run: |
+          python scripts/collect_manifest.py --check tests/.snapshot
+
       # Black check
       - name: Run Black check
         run: |
