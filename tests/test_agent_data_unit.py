@@ -186,12 +186,12 @@ class TestCLIExtended:
         from agent_data.cli import info, main, serve, test
 
         # Check main is a click group
-        assert hasattr(main, "__click_params__")
+        assert hasattr(main, "params")
 
         # Check commands are click commands
-        assert hasattr(serve, "__click_params__")
-        assert hasattr(info, "__click_params__")
-        assert hasattr(test, "__click_params__")
+        assert hasattr(serve, "params")
+        assert hasattr(info, "params")
+        assert hasattr(test, "params")
 
 
 @pytest.mark.unit
