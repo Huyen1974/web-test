@@ -41,3 +41,9 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-commit]
+      - id: trufflehog-scan
+        name: Trufflehog scan
+        entry: trufflehog filesystem . --fail --exclude-paths=.trufflehog-exclude --results=verified
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]

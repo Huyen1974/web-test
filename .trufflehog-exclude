@@ -1,0 +1,10 @@
+tests/.*
+terraform/.*
+containers/.*
+functions/.*
+venv/.*
+htmlcov/.*
+\.git/.*
+__pycache__/.*
+.*\.egg-info/.*
+\.mypy_cache/.*

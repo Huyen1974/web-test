@@ -1,5 +1,7 @@
 # Agent Data Langroid
 
+[![CI](https://github.com/Huyen1974/agent-data-test/actions/workflows/lint-only.yml/badge.svg)](https://github.com/Huyen1974/agent-data-test/actions/workflows/lint-only.yml)
+
 A modern knowledge management system built with Langroid for Google Cloud Platform.
 
 ## Project Overview
