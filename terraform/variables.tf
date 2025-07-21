@@ -17,3 +17,19 @@ variable "environment" {
     error_message = "Environment must be either 'test' or 'production'."
   }
 }
+
+variable "qdrant_cluster_id" {
+  description = "Qdrant cluster ID"
+  type        = string
+}
+
+variable "qdrant_region" {
+  description = "Qdrant region"
+  type        = string
+}
+
+variable "qdrant_api_key" {
+  description = "Qdrant API key"
+  type        = string
+  sensitive   = true
+}

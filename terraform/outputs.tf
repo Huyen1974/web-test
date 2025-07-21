@@ -29,3 +29,13 @@ output "artifact_registry_repository" {
     id       = google_artifact_registry_repository.agent_data_docker_repo.repository_id
   }
 }
+
+output "qdrant_endpoint" {
+  description = "Qdrant cluster endpoint"
+  value       = "https://${var.qdrant_cluster_id}.qdrant.tech"
+}
+
+output "qdrant_secret_name" {
+  description = "Qdrant API key secret name"
+  value       = google_secret_manager_secret.qdrant_api.secret_id
+}
