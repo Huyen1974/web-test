@@ -40,7 +40,7 @@ repos:
         entry: python scripts/collect_manifest.py --check tests/.snapshot
         language: system
         pass_filenames: false
-        stages: [pre-commit]
+        stages: [pre-commit, commit-msg]
       - id: trufflehog-scan
         name: Trufflehog scan
         entry: bash -c 'curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /tmp && /tmp/trufflehog filesystem . --fail --exclude-paths=.trufflehog-exclude --results=verified'
