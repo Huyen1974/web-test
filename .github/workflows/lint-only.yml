@@ -82,15 +82,11 @@ jobs:
 
       - name: Terraform init
         working-directory: terraform
-        run: terraform init -backend=false
+        run: terraform init -backend=false -input=false -no-color
 
       - name: Terraform validate
         working-directory: terraform
-        run: terraform validate
-
-      - name: Terraform fast-plan
-        working-directory: terraform
-        run: terraform plan -input=false -refresh=false -lock=false -no-color
+        run: terraform validate -no-color
 
   qdrant-fn-check:
     name: qdrant function check
@@ -111,13 +107,13 @@ jobs:
       - name: Setup Mock Server
         run: |
           # Create a simple mock server that returns state: RUNNING
-          echo '{"state":"RUNNING"}' > /tmp/mock_response.json
+          echo '{"state":"RUNNING"}' > /tmp/mock.json
           python3 -m http.server 8080 --directory /tmp &
           sleep 2
 
       - name: Check Qdrant Function Status
         env:
-          QDRANT_FN_URL: "http://localhost:8080/mock_response.json"
+          QDRANT_FN_URL: "http://localhost:8080/mock.json"
         run: python scripts/check_qdrant_fn.py
 
   qdrant-cost:

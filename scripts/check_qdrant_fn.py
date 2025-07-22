@@ -53,13 +53,16 @@ def check_qdrant_function_status(function_url: str) -> bool:
 
         print(f"Cluster Status: {cluster_status}")
 
+        # Check if state is not RUNNING or dummy and exit with error message
+        if data.get("state") not in ("RUNNING", "dummy"):
+            sys.exit("Fn unhealthy")
+
         # Assert RUNNING or dummy status
         if cluster_status in ("RUNNING", "dummy"):
             print("✅ CP0.8 PASS: Qdrant cluster status is RUNNING/dummy")
             return True
         else:
             print(f"❌ CP0.8 FAIL: Expected RUNNING/dummy, got {cluster_status}")
-            print("Fn unhealthy")
             return False
 
     except requests.exceptions.RequestException as e:

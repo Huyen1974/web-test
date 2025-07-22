@@ -2,7 +2,7 @@ resource "google_secret_manager_secret" "qdrant_api" {
   secret_id = "Qdrant_agent_data_N1D8R2vC0_5"
 
   replication {
-    auto {}
+    automatic = true
   }
 
   project = var.project_id
