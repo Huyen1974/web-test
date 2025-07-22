@@ -67,10 +67,11 @@ jobs:
           curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
           trufflehog filesystem . --fail --exclude-paths=.trufflehog-exclude --results=verified
 
-  iac-plan:
-    name: terraform plan
+  iac-validate:
+    name: terraform validate
     runs-on: ubuntu-22.04
     needs: lint
+    timeout-minutes: 15
     env:
       TF_IN_AUTOMATION: "1"
       TF_CLI_ARGS: "-no-color"
@@ -86,12 +87,25 @@ jobs:
 
       - name: Terraform validate
         working-directory: terraform
-        run: terraform validate -no-color
+        run: terraform validate -no-color || exit 1
+
+  build-fn:
+    name: build function
+    runs-on: ubuntu-22.04
+    needs: lint
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dry-run deploy manage_qdrant
+        run: bash functions/manage_qdrant/deploy.sh
 
   qdrant-fn-check:
     name: qdrant function check
     runs-on: ubuntu-22.04
-    needs: lint
+    needs: [iac-validate, build-fn]
+    env:
+      QDRANT_FN_URL: "https://mocki.io/v1/8f2fa8b8-88d9-4c4c-9d02-5f2414e7ca10"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

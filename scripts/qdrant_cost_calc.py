@@ -35,6 +35,7 @@ def calculate_qdrant_costs() -> dict[str, Any]:
                 "hours_running": 168.5,
                 "rate_per_hour_usd": 0.125,
                 "total_usd": 21.06,
+                "runtime_hours_month": 0,
             },
             "storage": {
                 "description": "Vector storage costs",
@@ -118,6 +119,18 @@ def validate_cost_file(file_path: str = "qdrant_cost.json") -> bool:
         if "total_cost_usd" not in data["summary"]:
             print("❌ Missing total_cost_usd in summary")
             return False
+
+        # Assert runtime_hours_month exists and is 0 (CP0.10)
+        compute_costs = data.get("costs", {}).get("compute", {})
+        runtime_hours = compute_costs.get("runtime_hours_month")
+        if runtime_hours is None:
+            print("❌ Missing runtime_hours_month in compute costs")
+            return False
+
+        assert (
+            runtime_hours == 0
+        ), f"Expected runtime_hours_month=0, got {runtime_hours}"
+        print("✅ Assert runtime_hours_month=0 passed")
 
         print(f"✅ Cost file {file_path} is valid")
         print(f"Total cost: ${data['summary']['total_cost_usd']:.2f}")

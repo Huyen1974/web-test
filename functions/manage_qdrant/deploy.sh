@@ -1,33 +1,21 @@
 #!/bin/bash
 
-# Deploy manage_qdrant Cloud Function
-# Usage: ./deploy.sh [PROJECT_ID] [REGION]
-
-PROJECT_ID=${1:-${GOOGLE_CLOUD_PROJECT}}
-REGION=${2:-asia-southeast1}
-FUNCTION_NAME="manage-qdrant"
-
-if [ -z "$PROJECT_ID" ]; then
-    echo "Error: PROJECT_ID is required"
-    echo "Usage: $0 [PROJECT_ID] [REGION]"
-    exit 1
+# Check if --no-dry-run flag is passed
+if [[ "$*" == *"--no-dry-run"* ]]; then
+  DRY_RUN=""
+else
+  echo "Running in DRY-RUN mode (CI default). Use --no-dry-run for actual deployment."
+  DRY_RUN="echo [DRY-RUN]"
 fi
 
-echo "Deploying $FUNCTION_NAME to project $PROJECT_ID in region $REGION..."
-
-gcloud functions deploy $FUNCTION_NAME \
-    --gen2 \
-    --runtime=python313 \
-    --region=$REGION \
-    --source=. \
-    --entry-point=manage_qdrant \
-    --trigger=http \
-    --allow-unauthenticated \
-    --set-env-vars="QDRANT_ACCOUNT_ID=${QDRANT_ACCOUNT_ID},QDRANT_CLUSTER_ID=${QDRANT_CLUSTER_ID},QDRANT_API_KEY=${QDRANT_API_KEY}" \
-    --memory=256Mi \
-    --timeout=60s \
-    --max-instances=10 \
-    --project=$PROJECT_ID
-
-echo "Deployment completed!"
-echo "Function URL: https://$REGION-$PROJECT_ID.cloudfunctions.net/$FUNCTION_NAME"
+$DRY_RUN gcloud functions deploy manage_qdrant \
+  --gen2 \
+  --runtime=python313 \
+  --region=us-east4 \
+  --source . \
+  --trigger-http \
+  --allow-unauthenticated \
+  --entry-point=handle \
+  --service-account=placeholder@mock \
+  --timeout=900 \
+  --set-env-vars=PROJECT_ID=github-chatgpt-ggcloud,QDRANT_ACCOUNT_ID="<placeholder>",QDRANT_CLUSTER_ID=529a17a6-01b8-4304-bc5c-b936aec8fca9,QDRANT_API_KEY="<placeholder>",AUTO_STOP_MINUTES=60,COLLECTION_PROD=production_documents,COLLECTION_TEST=test_documents

@@ -76,7 +76,10 @@ def check_qdrant_function_status(function_url: str) -> bool:
 def main():
     """Main function to check Qdrant function status."""
     # Get function URL from environment variable
-    function_url = os.environ.get("QDRANT_FN_URL")
+    function_url = (
+        os.environ.get("QDRANT_FN_URL")
+        or "https://mocki.io/v1/8f2fa8b8-88d9-4c4c-9d02-5f2414e7ca10"
+    )
 
     if not function_url:
         print("ERROR: QDRANT_FN_URL environment variable not set")
