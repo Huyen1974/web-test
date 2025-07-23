@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import subprocess
 import time
 
 import requests
@@ -10,97 +9,87 @@ import requests
 logging.basicConfig(format="%(message)s")
 logger = logging.getLogger(__name__)
 
-API_BASE = "https://api.cloud.qdrant.io/api/v1"
+API_BASE = "https://cloud.qdrant.io/api/v1"
+
+
+def _api(path: str) -> str:
+    """Build API URL for Qdrant Cloud Management API."""
+    account_id = os.getenv("QDRANT_ACCOUNT_ID")
+    return f"{API_BASE}/accounts/{account_id}/{path.lstrip('/')}"
+
+
+def get_access_token():
+    """Get access token from Google metadata server."""
+    try:
+        metadata_url = "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token"
+        headers = {"Metadata-Flavor": "Google"}
+        response = requests.get(metadata_url, headers=headers, timeout=10)
+        response.raise_for_status()
+        return response.json()["access_token"]
+    except Exception as e:
+        logger.error(json.dumps({"action": "token_error", "error": str(e)}))
+        return None
+
+
+def update_secret_manager(secret_name: str, secret_value: str) -> bool:
+    """Update Secret Manager secret using REST API."""
+    try:
+        project_id = os.getenv("PROJECT_ID")
+        access_token = get_access_token()
+        if not access_token:
+            return False
+
+        # Secret Manager REST API URL
+        url = f"https://secretmanager.googleapis.com/v1/projects/{project_id}/secrets/{secret_name}:addVersion"
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        }
+
+        data = {"payload": {"data": secret_value.encode("utf-8").hex()}}
+
+        response = requests.post(url, headers=headers, json=data, timeout=30)
+
+        if response.status_code == 200:
+            logger.info(
+                json.dumps(
+                    {
+                        "action": "secret_updated",
+                        "secret_name": secret_name,
+                        "version": response.json().get("name", "unknown"),
+                    }
+                )
+            )
+            return True
+        else:
+            logger.error(
+                json.dumps(
+                    {
+                        "action": "secret_update_error",
+                        "secret_name": secret_name,
+                        "status_code": response.status_code,
+                        "error": response.text,
+                    }
+                )
+            )
+            return False
+
+    except Exception as e:
+        logger.error(
+            json.dumps(
+                {
+                    "action": "secret_update_exception",
+                    "secret_name": secret_name,
+                    "error": str(e),
+                }
+            )
+        )
+        return False
 
 
 def handle(request):
     """Cloud Function entry point for managing Qdrant cluster."""
-
-    def get_secret(name):
-        """Get secret value from Secret Manager."""
-        try:
-            # Use gcloud to get secret value
-            result = subprocess.run(
-                [
-                    "gcloud",
-                    "secrets",
-                    "versions",
-                    "access",
-                    "latest",
-                    "--secret",
-                    name,
-                    "--project",
-                    env["PROJECT_ID"],
-                    "--quiet",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            if result.returncode == 0:
-                return result.stdout.strip()
-            else:
-                logger.error(
-                    json.dumps(
-                        {
-                            "error": "Failed to get secret",
-                            "secret": name,
-                            "stderr": result.stderr,
-                        }
-                    )
-                )
-                return "0"  # Default fallback
-        except Exception as e:
-            logger.error(
-                json.dumps({"error": "Secret access failed", "exception": str(e)})
-            )
-            return "0"  # Default fallback
-
-    def update_secret(name, value):
-        """Update secret value in Secret Manager."""
-        try:
-            # Use gcloud to add new secret version
-            result = subprocess.run(
-                [
-                    "gcloud",
-                    "secrets",
-                    "versions",
-                    "add",
-                    name,
-                    "--data-file",
-                    "-",
-                    "--project",
-                    env["PROJECT_ID"],
-                    "--quiet",
-                ],
-                input=str(value),
-                text=True,
-                capture_output=True,
-                timeout=30,
-            )
-            if result.returncode == 0:
-                logger.info(
-                    json.dumps(
-                        {"action": "secret_updated", "secret": name, "value": value}
-                    )
-                )
-                return True
-            else:
-                logger.error(
-                    json.dumps(
-                        {
-                            "error": "Failed to update secret",
-                            "secret": name,
-                            "stderr": result.stderr,
-                        }
-                    )
-                )
-                return False
-        except Exception as e:
-            logger.error(
-                json.dumps({"error": "Secret update failed", "exception": str(e)})
-            )
-            return False
 
     # Environment configuration
     env = {
@@ -108,351 +97,252 @@ def handle(request):
         "QDRANT_ACCOUNT_ID": os.getenv("QDRANT_ACCOUNT_ID"),
         "QDRANT_CLUSTER_ID": os.getenv("QDRANT_CLUSTER_ID"),
         "AUTO_STOP_MINUTES": int(os.getenv("AUTO_STOP_MINUTES", "60")),
+        "QDRANT_MGMT_KEY": os.getenv("QDRANT_MGMT_KEY", ""),
     }
 
-    # Handle QDRANT_API_KEY - it might be a secret reference or actual key
-    api_key_env = os.getenv("QDRANT_API_KEY", "").strip()
-    if api_key_env.startswith("projects/") and "/secrets/" in api_key_env:
-        # This is a secret reference, extract the secret name
-        secret_name = api_key_env.split("/secrets/")[1].split(":")[0]
-        env["QDRANT_API_KEY"] = get_secret(secret_name)
-    else:
-        env["QDRANT_API_KEY"] = api_key_env
+    # Validate required environment variables
+    missing_vars = [key for key, value in env.items() if value == ""]
+    if missing_vars:
+        error_msg = f"Missing required environment variables: {missing_vars}"
+        logger.error(json.dumps({"action": "error", "message": error_msg}))
+        return error_msg, 500
 
-    # Get LAST_HIT from secret
-    last_hit_value = get_secret("qdrant_idle_marker")
-    env["LAST_HIT"] = int(last_hit_value or "0")
+    # Common headers for Qdrant Cloud Management API
+    headers = {
+        "api-key": env["QDRANT_MGMT_KEY"],
+        "Content-Type": "application/json",
+    }
 
-    # Log environment for debugging (without showing full API key)
-    logger.info(
-        json.dumps(
-            {
-                "env_check": {
-                    "PROJECT_ID": env["PROJECT_ID"],
-                    "QDRANT_ACCOUNT_ID": env["QDRANT_ACCOUNT_ID"],
-                    "QDRANT_CLUSTER_ID": env["QDRANT_CLUSTER_ID"],
-                    "api_key_length": (
-                        len(env["QDRANT_API_KEY"]) if env["QDRANT_API_KEY"] else 0
-                    ),
-                    "api_key_prefix": (
-                        env["QDRANT_API_KEY"][:10] if env["QDRANT_API_KEY"] else "none"
-                    ),
-                }
-            }
-        )
-    )
-
-    def call_qdrant(method, path, **kwargs):
-        """Make authenticated request to Qdrant API with proper headers."""
-        headers = {"Authorization": f"apikey {env['QDRANT_API_KEY']}"}
-        headers.update(kwargs.get("headers", {}))
-        kwargs["headers"] = headers
-
-        url = f"{API_BASE}{path}"
-        start_time = time.time()
-
-        try:
-            response = requests.request(method, url, timeout=60, **kwargs)
-            elapsed_ms = (time.time() - start_time) * 1000
-
-            logger.info(
-                json.dumps(
-                    {
-                        "method": method,
-                        "path": path,
-                        "status_code": response.status_code,
-                        "elapsed_ms": round(elapsed_ms, 2),
-                    }
-                )
-            )
-
-            response.raise_for_status()
-            return response
-        except requests.exceptions.RequestException as e:
-            elapsed_ms = (time.time() - start_time) * 1000
-            logger.error(
-                json.dumps(
-                    {
-                        "method": method,
-                        "path": path,
-                        "error": str(e),
-                        "elapsed_ms": round(elapsed_ms, 2),
-                    }
-                )
-            )
-            raise
-
-    def get_health():
-        """Get cluster health status."""
-        response = call_qdrant(
-            "GET",
-            f"/accounts/{env['QDRANT_ACCOUNT_ID']}/clusters/{env['QDRANT_CLUSTER_ID']}",
-        )
-        return response.json()
-
-    def create_snapshot():
-        """Create a backup snapshot."""
-        payload = {"backup": {"name": f"autostop-{int(time.time())}"}}
-        response = call_qdrant(
-            "POST",
-            f"/accounts/{env['QDRANT_ACCOUNT_ID']}/clusters/{env['QDRANT_CLUSTER_ID']}/backups",
-            json=payload,
-        )
-        return response.json()
-
-    def wait_backup(task_id):
-        """Wait for backup task to complete."""
-        start_time = time.time()
-        while time.time() - start_time < 600:  # 10 minute timeout
+    def call_qdrant(method, path, data=None, retries=3):
+        """Make API call to Qdrant Cloud Management API with retry logic."""
+        url = f"{API_BASE}/{path}"
+        for attempt in range(retries):
             try:
-                response = call_qdrant("GET", f"/tasks/{task_id}")
-                task_data = response.json()
-                status = task_data.get("status", "")
-
-                logger.info(
-                    json.dumps(
-                        {"action": "wait_backup", "task_id": task_id, "status": status}
-                    )
-                )
-
-                if status == "SUCCEEDED":
-                    return True
-                elif status == "FAILED":
-                    raise Exception(f"Backup task failed: {task_data}")
-
-                time.sleep(30)  # Poll every 30 seconds
-            except Exception as e:
-                logger.error(
-                    json.dumps(
-                        {"action": "wait_backup", "task_id": task_id, "error": str(e)}
-                    )
-                )
-                time.sleep(30)
-
-        raise TimeoutError(f"Backup task {task_id} timeout after 600s")
-
-    def suspend_cluster():
-        """Suspend the cluster."""
-        response = call_qdrant(
-            "POST",
-            f"/accounts/{env['QDRANT_ACCOUNT_ID']}/clusters/{env['QDRANT_CLUSTER_ID']}:suspend",
-        )
-        return response.json()
-
-    def resume_cluster():
-        """Resume the cluster."""
-        response = call_qdrant(
-            "POST",
-            f"/accounts/{env['QDRANT_ACCOUNT_ID']}/clusters/{env['QDRANT_CLUSTER_ID']}:resume",
-        )
-        return response.json()
-
-    def wait_for_healthy():
-        """Wait for cluster to reach HEALTHY status."""
-        start_time = time.time()
-        while time.time() - start_time < 600:  # 10 minute timeout
-            try:
-                cluster_data = get_health()
-                phase = (
-                    cluster_data.get("cluster", {}).get("state", {}).get("phase", "")
-                )
-
                 logger.info(
                     json.dumps(
                         {
-                            "action": "wait_for_healthy",
-                            "phase": phase,
-                            "account": env["QDRANT_ACCOUNT_ID"],
-                            "cluster": env["QDRANT_CLUSTER_ID"],
+                            "action": "api_call",
+                            "method": method,
+                            "url": url,
+                            "headers": {"api-key": f"{env['QDRANT_MGMT_KEY'][:8]}..."},
+                        }
+                    )
+                )
+                response = requests.request(
+                    method=method,
+                    url=url,
+                    headers=headers,
+                    json=data,
+                    timeout=30,
+                )
+
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    logger.error(
+                        json.dumps(
+                            {
+                                "action": "api_error",
+                                "url": url,
+                                "status_code": response.status_code,
+                                "error": response.text,
+                            }
+                        )
+                    )
+                    if response.status_code in [401, 403]:
+                        # Authentication errors shouldn't be retried
+                        break
+
+            except requests.exceptions.RequestException as e:
+                logger.error(
+                    json.dumps(
+                        {
+                            "action": "request_error",
+                            "url": url,
+                            "error": str(e),
                         }
                     )
                 )
 
-                if phase == "HEALTHY":
-                    return True
+            if attempt < retries - 1:
+                time.sleep(2**attempt)  # Exponential backoff
 
-                time.sleep(30)  # Poll every 30 seconds
-            except Exception as e:
+        return None
+
+    def get_cluster_status():
+        """Get current cluster status using list-clusters API."""
+        clusters_result = call_qdrant(
+            "GET", f"accounts/{env['QDRANT_ACCOUNT_ID']}/clusters"
+        )
+        if not clusters_result:
+            return None
+
+        # Find our specific cluster
+        clusters = clusters_result.get("clusters", [])
+        for cluster in clusters:
+            if cluster.get("id") == env["QDRANT_CLUSTER_ID"]:
+                return cluster
+
+        logger.error(
+            json.dumps(
+                {
+                    "action": "cluster_not_found",
+                    "cluster_id": env["QDRANT_CLUSTER_ID"],
+                    "available_clusters": [c.get("id") for c in clusters],
+                }
+            )
+        )
+        return None
+
+    def create_snapshot():
+        """Create a cluster snapshot."""
+        return call_qdrant(
+            "POST",
+            f"accounts/{env['QDRANT_ACCOUNT_ID']}/clusters/{env['QDRANT_CLUSTER_ID']}/backups",
+        )
+
+    def wait_for_task(task_id, max_attempts=20):
+        """Wait for a task to complete."""
+        for _attempt in range(max_attempts):
+            task_result = call_qdrant("GET", f"tasks/{task_id}")
+            if task_result and task_result.get("status") == "SUCCEEDED":
+                return task_result
+            elif task_result and task_result.get("status") == "FAILED":
                 logger.error(
-                    json.dumps({"action": "wait_for_healthy", "error": str(e)})
+                    json.dumps(
+                        {
+                            "action": "task_failed",
+                            "task_id": task_id,
+                            "result": task_result,
+                        }
+                    )
                 )
-                time.sleep(30)
+                return None
+            time.sleep(30)  # Wait 30 seconds before next check
+        return None
 
-        raise TimeoutError("Cluster did not reach HEALTHY state within 600s")
+    def suspend_cluster():
+        """Suspend the cluster."""
+        return call_qdrant(
+            "POST",
+            f"accounts/{env['QDRANT_ACCOUNT_ID']}/clusters/{env['QDRANT_CLUSTER_ID']}:suspend",
+        )
 
-    def update_last_hit(value):
-        """Update LAST_HIT value in secret manager."""
-        return update_secret("qdrant_idle_marker", value)
+    def resume_cluster():
+        """Resume the cluster."""
+        return call_qdrant(
+            "POST",
+            f"accounts/{env['QDRANT_ACCOUNT_ID']}/clusters/{env['QDRANT_CLUSTER_ID']}:resume",
+        )
 
-    try:
-        # Get action from query params or request body
-        action = request.args.get("action") or (
-            request.get_json(silent=True) or {}
-        ).get("action")
+    def set_last_hit():
+        """Update the last hit timestamp in Secret Manager."""
+        current_time = str(int(time.time()))
+        success = update_secret_manager("qdrant_idle_marker", current_time)
 
         logger.info(
             json.dumps(
                 {
-                    "action": action or "ping",
-                    "account": env["QDRANT_ACCOUNT_ID"],
-                    "cluster": env["QDRANT_CLUSTER_ID"],
+                    "action": "touch",
+                    "last_hit": current_time,
+                    "secret_updated": success,
                 }
             )
         )
+        return current_time
 
-        if action == "start":
-            # Resume cluster and wait for healthy state
-            logger.info(json.dumps({"phase": "resuming_cluster"}))
-            resume_cluster()
-            wait_for_healthy()
+    # Get action from query parameters
+    action = request.args.get("action", "status")
 
-            logger.info(
-                json.dumps(
-                    {
-                        "action": "start",
-                        "phase": "HEALTHY",
-                        "account": env["QDRANT_ACCOUNT_ID"],
-                        "cluster": env["QDRANT_CLUSTER_ID"],
-                    }
-                )
-            )
-            return "Cluster resumed and healthy", 200
-
-        elif action == "stop":
-            # Create backup then suspend cluster
-            logger.info(json.dumps({"phase": "creating_snapshot"}))
-            snap_response = create_snapshot()
-            task_id = snap_response.get("task_id")
-
-            if task_id:
-                wait_backup(task_id)
-
-            logger.info(json.dumps({"phase": "suspending_cluster"}))
-            suspend_cluster()
-
-            logger.info(
-                json.dumps(
-                    {
-                        "action": "stop",
-                        "phase": "suspended_after_snapshot",
-                        "account": env["QDRANT_ACCOUNT_ID"],
-                        "cluster": env["QDRANT_CLUSTER_ID"],
-                    }
-                )
-            )
-            return "Cluster suspended after snapshot", 200
-
-        elif action == "touch":
-            # Reset idle timer
-            new_last_hit = int(time.time())
-            if update_last_hit(new_last_hit):
-                logger.info(
-                    json.dumps(
-                        {
-                            "action": "touch",
-                            "last_hit": new_last_hit,
-                            "account": env["QDRANT_ACCOUNT_ID"],
-                            "cluster": env["QDRANT_CLUSTER_ID"],
-                        }
-                    )
-                )
-                return "Idle timer reset", 200
-            else:
-                return "Failed to update idle timer", 500
-
-        elif action == "status":
-            # Get cluster status
-            cluster_data = get_health()
-            state = (
-                cluster_data.get("cluster", {}).get("state", {}).get("phase", "UNKNOWN")
-            )
-            endpoint = cluster_data.get("cluster", {}).get("endpoint", "")
-
+    if action == "status":
+        # Get cluster status using list-clusters
+        cluster = get_cluster_status()
+        if cluster:
             logger.info(
                 json.dumps(
                     {
                         "action": "status",
-                        "phase": state,
-                        "endpoint": endpoint,
-                        "account": env["QDRANT_ACCOUNT_ID"],
-                        "cluster": env["QDRANT_CLUSTER_ID"],
+                        "cluster_status": cluster.get("phase", "unknown"),
+                        "cluster_id": env["QDRANT_CLUSTER_ID"],
+                        "endpoint": cluster.get("endpoint", ""),
+                    }
+                )
+            )
+            return {"status": "ok", "cluster": cluster}
+        else:
+            return {"status": "error", "message": "Failed to get cluster status"}, 500
+
+    elif action == "touch":
+        # Update last hit timestamp
+        last_hit = set_last_hit()
+        return {"status": "ok", "action": "touch", "last_hit": last_hit}
+
+    elif action == "snapshot":
+        # Create a snapshot
+        snapshot_result = create_snapshot()
+        if snapshot_result and snapshot_result.get("task_id"):
+            task_id = snapshot_result["task_id"]
+            logger.info(
+                json.dumps(
+                    {
+                        "action": "snapshot_started",
+                        "task_id": task_id,
                     }
                 )
             )
 
-            return json.dumps({"state": state, "endpoint": endpoint}), 200
-
-        elif action is None:
-            # Scheduler ping - check if auto-stop needed
-            current_time = int(time.time())
-            idle_duration = current_time - env["LAST_HIT"]
-
-            if idle_duration > env["AUTO_STOP_MINUTES"] * 60:
+            # Wait for task completion
+            task_result = wait_for_task(task_id)
+            if task_result:
                 logger.info(
                     json.dumps(
                         {
-                            "phase": "auto_stop_triggered",
-                            "idle_duration": idle_duration,
-                            "auto_stop_minutes": env["AUTO_STOP_MINUTES"],
+                            "action": "snapshot_completed",
+                            "task_id": task_id,
+                            "result": task_result,
                         }
                     )
                 )
-
-                # Create backup then suspend
-                snap_response = create_snapshot()
-                task_id = snap_response.get("task_id")
-
-                if task_id:
-                    wait_backup(task_id)
-
-                suspend_cluster()
-
-                logger.info(
-                    json.dumps(
-                        {
-                            "action": "auto_stop",
-                            "phase": "suspended_after_snapshot",
-                            "account": env["QDRANT_ACCOUNT_ID"],
-                            "cluster": env["QDRANT_CLUSTER_ID"],
-                        }
-                    )
-                )
-                return "Auto suspended after idle", 200
+                return {"status": "ok", "action": "snapshot", "task": task_result}
             else:
-                logger.info(
-                    json.dumps(
-                        {
-                            "action": "ping",
-                            "status": "active",
-                            "idle_duration": idle_duration,
-                            "auto_stop_minutes": env["AUTO_STOP_MINUTES"],
-                        }
-                    )
-                )
-                return "still active", 200
-
+                return {
+                    "status": "error",
+                    "message": "Snapshot task failed or timed out",
+                }, 500
         else:
-            return "invalid action", 400
+            return {"status": "error", "message": "Failed to create snapshot"}, 500
 
-    except TimeoutError as e:
-        logger.error(
-            json.dumps(
-                {
-                    "error": str(e),
-                    "account": env["QDRANT_ACCOUNT_ID"],
-                    "cluster": env["QDRANT_CLUSTER_ID"],
-                }
+    elif action == "suspend":
+        # Suspend the cluster
+        suspend_result = suspend_cluster()
+        if suspend_result:
+            logger.info(
+                json.dumps(
+                    {
+                        "action": "suspend_completed",
+                        "result": suspend_result,
+                    }
+                )
             )
-        )
-        return f"Timeout: {str(e)}", 504
-    except Exception as e:
-        logger.error(
-            json.dumps(
-                {
-                    "error": str(e),
-                    "account": env["QDRANT_ACCOUNT_ID"],
-                    "cluster": env["QDRANT_CLUSTER_ID"],
-                }
+            return {"status": "ok", "action": "suspend", "result": suspend_result}
+        else:
+            return {"status": "error", "message": "Failed to suspend cluster"}, 500
+
+    elif action == "resume":
+        # Resume the cluster
+        resume_result = resume_cluster()
+        if resume_result:
+            logger.info(
+                json.dumps(
+                    {
+                        "action": "resume_completed",
+                        "result": resume_result,
+                    }
+                )
             )
-        )
-        return f"Error: {str(e)}", 500
+            return {"status": "ok", "action": "resume", "result": resume_result}
+        else:
+            return {"status": "error", "message": "Failed to resume cluster"}, 500
+
+    else:
+        return {"status": "error", "message": f"Unknown action: {action}"}, 400
