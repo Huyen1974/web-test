@@ -1,2 +1,1 @@
 requests>=2.31
-google-cloud-secretmanager>=2.0
