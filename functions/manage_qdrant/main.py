@@ -9,13 +9,14 @@ import requests
 logging.basicConfig(format="%(message)s")
 logger = logging.getLogger(__name__)
 
-API_BASE = "https://cloud.qdrant.io/api/v1"
+# Dynamic API configuration with fallback defaults
+API_BASE = os.getenv("QDRANT_API_BASE", "https://cloud.qdrant.io/api/v1")
+ACCOUNT_ID = os.getenv("QDRANT_ACCOUNT_ID")
 
 
 def _api(path: str) -> str:
     """Build API URL for Qdrant Cloud Management API."""
-    account_id = os.getenv("QDRANT_ACCOUNT_ID")
-    return f"{API_BASE}/accounts/{account_id}/{path.lstrip('/')}"
+    return f"{API_BASE}/accounts/{ACCOUNT_ID}/{path.lstrip('/')}"
 
 
 def get_access_token():
@@ -52,12 +53,15 @@ def update_secret_manager(secret_name: str, secret_value: str) -> bool:
         response = requests.post(url, headers=headers, json=data, timeout=30)
 
         if response.status_code == 200:
+            version_info = response.json()
+            version_id = version_info.get("name", "unknown").split("/")[-1]
             logger.info(
                 json.dumps(
                     {
                         "action": "secret_updated",
                         "secret_name": secret_name,
-                        "version": response.json().get("name", "unknown"),
+                        "version_id": version_id,
+                        "version": version_info.get("name", "unknown"),
                     }
                 )
             )
@@ -98,24 +102,42 @@ def handle(request):
         "QDRANT_CLUSTER_ID": os.getenv("QDRANT_CLUSTER_ID"),
         "AUTO_STOP_MINUTES": int(os.getenv("AUTO_STOP_MINUTES", "60")),
         "QDRANT_MGMT_KEY": os.getenv("QDRANT_MGMT_KEY", ""),
+        "QDRANT_API_BASE": os.getenv(
+            "QDRANT_API_BASE", "https://cloud.qdrant.io/api/v1"
+        ),
+        "QDRANT_AUTH_HEADER": os.getenv("QDRANT_AUTH_HEADER", "api-key"),
     }
 
     # Validate required environment variables
-    missing_vars = [key for key, value in env.items() if value == ""]
+    missing_vars = [
+        key
+        for key, value in env.items()
+        if value == "" and key != "QDRANT_API_BASE" and key != "QDRANT_AUTH_HEADER"
+    ]
     if missing_vars:
         error_msg = f"Missing required environment variables: {missing_vars}"
         logger.error(json.dumps({"action": "error", "message": error_msg}))
         return error_msg, 500
 
+    # Build authentication headers dynamically
+    auth_header = env["QDRANT_AUTH_HEADER"]
+    mgmt_key = env["QDRANT_MGMT_KEY"]
+
+    if auth_header == "api-key":
+        auth_value = mgmt_key
+    else:  # Authorization header
+        auth_value = f"apikey {mgmt_key}"
+
     # Common headers for Qdrant Cloud Management API
     headers = {
-        "api-key": env["QDRANT_MGMT_KEY"],
+        auth_header: auth_value,
         "Content-Type": "application/json",
     }
 
     def call_qdrant(method, path, data=None, retries=3):
         """Make API call to Qdrant Cloud Management API with retry logic."""
-        url = f"{API_BASE}/{path}"
+        # Use dynamic API base from environment
+        url = f"{env['QDRANT_API_BASE']}/{path}"
         for attempt in range(retries):
             try:
                 logger.info(
@@ -124,7 +146,7 @@ def handle(request):
                             "action": "api_call",
                             "method": method,
                             "url": url,
-                            "headers": {"api-key": f"{env['QDRANT_MGMT_KEY'][:8]}..."},
+                            "headers": {auth_header: f"{mgmt_key[:8]}..."},
                         }
                     )
                 )
@@ -177,11 +199,15 @@ def handle(request):
         if not clusters_result:
             return None
 
-        # Find our specific cluster
+        # Find our specific cluster and return phase/endpoint
         clusters = clusters_result.get("clusters", [])
         for cluster in clusters:
             if cluster.get("id") == env["QDRANT_CLUSTER_ID"]:
-                return cluster
+                return {
+                    "id": cluster.get("id"),
+                    "phase": cluster.get("phase", "unknown"),
+                    "endpoint": cluster.get("endpoint", ""),
+                }
 
         logger.error(
             json.dumps(

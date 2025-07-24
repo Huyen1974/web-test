@@ -4,6 +4,7 @@ Unit tests for agent_data package functionality.
 
 import os
 import sys
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -237,3 +238,208 @@ class TestServerExtended:
         assert app.title == "Agent Data Langroid"
         assert app.version == "0.1.0"
         assert "Multi-agent knowledge management" in app.description
+
+
+@pytest.mark.unit
+class TestQdrantManagement:
+    """Test Qdrant management functionality."""
+
+    @patch("functions.manage_qdrant.main.requests.request")
+    @patch("functions.manage_qdrant.main.os.getenv")
+    def test_get_cluster_status_success(self, mock_getenv, mock_request):
+        """Test successful cluster status retrieval with list-clusters API."""
+        # Mock environment variables
+        env_vars = {
+            "PROJECT_ID": "github-chatgpt-ggcloud",
+            "QDRANT_ACCOUNT_ID": "b7093834-20e9-4206-8ea0-025b6994b319",
+            "QDRANT_CLUSTER_ID": "529a17a6-01b8-4304-bc5c-b936aec8fca9",
+            "AUTO_STOP_MINUTES": "60",
+            "QDRANT_MGMT_KEY": "test-mgmt-key-12345",
+            "QDRANT_API_BASE": "https://cloud.qdrant.io/api/v1",
+            "QDRANT_AUTH_HEADER": "api-key",
+        }
+        mock_getenv.side_effect = lambda key, default=None: env_vars.get(key, default)
+
+        # Mock successful list-clusters response
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "clusters": [
+                {
+                    "id": "529a17a6-01b8-4304-bc5c-b936aec8fca9",
+                    "phase": "HEALTHY",
+                    "endpoint": "https://test-cluster.cloud.qdrant.io",
+                },
+                {
+                    "id": "other-cluster-id",
+                    "phase": "SUSPENDED",
+                    "endpoint": "https://other-cluster.cloud.qdrant.io",
+                },
+            ]
+        }
+        mock_request.return_value = mock_response
+
+        # Mock Flask request
+        mock_flask_request = Mock()
+        mock_flask_request.args.get.return_value = "status"
+
+        # Import and test the handle function
+        sys.path.append(os.path.join(project_root, "functions", "manage_qdrant"))
+        from functions.manage_qdrant.main import handle
+
+        result = handle(mock_flask_request)
+
+        # Verify the result
+        assert result["status"] == "ok"
+        assert result["cluster"]["id"] == "529a17a6-01b8-4304-bc5c-b936aec8fca9"
+        assert result["cluster"]["phase"] == "HEALTHY"
+        assert result["cluster"]["endpoint"] == "https://test-cluster.cloud.qdrant.io"
+
+        # Verify the API call was made correctly
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[1]["method"] == "GET"
+        assert (
+            "accounts/b7093834-20e9-4206-8ea0-025b6994b319/clusters"
+            in call_args[1]["url"]
+        )
+        assert call_args[1]["headers"]["api-key"] == "test-mgmt-key-12345"
+
+    @patch("functions.manage_qdrant.main.requests.request")
+    @patch("functions.manage_qdrant.main.os.getenv")
+    def test_suspend_cluster_success(self, mock_getenv, mock_request):
+        """Test successful cluster suspension."""
+        # Mock environment variables
+        env_vars = {
+            "PROJECT_ID": "github-chatgpt-ggcloud",
+            "QDRANT_ACCOUNT_ID": "b7093834-20e9-4206-8ea0-025b6994b319",
+            "QDRANT_CLUSTER_ID": "529a17a6-01b8-4304-bc5c-b936aec8fca9",
+            "AUTO_STOP_MINUTES": "60",
+            "QDRANT_MGMT_KEY": "test-mgmt-key-12345",
+            "QDRANT_API_BASE": "https://cloud.qdrant.io/api/v1",
+            "QDRANT_AUTH_HEADER": "api-key",
+        }
+        mock_getenv.side_effect = lambda key, default=None: env_vars.get(key, default)
+
+        # Mock successful suspend response
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"task_id": "suspend-task-123"}
+        mock_request.return_value = mock_response
+
+        # Mock Flask request
+        mock_flask_request = Mock()
+        mock_flask_request.args.get.return_value = "suspend"
+
+        # Import and test the handle function
+        sys.path.append(os.path.join(project_root, "functions", "manage_qdrant"))
+        from functions.manage_qdrant.main import handle
+
+        result = handle(mock_flask_request)
+
+        # Verify the result
+        assert result["status"] == "ok"
+        assert result["action"] == "suspend"
+        assert result["result"]["task_id"] == "suspend-task-123"
+
+    @patch("functions.manage_qdrant.main.requests.post")
+    @patch("functions.manage_qdrant.main.requests.get")
+    @patch("functions.manage_qdrant.main.os.getenv")
+    def test_secret_manager_update_success(self, mock_getenv, mock_get, mock_post):
+        """Test successful Secret Manager update with version logging."""
+        # Mock environment variables
+        env_vars = {
+            "PROJECT_ID": "github-chatgpt-ggcloud",
+        }
+        mock_getenv.side_effect = lambda key, default=None: env_vars.get(key, default)
+
+        # Mock metadata server token response
+        mock_token_response = Mock()
+        mock_token_response.status_code = 200
+        mock_token_response.json.return_value = {"access_token": "test-access-token"}
+        mock_token_response.raise_for_status = Mock()
+        mock_get.return_value = mock_token_response
+
+        # Mock Secret Manager addVersion response
+        mock_secret_response = Mock()
+        mock_secret_response.status_code = 200
+        mock_secret_response.json.return_value = {
+            "name": "projects/github-chatgpt-ggcloud/secrets/qdrant_idle_marker/versions/42"
+        }
+        mock_post.return_value = mock_secret_response
+
+        # Import and test the update_secret_manager function
+        sys.path.append(os.path.join(project_root, "functions", "manage_qdrant"))
+        from functions.manage_qdrant.main import update_secret_manager
+
+        result = update_secret_manager("qdrant_idle_marker", "1234567890")
+
+        # Verify the result
+        assert result is True
+
+        # Verify Secret Manager API call
+        mock_post.assert_called_once()
+        call_args = mock_post.call_args
+        # Check positional arguments (URL) and keyword arguments (headers)
+        assert "secrets/qdrant_idle_marker:addVersion" in call_args[0][0]
+        assert call_args[1]["headers"]["Authorization"] == "Bearer test-access-token"
+
+    @patch("functions.manage_qdrant.main.requests.request")
+    @patch("functions.manage_qdrant.main.os.getenv")
+    def test_dynamic_auth_header_configuration(self, mock_getenv, mock_request):
+        """Test dynamic authentication header configuration."""
+        # Test with Authorization header
+        env_vars = {
+            "PROJECT_ID": "github-chatgpt-ggcloud",
+            "QDRANT_ACCOUNT_ID": "b7093834-20e9-4206-8ea0-025b6994b319",
+            "QDRANT_CLUSTER_ID": "529a17a6-01b8-4304-bc5c-b936aec8fca9",
+            "AUTO_STOP_MINUTES": "60",
+            "QDRANT_MGMT_KEY": "test-mgmt-key-12345",
+            "QDRANT_API_BASE": "https://api.cloud.qdrant.io/pa/v1",
+            "QDRANT_AUTH_HEADER": "Authorization",
+        }
+        mock_getenv.side_effect = lambda key, default=None: env_vars.get(key, default)
+
+        # Mock successful response
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "clusters": [
+                {
+                    "id": "529a17a6-01b8-4304-bc5c-b936aec8fca9",
+                    "phase": "HEALTHY",
+                    "endpoint": "https://test-cluster.cloud.qdrant.io",
+                }
+            ]
+        }
+        mock_request.return_value = mock_response
+
+        # Mock Flask request
+        mock_flask_request = Mock()
+        mock_flask_request.args.get.return_value = "status"
+
+        # Import and test the handle function
+        sys.path.append(os.path.join(project_root, "functions", "manage_qdrant"))
+        from functions.manage_qdrant.main import handle
+
+        handle(mock_flask_request)
+
+        # Verify the Authorization header format
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[1]["headers"]["Authorization"] == "apikey test-mgmt-key-12345"
+        assert call_args[1]["url"].startswith("https://api.cloud.qdrant.io/pa/v1")
+
+    def test_import_manage_qdrant_module(self):
+        """Test that manage_qdrant module can be imported."""
+        sys.path.append(os.path.join(project_root, "functions", "manage_qdrant"))
+
+        try:
+            from functions.manage_qdrant import main
+
+            assert hasattr(main, "handle")
+            assert hasattr(main, "update_secret_manager")
+            assert callable(main.handle)
+            assert callable(main.update_secret_manager)
+        except ImportError as e:
+            pytest.fail(f"Failed to import manage_qdrant module: {e}")
