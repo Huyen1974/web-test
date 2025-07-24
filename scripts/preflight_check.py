@@ -73,9 +73,9 @@ def check_qdrant_mgmt_key():
             print("❌ QDRANT_ACCOUNT_ID not set for API validation")
             return False
 
-        # Test both API endpoints
+        # Test API endpoints - new cluster v1 API first
         endpoints = [
-            ("https://cloud.qdrant.io/api/v1", "api-key"),
+            ("https://api.cloud.qdrant.io/api/cluster/v1", "Authorization"),
             ("https://api.cloud.qdrant.io/api/v1", "api-key"),
             ("https://api.cloud.qdrant.io/pa/v1", "Authorization"),
         ]

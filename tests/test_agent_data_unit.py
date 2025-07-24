@@ -255,25 +255,29 @@ class TestQdrantManagement:
             "QDRANT_CLUSTER_ID": "529a17a6-01b8-4304-bc5c-b936aec8fca9",
             "AUTO_STOP_MINUTES": "60",
             "QDRANT_MGMT_KEY": "test-mgmt-key-12345",
-            "QDRANT_API_BASE": "https://cloud.qdrant.io/api/v1",
-            "QDRANT_AUTH_HEADER": "api-key",
+            "QDRANT_API_BASE": "https://api.cloud.qdrant.io/api/cluster/v1",
+            "QDRANT_AUTH_HEADER": "Authorization",
         }
         mock_getenv.side_effect = lambda key, default=None: env_vars.get(key, default)
 
-        # Mock successful list-clusters response
+        # Mock successful list-clusters response with new cluster v1 API format
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "clusters": [
+            "items": [
                 {
                     "id": "529a17a6-01b8-4304-bc5c-b936aec8fca9",
-                    "phase": "HEALTHY",
-                    "endpoint": "https://test-cluster.cloud.qdrant.io",
+                    "state": {
+                        "phase": "CLUSTER_PHASE_HEALTHY",
+                        "endpoint": {"url": "https://test-cluster.cloud.qdrant.io"},
+                    },
                 },
                 {
                     "id": "other-cluster-id",
-                    "phase": "SUSPENDED",
-                    "endpoint": "https://other-cluster.cloud.qdrant.io",
+                    "state": {
+                        "phase": "CLUSTER_PHASE_SUSPENDED",
+                        "endpoint": {"url": "https://other-cluster.cloud.qdrant.io"},
+                    },
                 },
             ]
         }
@@ -292,7 +296,7 @@ class TestQdrantManagement:
         # Verify the result
         assert result["status"] == "ok"
         assert result["cluster"]["id"] == "529a17a6-01b8-4304-bc5c-b936aec8fca9"
-        assert result["cluster"]["phase"] == "HEALTHY"
+        assert result["cluster"]["phase"] == "HEALTHY"  # Prefix stripped off
         assert result["cluster"]["endpoint"] == "https://test-cluster.cloud.qdrant.io"
 
         # Verify the API call was made correctly
@@ -303,7 +307,7 @@ class TestQdrantManagement:
             "accounts/b7093834-20e9-4206-8ea0-025b6994b319/clusters"
             in call_args[1]["url"]
         )
-        assert call_args[1]["headers"]["api-key"] == "test-mgmt-key-12345"
+        assert call_args[1]["headers"]["Authorization"] == "apikey test-mgmt-key-12345"
 
     @patch("functions.manage_qdrant.main.requests.request")
     @patch("functions.manage_qdrant.main.os.getenv")
@@ -340,7 +344,9 @@ class TestQdrantManagement:
         # Verify the result
         assert result["status"] == "ok"
         assert result["action"] == "suspend"
-        assert result["result"]["task_id"] == "suspend-task-123"
+        assert (
+            "message" in result
+        )  # New API format includes message about unsupported operation
 
     @patch("functions.manage_qdrant.main.requests.post")
     @patch("functions.manage_qdrant.main.requests.get")
