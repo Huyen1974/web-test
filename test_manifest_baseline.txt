@@ -1,10 +1,10 @@
 tests/test_agent_data_unit.py::test_app_metadata
+tests/test_agent_data_unit.py::test_backup_base_url_selection
 tests/test_agent_data_unit.py::test_check_dependencies
 tests/test_agent_data_unit.py::test_check_dependencies_detailed
 tests/test_agent_data_unit.py::test_cli_click_decorators
 tests/test_agent_data_unit.py::test_cli_commands_exist
 tests/test_agent_data_unit.py::test_cli_import
-tests/test_agent_data_unit.py::test_dynamic_auth_header_configuration
 tests/test_agent_data_unit.py::test_fastapi_app_creation
 tests/test_agent_data_unit.py::test_fastapi_middleware
 tests/test_agent_data_unit.py::test_get_cluster_status_success
@@ -17,7 +17,7 @@ tests/test_agent_data_unit.py::test_package_import
 tests/test_agent_data_unit.py::test_pydantic_models
 tests/test_agent_data_unit.py::test_secret_manager_update_success
 tests/test_agent_data_unit.py::test_server_import
-tests/test_agent_data_unit.py::test_suspend_cluster_success
+tests/test_agent_data_unit.py::test_stop_cluster_success
 tests/test_foundation.py::test_agent_data_langroid_integration
 tests/test_foundation.py::test_chat_endpoint_basic
 tests/test_foundation.py::test_cli_and_server_consistency

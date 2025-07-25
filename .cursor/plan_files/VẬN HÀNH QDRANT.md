@@ -100,4 +100,4 @@ curl -X POST "$CLUSTER_ENDPOINT/collections/test_documents/points/count" \
 
 ---
 
-**Quy trình trên là kết quả cuối cùng và đáng tin cậy nhất sau khi chúng ta đã cùng nhau kiểm chứng.** 
+**Quy trình trên là kết quả cuối cùng và đáng tin cậy nhất sau khi chúng ta đã cùng nhau kiểm chứng.**
