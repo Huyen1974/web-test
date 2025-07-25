@@ -85,12 +85,17 @@ def check_unit_tests():
 def check_manifest_drift():
     """Check CP0.4: Manifest drift = 0."""
     try:
-        snapshot_file = Path("tests/.snapshot")
+        snapshot_file = Path("test_manifest_baseline.txt")
         if not snapshot_file.exists():
-            return False, "tests/.snapshot not found"
+            return False, "test_manifest_baseline.txt not found"
 
         result = subprocess.run(
-            ["python", "scripts/collect_manifest.py", "--check", "tests/.snapshot"],
+            [
+                "python",
+                "scripts/collect_manifest.py",
+                "--check",
+                "test_manifest_baseline.txt",
+            ],
             capture_output=True,
             text=True,
             timeout=60,
