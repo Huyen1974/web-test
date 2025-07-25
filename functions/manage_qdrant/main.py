@@ -9,14 +9,131 @@ import requests
 logging.basicConfig(format="%(message)s")
 logger = logging.getLogger(__name__)
 
-# Dynamic API configuration with fallback defaults
-API_BASE = os.getenv("QDRANT_API_BASE", "https://api.cloud.qdrant.io/api/cluster/v1")
-ACCOUNT_ID = os.getenv("QDRANT_ACCOUNT_ID")
+# Environment variables
+PROJECT_ID = os.getenv("PROJECT_ID", "github-chatgpt-ggcloud")
+ACC = os.getenv("QDRANT_ACCOUNT_ID")
+CLUS = os.getenv("QDRANT_CLUSTER_ID")
+AUTO_STOP_MINUTES = int(os.getenv("AUTO_STOP_MINUTES", "60"))
+QDRANT_API_BASE = os.getenv(
+    "QDRANT_API_BASE", "https://api.cloud.qdrant.io/api/cluster/v1"
+)
+QDRANT_BACKUP_BASE = os.getenv(
+    "QDRANT_BACKUP_BASE", "https://api.cloud.qdrant.io/api/cluster/backup/v1"
+)
+QDRANT_MGMT_KEY = os.getenv("QDRANT_MGMT_KEY")
 
 
-def _api(path: str) -> str:
-    """Build API URL for Qdrant Cloud Management API."""
-    return f"{API_BASE}/accounts/{ACCOUNT_ID}/{path.lstrip('/')}"
+def call_mgmt(method, path, **kwargs):
+    """Make API call to Qdrant Management API with appropriate base URL."""
+    headers = {
+        "Authorization": f"apikey {QDRANT_MGMT_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    # Choose base URL based on path
+    if "backups" in path or "tasks/" in path:
+        base = QDRANT_BACKUP_BASE
+    else:
+        base = QDRANT_API_BASE
+
+    url = f"{base}/{path.lstrip('/')}"
+
+    try:
+        response = requests.request(method, url, headers=headers, **kwargs)
+        logger.info(
+            json.dumps(
+                {
+                    "method": method,
+                    "url": url,
+                    "status_code": response.status_code,
+                    "headers_sent": {
+                        k: v[:20] + "..." if len(v) > 20 else v
+                        for k, v in headers.items()
+                    },
+                }
+            )
+        )
+
+        if response.status_code == 200:
+            return response
+        else:
+            logger.error(
+                json.dumps(
+                    {
+                        "error": "api_call_failed",
+                        "method": method,
+                        "url": url,
+                        "status_code": response.status_code,
+                        "response_text": response.text,
+                        "headers_sent": {
+                            k: v[:20] + "..." if len(v) > 20 else v
+                            for k, v in headers.items()
+                        },
+                    }
+                )
+            )
+            return None
+    except Exception as e:
+        logger.error(
+            json.dumps(
+                {
+                    "error": "api_call_exception",
+                    "method": method,
+                    "url": url,
+                    "exception": str(e),
+                    "headers_sent": {
+                        k: v[:20] + "..." if len(v) > 20 else v
+                        for k, v in headers.items()
+                    },
+                }
+            )
+        )
+        return None
+
+
+def current_phase(acc, clus):
+    """Get current cluster phase."""
+    resp = call_mgmt("GET", f"accounts/{acc}/clusters/{clus}")
+    if resp:
+        data = resp.json()
+        return data["cluster"]["state"]["phase"]
+    return None
+
+
+def do_backup(acc, clus):
+    """Create backup - backup API is synchronous, no polling needed."""
+    start_time = time.time()
+
+    # Create backup
+    backup_payload = {
+        "backup": {
+            "account_id": acc,
+            "cluster_id": clus,
+            "name": f"auto-{int(time.time())}",
+        }
+    }
+
+    resp = call_mgmt("POST", f"accounts/{acc}/backups", json=backup_payload)
+    if not resp:
+        logger.error(json.dumps({"error": "backup_creation_failed"}))
+        return {"error": "backup_creation_failed"}
+
+    response_data = resp.json()
+    backup_id = response_data["backup"]["id"]
+
+    elapsed_ms = int((time.time() - start_time) * 1000)
+
+    logger.info(
+        json.dumps(
+            {
+                "action": "backup_completed",
+                "backup_id": backup_id,
+                "elapsed_ms": elapsed_ms,
+            }
+        )
+    )
+
+    return backup_id
 
 
 def get_access_token():
@@ -35,19 +152,15 @@ def get_access_token():
 def update_secret_manager(secret_name: str, secret_value: str) -> bool:
     """Update Secret Manager secret using REST API."""
     try:
-        project_id = os.getenv("PROJECT_ID")
         access_token = get_access_token()
         if not access_token:
             return False
 
-        # Secret Manager REST API URL
-        url = f"https://secretmanager.googleapis.com/v1/projects/{project_id}/secrets/{secret_name}:addVersion"
-
+        url = f"https://secretmanager.googleapis.com/v1/projects/{PROJECT_ID}/secrets/{secret_name}:addVersion"
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
         }
-
         data = {"payload": {"data": secret_value.encode("utf-8").hex()}}
 
         response = requests.post(url, headers=headers, json=data, timeout=30)
@@ -61,7 +174,6 @@ def update_secret_manager(secret_name: str, secret_value: str) -> bool:
                         "action": "secret_updated",
                         "secret_name": secret_name,
                         "version_id": version_id,
-                        "version": version_info.get("name", "unknown"),
                     }
                 )
             )
@@ -92,285 +204,122 @@ def update_secret_manager(secret_name: str, secret_value: str) -> bool:
         return False
 
 
-def handle(request):
-    """Cloud Function entry point for managing Qdrant cluster."""
+def stop():
+    """Stop cluster: backup -> suspend -> wait for SUSPENDED."""
+    start_time = time.time()
 
-    # Environment configuration
-    env = {
-        "PROJECT_ID": os.getenv("PROJECT_ID", "github-chatgpt-ggcloud"),
-        "QDRANT_ACCOUNT_ID": os.getenv("QDRANT_ACCOUNT_ID"),
-        "QDRANT_CLUSTER_ID": os.getenv("QDRANT_CLUSTER_ID"),
-        "AUTO_STOP_MINUTES": int(os.getenv("AUTO_STOP_MINUTES", "60")),
-        "QDRANT_MGMT_KEY": os.getenv("QDRANT_MGMT_KEY", ""),
-        "QDRANT_API_BASE": os.getenv(
-            "QDRANT_API_BASE", "https://api.cloud.qdrant.io/api/cluster/v1"
-        ),
-        "QDRANT_AUTH_HEADER": os.getenv("QDRANT_AUTH_HEADER", "Authorization"),
-    }
-
-    # Validate required environment variables
-    missing_vars = [
-        key
-        for key, value in env.items()
-        if value == "" and key != "QDRANT_API_BASE" and key != "QDRANT_AUTH_HEADER"
-    ]
-    if missing_vars:
-        error_msg = f"Missing required environment variables: {missing_vars}"
-        logger.error(json.dumps({"action": "error", "message": error_msg}))
-        return error_msg, 500
-
-    # Build authentication headers - always use Authorization: apikey format for new cluster API
-    mgmt_key = env["QDRANT_MGMT_KEY"]
-
-    # Common headers for Qdrant Cloud Management API
-    headers = {
-        "Authorization": f"apikey {mgmt_key}",
-        "Content-Type": "application/json",
-    }
-
-    def call_qdrant(method, path, data=None, retries=3):
-        """Make API call to Qdrant Cloud Management API with retry logic."""
-        # Use dynamic API base from environment
-        url = f"{env['QDRANT_API_BASE']}/{path}"
-        for attempt in range(retries):
-            try:
-                logger.info(
-                    json.dumps(
-                        {
-                            "action": "api_call",
-                            "method": method,
-                            "url": url,
-                            "headers": {"Authorization": f"apikey {mgmt_key[:8]}..."},
-                        }
-                    )
-                )
-                response = requests.request(
-                    method=method,
-                    url=url,
-                    headers=headers,
-                    json=data,
-                    timeout=30,
-                )
-
-                if response.status_code == 200:
-                    return response.json()
-                else:
-                    logger.error(
-                        json.dumps(
-                            {
-                                "action": "api_error",
-                                "url": url,
-                                "status_code": response.status_code,
-                                "error": response.text,
-                            }
-                        )
-                    )
-                    if response.status_code in [401, 403]:
-                        # Authentication errors shouldn't be retried
-                        break
-
-            except requests.exceptions.RequestException as e:
-                logger.error(
-                    json.dumps(
-                        {
-                            "action": "request_error",
-                            "url": url,
-                            "error": str(e),
-                        }
-                    )
-                )
-
-            if attempt < retries - 1:
-                time.sleep(2**attempt)  # Exponential backoff
-
-        return None
-
-    def get_cluster_status():
-        """Get current cluster status using list-clusters API."""
-        clusters_result = call_qdrant(
-            "GET", f"accounts/{env['QDRANT_ACCOUNT_ID']}/clusters"
-        )
-        if not clusters_result:
-            return None
-
-        # Find our specific cluster and return phase/endpoint from new API format
-        clusters = clusters_result.get("items", [])
-        for cluster in clusters:
-            if cluster.get("id") == env["QDRANT_CLUSTER_ID"]:
-                state = cluster.get("state", {})
-                endpoint_info = state.get("endpoint", {})
-                return {
-                    "id": cluster.get("id"),
-                    "phase": state.get("phase", "unknown").replace(
-                        "CLUSTER_PHASE_", ""
-                    ),
-                    "endpoint": endpoint_info.get("url", ""),
-                }
-
-        logger.error(
-            json.dumps(
-                {
-                    "action": "cluster_not_found",
-                    "cluster_id": env["QDRANT_CLUSTER_ID"],
-                    "available_clusters": [c.get("id") for c in clusters],
-                }
-            )
-        )
-        return None
-
-    def create_snapshot():
-        """Create a cluster snapshot."""
-        return call_qdrant(
-            "POST",
-            f"accounts/{env['QDRANT_ACCOUNT_ID']}/clusters/{env['QDRANT_CLUSTER_ID']}/backups",
-        )
-
-    def wait_for_task(task_id, max_attempts=20):
-        """Wait for a task to complete."""
-        for _attempt in range(max_attempts):
-            task_result = call_qdrant("GET", f"tasks/{task_id}")
-            if task_result and task_result.get("status") == "SUCCEEDED":
-                return task_result
-            elif task_result and task_result.get("status") == "FAILED":
-                logger.error(
-                    json.dumps(
-                        {
-                            "action": "task_failed",
-                            "task_id": task_id,
-                            "result": task_result,
-                        }
-                    )
-                )
-                return None
-            time.sleep(30)  # Wait 30 seconds before next check
-        return None
-
-    def suspend_cluster():
-        """Suspend the cluster."""
-        return call_qdrant(
-            "POST",
-            f"accounts/{env['QDRANT_ACCOUNT_ID']}/clusters/{env['QDRANT_CLUSTER_ID']}/suspend",
-        )
-
-    def resume_cluster():
-        """Resume the cluster."""
-        return call_qdrant(
-            "POST",
-            f"accounts/{env['QDRANT_ACCOUNT_ID']}/clusters/{env['QDRANT_CLUSTER_ID']}/resume",
-        )
-
-    def set_last_hit():
-        """Update the last hit timestamp in Secret Manager."""
-        current_time = str(int(time.time()))
-        success = update_secret_manager("qdrant_idle_marker", current_time)
-
+    # Check current phase
+    phase = current_phase(ACC, CLUS)
+    if phase == "CLUSTER_PHASE_SUSPENDED":
         logger.info(
             json.dumps(
-                {
-                    "action": "touch",
-                    "last_hit": current_time,
-                    "secret_updated": success,
-                }
+                {"action": "stop", "phase": phase, "message": "already_suspended"}
             )
         )
-        return current_time
+        return {"status": "ok", "phase": phase}
+
+    # Create backup
+    backup_result = do_backup(ACC, CLUS)
+    if isinstance(backup_result, dict) and "error" in backup_result:
+        return backup_result
+
+    backup_id = backup_result
+
+    # Suspend cluster
+    suspend_resp = call_mgmt("POST", f"accounts/{ACC}/clusters/{CLUS}/suspend")
+    if not suspend_resp:
+        logger.error(json.dumps({"error": "suspend_failed"}))
+        return {"error": "suspend_failed"}
+
+    # Poll for SUSPENDED phase (10 min timeout)
+    suspend_start = time.time()
+    while time.time() - suspend_start < 600:  # 10 minutes
+        phase = current_phase(ACC, CLUS)
+        if phase == "CLUSTER_PHASE_SUSPENDED":
+            break
+        time.sleep(15)
+
+    elapsed_ms = int((time.time() - start_time) * 1000)
+
+    logger.info(
+        json.dumps(
+            {"action": "stop", "backup_id": backup_id, "phase": phase, "ms": elapsed_ms}
+        )
+    )
+
+    return {"status": "ok", "phase": phase, "backup_id": backup_id}
+
+
+def status():
+    """Get cluster status and endpoint."""
+    phase = current_phase(ACC, CLUS)
+    if not phase:
+        return {"error": "failed_to_get_phase"}
+
+    # Get endpoint info
+    resp = call_mgmt("GET", f"accounts/{ACC}/clusters/{CLUS}")
+    endpoint = ""
+    if resp:
+        data = resp.json()
+        endpoint_info = data.get("cluster", {}).get("state", {}).get("endpoint", {})
+        endpoint = endpoint_info.get("url", "")
+
+    return {"status": "ok", "phase": phase, "endpoint": endpoint}
+
+
+def touch():
+    """Update last hit timestamp in secret manager only."""
+    current_time = str(int(time.time()))
+    success = update_secret_manager("qdrant_idle_marker", current_time)
+
+    logger.info(
+        json.dumps(
+            {
+                "action": "touch",
+                "last_hit": current_time,
+                "secret_updated": success,
+            }
+        )
+    )
+
+    return {
+        "status": "ok",
+        "action": "touch",
+        "last_hit": current_time,
+        "secret_updated": success,
+    }
+
+
+def handle(request):
+    """Cloud Function entry point."""
+
+    # Debug environment variables (without exposing secrets)
+    logger.info(
+        json.dumps(
+            {
+                "debug": "env_check",
+                "acc_set": bool(ACC),
+                "clus_set": bool(CLUS),
+                "mgmt_key_set": bool(QDRANT_MGMT_KEY),
+                "mgmt_key_len": len(QDRANT_MGMT_KEY) if QDRANT_MGMT_KEY else 0,
+            }
+        )
+    )
+
+    # Validate required environment variables
+    if not all([ACC, CLUS, QDRANT_MGMT_KEY]):
+        error_msg = "Missing required environment variables"
+        logger.error(json.dumps({"error": error_msg}))
+        return {"error": error_msg}, 500
 
     # Get action from query parameters
     action = request.args.get("action", "status")
 
-    if action == "status":
-        # Get cluster status using list-clusters
-        cluster = get_cluster_status()
-        if cluster:
-            logger.info(
-                json.dumps(
-                    {
-                        "action": "status",
-                        "cluster_status": cluster.get("phase", "unknown"),
-                        "cluster_id": env["QDRANT_CLUSTER_ID"],
-                        "endpoint": cluster.get("endpoint", ""),
-                    }
-                )
-            )
-            return {"status": "ok", "cluster": cluster}
-        else:
-            return {"status": "error", "message": "Failed to get cluster status"}, 500
-
+    if action == "stop":
+        return stop()
+    elif action == "status":
+        return status()
     elif action == "touch":
-        # Update last hit timestamp
-        last_hit = set_last_hit()
-        return {"status": "ok", "action": "touch", "last_hit": last_hit}
-
-    elif action == "snapshot":
-        # Create a snapshot
-        snapshot_result = create_snapshot()
-        if snapshot_result and snapshot_result.get("task_id"):
-            task_id = snapshot_result["task_id"]
-            logger.info(
-                json.dumps(
-                    {
-                        "action": "snapshot_started",
-                        "task_id": task_id,
-                    }
-                )
-            )
-
-            # Wait for task completion
-            task_result = wait_for_task(task_id)
-            if task_result:
-                logger.info(
-                    json.dumps(
-                        {
-                            "action": "snapshot_completed",
-                            "task_id": task_id,
-                            "result": task_result,
-                        }
-                    )
-                )
-                return {"status": "ok", "action": "snapshot", "task": task_result}
-            else:
-                return {
-                    "status": "error",
-                    "message": "Snapshot task failed or timed out",
-                }, 500
-        else:
-            return {"status": "error", "message": "Failed to create snapshot"}, 500
-
-    elif action == "suspend":
-        # Suspend the cluster - note: new cluster v1 API doesn't support suspend/resume
-        # We'll simulate the operation and rely on status endpoint to check actual state
-        logger.info(
-            json.dumps(
-                {
-                    "action": "suspend_requested",
-                    "message": "Suspend operation not supported in cluster v1 API",
-                    "note": "Use status endpoint to monitor cluster state changes",
-                }
-            )
-        )
-        return {
-            "status": "ok",
-            "action": "suspend",
-            "message": "Suspend operation logged (not supported in cluster v1 API)",
-        }
-
-    elif action == "resume":
-        # Resume the cluster - note: new cluster v1 API doesn't support suspend/resume
-        # We'll simulate the operation and rely on status endpoint to check actual state
-        logger.info(
-            json.dumps(
-                {
-                    "action": "resume_requested",
-                    "message": "Resume operation not supported in cluster v1 API",
-                    "note": "Use status endpoint to monitor cluster state changes",
-                }
-            )
-        )
-        return {
-            "status": "ok",
-            "action": "resume",
-            "message": "Resume operation logged (not supported in cluster v1 API)",
-        }
-
+        return touch()
     else:
-        return {"status": "error", "message": f"Unknown action: {action}"}, 400
+        return {"error": f"unknown_action: {action}"}, 400

@@ -73,76 +73,82 @@ def check_qdrant_mgmt_key():
             print("❌ QDRANT_ACCOUNT_ID not set for API validation")
             return False
 
-        # Test API endpoints - new cluster v1 API first
-        endpoints = [
-            ("https://api.cloud.qdrant.io/api/cluster/v1", "Authorization"),
-            ("https://api.cloud.qdrant.io/api/v1", "api-key"),
-            ("https://api.cloud.qdrant.io/pa/v1", "Authorization"),
+        # Test new cluster v1 API route with cluster ID
+        cluster_id = os.environ.get("QDRANT_CLUSTER_ID")
+        if not cluster_id:
+            print("❌ QDRANT_CLUSTER_ID not set for API validation")
+            return False
+
+        base_url = "https://api.cloud.qdrant.io/api/cluster/v1"
+        test_url = f"{base_url}/accounts/{account_id}/clusters/{cluster_id}"
+
+        print(f"Testing {base_url} with Authorization: apikey header...")
+
+        curl_cmd = [
+            "curl",
+            "-s",
+            "-w",
+            "%{http_code}",
+            "-o",
+            "/dev/null",
+            "-H",
+            f"Authorization: apikey {mgmt_key}",
+            test_url,
         ]
 
-        working_endpoint = None
-        working_header = None
+        try:
+            curl_result = subprocess.run(
+                curl_cmd, capture_output=True, text=True, timeout=30
+            )
+            status_code = curl_result.stdout.strip()
 
-        for base_url, header_type in endpoints:
-            print(f"Testing {base_url} with {header_type} header...")
+            print(f"  Status: {status_code}")
 
-            if header_type == "api-key":
-                header_value = mgmt_key
-            else:
-                header_value = f"apikey {mgmt_key}"
+            if status_code == "200":
+                print(f"✅ New route validation successful: {base_url}")
 
-            test_url = f"{base_url}/accounts/{account_id}/clusters"
+                # Also test backup API
+                backup_base = "https://api.cloud.qdrant.io/api/cluster/backup/v1"
+                backup_url = f"{backup_base}/accounts/{account_id}/backups"
 
-            curl_cmd = [
-                "curl",
-                "-s",
-                "-w",
-                "%{http_code}",
-                "-o",
-                "/dev/null",
-                "-H",
-                f"{header_type}: {header_value}",
-                test_url,
-            ]
+                backup_cmd = [
+                    "curl",
+                    "-s",
+                    "-w",
+                    "%{http_code}",
+                    "-o",
+                    "/dev/null",
+                    "-H",
+                    f"Authorization: apikey {mgmt_key}",
+                    backup_url,
+                ]
 
-            try:
-                curl_result = subprocess.run(
-                    curl_cmd, capture_output=True, text=True, timeout=30
+                backup_result = subprocess.run(
+                    backup_cmd, capture_output=True, text=True, timeout=30
                 )
-                status_code = curl_result.stdout.strip()
+                backup_status = backup_result.stdout.strip()
 
-                print(f"  Status: {status_code}")
+                print(f"Testing backup API: {backup_status}")
 
-                if status_code == "200":
-                    working_endpoint = base_url
-                    working_header = header_type
-                    print(f"✅ Working endpoint found: {base_url} with {header_type}")
-                    break
-                elif status_code == "401":
-                    print(f"  401 Unauthorized - Invalid token for {base_url}")
+                if backup_status == "200":
+                    print("✅ Backup API also working")
                 else:
-                    print(f"  {status_code} - Other error for {base_url}")
+                    print(f"⚠️  Backup API returned {backup_status}")
 
-            except subprocess.TimeoutExpired:
-                print(f"  Timeout testing {base_url}")
-            except Exception as e:
-                print(f"  Error testing {base_url}: {e}")
+                return True
+            elif status_code == "401":
+                print("❌ 401 Unauthorized - Invalid MGMT_KEY")
+                print("Please verify the Qdrant_cloud_management_key secret is correct")
+                return False
+            else:
+                print(f"❌ {status_code} - API error")
+                return False
 
-        if working_endpoint:
-            # Set environment variables for deployment
-            print("\n✅ Working API configuration found:")
-            print(f"  QDRANT_API_BASE={working_endpoint}")
-            print(f"  QDRANT_AUTH_HEADER={working_header}")
-
-            # Export for shell use
-            with open(".env.working", "w") as f:
-                f.write(f"export QDRANT_API_BASE={working_endpoint}\n")
-                f.write(f"export QDRANT_AUTH_HEADER={working_header}\n")
-
-            return True
-        else:
-            print("❌ No working API endpoint found - all returned 401 or errors")
-            print("Please verify the Qdrant_cloud_management_key secret is correct")
+        except subprocess.TimeoutExpired:
+            print(f"  Timeout testing {base_url}")
+            return False
+        except Exception as e:
+            print(f"  Error testing {base_url}: {e}")
             return False
 
     except subprocess.TimeoutExpired:
