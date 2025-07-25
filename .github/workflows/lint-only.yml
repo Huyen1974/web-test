@@ -59,7 +59,7 @@ jobs:
       # Manifest drift check (CP0.4)
       - name: manifest drift check (CP0.4)
         run: |
-          python scripts/collect_manifest.py --check tests/.snapshot
+          python scripts/collect_manifest.py --check test_manifest_baseline.txt
 
       # Secret scan (CP0.5)
       - name: secret scan (CP0.5)
