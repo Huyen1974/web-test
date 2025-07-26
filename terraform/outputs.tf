@@ -10,14 +10,18 @@ output "region" {
 
 output "environment" {
   description = "The environment"
-  value       = var.environment
+  value       = var.env
 }
 
 output "gcs_buckets" {
   description = "Map of GCS bucket purposes to their names"
   value = {
-    for purpose, bucket in google_storage_bucket.agent_data_buckets :
-    purpose => bucket.name
+    artifacts        = google_storage_bucket.huyen1974_agent_data_artifacts_test.name
+    knowledge        = google_storage_bucket.huyen1974_agent_data_knowledge_test.name
+    logs             = google_storage_bucket.huyen1974_agent_data_logs_test.name
+    qdrant_snapshots = google_storage_bucket.huyen1974_agent_data_qdrant_snapshots_test.name
+    source           = google_storage_bucket.huyen1974_agent_data_source_test.name
+    tfstate          = google_storage_bucket.huyen1974_agent_data_tfstate_test.name
   }
 }
 

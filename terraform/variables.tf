@@ -9,11 +9,12 @@ variable "region" {
   default     = "asia-southeast1"
 }
 
-variable "environment" {
+variable "env" {
   description = "Environment (test/production)"
   type        = string
+  default     = "test"
   validation {
-    condition     = contains(["test", "production"], var.environment)
+    condition     = contains(["test", "production"], var.env)
     error_message = "Environment must be either 'test' or 'production'."
   }
 }

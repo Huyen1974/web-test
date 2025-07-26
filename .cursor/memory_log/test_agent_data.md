@@ -15,3 +15,4 @@
 2025-07-22 0.4d PASS SHA 2cd6dc6 URL https://github.com/Huyen1974/agent-data-test/actions/runs/16433445124
 2025-07-22 0.4e PASS SHA 853dd73 URL https://github.com/Huyen1974/agent-data-test/actions/runs/16438878213
 2025-01-22 0.4f PASS SHA c192db8 URL https://github.com/Huyen1974/agent-data-test/actions/runs/16443107479
+2025-07-26 0.4a PASS SHA 69bb4b0 - CPG0.1 terraform plan exit-code 0, buckets imported successfully. CI terraform-plan job requires GCP_WIF_PROVIDER secret.

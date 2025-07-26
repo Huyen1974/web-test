@@ -177,6 +177,34 @@ jobs:
       - name: Run checkpoint gate
         run: python scripts/checkpoint_runner.py
 
+  terraform-plan:
+    name: Terraform Plan (CPG0.1)
+    runs-on: ubuntu-22.04
+    needs: checkpoint-gate
+    env:
+      TF_VERSION: "1.8.5"
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com
+
+      - run: sudo apt-get update && sudo apt-get install -y unzip
+
+      - uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - run: |
+          cd terraform
+          terraform fmt -check -diff
+          terraform init -backend-config="bucket=huyen1974-agent-data-tfstate-test" -backend-config="prefix=terraform/state"
+          terraform validate
+          terraform plan -detailed-exitcode -lock=false -var-file=terraform.tfvars
+
   actionlint:
     runs-on: ubuntu-22.04
     steps:
