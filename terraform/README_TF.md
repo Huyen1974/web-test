@@ -135,32 +135,48 @@ The following Terraform-related pre-commit hooks are configured:
 - `terraform-docs` - Generate documentation
 - `tflint` - Lint Terraform files with Google provider rules
 
+## GCP Authentication Secrets for CI/CD
+
+To enable Terraform operations in GitHub Actions, configure one of the following authentication methods:
+
+### Option 1: Workload Identity Federation (Recommended)
+
+Set up the `GCP_WIF_PROVIDER` secret with the full resource name:
+
+```bash
+# Secret value format:
+projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL_ID/providers/PROVIDER_ID
+
+# Example:
+projects/123456789/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+```
+
+### Option 2: Service Account Key JSON
+
+Set up the `GCP_SA_KEY_JSON` secret with base64 encoded service account key:
+
+```bash
+# Generate and encode the key:
+gcloud iam service-accounts keys create key.json --iam-account=SERVICE_ACCOUNT_EMAIL
+base64 -i key.json | pbcopy  # macOS
+base64 -w 0 key.json         # Linux
+
+# Add the base64 output as the secret value
+```
+
+### Required Service Account Permissions
+
+The service account (`chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com`) needs:
+- `roles/storage.admin` (for Terraform state in GCS)
+- `roles/editor` or specific resource permissions
+- Access to the target GCP project
+
+### CI Behavior
+
+- If both secrets are missing: Terraform plan job will skip with warning "skipped-auth"
+- If `GCP_WIF_PROVIDER` exists: Use Workload Identity Federation
+- If only `GCP_SA_KEY_JSON` exists: Use service account key authentication
+
 ## Resource Naming Convention
 
-- **Buckets**: `huyen1974-agent-data-{purpose}-{environment}`
-- **Resources**: `huyen1974_agent_data_{purpose}_{environment}` (Terraform resource names)
-- **Environment**: `test` or `production`
-
-## Security Notes
-
-- All GCS buckets have `prevent_destroy = true` lifecycle rule
-- Bucket contents are versioned for data protection
-- Secrets are managed through Google Secret Manager
-- Public access prevention is enabled on buckets
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Authentication Errors**: Ensure GCP credentials are properly configured
-2. **State Lock Issues**: Use `-lock=false` for plan operations in CI
-3. **Import Conflicts**: Remove duplicate resource blocks before import
-4. **Version Conflicts**: Ensure Terraform version compatibility
-
-### Support
-
-For issues related to this infrastructure, check:
-
-1. GitHub Actions logs for CI failures
-2. Terraform state in GCS bucket
-3. Google Cloud Console for resource status
+- **Buckets**: `
