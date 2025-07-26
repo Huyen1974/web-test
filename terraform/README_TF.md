@@ -177,6 +177,14 @@ The service account (`chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccoun
 - If `GCP_WIF_PROVIDER` exists: Use Workload Identity Federation
 - If only `GCP_SA_KEY_JSON` exists: Use service account key authentication
 
+### Secrets Matrix Table
+
+| Secret Name | Required | Format | Description |
+|-------------|----------|--------|-------------|
+| `GCP_WIF_PROVIDER` | Recommended | `projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL_ID/providers/PROVIDER_ID` | Full resource name for Workload Identity Federation |
+| `GCP_SERVICE_ACCOUNT` | Required with WIF | `SERVICE_ACCOUNT_EMAIL` | Service account email for WIF authentication |
+| `GCP_SA_KEY_JSON` | Alternative | Base64 encoded JSON | Service account key for direct authentication |
+
 ## Resource Naming Convention
 
 - **Buckets**: `
