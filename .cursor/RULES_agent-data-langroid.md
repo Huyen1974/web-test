@@ -73,6 +73,32 @@ Không được làm việc trên mã cũ.
 
 ---
 
+## 8. CI Verification & Anti-Fake Report (MANDATORY)
+
+After each push, you must verify CI status to prevent "fake green" reports:
+
+1. **Watch CI execution** using GitHub CLI:
+   ```bash
+   gh run watch --exit-status --interval 15 --timeout 1200
+   ```
+
+2. **Capture conclusion status**:
+   ```bash
+   RUN_ID=$(gh run list -L1 --json databaseId -q '.[0].databaseId')
+   CONCLUSION=$(gh run view $RUN_ID --json conclusion -q .conclusion)
+   ```
+
+3. **If CONCLUSION ≠ `success`**, do **NOT** write PASS/green status anywhere; instead:
+   1. View logs: `gh run view $RUN_ID --log`
+   2. Fix the root cause, amend commit, and push again — max 3 loops
+   3. Repeat verification process
+
+4. **Only when CONCLUSION == `success`** may Cursor append a "PASS" line to `.cursor/memory_log/...`
+
+5. **Using `continue-on-error: true` to bypass this rule is strictly forbidden.**
+
+---
+
 ## Pre-push Self-Validation (MANDATORY)
 
 Before pushing any code, you must verify all of the following:
