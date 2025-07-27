@@ -187,4 +187,6 @@ The service account (`chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccoun
 
 ## Resource Naming Convention
 
-- **Buckets**: `
+All resources follow the pattern: `huyen1974-agent-data-{purpose}-{env}`
+
+- **Buckets**: `huyen1974-agent-data-{artifacts,knowledge,logs,qdrant-snapshots,source,tfstate}-{test,production}`

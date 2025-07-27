@@ -137,6 +137,8 @@ After each push, you must verify CI status to prevent "fake green" reports:
 
 5. **Using `continue-on-error: true` to bypass this rule is strictly forbidden.**
 
+**CI Verification**: Always check CI conclusion == success before PASS; use gh run view for logs.
+
 ---
 
 ✅ Hãy tuân thủ nghiêm ngặt các quy tắc trên khi làm việc với dự án Agent Data Langroid.

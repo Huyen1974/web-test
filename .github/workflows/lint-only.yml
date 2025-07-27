@@ -5,6 +5,10 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   lint:
     runs-on: ubuntu-22.04
@@ -209,7 +213,6 @@ jobs:
           fi
 
       - id: auth_wif
-        if: ${{ secrets.GCP_WIF_PROVIDER != '' }}
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
@@ -232,7 +235,7 @@ jobs:
         run: |
           terraform plan -detailed-exitcode -lock=false -var-file=terraform.tfvars
           TF_EXIT=$?
-          echo "TF_EXIT=$TF_EXIT" >> $GITHUB_ENV
+          echo "TF_EXIT=${TF_EXIT}" >> "$GITHUB_ENV"
           if [[ $TF_EXIT -ne 0 && $TF_EXIT -ne 2 ]]; then
             echo "::error::Terraform plan failed with exit $TF_EXIT"
             exit $TF_EXIT
