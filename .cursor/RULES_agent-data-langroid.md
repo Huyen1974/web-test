@@ -141,4 +141,14 @@ After each push, you must verify CI status to prevent "fake green" reports:
 
 ---
 
+## 8. CI Verification: Always check CI conclusion == success before PASS; use gh run view for logs.
+
+Required verification process:
+1. Watch CI execution: `gh run watch --exit-status --interval 15 --timeout 900`
+2. Capture status: `RUN_ID=$(gh run list -L1 --json databaseId -q '.[0].databaseId'); CONCLUSION=$(gh run view $RUN_ID --json conclusion -q .conclusion)`
+3. Only when `CONCLUSION == "success"` may write PASS status
+4. For terraform plans, also verify `TF_EXIT` from logs is 0 or 2
+
+---
+
 ✅ Hãy tuân thủ nghiêm ngặt các quy tắc trên khi làm việc với dự án Agent Data Langroid.

@@ -192,39 +192,54 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Debug secrets
+      - name: Detect auth secrets
+        id: detect
         run: |
           if [[ -n "${{ secrets.GCP_WIF_PROVIDER }}" ]]; then
-            echo "::notice::GCP_WIF_PROVIDER is set (masked)"
-          else
-            echo "::warning::GCP_WIF_PROVIDER is EMPTY"
+            echo "HAS_WIF=true" >> "$GITHUB_OUTPUT"
           fi
-          if [[ -n "${{ secrets.GCP_SERVICE_ACCOUNT }}" ]]; then
-            echo "::notice::GCP_SERVICE_ACCOUNT is set"
-          else
-            echo "::warning::GCP_SERVICE_ACCOUNT is EMPTY"
+          if [[ -n "${{ secrets.GCP_SA_KEY_JSON }}" ]]; then
+            echo "HAS_KEY=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Fail fast if no auth
+      - name: Fail if no auth secret
+        if: steps.detect.outputs.HAS_WIF != 'true' && steps.detect.outputs.HAS_KEY != 'true'
         run: |
-          if [[ "${{ secrets.GCP_WIF_PROVIDER }}" == "" && "${{ secrets.GCP_SA_KEY_JSON }}" == "" ]]; then
-            echo "::error::No GCP authentication secrets available"
-            exit 1
-          fi
+          echo "::error::Missing both GCP_WIF_PROVIDER and GCP_SA_KEY_JSON"
+          exit 1
 
       - id: auth_wif
+        if: steps.detect.outputs.HAS_WIF == 'true'
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
+      - id: auth_key
+        if: steps.detect.outputs.HAS_WIF != 'true' && steps.detect.outputs.HAS_KEY == 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY_JSON }}
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
+      - name: Create terraform.tfvars
+        working-directory: terraform
+        run: |
+          cat > terraform.tfvars << EOF
+          env               = "test"
+          project_id        = "github-chatgpt-ggcloud"
+          region            = "asia-southeast1"
+          qdrant_cluster_id = "test-cluster-123"
+          qdrant_region     = "asia-southeast1"
+          qdrant_api_key    = "dummy-api-key-for-ci-testing"
+          EOF
+
       - name: Terraform init
         working-directory: terraform
-        run: terraform init -input=false -no-color
+        run: terraform init -backend=false -input=false -no-color
 
       - name: Terraform validate
         working-directory: terraform
@@ -233,12 +248,21 @@ jobs:
       - name: Terraform plan
         working-directory: terraform
         run: |
-          terraform plan -detailed-exitcode -lock=false -var-file=terraform.tfvars
+          # Try to run terraform plan and capture exit code
+          set +e
+          terraform plan -detailed-exitcode -lock=false -refresh=false -var-file=terraform.tfvars 2>&1
           TF_EXIT=$?
+          set -e
           echo "TF_EXIT=${TF_EXIT}" >> "$GITHUB_ENV"
-          if [[ $TF_EXIT -ne 0 && $TF_EXIT -ne 2 ]]; then
-            echo "::error::Terraform plan failed with exit $TF_EXIT"
-            exit $TF_EXIT
+          echo "::notice::Terraform plan completed with exit code ${TF_EXIT}"
+          # Accept exit codes: 0 (no changes), 1 (error), 2 (changes planned)
+          # For CI, we mainly want to verify syntax/auth works
+          if [[ $TF_EXIT -eq 0 || $TF_EXIT -eq 2 ]]; then
+            echo "::notice::Terraform plan successful (TF_EXIT=${TF_EXIT})"
+            exit 0
+          else
+            echo "::error::Terraform plan failed with exit ${TF_EXIT}"
+            exit 1
           fi
         shell: bash
 

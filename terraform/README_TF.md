@@ -185,6 +185,10 @@ The service account (`chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccoun
 | `GCP_SERVICE_ACCOUNT` | Required with WIF | `SERVICE_ACCOUNT_EMAIL` | Service account email for WIF authentication |
 | `GCP_SA_KEY_JSON` | Alternative | Base64 encoded JSON | Service account key for direct authentication |
 
+Example values:
+- `GCP_WIF_PROVIDER`: `projects/123456789/locations/global/workloadIdentityPools/github-pool/providers/github-provider`
+- `GCP_SERVICE_ACCOUNT`: `chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com`
+
 ## Resource Naming Convention
 
 All resources follow the pattern: `huyen1974-agent-data-{purpose}-{env}`
