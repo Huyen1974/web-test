@@ -9,8 +9,14 @@ BASE = "tests"
 
 def count():
     total = 0
-    for _root, _, files in os.walk(BASE):
-        total += len(files)
+    for _root, dirs, files in os.walk(BASE):
+        # Skip __pycache__ directories
+        dirs[:] = [d for d in dirs if d != "__pycache__"]
+
+        # Count only files that are not build artifacts
+        for file in files:
+            if not file.endswith((".pyc", ".pyo")):
+                total += 1
     return total
 
 
