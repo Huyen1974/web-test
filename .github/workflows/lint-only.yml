@@ -60,11 +60,6 @@ jobs:
       - name: unit tests
         run: pytest
 
-      # Manifest drift check (CP0.4)
-      - name: manifest drift check (CP0.4)
-        run: |
-          python scripts/collect_manifest.py --check test_manifest_baseline.txt
-
       # Secret scan (CP0.5)
       - name: secret scan (CP0.5)
         run: |
@@ -225,17 +220,7 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: Create terraform.tfvars
-        working-directory: terraform
-        run: |
-          cat > terraform.tfvars << EOF
-          env               = "test"
-          project_id        = "github-chatgpt-ggcloud"
-          region            = "asia-southeast1"
-          qdrant_cluster_id = "test-cluster-123"
-          qdrant_region     = "asia-southeast1"
-          qdrant_api_key    = "dummy-api-key-for-ci-testing"
-          EOF
+
 
       - name: Terraform init
         working-directory: terraform
@@ -247,7 +232,7 @@ jobs:
       - name: Import buckets (first-run)
         working-directory: terraform
         run: |
-          terraform state list | grep google_storage_bucket || {
+          terraform state list | grep -q '^google_storage_bucket' && echo "Buckets already managed" || {
             for b in artifacts knowledge logs qdrant-snapshots source tfstate; do
               full="huyen1974-agent-data-${b}-test"
               terraform import -allow-missing-config google_storage_bucket.${full//-/_} $full
@@ -281,6 +266,15 @@ jobs:
       - name: Run trufflehog
         run: |
           trufflehog filesystem . --no-update --fail --exclude-paths .trufflehogignore
+
+  manifest-drift:
+    name: manifest-drift (CP0.4)
+    needs: secret-scan
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check manifest drift
+        run: python scripts/collect_manifest.py --check test_manifest_baseline.txt
 
   actionlint:
     runs-on: ubuntu-22.04

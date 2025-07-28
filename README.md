@@ -142,9 +142,10 @@ pytest tests/e2e/
 2. Create a feature branch: `git checkout -b feature/your-feature`
 3. Make your changes and add tests
 4. Run the test suite: `pytest`
-5. Commit your changes: `git commit -m "feat: add your feature"`
-6. Push to the branch: `git push origin feature/your-feature`
-7. Submit a pull request
+5. Update test manifest baseline if needed: `python scripts/collect_manifest.py > test_manifest_baseline.txt`
+6. Commit your changes: `git commit -m "feat: add your feature"`
+7. Push to the branch: `git push origin feature/your-feature`
+8. Submit a pull request
 
 ## License
 

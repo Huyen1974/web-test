@@ -53,6 +53,5 @@ repos:
       - id: manifest-drift
         name: Manifest drift
         entry: python scripts/collect_manifest.py --check test_manifest_baseline.txt
-        language: system
+        language: python
         pass_filenames: false
-        stages: [pre-commit, commit-msg]
