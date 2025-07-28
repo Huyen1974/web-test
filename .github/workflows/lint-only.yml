@@ -2,8 +2,10 @@ name: Lint Only
 on:
   push:
     branches: [main]
+    paths: [ 'terraform/**', '.github/workflows/lint-only.yml' ]
   pull_request:
     branches: [main]
+    paths: [ 'terraform/**', '.github/workflows/lint-only.yml' ]
 
 permissions:
   id-token: write
@@ -189,15 +191,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/cache@v4
-        with:
-          path: ~/.terraform.d/plugin-cache
-          key: terraform-plugins-${{ runner.os }}-${{ hashFiles('**/.terraform.lock.hcl') }}
-
       - name: Setup plugin cache dir
         run: |
           mkdir -p ~/.terraform.d/plugin-cache
-          export TF_PLUGIN_CACHE_DIR="$HOME/.terraform.d/plugin-cache"
+          echo "TF_PLUGIN_CACHE_DIR=$HOME/.terraform.d/plugin-cache" >> "$GITHUB_ENV"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: terraform-plugins-${{ runner.os }}-${{ hashFiles('terraform/.terraform.lock.hcl') }}
 
       - name: Detect auth secrets
         id: detect
@@ -232,8 +234,7 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: Log start time
-        run: echo "::notice::⏱ Terraform plan started $(date -u)"
+      - run: echo "::notice::⏱ init+plan start $(date -u)"; SECONDS=0
 
       - name: Terraform init
         working-directory: terraform
@@ -241,8 +242,6 @@ jobs:
           terraform init -backend-config="bucket=huyen1974-agent-data-tfstate-test" \
                          -backend-config="prefix=terraform/state" \
                          -input=false -no-color
-
-
 
       - name: Terraform validate
         working-directory: terraform
@@ -259,8 +258,7 @@ jobs:
             exit "$TF_EXIT"
           fi
 
-      - name: Log finish time
-        run: echo "::notice::✅ Terraform plan finished $(date -u)"
+      - run: echo "::notice::⏱ init+plan took $((SECONDS/60))m$((SECONDS%60))s"
 
   secret-scan:
     name: secret-scan (CP0.5)
