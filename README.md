@@ -150,6 +150,49 @@ pytest tests/e2e/
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+## Security
+
+### Secret Scanning with TruffleHog
+
+This project uses TruffleHog for secret scanning to prevent accidental commits of sensitive information.
+
+#### .trufflehogignore Setup
+
+Create a `.trufflehogignore` file in the project root to exclude patterns from secret scanning:
+
+```bash
+# Terraform binary files
+terraform/.*\.tfplan\.binary
+
+# Test/dummy values
+.*dummy-api-key-for-ci-testing.*
+.*test-cluster-123.*
+
+# Vendor directories
+vendor/Langroid/.*
+
+# Build artifacts
+.*\.egg-info/.*
+venv/.*
+htmlcov/.*
+\.git/.*
+__pycache__/.*
+\.mypy_cache/.*
+\.pytest_cache/.*
+```
+
+#### Pre-commit Hook
+
+TruffleHog runs automatically as a pre-commit hook. To install:
+
+```bash
+pre-commit install
+```
+
+#### CI Integration
+
+Secret scanning runs in CI as checkpoint CP0.5, ensuring no secrets are committed to the repository.
+
 ## Support
 
 For support and questions, please:

@@ -1,0 +1,11 @@
+terraform/.*\.tfplan\.binary
+.*dummy-api-key-for-ci-testing.*
+vendor/Langroid/.*
+.*test-cluster-123.*
+.*\.egg-info/.*
+venv/.*
+htmlcov/.*
+\.git/.*
+__pycache__/.*
+\.mypy_cache/.*
+\.pytest_cache/.*

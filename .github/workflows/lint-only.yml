@@ -269,6 +269,19 @@ jobs:
             exit "$TF_EXIT"
           fi
 
+  secret-scan:
+    name: secret-scan (CP0.5)
+    needs: terraform-plan
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install trufflehog
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+      - name: Run trufflehog
+        run: |
+          trufflehog filesystem . --no-update --fail --exclude-paths .trufflehogignore
+
   actionlint:
     runs-on: ubuntu-22.04
     steps:
