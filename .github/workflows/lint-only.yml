@@ -239,7 +239,20 @@ jobs:
 
       - name: Terraform init
         working-directory: terraform
-        run: terraform init -backend=false -input=false -no-color
+        run: |
+          terraform init -backend-config="bucket=huyen1974-agent-data-tfstate-test" \
+                         -backend-config="prefix=terraform/state" \
+                         -input=false -no-color
+
+      - name: Import buckets (first-run)
+        working-directory: terraform
+        run: |
+          terraform state list | grep google_storage_bucket || {
+            for b in artifacts knowledge logs qdrant-snapshots source tfstate; do
+              full="huyen1974-agent-data-${b}-test"
+              terraform import -allow-missing-config google_storage_bucket.${full//-/_} $full
+            done
+          }
 
       - name: Terraform validate
         working-directory: terraform
@@ -248,23 +261,13 @@ jobs:
       - name: Terraform plan
         working-directory: terraform
         run: |
-          # Try to run terraform plan and capture exit code
-          set +e
-          terraform plan -detailed-exitcode -lock=false -refresh=false -var-file=terraform.tfvars 2>&1
+          terraform plan -detailed-exitcode -lock=false -refresh=false
           TF_EXIT=$?
-          set -e
-          echo "TF_EXIT=${TF_EXIT}" >> "$GITHUB_ENV"
-          echo "::notice::Terraform plan completed with exit code ${TF_EXIT}"
-          # Accept exit codes: 0 (no changes), 1 (error), 2 (changes planned)
-          # For CI, we mainly want to verify syntax/auth works
-          if [[ $TF_EXIT -eq 0 || $TF_EXIT -eq 2 ]]; then
-            echo "::notice::Terraform plan successful (TF_EXIT=${TF_EXIT})"
-            exit 0
-          else
-            echo "::error::Terraform plan failed with exit ${TF_EXIT}"
-            exit 1
+          echo "TF_EXIT=$TF_EXIT" >> "$GITHUB_ENV"
+          if [[ $TF_EXIT -ne 0 && $TF_EXIT -ne 2 ]]; then
+            echo "::error::Terraform plan failed (exit $TF_EXIT)"
+            exit "$TF_EXIT"
           fi
-        shell: bash
 
   actionlint:
     runs-on: ubuntu-22.04

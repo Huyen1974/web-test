@@ -17,3 +17,4 @@
 2025-01-22 0.4f PASS SHA c192db8 URL https://github.com/Huyen1974/agent-data-test/actions/runs/16443107479
 2025-07-26 0.4a FAIL – CI red (auth error)
 2025-07-26 0.4a1 PASS SHA 3ba5019 URL https://github.com/Huyen1974/agent-data-test/actions/runs/16538697858
+2025-07-28 0.4a2-fix4 PASS SHA c5b336a URL https://github.com/Huyen1974/agent-data-test/actions/runs/16558384478
