@@ -180,12 +180,21 @@ jobs:
     name: Terraform Plan (CPG0.1)
     runs-on: ubuntu-22.04
     needs: checkpoint-gate
+    timeout-minutes: 40
     env:
       TF_VERSION: "1.8.5"
       TF_IN_AUTOMATION: "1"
       TF_CLI_ARGS: "-no-color"
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: terraform-plugins-${{ runner.os }}-${{ hashFiles('**/.terraform.lock.hcl') }}
+
+      - name: Setup plugin cache dir
+        run: mkdir -p ~/.terraform.d/plugin-cache
 
       - name: Detect auth secrets
         id: detect
@@ -229,15 +238,7 @@ jobs:
                          -backend-config="prefix=terraform/state" \
                          -input=false -no-color
 
-      - name: Import buckets (first-run)
-        working-directory: terraform
-        run: |
-          terraform state list | grep -q '^google_storage_bucket' && echo "Buckets already managed" || {
-            for b in artifacts knowledge logs qdrant-snapshots source tfstate; do
-              full="huyen1974-agent-data-${b}-test"
-              terraform import -allow-missing-config google_storage_bucket.${full//-/_} $full
-            done
-          }
+
 
       - name: Terraform validate
         working-directory: terraform

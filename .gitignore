@@ -238,3 +238,4 @@ deployment_logs/
 docker-compose.override.yml
 !/.cursor/**
 __pycache__/
+*.py[cod]
