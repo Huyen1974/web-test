@@ -180,11 +180,12 @@ jobs:
     name: Terraform Plan (CPG0.1)
     runs-on: ubuntu-22.04
     needs: checkpoint-gate
-    timeout-minutes: 40
+    timeout-minutes: 25
     env:
       TF_VERSION: "1.8.5"
       TF_IN_AUTOMATION: "1"
       TF_CLI_ARGS: "-no-color"
+      SKIP_IMPORT: 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -194,7 +195,9 @@ jobs:
           key: terraform-plugins-${{ runner.os }}-${{ hashFiles('**/.terraform.lock.hcl') }}
 
       - name: Setup plugin cache dir
-        run: mkdir -p ~/.terraform.d/plugin-cache
+        run: |
+          mkdir -p ~/.terraform.d/plugin-cache
+          export TF_PLUGIN_CACHE_DIR="$HOME/.terraform.d/plugin-cache"
 
       - name: Detect auth secrets
         id: detect
@@ -229,7 +232,8 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-
+      - name: Log start time
+        run: echo "::notice::⏱ Terraform plan started $(date -u)"
 
       - name: Terraform init
         working-directory: terraform
@@ -247,13 +251,16 @@ jobs:
       - name: Terraform plan
         working-directory: terraform
         run: |
-          terraform plan -detailed-exitcode -lock=false -refresh=false
+          terraform plan -detailed-exitcode -refresh=false -lock=false
           TF_EXIT=$?
           echo "TF_EXIT=$TF_EXIT" >> "$GITHUB_ENV"
           if [[ $TF_EXIT -ne 0 && $TF_EXIT -ne 2 ]]; then
             echo "::error::Terraform plan failed (exit $TF_EXIT)"
             exit "$TF_EXIT"
           fi
+
+      - name: Log finish time
+        run: echo "::notice::✅ Terraform plan finished $(date -u)"
 
   secret-scan:
     name: secret-scan (CP0.5)

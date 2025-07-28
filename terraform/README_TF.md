@@ -126,6 +126,13 @@ The CI pipeline includes a `terraform-plan` job that:
 4. Fails if exit code ≠ 0 and ≠ 2
 5. Shows warnings for drift (exit code 2) but doesn't block merge
 
+#### Plan Timeout & Cache
+
+- **Timeout**: Job auto-cancels after 25 minutes to prevent hanging
+- **Plugin Cache**: Terraform providers are cached to speed up initialization
+- **Skip Import**: Import steps are skipped by default (`SKIP_IMPORT=true`)
+- **Performance**: Target completion under 10 minutes with timing logs
+
 ### Pre-commit Hooks
 
 The following Terraform-related pre-commit hooks are configured:
