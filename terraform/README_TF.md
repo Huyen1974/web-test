@@ -202,3 +202,4 @@ Example values:
 All resources follow the pattern: `huyen1974-agent-data-{purpose}-{env}`
 
 - **Buckets**: `huyen1974-agent-data-{artifacts,knowledge,logs,qdrant-snapshots,source,tfstate}-{test,production}`
+# CI trigger
