@@ -132,7 +132,7 @@ The CI pipeline includes a `terraform-plan` job that:
 - **Plugin Cache**: Terraform providers are cached to speed up initialization
 - **Skip Import**: Import steps are skipped by default (`SKIP_IMPORT=true`)
 - **Performance**: Target completion under 10 minutes with timing logs
-- **Plan optimised**: provider cache, no refresh, timeout 25 min, ≤ 10 min target.
+- **Plan optimised**: TF_VAR_project_id env, provider cache, no refresh, timeout 25 min, target ≤ 10 min.
 
 ### Pre-commit Hooks
 

@@ -182,64 +182,83 @@ jobs:
     name: Terraform Plan (CPG0.1)
     runs-on: ubuntu-22.04
     needs: checkpoint-gate
-    timeout-minutes: 25
+    timeout-minutes: 25            # hard-stop sau 25 phút
     env:
       TF_VERSION: "1.8.5"
       TF_IN_AUTOMATION: "1"
       TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.tf-cache
+      TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}   # ⚠ quan trọng
       SKIP_IMPORT: 'true'
     steps:
       - uses: actions/checkout@v4
+
       - name: Prep plugin cache dir
         run: mkdir -p "${{ env.TF_PLUGIN_CACHE_DIR }}"
+
       - name: Cache terraform providers
         uses: actions/cache@v4
         with:
           path: ${{ env.TF_PLUGIN_CACHE_DIR }}
           key: tf-plugins-${{ runner.os }}-${{ hashFiles('terraform/.terraform.lock.hcl') }}
           restore-keys: tf-plugins-${{ runner.os }}-
+
+      # --- Auth secret detection (không thoát sớm) ---
       - name: Detect auth secrets
         id: detect
         run: |
-          [[ -n "${{ secrets.GCP_WIF_PROVIDER }}" ]] && echo "HAS_WIF=true" >> "$GITHUB_OUTPUT" || true
-          [[ -n "${{ secrets.GCP_SA_KEY_JSON }}" ]] && echo "HAS_KEY=true" >> "$GITHUB_OUTPUT" || true
+          [[ -n "${{ secrets.GCP_WIF_PROVIDER }}" ]] && echo "HAS_WIF=true"  >>"$GITHUB_OUTPUT" || true
+          [[ -n "${{ secrets.GCP_SA_KEY_JSON }}" ]] && echo "HAS_KEY=true"  >>"$GITHUB_OUTPUT" || true
+
       - name: Fail if no auth secret
         if: steps.detect.outputs.HAS_WIF != 'true' && steps.detect.outputs.HAS_KEY != 'true'
         run: |
           echo "::error::Missing both GCP_WIF_PROVIDER and GCP_SA_KEY_JSON"
           exit 1
+
       - id: auth_wif
         if: steps.detect.outputs.HAS_WIF == 'true'
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
       - id: auth_key
         if: steps.detect.outputs.HAS_WIF != 'true' && steps.detect.outputs.HAS_KEY == 'true'
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY_JSON }}
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+
       - name: Log start
         run: echo "::notice::⏱ terraform init+plan started at $(date -u)"
-      - name: terraform init
+
+      - name: Terraform init
         working-directory: terraform
         run: |
-          terraform init -backend-config="bucket=huyen1974-agent-data-tfstate-test" \
-                         -backend-config="prefix=terraform/state" \
-                         -input=false
-      - name: terraform validate
+          terraform init \
+            -backend-config="bucket=huyen1974-agent-data-tfstate-test" \
+            -backend-config="prefix=terraform/state" \
+            -input=false
+
+      - name: Terraform validate
         working-directory: terraform
         run: terraform validate
-      - name: terraform plan
+
+      - name: Terraform plan
         working-directory: terraform
         run: |
           SECONDS=0
-          terraform plan -detailed-exitcode -refresh=false -lock=false
+          terraform plan \
+            -detailed-exitcode \
+            -refresh=false \
+            -lock=false \
+            -parallelism=2 \
+            -var "project_id=${{ secrets.GCP_PROJECT_ID }}"
           TF_EXIT=$?
-          echo "TF_EXIT=$TF_EXIT" >> $GITHUB_ENV
+          echo "TF_EXIT=$TF_EXIT" >>"$GITHUB_ENV"
           echo "::notice::⏱ terraform plan finished in ${SECONDS}s"
           if [[ $SECONDS -gt 600 ]]; then
             echo "::error::Plan slower than 10 min (${SECONDS}s)"; exit 1
