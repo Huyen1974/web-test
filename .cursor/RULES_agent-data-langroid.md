@@ -58,9 +58,47 @@ Sử dụng dummy để test CI/CD khi chưa có mã chính thức.
 
 ---
 
-## 6. Secrets
-- Secrets dùng chung lưu tại repo: `chatgpt-githubnew`
-- Token/API key dùng chung lưu trong Secret Manager GCP (`github-chatgpt-ggcloud`)
+## 6. 🔑 SECRETS & IAM – MUST READ
+
+| Purpose | GitHub secret | Description |
+|---------|---------------|-------------|
+| GCP project ID               | `GCP_PROJECT_ID`    | e.g. `github-chatgpt-ggcloud` |
+| Deployer service-account     | `GCP_SERVICE_ACCOUNT` | `chatgpt-deployer@…` |
+| WIF provider full name       | `GCP_WIF_PROVIDER`  | `projects/•••/locations/global/workloadIdentityPools/•••/providers/•••` |
+| WIF pool ID (short)          | `GCP_WIF_POOL`      | e.g. `gha-pool` |
+| SA key (base64 JSON) fallback| `GCP_SA_KEY_JSON`   | **ONLY** used if WIF fails |
+| OpenAI key                   | `OPENAI_API_KEY`    | runtime |
+| Lark app secret              | `LARK_APP_SECRET`   | runtime |
+| Qdrant API key               | `QDRANT_API_KEY`    | runtime |
+| Qdrant cluster ID            | `QDRANT_CLUSTER_ID` | runtime |
+
+> **Never add secrets to code.** Use `process.env.*` (runtime) or Terraform `TF_VAR_*`.
+
+**IAM role baseline for `chatgpt-deployer`**
+
+* _CI / terraform plan_:
+  `roles/viewer`, `roles/cloudasset.viewer`
+* _CD / deploy_:
+  `roles/run.admin`, `roles/storage.admin`, `roles/artifactregistry.writer`,
+  `roles/iam.serviceAccountUser`, `roles/serviceusage.serviceUsageAdmin`,
+  `roles/cloudfunctions.developer`, `roles/logging.logWriter`,
+  `roles/secretmanager.secretAccessor`
+* **Forbidden** (remove if present): `roles/secretmanager.admin`, `roles/cloudsql.*`, `roles/iam.serviceAccountAdmin`, `roles/compute.securityAdmin`
+
+**Terraform workflow rules**
+
+* Always call `terraform plan` with
+  `-input=false -detailed-exitcode -refresh=false -lock=false`.
+* Pass required variables via env, e.g. `TF_VAR_project_id=${{ secrets.GCP_PROJECT_ID }}`.
+* Provider cache directory: `${{ github.workspace }}/.tf-cache`.
+* Job timeout 25 min; fail if runtime > 10 min.
+
+Cursor must refuse any PR/commit that:
+1. Adds hard-coded secrets.
+2. Grants extra IAM roles not listed above.
+3. Removes/renames the required GitHub secrets.
+
+> _Last updated 2025-07-28_
 
 ---
 
