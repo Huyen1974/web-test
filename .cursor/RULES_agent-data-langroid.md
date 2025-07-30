@@ -1,134 +1,146 @@
+📂 Final: .cursor/RULES_agent-data-langroid.md (Cập nhật 30.07.2025)
+
 # ⛔ CURSOR RULES – Agent Data Langroid (critical)
 
 ## 1. Project root (edit‑allowed ONLY)
 /Users/nmhuyen/Documents/Manual Deploy/agent-data-langroid
-
 ✅ Mọi thao tác phải nằm trong thư mục này.
 ⛔ Không được đọc/ghi/sửa ngoài path.
 
 ---
 
-## 2. Dự án GitHub
-Bạn đang làm việc với 2 repo:
+## 2. GitHub repositories
+Bạn đang làm việc với đúng 2 repo:
 - `agent-data-test`
 - `agent-data-production`
 
-Không được làm việc với các repo khác.
+⛔ Không được thao tác với bất kỳ repo nào khác.
 
 ---
 
 ## 3. Artifact Registry
-Mỗi repo trên sẽ có 1 Artifact Registry tương ứng:
+Mỗi repo sẽ có Artifact Registry riêng tương ứng:
 - `agent-data-test`
 - `agent-data-production`
 
-☑️ Artifact Registry này lưu toàn bộ artifact cần dùng (Docker image, Cloud Function, Cloud Run...), không cần tách riêng từng loại.
+☑️ Lưu Docker, Cloud Functions, Cloud Run... Không tách nhỏ.
 
 ---
 
-## 4. CI/CD
-Yêu cầu CI xanh cho:
-- Cloud Function
-- Cloud Run
-- Workflow YAML
+## 4. CI/CD – Kỷ luật tuyệt đối
+✅ Mỗi thay đổi phải đảm bảo CI xanh toàn phần: Cloud Function, Cloud Run, Workflow YAML.
 
-Sử dụng dummy để test CI/CD khi chưa có mã chính thức.
+⛔ Không được merge khi CI còn đỏ dù chỉ 1 bước.
+⛔ Không dùng `continue-on-error: true` trong mọi bước test hoặc validate.
 
 ---
 
-## 5. Terraform
-- Các bucket sau đã có sẵn, Terraform cần tiếp quản quyền quản lý tương ứng theo repo:
+## 5. Terraform buckets (do Terraform quản lý)
 
-| Bucket Name                                           | Thuộc repo |
-|------------------------------------------------------|------------|
-| huyen1974-agent-data-artifacts-test                  | test       |
-| huyen1974-agent-data-artifacts-production            | production |
-| huyen1974-agent-data-knowledge-test                  | test       |
-| huyen1974-agent-data-knowledge-production            | production |
-| huyen1974-agent-data-logs-test                       | test       |
-| huyen1974-agent-data-logs-production                 | production |
-| huyen1974-agent-data-qdrant-snapshots-test           | test       |
-| huyen1974-agent-data-qdrant-snapshots-production     | production |
-| huyen1974-agent-data-source-test                     | test       |
-| huyen1974-agent-data-source-production               | production |
-| huyen1974-agent-data-tfstate-test                    | test       |
-| huyen1974-agent-data-tfstate-production              | production |
+| Bucket Name                                           | Repo        |
+|------------------------------------------------------|-------------|
+| huyen1974-agent-data-artifacts-test                  | test        |
+| huyen1974-agent-data-artifacts-production            | production  |
+| huyen1974-agent-data-knowledge-test                  | test        |
+| huyen1974-agent-data-knowledge-production            | production  |
+| huyen1974-agent-data-logs-test                       | test        |
+| huyen1974-agent-data-logs-production                 | production  |
+| huyen1974-agent-data-qdrant-snapshots-test           | test        |
+| huyen1974-agent-data-qdrant-snapshots-production     | production  |
+| huyen1974-agent-data-source-test                     | test        |
+| huyen1974-agent-data-source-production               | production  |
+| huyen1974-agent-data-tfstate-test                    | test        |
+| huyen1974-agent-data-tfstate-production              | production  |
 
-➡️ Những bucket trước đây do `agent-data` quản lý sẽ chuyển giao cho 2 repo mới tương ứng.
+➡️ Terraform phải giữ quyền trên các bucket này theo đúng repo tương ứng.
 
 ---
 
-## 6. 🔑 SECRETS & IAM – MUST READ
+## 6. 🔐 SECRETS & IAM (baseline chuẩn nhất)
 
-| Purpose | GitHub secret | Description |
-|---------|--------------|-------------|
-| GCP project ID | `GCP_PROJECT_ID` | e.g. `github-chatgpt-ggcloud` |
-| Deployer service-account | `GCP_SERVICE_ACCOUNT` | `chatgpt-deployer@…` |
-| WIF provider full name | `GCP_WIF_PROVIDER` | `projects/.../providers/...` |
-| WIF pool ID | `GCP_WIF_POOL` | e.g. `gha-pool` |
-| SA key (b64 JSON) fallback | `GCP_SA_KEY_JSON` | **ONLY** if WIF fails |
-| OpenAI key | `OPENAI_API_KEY` | runtime |
-| Lark app secret | `LARK_APP_SECRET` | runtime |
-| **Qdrant cloud mgmt key** | `QDRANT_CLOUD_MGMT_KEY` | account-level operations |
-| **Qdrant cluster 1 key** | `QDRANT_CLUSTER1_KEY` | auth token for cluster 1 |
-| **Qdrant cluster 1 ID** | `QDRANT_CLUSTER1_ID` | e.g. `N1D8R2vC0_5` |
+| Purpose                  | GitHub secret              | Example / Note                             |
+|--------------------------|----------------------------|---------------------------------------------|
+| GCP project ID           | `GCP_PROJECT_ID`           | `github-chatgpt-ggcloud`                    |
+| Deployer SA              | `GCP_SERVICE_ACCOUNT`      | `chatgpt-deployer@...`                      |
+| WIF provider             | `GCP_WIF_PROVIDER`         | `projects/.../providers/...`                |
+| WIF pool ID              | `GCP_WIF_POOL`             | e.g. `gha-pool`                             |
+| SA fallback key (base64) | `GCP_SA_KEY_JSON`          | Dùng nếu WIF lỗi                            |
+| OpenAI Key               | `OPENAI_API_KEY`           | runtime                                     |
+| Lark app secret          | `LARK_APP_SECRET`          | runtime                                     |
+| Qdrant mgmt key          | `QDRANT_CLOUD_MGMT_KEY`    | cho tạo/xoá cluster                         |
+| Qdrant cluster 1 ID      | `QDRANT_CLUSTER1_ID`       | e.g. `N1D8R2vC0_5`                           |
+| Qdrant cluster 1 key     | `QDRANT_CLUSTER1_KEY`      | auth key cụ thể cho cluster trên            |
 
-> Quy ước thêm cluster: `QDRANT_CLUSTER{N}_KEY` / `QDRANT_CLUSTER{N}_ID`.
+> Quy ước thêm: `QDRANT_CLUSTER{N}_KEY` / `QDRANT_CLUSTER{N}_ID`
 
-For Qdrant usage in CI:
+🌐 GCP secrets lưu tại `github-chatgpt-ggcloud` → Secret Manager
+🔐 GitHub Secrets lưu tại `agent-data-test` / `agent-data-production`
+
+---
+
+## 7. IAM roles (đã phân quyền)
+
+✅ Bắt buộc giữ:
+- `roles/viewer`, `roles/cloudasset.viewer`, `roles/artifactregistry.writer`
+- `roles/cloudfunctions.developer`, `roles/iam.serviceAccountUser`
+- `roles/run.admin`, `roles/logging.logWriter`, `roles/secretmanager.secretAccessor`
+- `roles/serviceusage.serviceUsageAdmin`, `roles/storage.admin`
+
+⛔ Cấm gán thêm:
+- `roles/secretmanager.admin`, `roles/iam.serviceAccountAdmin`
+- `roles/cloudscheduler.admin`, `roles/cloudsql.*`, `roles/pubsub.publisher`
+- `roles/cloudbuild.builds.editor`, `roles/run.invoker`, `roles/workflows.admin`
+
+---
+
+## 8. Kiểm soát CI & test count
+### CI Verification Rules
+- Mọi commit phải pass CI với `conclusion == success`
+- Dùng các lệnh kiểm tra:
+```bash
+gh run view --log
+gh run list -L1
+gh run watch --exit-status --interval 15 --timeout 900
 ```
-TF_VAR_qdrant_api_key     = ${{ secrets.QDRANT_CLUSTER1_KEY }}
-TF_VAR_qdrant_cluster_id  = ${{ secrets.QDRANT_CLUSTER1_ID }}
-```
+- Terraform: TF_EXIT phải là 0 hoặc 2
+- ⛔ Cấm tuyệt đối dùng continue-on-error trong bất kỳ job test/lint/validate
 
-> **Never add secrets to code.** Use `process.env.*` (runtime) or Terraform `TF_VAR_*`.
+### Test Count Rules (Manifest Drift & Baseline)
+Nguyên tắc: Mọi thay đổi về số lượng file trong thư mục tests/ phải được kiểm soát chặt chẽ thông qua cơ chế "Manifest Drift" (CP0.4).
+- ✅ Cơ chế kiểm soát: CI sẽ chạy lệnh: `python scripts/check_manifest.py`
+  Lệnh này sẽ so sánh số lượng file trong thư mục tests/ với số lượng đã chốt trong file test_manifest_baseline.txt
+- ❌ CI sẽ thất bại nếu số lượng file không khớp (Manifest drift ≠ 0)
 
-**IAM role baseline for `chatgpt-deployer`**
+### Quy trình cập nhật baseline hợp lệ:
+1. Viết file test mới ➜ commit trước đó phải CI xanh
+2. Chạy lệnh: `python scripts/collect_manifest.py > test_manifest_baseline.txt`
+3. Commit cùng lúc:
+   - Các file test mới
+   - File test_manifest_baseline.txt cập nhật
+4. Mô tả commit phải ghi rõ lý do thay đổi số lượng test
+5. CI sau commit phải xanh
 
-* _CI / terraform plan_:
-  `roles/viewer`, `roles/cloudasset.viewer`
-* _CD / deploy_:
-  `roles/run.admin`, `roles/storage.admin`, `roles/artifactregistry.writer`,
-  `roles/iam.serviceAccountUser`, `roles/serviceusage.serviceUsageAdmin`,
-  `roles/cloudfunctions.developer`, `roles/logging.logWriter`,
-  `roles/secretmanager.secretAccessor`
-* **Forbidden** (remove if present): `roles/secretmanager.admin`, `roles/iam.serviceAccountAdmin`, `roles/compute.securityAdmin`, `roles/cloudscheduler.admin`, `roles/cloudbuild.builds.editor`, `roles/workflows.admin`, `roles/run.invoker`, `roles/pubsub.publisher`, `roles/cloudsql.*`
-
-**Terraform workflow rules**
-
-* Always call `terraform plan` with
-  `-input=false -detailed-exitcode -refresh=false -lock=false`.
-* Pass required variables via env, e.g. `TF_VAR_project_id=${{ secrets.GCP_PROJECT_ID }}`.
-* Provider cache directory: `${{ github.workspace }}/.tf-cache`.
-* Job timeout 25 min; fail if runtime > 10 min.
-
-Cursor must refuse any PR/commit that:
-1. Adds hard-coded secrets.
-2. Grants extra IAM roles not listed above.
-3. Removes/renames the required GitHub secrets.
-
-> _Last updated 2025-07-28_
+⛔ Cursor không được chỉnh sửa test mà không cập nhật manifest. Không được tự thêm test nếu chưa pass đủ CI + update manifest.
+📌 Đây là cơ chế bắt buộc để giữ số lượng test ổn định, tránh báo cáo ảo hoặc CI rác.
 
 ---
 
-## 7. Git
-Mã luôn phải được đồng bộ:
-- Trước khi làm: **pull bản mới nhất**
-- Sau khi làm: **push bản cập nhật**
+## 9. Báo cáo & tự sửa lỗi (strict)
+Cursor không được báo "PASS" nếu chưa verify bằng log CI.
 
-Không được làm việc trên mã cũ.
-
----
-
-## 8. CI Verification: Always check CI conclusion == success before PASS; use gh run view for logs.
-
-Required verification process:
-1. Watch CI execution: `gh run watch --exit-status --interval 15 --timeout 900`
-2. Capture status: `RUN_ID=$(gh run list -L1 --json databaseId -q '.[0].databaseId'); CONCLUSION=$(gh run view $RUN_ID --json conclusion -q .conclusion)`
-3. Only when `CONCLUSION == "success"` may write PASS status
-4. For terraform plans, also verify `TF_EXIT` from logs is 0 or 2
-5. Using `continue-on-error: true` to bypass this rule is strictly forbidden
+Nếu CI đỏ, phải:
+1. Kiểm tra log `gh run view`
+2. Tự sửa lỗi và push lại cùng branch
+3. Lặp lại tối đa 3 lần, nếu vẫn fail mới được báo lỗi
 
 ---
 
-✅ Hãy tuân thủ nghiêm ngặt các quy tắc trên khi làm việc với dự án Agent Data Langroid.
+## 10. Bảo vệ RULES – Không được xóa
+- Khi cập nhật RULES, Cursor tuyệt đối không được xoá bất kỳ nội dung nào nếu Prompt không cho phép rõ ràng.
+- Chỉ được thêm phần mới nếu Prompt không nói về xoá.
+- Tất cả cập nhật rules phải commit cùng commit logic.
+- Khi remove workflow, dùng `git rm`, không dùng `rm -f`
+
+✅ Đây là quy tắc chuẩn cứng Agent Data Langroid – Cursor phải luôn tuân thủ tuyệt đối.
+
+🕘 Cập nhật: 2025-07-30

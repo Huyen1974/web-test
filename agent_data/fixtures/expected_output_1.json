@@ -1,0 +1,26 @@
+{
+  "content": {
+    "query": "Find documents that discuss machine learning model deployment strategies and best practices for production environments. I'm particularly interested in containerization approaches and monitoring solutions.",
+    "response": "Based on the document search, here are the key findings about ML model deployment strategies:\n\n**Containerization Approaches:**\n- Docker containers provide consistent deployment environments\n- Kubernetes orchestration for scalable model serving\n- Container registries for version management\n\n**Production Best Practices:**\n- Model versioning and A/B testing frameworks\n- Automated CI/CD pipelines for model updates\n- Health checks and monitoring endpoints\n\n**Monitoring Solutions:**\n- Model performance metrics tracking\n- Data drift detection systems\n- Resource utilization monitoring\n\nThe documents emphasize the importance of reproducible environments and robust monitoring for successful ML production deployments.",
+    "sources": [
+      {
+        "document_id": "ml_deployment_guide_2024",
+        "excerpt": "Container-based deployment provides isolation and reproducibility...",
+        "relevance_score": 0.89
+      },
+      {
+        "document_id": "production_ml_best_practices",
+        "excerpt": "Monitoring model performance in production requires comprehensive metrics...",
+        "relevance_score": 0.85
+      }
+    ]
+  },
+  "metadata": {
+    "mock_data": true,
+    "model_version": "langroid-0.58.0",
+    "processing_time_ms": 1250,
+    "search_type": "semantic_similarity",
+    "timestamp": "2025-07-30T02:42:05.928526Z"
+  },
+  "type": "ToolMessage"
+}
