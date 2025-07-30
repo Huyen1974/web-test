@@ -1,11 +1,19 @@
 name: Lint Only
 on:
   push:
-    branches: [main]
-    paths: [ 'terraform/**', '.github/workflows/lint-only.yml' ]
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'test_manifest_baseline.txt'
   pull_request:
-    branches: [main]
-    paths: [ 'terraform/**', '.github/workflows/lint-only.yml' ]
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'test_manifest_baseline.txt'
 
 permissions:
   id-token: write
@@ -209,8 +217,12 @@ jobs:
       - name: Detect auth secrets
         id: detect
         run: |
-          [[ -n "${{ secrets.GCP_WIF_PROVIDER }}" ]] && echo "HAS_WIF=true"  >>"$GITHUB_OUTPUT" || true
-          [[ -n "${{ secrets.GCP_SA_KEY_JSON }}" ]] && echo "HAS_KEY=true"  >>"$GITHUB_OUTPUT" || true
+          if [[ -n "${{ secrets.GCP_WIF_PROVIDER }}" ]]; then
+            echo "HAS_WIF=true" >>"$GITHUB_OUTPUT"
+          fi
+          if [[ -n "${{ secrets.GCP_SA_KEY_JSON }}" ]]; then
+            echo "HAS_KEY=true" >>"$GITHUB_OUTPUT"
+          fi
 
       - name: Fail if no auth secret
         if: steps.detect.outputs.HAS_WIF != 'true' && steps.detect.outputs.HAS_KEY != 'true'

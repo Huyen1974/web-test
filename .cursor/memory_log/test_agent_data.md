@@ -22,3 +22,4 @@
 2025-07-30 0.5d-fix PASS SHA 19332b7 URL https://github.com/Huyen1974/agent-data-test/actions/runs/16611766117
 2025-07-30 0.6a PASS SHA df754ab URL https://github.com/Huyen1974/agent-data-test/actions/runs/16611860794 # CI terraform fixes, base for 0.6a1
 2025-07-30 0.6a1 PASS SHA 71cabd7 URL https://github.com/Huyen1974/agent-data-test/actions/runs/16611860794 # Golden Fixtures + manifest baseline updated, check_manifest.py added
+2025-07-30 0.6a2 PASS SHA 49e54b4 URL https://github.com/Huyen1974/agent-data-test/actions/runs/16613537206
