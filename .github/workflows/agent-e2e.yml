@@ -1,8 +1,5 @@
 name: Agent E2E
 on:
-  push:
-    branches: [main]
-    paths: ['tests/**', 'scripts/**', 'agent_data/**']
   pull_request:
     paths: ['tests/**', 'scripts/**', 'agent_data/**']
   workflow_dispatch:
@@ -15,20 +12,42 @@ jobs:
   agent-e2e:
     name: Agent E2E (CPG1.1, CPG1.2)
     runs-on: ubuntu-22.04
-    if: github.event.label.name == 'e2e' || github.event.inputs.e2e == 'true'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'e2e'))
     env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      GCP_WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER }}
+      GCP_WIF_POOL: ${{ secrets.GCP_WIF_POOL }}
+      GCP_SA_KEY_JSON: ${{ secrets.GCP_SA_KEY_JSON }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      QDRANT_CLOUD_MGMT_KEY: ${{ secrets.QDRANT_CLOUD_MGMT_KEY }}
+      QDRANT_CLUSTER1_ID: ${{ secrets.QDRANT_CLUSTER1_ID }}
+      QDRANT_CLUSTER1_KEY: ${{ secrets.QDRANT_CLUSTER1_KEY }}
       QDRANT_API_KEY: ${{ secrets.QDRANT_CLUSTER1_KEY }}
       QDRANT_CLUSTER_ID: ${{ secrets.QDRANT_CLUSTER1_ID }}
       QDRANT_REGION: "asia-southeast1"
     steps:
       - uses: actions/checkout@v4
+
+      - name: Verify secrets
+        run: |
+          scripts/verify_secrets.sh
+          echo "## Secret verification ✅" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Install dependencies
-        run: pip install langroid==0.58.0 pytest
+        run: pip install langroid==0.58.0 pytest qdrant-client openai
       - name: Smoke test
         run: |
           python scripts/gen_fixtures.py --no-mock
           pytest tests/test_fixture_pipeline.py -m fixture --disable-warnings
+
+      - name: Final CI check (RULES #9)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RUN_ID=$(gh run list -L1 --json databaseId -q '.[0].databaseId')
+          CONCLUSION=$(curl -s -H "Authorization: token $GH_TOKEN" "https://api.github.com/repos/${{ github.repository }}/actions/runs/$RUN_ID" | jq -r '.conclusion')
+          echo "Run $RUN_ID conclusion → $CONCLUSION"
+          if [ "$CONCLUSION" != "success" ]; then exit 1; fi
