@@ -61,16 +61,25 @@ Sử dụng dummy để test CI/CD khi chưa có mã chính thức.
 ## 6. 🔑 SECRETS & IAM – MUST READ
 
 | Purpose | GitHub secret | Description |
-|---------|---------------|-------------|
-| GCP project ID               | `GCP_PROJECT_ID`    | e.g. `github-chatgpt-ggcloud` |
-| Deployer service-account     | `GCP_SERVICE_ACCOUNT` | `chatgpt-deployer@…` |
-| WIF provider full name       | `GCP_WIF_PROVIDER`  | `projects/•••/locations/global/workloadIdentityPools/•••/providers/•••` |
-| WIF pool ID (short)          | `GCP_WIF_POOL`      | e.g. `gha-pool` |
-| SA key (base64 JSON) fallback| `GCP_SA_KEY_JSON`   | **ONLY** used if WIF fails |
-| OpenAI key                   | `OPENAI_API_KEY`    | runtime |
-| Lark app secret              | `LARK_APP_SECRET`   | runtime |
-| Qdrant API key               | `QDRANT_API_KEY`    | runtime |
-| Qdrant cluster ID            | `QDRANT_CLUSTER_ID` | runtime |
+|---------|--------------|-------------|
+| GCP project ID | `GCP_PROJECT_ID` | e.g. `github-chatgpt-ggcloud` |
+| Deployer service-account | `GCP_SERVICE_ACCOUNT` | `chatgpt-deployer@…` |
+| WIF provider full name | `GCP_WIF_PROVIDER` | `projects/.../providers/...` |
+| WIF pool ID | `GCP_WIF_POOL` | e.g. `gha-pool` |
+| SA key (b64 JSON) fallback | `GCP_SA_KEY_JSON` | **ONLY** if WIF fails |
+| OpenAI key | `OPENAI_API_KEY` | runtime |
+| Lark app secret | `LARK_APP_SECRET` | runtime |
+| **Qdrant cloud mgmt key** | `QDRANT_CLOUD_MGMT_KEY` | account-level operations |
+| **Qdrant cluster 1 key** | `QDRANT_CLUSTER1_KEY` | auth token for cluster 1 |
+| **Qdrant cluster 1 ID** | `QDRANT_CLUSTER1_ID` | e.g. `N1D8R2vC0_5` |
+
+> Quy ước thêm cluster: `QDRANT_CLUSTER{N}_KEY` / `QDRANT_CLUSTER{N}_ID`.
+
+For Qdrant usage in CI:
+```
+TF_VAR_qdrant_api_key     = ${{ secrets.QDRANT_CLUSTER1_KEY }}
+TF_VAR_qdrant_cluster_id  = ${{ secrets.QDRANT_CLUSTER1_ID }}
+```
 
 > **Never add secrets to code.** Use `process.env.*` (runtime) or Terraform `TF_VAR_*`.
 
@@ -83,7 +92,7 @@ Sử dụng dummy để test CI/CD khi chưa có mã chính thức.
   `roles/iam.serviceAccountUser`, `roles/serviceusage.serviceUsageAdmin`,
   `roles/cloudfunctions.developer`, `roles/logging.logWriter`,
   `roles/secretmanager.secretAccessor`
-* **Forbidden** (remove if present): `roles/secretmanager.admin`, `roles/cloudsql.*`, `roles/iam.serviceAccountAdmin`, `roles/compute.securityAdmin`
+* **Forbidden** (remove if present): `roles/secretmanager.admin`, `roles/iam.serviceAccountAdmin`, `roles/compute.securityAdmin`, `roles/cloudscheduler.admin`, `roles/cloudbuild.builds.editor`, `roles/workflows.admin`, `roles/run.invoker`, `roles/pubsub.publisher`, `roles/cloudsql.*`
 
 **Terraform workflow rules**
 
