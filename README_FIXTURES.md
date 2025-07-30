@@ -76,14 +76,35 @@ For real agent testing with OpenAI and Qdrant integration:
 
 1. **Environment Variables**: Set the following in your environment:
    ```bash
+   # Required for OpenAI integration (CPG1.2)
    export OPENAI_API_KEY="your-openai-api-key"
+
+   # Required for Qdrant integration (CPG1.1)
    export QDRANT_CLUSTER1_KEY="your-qdrant-api-key"
    export QDRANT_CLUSTER1_ID="your-qdrant-cluster-id"
+
+   # Optional for advanced Qdrant management
+   export QDRANT_CLOUD_MGMT_KEY="your-qdrant-management-key"
    ```
 
-2. **Dependencies**: Install Langroid:
+   **Setting up local environment:**
    ```bash
-   pip install langroid==0.58.0
+   # Create a .env file (not tracked by git)
+   cat > .env << EOF
+   OPENAI_API_KEY=sk-your-actual-openai-key-here
+   QDRANT_CLUSTER1_KEY=your-qdrant-cluster-api-key
+   QDRANT_CLUSTER1_ID=529a17a6-01b8-4304-bc5c-b936aec8fca9
+   QDRANT_CLOUD_MGMT_KEY=your-qdrant-management-key
+   EOF
+
+   # Load environment variables
+   source .env
+   # OR if using direnv: direnv allow
+   ```
+
+2. **Dependencies**: Install Langroid and required clients:
+   ```bash
+   pip install langroid==0.58.0 qdrant-client openai
    ```
 
 ### Real Agent Configuration
@@ -97,12 +118,31 @@ For real agent testing with OpenAI and Qdrant integration:
 ### Running Real Tests
 
 ```bash
+# First, verify all required secrets are set
+scripts/verify_secrets.sh
+
 # Generate real agent fixtures
 python scripts/gen_fixtures.py --no-mock
 
 # Run tests to validate CPG1.1 (Qdrant connectivity) and CPG1.2 (OpenAI connectivity)
 pytest tests/test_fixture_pipeline.py -m fixture --disable-warnings
 ```
+
+### Secret Verification
+
+Before running real agent tests, use the verification script to ensure all required environment variables are properly set:
+
+```bash
+# Check all required secrets
+scripts/verify_secrets.sh
+```
+
+This script validates the following environment variables:
+- `GCP_PROJECT_ID`, `GCP_SERVICE_ACCOUNT`, `GCP_WIF_PROVIDER`, `GCP_WIF_POOL`, `GCP_SA_KEY_JSON` (for GCP auth)
+- `OPENAI_API_KEY` (for OpenAI integration)
+- `QDRANT_CLOUD_MGMT_KEY`, `QDRANT_CLUSTER1_ID`, `QDRANT_CLUSTER1_KEY` (for Qdrant integration)
+
+The script will exit with error code 1 if any secrets are missing or contain placeholder values.
 
 ### Real Mode Validation
 

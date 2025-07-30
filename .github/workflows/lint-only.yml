@@ -213,7 +213,7 @@ jobs:
           key: tf-plugins-${{ runner.os }}-${{ hashFiles('terraform/.terraform.lock.hcl') }}
           restore-keys: tf-plugins-${{ runner.os }}-
 
-      # --- Auth secret detection (không thoát sớm) ---
+      # --- Auth with WIF-first and JSON key fallback ---
       - name: Detect auth secrets
         id: detect
         run: |
@@ -230,18 +230,41 @@ jobs:
           echo "::error::Missing both GCP_WIF_PROVIDER and GCP_SA_KEY_JSON"
           exit 1
 
-      - id: auth_wif
+      - name: Try WIF authentication first
+        id: auth_wif
         if: steps.detect.outputs.HAS_WIF == 'true'
+        continue-on-error: true
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-      - id: auth_key
-        if: steps.detect.outputs.HAS_WIF != 'true' && steps.detect.outputs.HAS_KEY == 'true'
+      - name: Check WIF auth result and set auth mode
+        id: auth_mode
+        run: |
+          if [[ "${{ steps.auth_wif.outcome }}" == "success" ]]; then
+            echo "::notice::✅ Auth mode → wif"
+            echo "AUTH_MODE=wif" >>"$GITHUB_OUTPUT"
+          elif [[ "${{ steps.detect.outputs.HAS_KEY }}" == "true" ]]; then
+            echo "::notice::⚠️ WIF failed, falling back to JSON key"
+            echo "AUTH_MODE=json-key" >>"$GITHUB_OUTPUT"
+          else
+            echo "::error::WIF failed and no JSON key available"
+            exit 1
+          fi
+
+      - name: Fallback to JSON key authentication
+        id: auth_key
+        if: steps.auth_mode.outputs.AUTH_MODE == 'json-key'
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY_JSON }}
+
+      - name: Verify final authentication
+        run: |
+          if [[ "${{ steps.auth_mode.outputs.AUTH_MODE }}" == "json-key" ]]; then
+            echo "::notice::✅ Auth mode → json-key (fallback successful)"
+          fi
 
       - uses: hashicorp/setup-terraform@v3
         with:
