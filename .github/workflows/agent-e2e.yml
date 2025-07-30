@@ -37,7 +37,12 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install dependencies
-        run: pip install langroid==0.58.0 pytest qdrant-client openai
+        run: pip install langroid==0.58.0 pytest qdrant-client openai requests
+      - name: Test Qdrant Secrets
+        run: |
+          echo "🔐 Testing updated Qdrant secrets..."
+          python test_qdrant_secrets.py
+
       - name: Smoke test
         run: |
           python scripts/gen_fixtures.py --no-mock
