@@ -74,7 +74,7 @@ def test_qdrant_cluster_key():
 
     # Test actual API call
     try:
-        cluster_url = f"https://{cluster_id}.asia-southeast1-0.aws.cloud.qdrant.io:6333"
+        cluster_url = f"https://{cluster_id}.us-east4-0.gcp.cloud.qdrant.io:6333"
         headers = {"api-key": api_key, "Content-Type": "application/json"}
 
         url = f"{cluster_url}/collections"
