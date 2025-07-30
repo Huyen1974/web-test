@@ -20,4 +20,5 @@
 2025-07-28 0.4a2-fix4 PASS SHA c5b336a URL https://github.com/Huyen1974/agent-data-test/actions/runs/16558384478
 2025-07-28 0.5a PASS SHA 99c0684 URL https://github.com/Huyen1974/agent-data-test/actions/runs/16558941802
 2025-07-30 0.5d-fix PASS SHA 19332b7 URL https://github.com/Huyen1974/agent-data-test/actions/runs/16611766117
-2025-07-30 0.6a PASS SHA df754ab URL [PENDING] # Golden Fixtures created, pytest -m fixture passes with 10 tests, CI-safe mock data
+2025-07-30 0.6a PASS SHA df754ab URL https://github.com/Huyen1974/agent-data-test/actions/runs/16611860794 # CI terraform fixes, base for 0.6a1
+2025-07-30 0.6a1 PASS SHA 71cabd7 URL https://github.com/Huyen1974/agent-data-test/actions/runs/16611860794 # Golden Fixtures + manifest baseline updated, check_manifest.py added
