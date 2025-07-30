@@ -1,4 +1,5 @@
-#!/usr/bin/env bash -e
+#!/usr/bin/env bash
+set -euo pipefail
 
 # verify_secrets.sh - Check required environment variables for CI/CD
 # Exit 1 with ::error:: message if any required secrets are missing or placeholder

@@ -48,6 +48,7 @@ def real_langroid_docchat_agent(query: str) -> dict[str, Any]:
     try:
         import langroid as lr
         from langroid.agent.special.doc_chat_agent import DocChatAgent
+        from langroid.embedding_models.models import OpenAIEmbeddingsConfig
         from langroid.utils.configuration import Settings, set_global
         from langroid.vector_store.qdrantdb import QdrantDBConfig
     except ImportError as e:
@@ -68,14 +69,34 @@ def real_langroid_docchat_agent(query: str) -> dict[str, Any]:
     settings = Settings(debug=False, cache=True, stream=False)
     set_global(settings)
 
-    # Configure Qdrant connection
+    # Configure Qdrant connection with environment variables
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    qdrant_api_key = os.getenv("QDRANT_CLUSTER1_KEY")
+    qdrant_cluster_id = os.getenv("QDRANT_CLUSTER1_ID")
+    qdrant_url = (
+        f"https://{qdrant_cluster_id}.asia-southeast1-0.aws.cloud.qdrant.io:6333"
+    )
+
+    # Debug: Check if keys are being read properly
+    print(
+        f"🔑 Debug: OPENAI_API_KEY length: {len(openai_api_key) if openai_api_key else 0}"
+    )
+    print(
+        f"🔑 Debug: QDRANT_CLUSTER1_KEY length: {len(qdrant_api_key) if qdrant_api_key else 0}"
+    )
+    print(f"🔑 Debug: QDRANT_CLUSTER1_ID: {qdrant_cluster_id}")
+
+    # Set environment variables for Qdrant
+    if qdrant_api_key:
+        os.environ["QDRANT_API_KEY"] = qdrant_api_key
+    if qdrant_url:
+        os.environ["QDRANT_URL"] = qdrant_url
+
     qdrant_config = QdrantDBConfig(
         cloud=True,
-        api_key=os.getenv("QDRANT_CLUSTER1_KEY"),
-        url=f"https://{os.getenv('QDRANT_CLUSTER1_ID')}.asia-southeast1-0.aws.cloud.qdrant.io:6333",
         collection_name="test_documents",
-        embedding=lr.embedding.models.OpenAIEmbeddingsConfig(
-            model_type="text-embedding-3-small", api_key=os.getenv("OPENAI_API_KEY")
+        embedding=OpenAIEmbeddingsConfig(
+            model_type="text-embedding-3-small", api_key=openai_api_key
         ),
         replace_collection=True,  # Clean collection before run
     )
@@ -84,7 +105,7 @@ def real_langroid_docchat_agent(query: str) -> dict[str, Any]:
     agent_config = lr.agent.special.doc_chat_agent.DocChatAgentConfig(
         vecdb=qdrant_config,
         llm=lr.language_models.OpenAIGPTConfig(
-            chat_model="gpt-4o-mini", api_key=os.getenv("OPENAI_API_KEY")
+            chat_model="gpt-4o-mini", api_key=openai_api_key
         ),
     )
 
