@@ -40,7 +40,7 @@ jobs:
           echo "::notice::Testing OpenAI API connectivity..."
           curl -fsSL -H "Authorization: Bearer $OPENAI_API_KEY" \
             https://api.openai.com/v1/models >/dev/null || {
-            echo "::error::OpenAI API test failed - invalid API key or network issue"
+            echo "::error::OpenAI API test failed - Set repo secret OPENAI_API_KEY with a valid sk-** key (≥ 51 chars)."
             exit 1
           }
           echo "::notice::✅ OpenAI API test passed"
@@ -64,3 +64,18 @@ jobs:
         run: |
           python scripts/gen_fixtures.py --no-mock
           pytest tests/test_fixture_pipeline.py -m fixture --disable-warnings
+
+      - name: Write PASS to memory log
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check combined status before writing PASS
+          SHA=${{ github.sha }}
+          STATE=$(curl -s -H "Authorization: token $GH_TOKEN" \
+            https://api.github.com/repos/${{ github.repository }}/commits/$SHA/status \
+            | jq -r .state)
+          if [[ "$STATE" != "success" ]]; then
+            echo "::error::Cannot write PASS - CI state is $STATE, not success"
+            exit 1
+          fi
+          echo "✅ CI state confirmed as success, proceeding with PASS entry"
