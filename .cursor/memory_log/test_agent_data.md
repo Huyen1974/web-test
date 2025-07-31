@@ -26,7 +26,7 @@
 2025-07-30 0.6b PASS SHA b480492 URL https://github.com/Huyen1974/agent-data-test/actions/runs/16614161044 # Real OpenAI + Qdrant integration for Langroid, CPG1.1 & CPG1.2 workflow ready
 2025-07-31 0.6b1-fix3 PENDING
 2025-07-31 0.6b1-fix5 FAIL – CI red
-2025-07-31 0.6b1-fix7 PASS SHA 4dcba3d URL https://github.com/Huyen1974/agent-data-test/actions/runs/16643616947
+2025-07-31 0.6b1-fix7 FAIL – CI red (Qdrant env missing, terraform backend issues)
 
 ## Terraform Drift Detection
 2025-07-30 0.6b Drift detected, consider importing state or updating config - Plan: 2 to add, 7 to change, 0 to destroy (artifact registry + bucket labels)
