@@ -52,6 +52,15 @@ jobs:
           }
           echo "::notice::✅ GCP SA key test passed"
 
+          # Qdrant API test
+          echo "::notice::Testing Qdrant API connectivity..."
+          curl -fsSL -H "api-key: $QDRANT_API_KEY" \
+            "$QDRANT_API_URL/collections" >/dev/null || {
+            echo "::error::Qdrant API test failed - Check QDRANT_API_KEY and QDRANT_API_URL"
+            exit 1
+          }
+          echo "::notice::✅ Qdrant API test passed"
+
           echo "::notice::✅ All secret smoke tests passed"
 
       - uses: actions/setup-python@v5

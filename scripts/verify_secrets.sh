@@ -71,7 +71,7 @@ done
 
 # Special validation for QDRANT_API_URL if it exists
 if [[ -n "${QDRANT_API_URL:-}" ]]; then
-    if [[ ! "$QDRANT_API_URL" =~ ^https://.*\.cloud\.qdrant\.io:6333$ ]]; then
+    if [[ ! "$QDRANT_API_URL" =~ ^https://.*.cloud.qdrant.io:6333$ ]]; then
         echo "::error::❌ QDRANT_API_URL format validation failed!"
         echo "::error::Expected format: https://<cluster-id>.<region>.gcp.cloud.qdrant.io:6333"
         echo "::error::Got: $QDRANT_API_URL"
