@@ -47,13 +47,12 @@ def real_langroid_docchat_agent(query: str) -> dict[str, Any]:
     """
     try:
         import langroid as lr
-        from langchain_openai import OpenAIEmbeddings
         from langroid.agent.special.doc_chat_agent import DocChatAgent
         from langroid.utils.configuration import Settings, set_global
         from langroid.vector_store.qdrantdb import QdrantDBConfig
     except ImportError as e:
         raise ImportError(
-            "langroid==0.58.0 and langchain_openai are required for real agent mode. Install with: pip install langroid==0.58.0 langchain-openai"
+            "langroid==0.58.0 is required for real agent mode. Install with: pip install langroid==0.58.0"
         ) from e
 
     # Check required environment variables
@@ -69,18 +68,15 @@ def real_langroid_docchat_agent(query: str) -> dict[str, Any]:
     settings = Settings(debug=False, cache=True, stream=False)
     set_global(settings)
 
-    # Configure OpenAI embeddings
-    openai_embeddings = OpenAIEmbeddings(
-        model="text-embedding-3-small", api_key=os.getenv("OPENAI_API_KEY")
-    )
-
     # Configure Qdrant connection
     qdrant_config = QdrantDBConfig(
         cloud=True,
         api_key=os.getenv("QDRANT_CLUSTER1_KEY"),
         url=f"https://{os.getenv('QDRANT_CLUSTER1_ID')}.asia-southeast1-0.aws.cloud.qdrant.io:6333",
         collection_name="test_documents",
-        embedding=openai_embeddings,
+        embedding=lr.embedding.models.OpenAIEmbeddingsConfig(
+            model_type="text-embedding-3-small", api_key=os.getenv("OPENAI_API_KEY")
+        ),
         replace_collection=True,  # Clean collection before run
     )
 
