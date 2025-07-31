@@ -31,6 +31,30 @@ jobs:
 
       - name: Verify secrets
         run: scripts/verify_secrets.sh
+
+      - name: Secret smoke-test
+        run: |
+          echo "::notice::🔥 Running secret smoke tests..."
+
+          # OpenAI API test
+          echo "::notice::Testing OpenAI API connectivity..."
+          curl -fsSL -H "Authorization: Bearer $OPENAI_API_KEY" \
+            https://api.openai.com/v1/models >/dev/null || {
+            echo "::error::OpenAI API test failed - invalid API key or network issue"
+            exit 1
+          }
+          echo "::notice::✅ OpenAI API test passed"
+
+          # GCP Service Account key test
+          echo "::notice::Testing GCP SA key decoding..."
+          echo "$GCP_SA_KEY_JSON" | base64 -d | jq -e '.client_email' >/dev/null || {
+            echo "::error::GCP SA key test failed - invalid base64 JSON or missing client_email"
+            exit 1
+          }
+          echo "::notice::✅ GCP SA key test passed"
+
+          echo "::notice::✅ All secret smoke tests passed"
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'

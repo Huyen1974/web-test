@@ -230,8 +230,8 @@ jobs:
           echo "::error::Missing both GCP_WIF_PROVIDER and GCP_SA_KEY_JSON"
           exit 1
 
-      - name: Try WIF authentication first
-        id: auth_wif
+      - name: WIF authentication
+        id: auth-wif
         if: steps.detect.outputs.HAS_WIF == 'true'
         continue-on-error: true
         uses: google-github-actions/auth@v2
@@ -239,32 +239,21 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-      - name: Check WIF auth result and set auth mode
-        id: auth_mode
-        run: |
-          if [[ "${{ steps.auth_wif.outcome }}" == "success" ]]; then
-            echo "::notice::✅ Auth mode → wif"
-            echo "AUTH_MODE=wif" >>"$GITHUB_OUTPUT"
-          elif [[ "${{ steps.detect.outputs.HAS_KEY }}" == "true" ]]; then
-            echo "::notice::⚠️ WIF failed, falling back to JSON key"
-            echo "AUTH_MODE=json-key" >>"$GITHUB_OUTPUT"
-          else
-            echo "::error::WIF failed and no JSON key available"
-            exit 1
-          fi
-
-      - name: Fallback to JSON key authentication
-        id: auth_key
-        if: steps.auth_mode.outputs.AUTH_MODE == 'json-key'
+      - name: Fallback authentication (JSON key)
+        if: failure() && steps.detect.outputs.HAS_KEY == 'true'
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY_JSON }}
 
-      - name: Verify final authentication
+      - name: Verify authentication success
         run: |
-          if [[ "${{ steps.auth_mode.outputs.AUTH_MODE }}" == "json-key" ]]; then
-            echo "::notice::✅ Auth mode → json-key (fallback successful)"
+          if [[ "${{ steps.auth-wif.outcome }}" == "success" ]]; then
+            echo "::notice::✅ Authentication successful via WIF"
+          else
+            echo "::notice::✅ Authentication successful via JSON key fallback"
           fi
+          # Test GCP access to ensure auth worked
+          gcloud auth list --filter=status:ACTIVE --format="value(account)" | head -1
 
       - uses: hashicorp/setup-terraform@v3
         with:
