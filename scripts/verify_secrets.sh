@@ -35,6 +35,17 @@ PLACEHOLDER_VALUES=(
 # Function to check if value is a placeholder
 is_placeholder() {
     local value="$1"
+
+    # Check for star-only patterns (placeholder stars)
+    if [[ "$value" =~ ^\*+$ ]]; then
+        return 0
+    fi
+
+    # Check if value is too short (minimum 20 chars for secrets)
+    if [[ ${#value} -lt 20 ]]; then
+        return 0
+    fi
+
     for placeholder in "${PLACEHOLDER_VALUES[@]}"; do
         if [[ "$value" == "$placeholder" ]]; then
             return 0
@@ -53,7 +64,8 @@ for var in "${REQUIRED_VARS[@]}"; do
     elif is_placeholder "${!var}"; then
         placeholder_vars+=("$var")
     else
-        echo "✅ $var: set (${#!var} characters)"
+        value="${!var}"
+        echo "✅ $var (${#value} chars)"
     fi
 done
 
