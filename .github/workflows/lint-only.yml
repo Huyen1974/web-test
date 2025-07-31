@@ -268,6 +268,7 @@ jobs:
           terraform init \
             -backend-config="bucket=huyen1974-agent-data-tfstate-test" \
             -backend-config="prefix=terraform/state" \
+            -backend-config="skip_bucket_root_access=true" \
             -input=false
 
       - name: Terraform validate
