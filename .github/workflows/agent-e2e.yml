@@ -24,9 +24,6 @@ jobs:
       QDRANT_CLUSTER1_ID: ${{ secrets.QDRANT_CLUSTER1_ID }}
       QDRANT_CLUSTER1_KEY: ${{ secrets.QDRANT_CLUSTER1_KEY }}
       QDRANT_API_KEY: ${{ secrets.QDRANT_CLUSTER1_KEY }}
-      QDRANT_API_URL: https://${{ secrets.QDRANT_CLUSTER1_ID }}.asia-southeast1-0.gcp.cloud.qdrant.io:6333
-      QDRANT_CLUSTER_ID: ${{ secrets.QDRANT_CLUSTER1_ID }}
-      QDRANT_REGION: "asia-southeast1"
     steps:
       - uses: actions/checkout@v4
 

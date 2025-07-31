@@ -69,17 +69,7 @@ for var in "${REQUIRED_VARS[@]}"; do
     fi
 done
 
-# Special validation for QDRANT_API_URL if it exists
-if [[ -n "${QDRANT_API_URL:-}" ]]; then
-    if [[ ! "$QDRANT_API_URL" =~ ^https://.*\.cloud\.qdrant\.io:6333$ ]]; then
-        echo "::error::❌ QDRANT_API_URL format validation failed!"
-        echo "::error::Expected format: https://<cluster-id>.cloud.qdrant.io:6333"
-        echo "::error::Got: $QDRANT_API_URL"
-        exit 1
-    else
-        echo "✅ QDRANT_API_URL format validated"
-    fi
-fi
+# Note: QDRANT_API_URL is not required as Langroid auto-constructs from QDRANT_CLUSTER1_ID
 
 # Report any issues
 if [[ ${#missing_vars[@]} -gt 0 ]] || [[ ${#placeholder_vars[@]} -gt 0 ]]; then
