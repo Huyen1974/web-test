@@ -62,7 +62,6 @@ def real_langroid_docchat_agent(query: str) -> dict[str, Any]:
         "QDRANT_CLUSTER1_ID",
         "QDRANT_CLUSTER1_KEY",
         "QDRANT_API_KEY",
-        "QDRANT_API_URL",
     ]
 
     missing_vars = [var for var in required_env_vars if not os.getenv(var)]
@@ -87,8 +86,6 @@ def real_langroid_docchat_agent(query: str) -> dict[str, Any]:
         collection_name="test_documents",
         embedding=embedding_cfg,
         replace_collection=True,  # Clean collection before run
-        api_key=os.getenv("QDRANT_API_KEY"),
-        url=os.getenv("QDRANT_API_URL"),
     )
 
     # Configure DocChatAgent
