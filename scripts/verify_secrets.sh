@@ -53,7 +53,7 @@ for var in "${REQUIRED_VARS[@]}"; do
     elif is_placeholder "${!var}"; then
         placeholder_vars+=("$var")
     else
-        echo "✅ $var: set (${#!var} characters)"
+        echo "✅ $var: set"
     fi
 done
 
