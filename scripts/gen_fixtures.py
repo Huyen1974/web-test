@@ -78,8 +78,6 @@ def real_langroid_docchat_agent(query: str) -> dict[str, Any]:
     # Configure Qdrant connection
     qdrant_config = QdrantDBConfig(
         cloud=True,
-        api_key=os.getenv("QDRANT_CLUSTER1_KEY"),
-        url=f"https://{os.getenv('QDRANT_CLUSTER1_ID')}.asia-southeast1-0.gcp.cloud.qdrant.io:6333",
         collection_name="test_documents",
         embedding=embedding_cfg,
         replace_collection=True,  # Clean collection before run
