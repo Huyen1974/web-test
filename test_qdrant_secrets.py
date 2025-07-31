@@ -27,7 +27,11 @@ def test_qdrant_mgmt_key():
             "Content-Type": "application/json",
         }
 
-        url = "https://api.cloud.qdrant.io/api/cluster/v1/clusters"
+        # Use account-scoped endpoint instead of invalid /v1/clusters
+        account_id = "b7093834-20e9-4206-8ea0-025b6994b319"
+        url = (
+            f"https://api.cloud.qdrant.io/api/cluster/v1/accounts/{account_id}/clusters"
+        )
         print(f"🌐 Testing management API: {url}")
 
         response = requests.get(url, headers=headers, timeout=15)

@@ -35,8 +35,30 @@ PLACEHOLDER_VALUES=(
 # Function to check if value is a placeholder
 is_placeholder() {
     local value="$1"
+
+    # Check for empty value
+    if [[ -z "$value" ]]; then
+        return 0
+    fi
+
+    # Check for length (must be at least 20 characters for real API keys)
+    if [[ ${#value} -lt 20 ]]; then
+        return 0
+    fi
+
+    # Check for asterisk placeholders (like ****)
+    if [[ "${value,,}" =~ ^\*+$ ]]; then
+        return 0
+    fi
+
+    # Check for common placeholder patterns
+    if [[ "${value,,}" =~ (xxx|changeme|placeholder) ]]; then
+        return 0
+    fi
+
+    # Check against predefined placeholder values
     for placeholder in "${PLACEHOLDER_VALUES[@]}"; do
-        if [[ "$value" == "$placeholder" ]]; then
+        if [[ "${value,,}" == "${placeholder,,}" ]]; then
             return 0
         fi
     done

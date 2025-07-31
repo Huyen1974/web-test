@@ -73,8 +73,9 @@ def real_langroid_docchat_agent(query: str) -> dict[str, Any]:
     openai_api_key = os.getenv("OPENAI_API_KEY")
     qdrant_api_key = os.getenv("QDRANT_CLUSTER1_KEY")
     qdrant_cluster_id = os.getenv("QDRANT_CLUSTER1_ID")
+    qdrant_region = os.getenv("QDRANT_REGION", "us-east4")
     qdrant_url = (
-        f"https://{qdrant_cluster_id}.asia-southeast1-0.aws.cloud.qdrant.io:6333"
+        f"https://{qdrant_cluster_id}.{qdrant_region}-0.gcp.cloud.qdrant.io:6333"
     )
 
     # Debug: Check if keys are being read properly
@@ -140,7 +141,7 @@ def real_langroid_docchat_agent(query: str) -> dict[str, Any]:
             "model_version": "langroid-0.58.0",
             "embedding_model": "text-embedding-3-small",
             "collection_name": "test_documents",
-            "qdrant_region": "asia-southeast1",
+            "qdrant_region": "us-east4",
             "mock_data": False,
         },
     }
