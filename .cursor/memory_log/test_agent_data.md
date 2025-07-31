@@ -24,6 +24,7 @@
 2025-07-30 0.6a1 PASS SHA 71cabd7 URL https://github.com/Huyen1974/agent-data-test/actions/runs/16611860794 # Golden Fixtures + manifest baseline updated, check_manifest.py added
 2025-07-30 0.6a2 PASS SHA 49e54b4 URL https://github.com/Huyen1974/agent-data-test/actions/runs/16613537206
 2025-07-30 0.6b PASS SHA b480492 URL https://github.com/Huyen1974/agent-data-test/actions/runs/16614161044 # Real OpenAI + Qdrant integration for Langroid, CPG1.1 & CPG1.2 workflow ready
+2025-07-30 0.6b1-fix1 PASS SHA 5b18f43 URL https://github.com/Huyen1974/agent-data-test/actions/runs/16638447172 # Fixed secret validation, Qdrant endpoints, WIF fallback verified
 
 ## Terraform Drift Detection
 2025-07-30 0.6b Drift detected, consider importing state or updating config - Plan: 2 to add, 7 to change, 0 to destroy (artifact registry + bucket labels)

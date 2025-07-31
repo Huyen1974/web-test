@@ -242,6 +242,7 @@ agent_data/fixtures/
 - Mock-based implementation for CI safety
 - Comprehensive test suite with structure validation
 - **v0.6b1** (2025-07-30): Real OpenAI + Qdrant integration
+- **v0.6b1-fix1** (2025-07-30): Fixed secret validation, Qdrant endpoints, and CI checks
 - Added `--no-mock` flag for real agent testing
 - CPG1.1 (Qdrant connectivity) and CPG1.2 (OpenAI connectivity) validation
 - E2E workflow for controlled real agent testing
