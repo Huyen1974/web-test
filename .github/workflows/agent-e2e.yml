@@ -63,7 +63,7 @@ jobs:
       - name: Smoke test
         run: |
           python scripts/gen_fixtures.py --no-mock
-          pytest tests/test_fixture_pipeline.py -m fixture --disable-warnings
+          pytest tests/test_fixture_pipeline.py -m fixture --disable-warnings --override-ini="addopts=-q --maxfail=1"
 
       - name: Write PASS to memory log
         env:
