@@ -1,9 +1,9 @@
-**📜 File Quy tắc Dự án: RULES_agent-data-langroid.md (Version 1.1)**
+**📜 File Quy tắc Dự án: RULES_agent-data-langroid.md (Version 1.2)**
 
-**Cập nhật:** August 06, 2025 (Phiên bản tuân thủ Hiến pháp v1.11e và
+**Cập nhật:** August 07, 2025 (Phiên bản tuân thủ Hiến pháp v1.11e và
 các Luật liên quan)
 
-**⛔ QUY TẮC CURSOR -- DỰ ÁN AGENT DATA LANGROID (Bản Hoàn Chỉnh)**
+**⛔ QUY TẮC CURSOR – DỰ ÁN AGENT DATA LANGROID (Bản Hoàn Chỉnh)**
 
 *Tài liệu này là nguồn chân lý duy nhất cho mọi hoạt động của bạn. Mọi
 hành động phải tuân thủ nghiêm ngặt các quy tắc dưới đây.*
@@ -35,7 +35,7 @@ Bạn chỉ làm việc trong các bối cảnh đã được định nghĩa dư
 - **Kiểm tra nhanh WIF:** Trước khi đẩy các thay đổi liên quan đến quyền
   hạn, bạn nên chạy lệnh sau trên máy cục bộ để mô phỏng và kiểm tra các
   điều kiện WIF: gcloud auth application-default login
-  --impersonate-service-account=$GCP_SERVICE_ACCOUNT
+  --impersonate-service-account=\$GCP_SERVICE_ACCOUNT
 
 **2. Quy tắc Quản lý Hạ tầng (Terraform)**
 
@@ -51,44 +51,28 @@ Bạn chỉ làm việc trong các bối cảnh đã được định nghĩa dư
 - **Danh sách Bucket Cụ thể:** Dưới đây là danh sách các bucket được
   Terraform quản lý.
 
-  ------------------------------------------------------------------------------------
-  Tên Bucket                                         Mục đích           Môi trường
-                                                     (\<purpose\>)      (\<env\>)
-  -------------------------------------------------- ------------------ --------------
-  huyen1974-agent-data-artifacts-test                artifacts          test
-
-  huyen1974-agent-data-artifacts-production          artifacts          production
-
-  huyen1974-agent-data-knowledge-test                knowledge          test
-
-  huyen1974-agent-data-knowledge-production          knowledge          production
-
-  huyen1974-agent-data-logs-test                     logs               test
-
-  huyen1974-agent-data-logs-production               logs               production
-
-  huyen1974-agent-data-qdrant-snapshots-test         qdrant-snapshots   test
-
-  huyen1974-agent-data-qdrant-snapshots-production   qdrant-snapshots   production
-
-  huyen1974-agent-data-source-test                   source             test
-
-  huyen1974-agent-data-source-production             source             production
-
-  huyen1974-agent-data-tfstate-test                  tfstate            test
-
-  huyen1974-agent-data-tfstate-production            tfstate            production
-
-  huyen1974-agent-data-backup-test                   backup             test
-
-  huyen1974-agent-data-backup-production             backup             production
-  ------------------------------------------------------------------------------------
+| Tên Bucket | Mục đích (\<purpose\>) | Môi trường (\<env\>) |
+|----|----|----|
+| huyen1974-agent-data-artifacts-test | artifacts | test |
+| huyen1974-agent-data-artifacts-production | artifacts | production |
+| huyen1974-agent-data-knowledge-test | knowledge | test |
+| huyen1974-agent-data-knowledge-production | knowledge | production |
+| huyen1974-agent-data-logs-test | logs | test |
+| huyen1974-agent-data-logs-production | logs | production |
+| huyen1974-agent-data-qdrant-snapshots-test | qdrant-snapshots | test |
+| huyen1974-agent-data-qdrant-snapshots-production | qdrant-snapshots | production |
+| huyen1974-agent-data-source-test | source | test |
+| huyen1974-agent-data-source-production | source | production |
+| huyen1974-agent-data-tfstate-test | tfstate | test |
+| huyen1974-agent-data-tfstate-production | tfstate | production |
+| huyen1974-agent-data-backup-test | backup | test |
+| huyen1974-agent-data-backup-production | backup | production |
 
 - Ghi chú: Tất cả các bucket mới BẮT BUỘC phải bật Uniform Bucket-Level
   Access (UBLA) để tuân thủ **Hiến pháp (HP-02)** và **TF-LAW (§4.3)**.
 
 - Ghi chú bổ sung: Một số bucket được tạo trước khi Hiến pháp có hiệu
-  lực có thể chưa bật UBLA. Các bucket này được coi là \"legacy\" và sẽ
+  lực có thể chưa bật UBLA. Các bucket này được coi là "legacy" và sẽ
   được xử lý theo nợ kỹ thuật **TD-TF-01**.
 
 **3. Quản lý Artifacts & Docker Images**
@@ -103,7 +87,7 @@ Bạn chỉ làm việc trong các bối cảnh đã được định nghĩa dư
 - **Chính sách Lưu giữ (Retention):** Việc lưu giữ artifact BẮT BUỘC
   phải tuân thủ quy trình 2 giai đoạn:
 
-  - **14 ngày:** Các artifact sẽ được tự động đánh dấu là \"stale\" (cũ)
+  - **14 ngày:** Các artifact sẽ được tự động đánh dấu là "stale" (cũ)
     để cảnh báo sớm.
 
   - **30 ngày:** Một quy trình tự động sẽ tạo GitHub Issue \[CLEANUP\]
@@ -111,7 +95,7 @@ Bạn chỉ làm việc trong các bối cảnh đã được định nghĩa dư
     công sau khi Issue được đóng lại.
 
   - Báo cáo và Cảnh báo: Một báo cáo tự động hàng tuần qua Slack sẽ tổng
-    hợp số lượng artifact đang được đánh dấu \"stale\". Báo cáo này BẮT
+    hợp số lượng artifact đang được đánh dấu "stale". Báo cáo này BẮT
     BUỘC phải được cấu hình với một ngưỡng cảnh báo (ví dụ: stale_count
     \< 5) và sẽ gửi một cảnh báo đặc biệt nếu số lượng vượt ngưỡng này.
 
@@ -155,24 +139,42 @@ Bạn chỉ làm việc trong các bối cảnh đã được định nghĩa dư
   bạn là tuân thủ các cấu trúc đã được định nghĩa trong mã nguồn (ví dụ:
   Pydantic models).
 
-**5. Quy tắc CI/CD & GitHub**
+### **5. Quy tắc CI/CD & GitHub**
 
 - **Kiểm soát Lockfile:** Lockfile (requirements.txt) BẮT BUỘC phải được
   tạo bằng lệnh pip-compile --no-upgrade. CI sẽ có bước
 
 > git diff --exit-code requirements.txt để đảm bảo file không bị chỉnh
-> sửa thủ công .
+> sửa thủ công.
 
 - **Pre-commit Hooks:** Mọi commit BẮT BUỘC phải vượt qua các hook đã
   được định nghĩa trong .pre-commit-config.yaml (bao gồm black, ruff,
   trufflehog, manifest-drift).
 
-- **Pass-gate:** Một Pull Request chỉ được merge khi tất cả các status
-  check sau thành công: lint-only, terraform-plan, secret-scan,
-  agent-e2e, manifest-drift-check.
+- **Workflow Pass-gate Tổng hợp:** Một workflow tổng hợp có tên
+  pass-gate.yml (bao gồm các job: lint, terraform-plan/validate,
+  secret-scan, manifest-drift) **BẮT BUỘC** phải chạy và có kết quả
+  **GREEN**. Workflow này **BẮT BUỘC** phải được thiết lập là "Required"
+  trong mục Branch Protection Rules của repository.
+
+- **Yêu cầu đối với Job lint-only:** Ngoài việc lint mã nguồn Python,
+  job lint-only **BẮT BUỘC** phải chạy thêm lệnh terraform validate
+  -no-color để phát hiện sớm các lỗi cú pháp và cấu hình backend của
+  Terraform.
+
+- **Pass-gate (Chi tiết):** Một Pull Request chỉ được merge khi tất cả
+  các status check sau thành công: lint-only, terraform-plan,
+  secret-scan, agent-e2e, manifest-drift-check.
+
+- **Yêu cầu về Shell an toàn:** Tất cả các khối lệnh run: trong workflow
+  **BẮT BUỘC** phải tuân thủ quy tắc "Fail-fast Shell" đã được định
+  nghĩa trong GLOBAL_RULES (sử dụng shell: bash -eou pipefail {0}). Cấm
+  tuyệt đối việc sử dụng
+
+> set +e để bỏ qua lỗi trong các script.
 
 - **continue-on-error:** BỊ CẤM TUYỆT ĐỐI, ngoại trừ trường hợp duy nhất
-  cho bước \"auth fallback\" trong workflow.
+  cho bước "auth fallback" trong workflow.
 
 - **Định dạng Tag Release:** Các tag cho production release BẮT BUỘC
   phải theo định dạng vX.Y.Z (ví dụ: v1.2.3).
@@ -195,9 +197,9 @@ Bạn chỉ làm việc trong các bối cảnh đã được định nghĩa dư
 > được phép ghi (secrets:write) secrets lên các repo agent-data-test và
 > agent-data-production .
 
-- [**Nhiệm vụ của Cursor:** Bạn **KHÔNG ĐƯỢC PHÉP** tạo, sửa, hoặc xóa
-  secrets trực tiếp trên agent-data-test hoặc
-  agent-data-production.]{.mark} Quy trình Xử lý Sự cố (Fallback)**:**
+- <span class="mark">**Nhiệm vụ của Cursor:** Bạn **KHÔNG ĐƯỢC PHÉP**
+  tạo, sửa, hoặc xóa secrets trực tiếp trên agent-data-test hoặc
+  agent-data-production.</span> Quy trình Xử lý Sự cố (Fallback)**:**
   Trong trường hợp workflow sync-secrets.yml gặp sự cố kéo dài (\>24h),
   việc cập nhật thủ công sẽ được thực hiện theo quy trình fallback đã
   quy định tại GH-LAW §5.5.
@@ -205,35 +207,18 @@ Bạn chỉ làm việc trong các bối cảnh đã được định nghĩa dư
 - **Danh sách Secrets:** Dưới đây là danh sách các secret bạn sẽ làm
   việc.
 
-  -------------------------------------------------------------------------------------------
-  Mục đích      Tên Secret trên GitHub  Ghi chú
-  ------------- ----------------------- -----------------------------------------------------
-  GCP Project   GCP_PROJECT_ID          Giá trị: github-chatgpt-ggcloud
-  ID
-
-  Deployer SA   GCP_SERVICE_ACCOUNT     Giá trị: chatgpt-deployer@\...
-
-  WIF Provider  GCP_WIF_PROVIDER        projects/\.../providers/github-provider
-
-  WIF Pool      GCP_WIF_POOL            projects/\.../workloadIdentityPools/agent-data-pool
-
-  SA Fallback   GCP_SA_KEY_JSON         Dùng khi WIF lỗi
-  Key
-
-  OpenAI Key    OPENAI_API_KEY          Secret cho runtime
-
-  Lark App      LARK_APP_SECRET         Secret cho runtime
-  Secret
-
-  Qdrant Mgmt   QDRANT_CLOUD_MGMT_KEY   Key quản lý Qdrant Cloud
-  Key
-
-  Qdrant        QDRANT_CLUSTER1_KEY     Key truy cập cluster
-  Cluster Key
-
-  Qdrant        QDRANT_CLUSTER1_ID      ID của cluster
-  Cluster ID
-  -------------------------------------------------------------------------------------------
+| Mục đích | Tên Secret trên GitHub | Ghi chú |
+|----|----|----|
+| GCP Project ID | GCP_PROJECT_ID | Giá trị: github-chatgpt-ggcloud |
+| Deployer SA | GCP_SERVICE_ACCOUNT | Giá trị: chatgpt-deployer@... |
+| WIF Provider | GCP_WIF_PROVIDER | projects/.../providers/github-provider |
+| WIF Pool | GCP_WIF_POOL | projects/.../workloadIdentityPools/agent-data-pool |
+| SA Fallback Key | GCP_SA_KEY_JSON | Dùng khi WIF lỗi |
+| OpenAI Key | OPENAI_API_KEY | Secret cho runtime |
+| Lark App Secret | LARK_APP_SECRET | Secret cho runtime |
+| Qdrant Mgmt Key | QDRANT_CLOUD_MGMT_KEY | Key quản lý Qdrant Cloud |
+| Qdrant Cluster Key | QDRANT_CLUSTER1_KEY | Key truy cập cluster |
+| Qdrant Cluster ID | QDRANT_CLUSTER1_ID | ID của cluster |
 
 - \*\*Chính sách Luân chuyển:\*\* Các secret quan trọng (ví dụ:
   QDRANT_CLUSTER1_KEY, OPENAI_API_KEY) phải được luân chuyển định kỳ: 90
@@ -247,7 +232,7 @@ Bạn chỉ làm việc trong các bối cảnh đã được định nghĩa dư
 **7. Quản lý Truy cập (IAM)**
 
 - **Các quyền được phép cấp cho Service Account
-  (chatgpt-deployer@\...):**
+  (chatgpt-deployer@...):**
 
   - roles/artifactregistry.writer
 
@@ -304,7 +289,7 @@ Bạn chỉ làm việc trong các bối cảnh đã được định nghĩa dư
   là 5 phút giữa các lần retry tự động.**
 
 - **Xác minh Trước khi Báo cáo:** Bạn không được báo cáo một tác vụ là
-  \"Thành công\" hoặc \"Hoàn thành\" cho đến khi đã xác minh trạng thái
+  "Thành công" hoặc "Hoàn thành" cho đến khi đã xác minh trạng thái
   thành công (success) của nó bằng cách kiểm tra log của CI (ví dụ: gh
   run view).
 

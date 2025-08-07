@@ -24,6 +24,14 @@ Bạn chỉ làm việc **duy nhất** trong một bối cảnh đã được đ
 
 Niềm tin được xây dựng trên kết quả có thể kiểm chứng.
 
+- **Yêu cầu về Shell an toàn (Fail-fast Shell):** Mọi bước run: trong
+  các workflow GitHub Actions **BẮT BUỘC** phải khai báo shell: bash
+  -eou pipefail {0}. Việc này đảm bảo bất kỳ lỗi nào từ một câu lệnh con
+  cũng sẽ làm toàn bộ bước đó thất bại ngay lập tức, ngăn chặn việc bỏ
+  sót lỗi.
+
+<!-- -->
+
 - **Không Báo cáo Sai sự thật:** Trước khi báo cáo một tác vụ là **hoàn
   thành (done/pass)**, bạn BẮT BUỘC phải kiểm tra log, chạy các lệnh xác
   thực, hoặc sử dụng các phương pháp đáng tin cậy khác để đảm bảo kết
@@ -72,58 +80,109 @@ Mọi hành động phải tuân thủ luật và có khả năng tự sửa sai
 
 **5. Quy trình Tự kiểm tra trước khi Push (Pre-push Self-Check)**
 
-Trước mỗi lệnh git push, bạn phải tự kiểm tra và vượt qua các điều kiện
-sau:
+Trước mỗi lệnh git push, bạn bắt buộc phải kiểm tra và vượt qua tất cả
+các điều kiện sau:
 
-1.  **Kiểm tra Thư mục làm việc (Chỉ áp dụng cho môi trường cục bộ):**
+1.  **Kiểm tra Thư mục làm việc** (Chỉ áp dụng cho môi trường cục bộ)
 
     - **Lệnh:** pwd
 
     - **Kết quả mong đợi:** Phải trả về chính xác đường dẫn:
       /Users/nmhuyen/Documents/Manual Deploy/agent-data-langroid.
 
-2.  **Kiểm tra Remote Repository:**
+2.  **Kiểm tra Remote Repository**
 
     - **Lệnh:** git remote get-url origin
 
     - **Kết quả mong đợi:** URL trả về phải chứa agent-data-test hoặc
       agent-data-production.
 
-3.  **Kiểm tra Trạng thái CI trên Nhánh hiện tại (Logic cải tiến):**
+3.  **Kiểm tra Terraform cục bộ (Local Terraform Validation)**
 
-    - **Lưu ý:** Bước này chỉ được thực hiện nếu gh CLI có sẵn. Nếu
-      không, bước này sẽ được bỏ qua.
+    - **Lệnh:** terraform validate (chạy trong các thư mục chứa mã
+      Terraform đã thay đổi).
 
-    - **Bước 1: Lấy tên nhánh hiện tại.**
+    - **Kết quả mong đợi:** Lệnh phải chạy thành công với mã thoát 0,
+      không có lỗi cú pháp.
 
-      - CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+4.  **Kiểm tra Manifest Drift**
 
-    - **Bước 2: Kiểm tra Manifest Drift.**
+    - **Lệnh:** python scripts/collect_manifest.py --check
+      test_manifest_baseline.txt
 
-      - **Lệnh:** python scripts/collect_manifest.py --check
-        test_manifest_baseline.txt
+    - **Kết quả mong đợi:** Lệnh phải chạy thành công với mã thoát 0.
+      Nếu có sự thay đổi về số lượng file test chưa được cập nhật, lệnh
+      sẽ thất bại và chặn push.
 
-      - **Kết quả mong đợi:** Lệnh phải chạy thành công với mã thoát 0.
-        Nếu thất bại, **dừng push**.
+5.  **Kiểm tra Trạng thái Toàn bộ CI trên Nhánh (All-runs Green Check)**
 
-    - **Bước 3: Lấy trạng thái của lần chạy CI gần nhất trên nhánh đó.**
+    - **Lưu ý:** Bước này chỉ được thực hiện nếu gh CLI có sẵn.
 
-      - LAST_RUN_STATUS=$(gh run list --branch $CURRENT_BRANCH
-        --limit 1 --json conclusion --jq '.[0].conclusion')
+    - **Lệnh & Logic:**
 
-    - **Bước 4: Kiểm tra điều kiện.**
-
-      - **Nếu LAST_RUN_STATUS rỗng (chưa có CI nào chạy):** Kiểm tra
-        được coi là **PASS**.
-
-      - **Nếu LAST_RUN_STATUS là success:** Kiểm tra được coi là
-        **PASS**.
-
-      - **Nếu LAST_RUN_STATUS là failure (hoặc trạng thái lỗi khác):**
-
-        - Kiểm tra message của commit gần nhất: git log -1 --pretty=%B.
-
-        - Nếu message chứa tag [ci-fix], kiểm tra được coi là **PASS**
-          (cho phép push để sửa lỗi CI).
-
-        - Nếu không, kiểm tra **FAIL** và bạn không được phép push.
+> CURRENT_BRANCH=\$(git rev-parse --abbrev-ref HEAD)
+>
+> echo "---"
+>
+> echo "Checking CI status for all recent runs on branch:
+> \$CURRENT_BRANCH"
+>
+> \# Lấy 5 lần chạy workflow gần nhất, bao gồm tên và kết luận
+>
+> WORKFLOW_RUNS=\$(gh run list --branch "\$CURRENT_BRANCH" --limit 5
+> --json name,conclusion --jq -c '.\[\]')
+>
+> \# Nếu không có lần chạy nào, coi như PASS
+>
+> if \[ -z "\$WORKFLOW_RUNS" \]; then
+>
+> echo "✅ No CI runs found on branch. Check PASSED."
+>
+> exit 0
+>
+> fi
+>
+> \# Duyệt qua từng lần chạy
+>
+> HAS_FAILURE=false
+>
+> while IFS= read -r run; do
+>
+> conclusion=\$(echo "\$run" \| jq -r '.conclusion')
+>
+> name=\$(echo "\$run" \| jq -r '.name')
+>
+> \# Kiểm tra nếu kết luận không phải là các trạng thái thành công hoặc
+> bỏ qua
+>
+> if \[\[ "\$conclusion" != "success" && "\$conclusion" != "skipped" &&
+> "\$conclusion" != "neutral" \]\]; then
+>
+> echo "❌ CI FAILED: Workflow '\$name' has conclusion '\$conclusion'."
+>
+> HAS_FAILURE=true
+>
+> else
+>
+> echo "✅ CI PASSED: Workflow '\$name' has conclusion '\$conclusion'."
+>
+> fi
+>
+> done \<\<\< "\$WORKFLOW_RUNS"
+>
+> \# Nếu có bất kỳ lỗi nào, chặn push
+>
+> if \[ "\$HAS_FAILURE" = true \]; then
+>
+> echo "---"
+>
+> echo "🛑 Push blocked due to failed CI runs."
+>
+> exit 1
+>
+> fi
+>
+> echo "---"
+>
+> echo "All recent CI runs on branch '\$CURRENT_BRANCH' passed. Push
+> allowed."
