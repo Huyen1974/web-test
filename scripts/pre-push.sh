@@ -32,6 +32,12 @@ check_gh_auth() {
 check_running_workflows() {
     echo "🔄 Checking for running workflows..."
 
+    # Check if pass-gate workflow exists first
+    if ! gh run list --workflow=pass-gate --limit 1 &> /dev/null; then
+        echo "⚠️  No pass-gate workflow found (this is expected for new implementation)"
+        return 0
+    fi
+
     # Check if any pass-gate workflows are still running
     local running_count
     running_count=$(gh run list --workflow=pass-gate --json status \
@@ -53,8 +59,8 @@ check_recent_ci_status() {
 
     # Get the last 5 workflow runs and check their status
     local failed_runs
-    failed_runs=$(gh run list --limit 5 --json name,status,conclusion \
-        | jq -r '.[] | select(.status == "completed" and .conclusion != "success") | "\(.name): \(.conclusion)"')
+    failed_runs=$(gh run list --limit 5 --json name,status,conclusion 2>/dev/null \
+        | jq -r '.[] | select(.status == "completed" and .conclusion != "success") | "\(.name): \(.conclusion)"' 2>/dev/null || echo "")
 
     if [[ -n "$failed_runs" ]]; then
         echo "❌ Recent CI failures detected:"
