@@ -168,7 +168,7 @@ Bạn chỉ làm việc trong các bối cảnh đã được định nghĩa dư
 
 - **Yêu cầu về Shell an toàn:** Tất cả các khối lệnh run: trong workflow
   **BẮT BUỘC** phải tuân thủ quy tắc "Fail-fast Shell" đã được định
-  nghĩa trong GLOBAL_RULES (sử dụng shell: bash -eou pipefail {0}). Cấm
+  nghĩa trong GLOBAL_RULES (sử dụng shell: bash -euo pipefail {0}). Cấm
   tuyệt đối việc sử dụng
 
 > set +e để bỏ qua lỗi trong các script.
