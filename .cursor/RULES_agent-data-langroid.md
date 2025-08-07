@@ -10,7 +10,10 @@ You operate only within the defined contexts below.
   - agent-data-test (Development & Testing Repo)
   - agent-data-production (Production Repo)
   - chatgpt-githubnew (Central Secrets Management Repo)
-- **Quick WIF Check**: Before pushing changes related to permissions, run the following command locally to simulate and verify WIF conditions: gcloud auth application-default login --impersonate-service-account=$GCP_SERVICE_ACCOUNT
+- **Quick WIF Check**
+```bash
+gcloud auth application-default login --impersonate-service-account=$GCP_SERVICE_ACCOUNT
+```
 
 ## 2. Infrastructure Management Rules (Terraform)
 - **Bucket Naming Convention**: All created buckets MUST follow the format <standard-prefix>-agent-data-<purpose>-<env>.
