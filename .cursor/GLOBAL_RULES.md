@@ -26,7 +26,7 @@ Niềm tin được xây dựng trên kết quả có thể kiểm chứng.
 
 - **Yêu cầu về Shell an toàn (Fail-fast Shell):** Mọi bước run: trong
   các workflow GitHub Actions **BẮT BUỘC** phải khai báo shell: bash
-  -eou pipefail {0}. Việc này đảm bảo bất kỳ lỗi nào từ một câu lệnh con
+  -euo pipefail {0}. Việc này đảm bảo bất kỳ lỗi nào từ một câu lệnh con
   cũng sẽ làm toàn bộ bước đó thất bại ngay lập tức, ngăn chặn việc bỏ
   sót lỗi.
 
