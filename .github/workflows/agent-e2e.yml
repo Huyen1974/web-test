@@ -1,18 +1,15 @@
 name: Agent E2E
-on:
-  pull_request:
-    paths: ['tests/**', 'scripts/**', 'agent_data/**']
-  workflow_dispatch:
-    inputs:
-      e2e:
-        description: 'Run E2E tests'
-        required: false
-
+true:
+  workflow_call: null
+  schedule:
+  - cron: 0 19 * * *
+  workflow_dispatch: null
 jobs:
   agent-e2e:
     name: Agent E2E (CPG1.1, CPG1.2)
     runs-on: ubuntu-22.04
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'e2e'))
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request'
+      && contains(github.event.pull_request.labels.*.name, 'e2e'))
     env:
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
       GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
@@ -26,64 +23,45 @@ jobs:
       QDRANT_API_KEY: ${{ secrets.QDRANT_CLUSTER1_KEY }}
       QDRANT_API_URL: https://${{ secrets.QDRANT_CLUSTER1_ID }}.us-east4-0.gcp.cloud.qdrant.io:6333
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
+    - name: Verify secrets
+      run: scripts/verify_secrets.sh
+    - name: Secret smoke-test
+      run: "echo \"::notice::\U0001F525 Running secret smoke tests...\"\n\n# OpenAI\
+        \ API test\necho \"::notice::Testing OpenAI API connectivity...\"\ncurl -fsSL\
+        \ -H \"Authorization: Bearer $OPENAI_API_KEY\" \\\n  https://api.openai.com/v1/models\
+        \ >/dev/null || {\n  echo \"::error::OpenAI API test failed - Set repo secret\
+        \ OPENAI_API_KEY with a valid sk-** key (≥ 51 chars).\"\n  exit 1\n}\necho\
+        \ \"::notice::✅ OpenAI API test passed\"\n\n# GCP Service Account key test\n\
+        echo \"::notice::Testing GCP SA key decoding...\"\necho \"$GCP_SA_KEY_JSON\"\
+        \ | base64 -d | jq -e '.client_email' >/dev/null || {\n  echo \"::error::GCP\
+        \ SA key test failed - invalid base64 JSON or missing client_email\"\n  exit\
+        \ 1\n}\necho \"::notice::✅ GCP SA key test passed\"\n\n# Qdrant API test\n\
+        echo \"::notice::Testing Qdrant API connectivity...\"\ncurl -fsSL -H \"api-key:\
+        \ $QDRANT_API_KEY\" \\\n  \"$QDRANT_API_URL/collections\" >/dev/null || {\n\
+        \  echo \"::error::Qdrant API test failed - Check QDRANT_API_KEY and QDRANT_API_URL\"\
+        \n  exit 1\n}\necho \"::notice::✅ Qdrant API test passed\"\n\necho \"::notice::✅\
+        \ All secret smoke tests passed\"\n"
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    - name: Install dependencies
+      run: pip install -r requirements.txt
+    - name: Smoke test
+      run: 'python scripts/gen_fixtures.py --no-mock
 
-      - name: Verify secrets
-        run: scripts/verify_secrets.sh
+        pytest tests/test_fixture_pipeline.py -m fixture --disable-warnings --override-ini="addopts=-q
+        --maxfail=1"
 
-      - name: Secret smoke-test
-        run: |
-          echo "::notice::🔥 Running secret smoke tests..."
-
-          # OpenAI API test
-          echo "::notice::Testing OpenAI API connectivity..."
-          curl -fsSL -H "Authorization: Bearer $OPENAI_API_KEY" \
-            https://api.openai.com/v1/models >/dev/null || {
-            echo "::error::OpenAI API test failed - Set repo secret OPENAI_API_KEY with a valid sk-** key (≥ 51 chars)."
-            exit 1
-          }
-          echo "::notice::✅ OpenAI API test passed"
-
-          # GCP Service Account key test
-          echo "::notice::Testing GCP SA key decoding..."
-          echo "$GCP_SA_KEY_JSON" | base64 -d | jq -e '.client_email' >/dev/null || {
-            echo "::error::GCP SA key test failed - invalid base64 JSON or missing client_email"
-            exit 1
-          }
-          echo "::notice::✅ GCP SA key test passed"
-
-          # Qdrant API test
-          echo "::notice::Testing Qdrant API connectivity..."
-          curl -fsSL -H "api-key: $QDRANT_API_KEY" \
-            "$QDRANT_API_URL/collections" >/dev/null || {
-            echo "::error::Qdrant API test failed - Check QDRANT_API_KEY and QDRANT_API_URL"
-            exit 1
-          }
-          echo "::notice::✅ Qdrant API test passed"
-
-          echo "::notice::✅ All secret smoke tests passed"
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-      - name: Smoke test
-        run: |
-          python scripts/gen_fixtures.py --no-mock
-          pytest tests/test_fixture_pipeline.py -m fixture --disable-warnings --override-ini="addopts=-q --maxfail=1"
-
-      - name: Write PASS to memory log
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Check combined status before writing PASS
-          SHA=${{ github.sha }}
-          STATE=$(curl -s -H "Authorization: token $GH_TOKEN" \
-            https://api.github.com/repos/${{ github.repository }}/commits/$SHA/status \
-            | jq -r .state)
-          if [[ "$STATE" != "success" ]]; then
-            echo "::error::Cannot write PASS - CI state is $STATE, not success"
-            exit 1
-          fi
-          echo "✅ CI state confirmed as success, proceeding with PASS entry"
+        '
+    - name: Write PASS to memory log
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: "# Check combined status before writing PASS\nSHA=${{ github.sha }}\nSTATE=$(curl\
+        \ -s -H \"Authorization: token $GH_TOKEN\" \\\n  https://api.github.com/repos/${{\
+        \ github.repository }}/commits/$SHA/status \\\n  | jq -r .state)\nif [[ \"\
+        $STATE\" != \"success\" ]]; then\n  echo \"::error::Cannot write PASS - CI\
+        \ state is $STATE, not success\"\n  exit 1\nfi\necho \"✅ CI state confirmed\
+        \ as success, proceeding with PASS entry\"\n"
+'on':
+  workflow_call: null

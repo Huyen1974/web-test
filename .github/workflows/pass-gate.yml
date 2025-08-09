@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: pass-gate-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   id-token: write
   contents: read
@@ -266,33 +270,24 @@ jobs:
         shell: bash -euo pipefail {0}
         run: python scripts/collect_manifest.py --check test_manifest_baseline.txt
 
-  pass-gate-success:
-    name: pass-gate-success
+  gate:
+    name: Pass Gate
     runs-on: ubuntu-22.04
-    needs: [lint-only, terraform-plan, secret-scan, agent-e2e, manifest-drift-check]
-    if: always()
+    needs: [terraform-validate, lint-only, terraform-plan, secret-scan, agent-e2e, manifest-drift-check]
+    if: ${{ always() }}
     steps:
-      - name: Check all jobs succeeded
-        shell: bash -euo pipefail {0}
+      - name: Evaluate results of required jobs
+        shell: bash
+        env:
+          NEEDS: ${{ toJson(needs) }}
         run: |
-          if [[ "${{ needs.lint-only.result }}" != "success" ]]; then
-            echo "::error::lint-only failed: ${{ needs.lint-only.result }}"
-            exit 1
-          fi
-          if [[ "${{ needs.terraform-plan.result }}" != "success" ]]; then
-            echo "::error::terraform-plan failed: ${{ needs.terraform-plan.result }}"
-            exit 1
-          fi
-          if [[ "${{ needs.secret-scan.result }}" != "success" ]]; then
-            echo "::error::secret-scan failed: ${{ needs.secret-scan.result }}"
-            exit 1
-          fi
-          if [[ "${{ needs.agent-e2e.result }}" != "success" ]]; then
-            echo "::error::agent-e2e failed: ${{ needs.agent-e2e.result }}"
-            exit 1
-          fi
-          if [[ "${{ needs.manifest-drift-check.result }}" != "success" ]]; then
-            echo "::error::manifest-drift-check failed: ${{ needs.manifest-drift-check.result }}"
-            exit 1
-          fi
-          echo "::notice::✅ All pass-gate jobs succeeded"
+          python3 - <<'PY2'
+          import json,os,sys
+          needs_json = os.environ.get("NEEDS", "{}")
+          needs = json.loads(needs_json) if needs_json else {}
+          failed_jobs = [job for job, status in needs.items() if status.get("result") != "success"]
+          if failed_jobs:
+              print(f"❌ Failed/skipped jobs: {failed_jobs}")
+              sys.exit(1)
+          print("✅ All required jobs succeeded")
+          PY2
