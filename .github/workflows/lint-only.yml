@@ -339,3 +339,4 @@ jobs:
     - uses: reviewdog/action-actionlint@v1
 'on':
   workflow_call: null
+  workflow_dispatch: null

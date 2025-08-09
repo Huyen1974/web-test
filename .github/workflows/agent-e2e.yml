@@ -65,3 +65,4 @@ jobs:
         \ as success, proceeding with PASS entry\"\n"
 'on':
   workflow_call: null
+  workflow_dispatch: null
