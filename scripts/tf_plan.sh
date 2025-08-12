@@ -303,7 +303,7 @@ main() {
         echo ""
         echo "🔍 Last 30 lines of terraform errors:"
         cd "$TF_DIR"
-        terraform plan -input=false -lock=false -no-color 2>&1 | tail -30 | tee .ci/p169d/last_error.txt || true
+        terraform plan -input=false -lock=false -no-color 2>&1 | tail -30 | tee ../.ci/p169d/last_error.txt || true
 
         exit 1
     fi
