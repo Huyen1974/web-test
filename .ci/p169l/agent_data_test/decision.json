@@ -1,9 +1,14 @@
 {
-  "central_min_ok": true,
+  "central_min_ok": false,
   "child_min_ok": true,
   "forbidden_pat_present": false,
-  "head_sha_after": "b537d027f29643add28c5132ce5f4d7f83f012aa",
+  "head_sha_after": "351524e407403ed5717d9ff3745c6573bfb5c847",
+  "notes": {
+    "central_min_ok_reason": "Workflow failed due to PyNaCl compatibility issue with Python 3.12",
+    "sync_error": "PublicKey.__init__() got an unexpected keyword argument 'encoding'",
+    "workflow_run_id": "16903836990"
+  },
   "pat_http_200": true,
-  "timestamp_utc": "2025-08-12T08:34:52.369221Z",
-  "wif_has_central": false
+  "timestamp_utc": "2025-08-12T08:51:48Z",
+  "wif_has_central": true
 }

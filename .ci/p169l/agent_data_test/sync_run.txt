@@ -1,4 +1,2 @@
-https://github.com/Huyen1974/chatgpt-githubnew/actions/runs/16903464066
-ID: 16903464066
-Status: in_progress
-Conclusion:
+run_url: https://github.com/Huyen1974/chatgpt-githubnew/actions/runs/16903836990
+run_id: 16903836990

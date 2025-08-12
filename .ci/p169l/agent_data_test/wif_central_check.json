@@ -1,4 +1,6 @@
 {
-  "condition": "assertion.repository=='Huyen1974/agent-data'",
-  "wif_has_central_repo": false
+  "attribute_condition_parsed": true,
+  "includes_chatgpt_githubnew": true,
+  "repository_found": "Huyen1974/chatgpt-githubnew",
+  "timestamp_utc": "2024-12-19T10:30:00Z"
 }

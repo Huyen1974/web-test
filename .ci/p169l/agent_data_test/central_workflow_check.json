@@ -1,0 +1,13 @@
+{
+  "dependencies": [
+    "requests",
+    "PyNaCl"
+  ],
+  "pat_from_gsm": true,
+  "python_deps_present": true,
+  "python_setup_step": "Install Python dependencies",
+  "service_account": "chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com",
+  "timestamp_utc": "2024-12-19T10:35:00Z",
+  "wif_provider_correct": true,
+  "workflow_file": ".github/workflows/sync-secrets-min.yml"
+}

@@ -1,6 +1,11 @@
 {
-  "GCP_PROJECT_ID": true,
-  "GCP_SERVICE_ACCOUNT": true,
-  "GCP_WIF_POOL": true,
-  "GCP_WIF_PROVIDER": true
+  "all_required_present": true,
+  "required_minimal_secrets": {
+    "GCP_PROJECT_ID": true,
+    "GCP_SERVICE_ACCOUNT": true,
+    "GCP_WIF_POOL": true,
+    "GCP_WIF_PROVIDER": true
+  },
+  "total_secrets_count": 11,
+  "verification_timestamp": "2024-12-19T10:50:00Z"
 }

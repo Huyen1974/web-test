@@ -1,18 +1,30 @@
 {
-  "GCP_PROJECT_ID": {
-    "status_code": null,
-    "success": false
+  "exit_code": 1,
+  "issue": "PyNaCl version compatibility with Python 3.12",
+  "overall_success": false,
+  "pat_retrieval": "success",
+  "python_deps_install": "success",
+  "run_id": "16903836990",
+  "run_url": "https://github.com/Huyen1974/chatgpt-githubnew/actions/runs/16903836990",
+  "sync_attempts": {
+    "GCP_PROJECT_ID": {
+      "error": "PublicKey.__init__() got an unexpected keyword argument 'encoding'",
+      "status": "error"
+    },
+    "GCP_SERVICE_ACCOUNT": {
+      "error": "PublicKey.__init__() got an unexpected keyword argument 'encoding'",
+      "status": "error"
+    },
+    "GCP_WIF_POOL": {
+      "error": "PublicKey.__init__() got an unexpected keyword argument 'encoding'",
+      "status": "error"
+    },
+    "GCP_WIF_PROVIDER": {
+      "error": "PublicKey.__init__() got an unexpected keyword argument 'encoding'",
+      "status": "error"
+    }
   },
-  "GCP_SERVICE_ACCOUNT": {
-    "status_code": null,
-    "success": false
-  },
-  "GCP_WIF_POOL": {
-    "status_code": null,
-    "success": false
-  },
-  "GCP_WIF_PROVIDER": {
-    "status_code": null,
-    "success": false
-  }
+  "timestamp_utc": "2024-12-19T08:49:29Z",
+  "workflow_conclusion": "failure",
+  "workflow_status": "completed"
 }
