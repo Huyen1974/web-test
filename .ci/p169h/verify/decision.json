@@ -1,0 +1,8 @@
+{
+  "central_min_ok": true,
+  "forbidden_pat_present": false,
+  "head_sha": "28c537d5f0b17c1d584258e0273f7e65f9793369",
+  "includes_chatgpt_githubnew": true,
+  "pat_http_200": true,
+  "test_min_ok": true
+}
