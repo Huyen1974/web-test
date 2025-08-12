@@ -1,0 +1,50 @@
+sync-secrets	Sync secrets to target repository	2025-08-12T08:33:12.7070574Z Error syncing GCP_SERVICE_ACCOUNT: PublicKey.__init__() got an unexpected keyword argument 'encoding'
+sync-secrets	Sync secrets to target repository	2025-08-12T08:33:12.7075246Z Error syncing GCP_WIF_POOL: PublicKey.__init__() got an unexpected keyword argument 'encoding'
+sync-secrets	Sync secrets to target repository	2025-08-12T08:33:12.7076329Z Error syncing GCP_WIF_PROVIDER: PublicKey.__init__() got an unexpected keyword argument 'encoding'
+sync-secrets	Sync secrets to target repository	2025-08-12T08:33:12.7296860Z ##[error]Process completed with exit code 1.
+sync-secrets	Upload sync results	﻿2025-08-12T08:33:12.7370686Z ##[group]Run actions/upload-artifact@v4
+sync-secrets	Upload sync results	2025-08-12T08:33:12.7370975Z with:
+sync-secrets	Upload sync results	2025-08-12T08:33:12.7371155Z   name: sync-results
+sync-secrets	Upload sync results	2025-08-12T08:33:12.7371361Z   path: .ci/p169h/sync_result_*.json
+sync-secrets	Upload sync results	2025-08-12T08:33:12.7371606Z   if-no-files-found: warn
+sync-secrets	Upload sync results	2025-08-12T08:33:12.7371818Z   compression-level: 6
+sync-secrets	Upload sync results	2025-08-12T08:33:12.7372014Z   overwrite: false
+sync-secrets	Upload sync results	2025-08-12T08:33:12.7372206Z   include-hidden-files: false
+sync-secrets	Upload sync results	2025-08-12T08:33:12.7372414Z env:
+sync-secrets	Upload sync results	2025-08-12T08:33:12.7372881Z   CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE: /home/runner/work/chatgpt-githubnew/chatgpt-githubnew/gha-creds-295e0e000db1b33d.json
+sync-secrets	Upload sync results	2025-08-12T08:33:12.7373687Z   GOOGLE_APPLICATION_CREDENTIALS: /home/runner/work/chatgpt-githubnew/chatgpt-githubnew/gha-creds-295e0e000db1b33d.json
+sync-secrets	Upload sync results	2025-08-12T08:33:12.7374398Z   GOOGLE_GHA_CREDS_PATH: /home/runner/work/chatgpt-githubnew/chatgpt-githubnew/gha-creds-295e0e000db1b33d.json
+sync-secrets	Upload sync results	2025-08-12T08:33:12.7374883Z   CLOUDSDK_CORE_PROJECT: github-chatgpt-ggcloud
+sync-secrets	Upload sync results	2025-08-12T08:33:12.7375179Z   CLOUDSDK_PROJECT: github-chatgpt-ggcloud
+sync-secrets	Upload sync results	2025-08-12T08:33:12.7375478Z   GCLOUD_PROJECT: github-chatgpt-ggcloud
+sync-secrets	Upload sync results	2025-08-12T08:33:12.7375739Z   GCP_PROJECT: github-chatgpt-ggcloud
+sync-secrets	Upload sync results	2025-08-12T08:33:12.7376005Z   GOOGLE_CLOUD_PROJECT: github-chatgpt-ggcloud
+sync-secrets	Upload sync results	2025-08-12T08:33:12.7376334Z   CLOUDSDK_METRICS_ENVIRONMENT: github-actions-setup-gcloud
+sync-secrets	Upload sync results	2025-08-12T08:33:12.7376665Z   CLOUDSDK_METRICS_ENVIRONMENT_VERSION: 2.2.0
+sync-secrets	Upload sync results	2025-08-12T08:33:12.7376907Z ##[endgroup]
+sync-secrets	Upload sync results	2025-08-12T08:33:12.9623118Z With the provided path, there will be 1 file uploaded
+sync-secrets	Upload sync results	2025-08-12T08:33:12.9650243Z Artifact name is valid!
+sync-secrets	Upload sync results	2025-08-12T08:33:12.9650665Z Root directory input is valid!
+sync-secrets	Upload sync results	2025-08-12T08:33:13.1616733Z Beginning upload of artifact content to blob storage
+sync-secrets	Upload sync results	2025-08-12T08:33:13.3135023Z Uploaded bytes 371
+sync-secrets	Upload sync results	2025-08-12T08:33:13.3548826Z Finished uploading artifact content to blob storage!
+sync-secrets	Upload sync results	2025-08-12T08:33:13.3552879Z SHA256 digest of uploaded artifact zip is 4ad98dc50c17538703a496305bb6e0a51524b650918c47cf415ba41453ee8f42
+sync-secrets	Upload sync results	2025-08-12T08:33:13.3555023Z Finalizing artifact upload
+sync-secrets	Upload sync results	2025-08-12T08:33:13.4820788Z Artifact sync-results.zip successfully finalized. Artifact ID 3742623036
+sync-secrets	Upload sync results	2025-08-12T08:33:13.4826151Z Artifact sync-results has been successfully uploaded! Final size is 371 bytes. Artifact ID is 3742623036
+sync-secrets	Upload sync results	2025-08-12T08:33:13.4830756Z Artifact download URL: https://github.com/Huyen1974/chatgpt-githubnew/actions/runs/16903464066/artifacts/3742623036
+sync-secrets	Post Authenticate to Google Cloud	﻿2025-08-12T08:33:13.4967708Z Post job cleanup.
+sync-secrets	Post Authenticate to Google Cloud	2025-08-12T08:33:13.5784633Z Removed exported credentials at "/home/runner/work/chatgpt-githubnew/chatgpt-githubnew/gha-creds-295e0e000db1b33d.json".
+sync-secrets	Post Checkout	﻿2025-08-12T08:33:13.5885021Z Post job cleanup.
+sync-secrets	Post Checkout	2025-08-12T08:33:13.6819019Z [command]/usr/bin/git version
+sync-secrets	Post Checkout	2025-08-12T08:33:13.6861033Z git version 2.50.1
+sync-secrets	Post Checkout	2025-08-12T08:33:13.6921484Z Temporarily overriding HOME='/home/runner/work/_temp/bac6ee26-5672-40e1-a279-ff24b80a8975' before making global git config changes
+sync-secrets	Post Checkout	2025-08-12T08:33:13.6922655Z Adding repository directory to the temporary git global config as a safe directory
+sync-secrets	Post Checkout	2025-08-12T08:33:13.6923737Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/chatgpt-githubnew/chatgpt-githubnew
+sync-secrets	Post Checkout	2025-08-12T08:33:13.6969297Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+sync-secrets	Post Checkout	2025-08-12T08:33:13.7006343Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+sync-secrets	Post Checkout	2025-08-12T08:33:13.7247884Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+sync-secrets	Post Checkout	2025-08-12T08:33:13.7271741Z http.https://github.com/.extraheader
+sync-secrets	Post Checkout	2025-08-12T08:33:13.7286621Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+sync-secrets	Post Checkout	2025-08-12T08:33:13.7320743Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+sync-secrets	Complete job	﻿2025-08-12T08:33:13.7656184Z Cleaning up orphan processes

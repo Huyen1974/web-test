@@ -1,0 +1,9 @@
+{
+  "central_min_ok": true,
+  "child_min_ok": true,
+  "forbidden_pat_present": false,
+  "head_sha_after": "b537d027f29643add28c5132ce5f4d7f83f012aa",
+  "pat_http_200": true,
+  "timestamp_utc": "2025-08-12T08:34:52.369221Z",
+  "wif_has_central": false
+}

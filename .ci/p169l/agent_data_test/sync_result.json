@@ -1,0 +1,18 @@
+{
+  "GCP_PROJECT_ID": {
+    "status_code": null,
+    "success": false
+  },
+  "GCP_SERVICE_ACCOUNT": {
+    "status_code": null,
+    "success": false
+  },
+  "GCP_WIF_POOL": {
+    "status_code": null,
+    "success": false
+  },
+  "GCP_WIF_PROVIDER": {
+    "status_code": null,
+    "success": false
+  }
+}
