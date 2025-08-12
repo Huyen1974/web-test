@@ -44,9 +44,7 @@ def main():
     lines = source.split("\n")
     result = []
 
-    for i, line in enumerate(lines):
-        orig_line = line
-
+    for _i, line in enumerate(lines):
         # Only apply heading prefixes - NO content changes
         if re.match(r"^§\d+:", line.strip()) and line.strip():
             line = "### " + line.strip()

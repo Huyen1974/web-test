@@ -17,8 +17,6 @@ def apply_conservative_formatting(text):
     result_lines = []
 
     for line in lines:
-        original_line = line
-
         # 1) Headings: Add ### prefix to section headers
         # §1:, §2:, etc.
         if re.match(r"^§\d+:", line.strip()):
