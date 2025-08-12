@@ -168,12 +168,13 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      # Check backend bucket (non-fatal)
-      - name: Check backend bucket (non-fatal)
+      # Ensure backend bucket exists before terraform init
+      - name: Ensure backend bucket exists
         shell: bash -euo pipefail {0}
-        continue-on-error: true
         run: |
-          gsutil ls -b gs://${TF_BACKEND_BUCKET}
+          gsutil ls -b gs://${TF_BACKEND_BUCKET} || \
+          (gsutil mb -p "${{ secrets.GCP_PROJECT_ID }}" -l asia-southeast1 gs://${TF_BACKEND_BUCKET} \
+          && gsutil uniformbucketlevelaccess set on gs://${TF_BACKEND_BUCKET})
 
       - name: Install jq for script dependencies
         shell: bash -euo pipefail {0}
@@ -187,25 +188,18 @@ jobs:
 
       - name: Terraform Plan with Self-Healing (max 2 attempts)
         shell: bash -euo pipefail {0}
-        env:
-          PLAN_BACKEND: ${{ github.ref == 'refs/heads/main' && 'remote' || 'local' }}
         run: |
           SECONDS=0
 
+          # Set backend config for tf_plan.sh
+          export TF_BACKEND_BUCKET="${TF_BACKEND_BUCKET}"
+
+          # Create backend config for terraform init in tf_plan.sh
           mkdir -p terraform/.tf_backend_config
           cat > terraform/.tf_backend_config/backend.conf <<EOF
           bucket = "${TF_BACKEND_BUCKET}"
           prefix = "state"
           EOF
-
-          # Use local backend for non-main branches (safer for PRs)
-          if [[ "$PLAN_BACKEND" == "local" ]]; then
-            echo "::notice::Using local backend mode for branch: ${{ github.ref }}"
-            export TF_BACKEND_BUCKET=""
-          else
-            echo "::notice::Using remote backend mode for main branch"
-            export TF_BACKEND_BUCKET="${TF_BACKEND_BUCKET}"
-          fi
 
           # Run our self-healing terraform plan script
           ./scripts/tf_plan.sh terraform
@@ -231,28 +225,26 @@ jobs:
           trufflehog filesystem . --no-update --fail --exclude-paths .trufflehogignore
 
   ci-hard-gate:
-    name: CI Hard Gate - SHA-bound Evidence
+    name: CI Hard Gate - Verify Success
     runs-on: ubuntu-22.04
-    needs: [terraform-validate, lint-only, terraform-plan, secret-scan, manifest-drift-check]
-    if: ${{ always() }}
+    needs: [terraform-plan, secret-scan]
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install jq
+      - name: Install GitHub CLI and jq
         shell: bash -euo pipefail {0}
         run: |
           sudo apt-get update -q
           sudo apt-get install -qy jq
 
-      - name: Verify & Archive Logs
+      - name: Verify CI Hard Gate
         shell: bash -euo pipefail {0}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NEEDS_JSON: ${{ toJson(needs) }}
         run: |
-          echo "🔐 CI Hard Gate: Archiving evidence for SHA ${{ github.sha }}"
-          ./scripts/ci_guard.sh
+          echo "🔐 CI Hard Gate: Verifying all upstream jobs succeeded"
+          ./scripts/ci_guard.sh "agent-data-langroid"
 
   agent-e2e:
     name: agent-e2e
@@ -287,4 +279,24 @@ jobs:
         shell: bash -euo pipefail {0}
         run: python scripts/collect_manifest.py --check test_manifest_baseline.txt
 
-  # Final gate collapsed into ci-hard-gate (unskippable)
+  gate:
+    name: Pass Gate
+    runs-on: ubuntu-22.04
+    needs: [terraform-validate, lint-only, terraform-plan, secret-scan, ci-hard-gate, agent-e2e, manifest-drift-check]
+    if: ${{ always() }}
+    steps:
+      - name: Evaluate results of required jobs
+        shell: bash
+        env:
+          NEEDS: ${{ toJson(needs) }}
+        run: |
+          python3 - <<'PY2'
+          import json,os,sys
+          needs_json = os.environ.get("NEEDS", "{}")
+          needs = json.loads(needs_json) if needs_json else {}
+          failed_jobs = [job for job, status in needs.items() if status.get("result") != "success"]
+          if failed_jobs:
+              print(f"❌ Failed/skipped jobs: {failed_jobs}")
+              sys.exit(1)
+          print("✅ All required jobs succeeded")
+          PY2
