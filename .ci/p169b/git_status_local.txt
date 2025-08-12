@@ -1,0 +1,5 @@
+a296b60 docs(rules): sync from canonical DOCX v1.2 (deterministic conversion + hard anchors)
+5b461a4 ci(workflows): fix agent-e2e and lint-only YAML structure; only workflow_call/dispatch triggers
+3d7f700 ci(workflows): fix YAML format and Pass Gate branch config; policy PASS
+d8e1ef9 ci(workflows): restore schedule/dispatch while keeping workflow_call; policy check PASS
+34a4c38 ci(workflows): enforce workflow_call on non-gate workflows; drop direct triggers; ensure pass-gate concurrency & always(); policy check PASS

@@ -1,0 +1,9 @@
+1367c8d Merge pull request #22 from Huyen1974/fix/0.6b1-fix7-embedpatch
+
+0.6b1-fix7: embed API patch
+42063e2 fix: remove coverage requirements from Agent E2E pytest run
+8569ead fix: update embed import for Langroid 0.58 (0.6b1-fix7)
+ce0d59f ci: add PASS-gate, rollback wrong log (0.6b1-fix6)
+3c41448 Merge pull request #20 from Huyen1974/fix/0.6b1-fix5-secrets-auth
+
+0.6b1-fix5: secrets+auth hardening

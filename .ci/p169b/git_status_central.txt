@@ -1,0 +1,5 @@
+9c9eedd Thêm ghi chú cleanup trước khi dùng Cursor
+c44c3c9 Xóa file requirements.txt không còn sử dụng
+4f82ae1 Đổi tên file infrastructure.md thành INFRA.md để đồng bộ với cấu trúc
+1bc1e61 Thêm file kiểm tra push qua SSH từ terminal
+351ab46 Update deploy_functions.yaml with debug step on main branch

@@ -1,0 +1,40 @@
+{
+  "artifacts": [
+    ".ci/p169b/wif_summary.json",
+    ".ci/p169b/ci_summary.json",
+    ".ci/p169b/ci_logs/",
+    ".cursor/notes/169b_plans_review.md"
+  ],
+  "central_repository": "Huyen1974/chatgpt-githubnew",
+  "ci_conclusions": {
+    "central": "success",
+    "production": "success",
+    "test": "success"
+  },
+  "execution_time": "2025-08-12T03:51:36Z",
+  "next_phase": "169c_move_pat_to_gcp_secret_manager",
+  "phase": "phase1_pat_in_central",
+  "secrets_applied": {
+    "GCP_PROJECT_ID": "github-chatgpt-ggcloud",
+    "GCP_REGION": "asia-southeast1",
+    "GCP_SERVICE_ACCOUNT": "chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com",
+    "GCP_WIF_POOL": "agent-data-pool",
+    "GCP_WIF_PROVIDER": "projects/812872501910/locations/global/workloadIdentityPools/agent-data-pool/providers/github-provider"
+  },
+  "target_repositories": [
+    "Huyen1974/agent-data-test",
+    "Huyen1974/agent-data-production"
+  ],
+  "task_id": "p169b",
+  "test_count_status": "no_changes_made_baseline_outdated",
+  "wif_configuration": {
+    "condition_repos": [
+      "Huyen1974/agent-data-test",
+      "Huyen1974/agent-data-production"
+    ],
+    "full_provider_name": "projects/812872501910/locations/global/workloadIdentityPools/agent-data-pool/providers/github-provider",
+    "pool": "agent-data-pool",
+    "provider": "github-provider",
+    "service_account": "chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com"
+  }
+}

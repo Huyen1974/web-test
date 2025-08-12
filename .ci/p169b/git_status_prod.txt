@@ -1,0 +1,20 @@
+b9020b4 feat: clean foundation setup for ID0.1
+
+- Add clean agent_data stub modules (__init__.py, cli.py, server.py)
+- Add development dependencies and configuration
+- Add pre-commit hooks configuration
+- Add Python version specification (.python-version)
+- Add Dockerfile for containerization
+- Update requirements with Langroid dependencies
+- Clean test structure with unit tests
+- Foundation reset completed per Sprint S1 requirements
+503fa71 Merge remote-tracking branch 'origin/main' into main
+1800c2c Initial commit
+67a77c4 feat: initial repo setup and Terraform transfer ID0.1
+
+- Fixed Python version compatibility (>=3.10,<3.13)
+- Added shadow marker to pytest configuration
+- Fixed Terraform artifact_registry syntax
+- Copied essential files from old project
+- Set up basic agent_data module structure
+- Added CI workflow and dependabot configuration
