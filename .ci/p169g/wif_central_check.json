@@ -1,0 +1,7 @@
+{
+  "central_repo": "Huyen1974/chatgpt-githubnew",
+  "condition_after": "(attribute.repository=='Huyen1974/agent-data-test' && (attribute.ref.startsWith('refs/heads/') || attribute.ref.startsWith('refs/tags/'))) || (attribute.repository=='Huyen1974/agent-data-production' && (attribute.ref=='refs/heads/main' || attribute.ref.startsWith('refs/tags/'))) || (attribute.repository=='Huyen1974/chatgpt-githubnew' && (attribute.ref=='refs/heads/main' || attribute.ref.startsWith('refs/tags/')))",
+  "condition_before": "(attribute.repository=='Huyen1974/agent-data-test' && (attribute.ref.startsWith('refs/heads/') || attribute.ref.startsWith('refs/tags/'))) || (attribute.repository=='Huyen1974/agent-data-production' && (attribute.ref=='refs/heads/main' || attribute.ref.startsWith('refs/tags/')))",
+  "had_central_before": false,
+  "has_central_after": true
+}

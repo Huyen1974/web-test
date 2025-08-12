@@ -1,0 +1,29 @@
+{
+  "evidence_location": ".ci/p169e/iam_check.json",
+  "overall_iam_status": "PASS",
+  "secret_accessor_role_check": {
+    "fix_applied": "Granted secretAccessor role on gh_pat_sync_secrets",
+    "required_role": "roles/secretmanager.secretAccessor",
+    "sa_has_role_on_secret": true,
+    "status": "PASS"
+  },
+  "secret_iam_policy": {
+    "bindings": [
+      {
+        "members": [
+          "serviceAccount:chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com"
+        ],
+        "role": "roles/secretmanager.secretAccessor"
+      }
+    ],
+    "etag": "BwY8JLPHxlY=",
+    "note": "FIXED: Service account now has explicit secretAccessor binding"
+  },
+  "secret_name": "gh_pat_sync_secrets",
+  "service_account": "chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com",
+  "timestamp": "2024-01-XX",
+  "wif_binding_issues": [
+    "Principal sets reference wrong pool 'github-pool' instead of 'agent-data-pool'",
+    "Mixed pool references create authentication conflicts"
+  ]
+}

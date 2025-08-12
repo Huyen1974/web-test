@@ -1,8 +1,9 @@
 {
   "central_min_ok": true,
   "forbidden_pat_present": false,
-  "head_sha": "28c537d5f0b17c1d584258e0273f7e65f9793369",
+  "head_sha_after": "8fd048f44d43e0d518f5db6cb76fc28a61290b6a",
   "includes_chatgpt_githubnew": true,
   "pat_http_200": true,
-  "test_min_ok": true
+  "test_min_ok": true,
+  "timestamp_utc": "2025-08-12T07:04:17Z"
 }

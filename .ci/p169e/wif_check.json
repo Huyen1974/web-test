@@ -1,0 +1,39 @@
+{
+  "attribute_conditions_analysis": {
+    "central_repo_rules": "main + tags - MATCH",
+    "conditions_status": "PASS",
+    "configured_condition": "(attribute.repository=='Huyen1974/agent-data-test' && (attribute.ref.startsWith('refs/heads/') || attribute.ref.startsWith('refs/tags/'))) || (attribute.repository=='Huyen1974/agent-data-production' && (attribute.ref=='refs/heads/main' || attribute.ref.startsWith('refs/tags/'))) || (attribute.repository=='Huyen1974/chatgpt-githubnew' && (attribute.ref=='refs/heads/main' || attribute.ref.startsWith('refs/tags/')))",
+    "expected_repos": [
+      "Huyen1974/agent-data-test",
+      "Huyen1974/agent-data-production",
+      "Huyen1974/chatgpt-githubnew"
+    ],
+    "prod_repo_rules": "main + tags - MATCH",
+    "test_repo_rules": "any branch/tag - MATCH"
+  },
+  "evidence_location": ".ci/p169e/wif_check.json",
+  "iam_bindings_analysis": {
+    "binding_status": "PASS",
+    "fixes_applied": [
+      "FIXED: Added binding for agent-data-pool/* - now has correct pool binding",
+      "LEGACY: Old github-pool bindings retained for safety (minimal fix approach)"
+    ],
+    "service_account": "chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com",
+    "workload_identity_user_bindings": [
+      "principalSet://iam.googleapis.com/projects/812872501910/locations/global/workloadIdentityPools/agent-data-pool/*",
+      "principalSet://iam.googleapis.com/projects/812872501910/locations/global/workloadIdentityPools/github-pool/attribute.repository/Huyen1974/agent-data",
+      "principalSet://iam.googleapis.com/projects/812872501910/locations/global/workloadIdentityPools/github-pool/attribute.repository/Huyen1974/agent-data-test",
+      "principalSet://iam.googleapis.com/projects/812872501910/locations/global/workloadIdentityPools/github-pool/attribute.repository/Huyen1974/agent_data",
+      "principalSet://iam.googleapis.com/projects/812872501910/locations/global/workloadIdentityPools/github-pool/attribute.repository/Huyen1974/chatgpt-githubnew",
+      "principalSet://iam.googleapis.com/projects/812872501910/locations/global/workloadIdentityPools/github-pool/attribute.repository/Huyen1974/mpc_back_end_for_agent"
+    ]
+  },
+  "overall_wif_status": "PASS",
+  "project_id": "github-chatgpt-ggcloud",
+  "project_number": "812872501910",
+  "provider_status": "ACTIVE",
+  "resource_name": "projects/812872501910/locations/global/workloadIdentityPools/agent-data-pool/providers/github-provider",
+  "timestamp": "2024-01-XX",
+  "wif_pool": "agent-data-pool",
+  "wif_provider": "github-provider"
+}

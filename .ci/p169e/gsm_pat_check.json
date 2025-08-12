@@ -1,0 +1,16 @@
+{
+  "access_test": {
+    "command": "gcloud secrets versions access latest --secret=gh_pat_sync_secrets | head -c 4",
+    "note": "Successfully retrieved first 4 characters - PAT exists and is readable",
+    "result": "ghp_",
+    "status": "PASS"
+  },
+  "evidence_location": ".ci/p169e/gsm_pat_check.json",
+  "overall_gsm_status": "PASS",
+  "secret_name": "gh_pat_sync_secrets",
+  "timestamp": "2024-01-XX",
+  "token_validation": {
+    "format_check": "PASS - starts with 'ghp_' (GitHub Personal Access Token format)",
+    "full_token_not_revealed": true
+  }
+}

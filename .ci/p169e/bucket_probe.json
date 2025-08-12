@@ -1,0 +1,22 @@
+{
+  "access_verification": {
+    "bucket_exists": true,
+    "error": null,
+    "read_access": true
+  },
+  "bucket_name": "gs://huyen1974-agent-data-tfstate-test",
+  "evidence_location": ".ci/p169e/bucket_probe.json",
+  "notes": [
+    "Bucket accessible for Terraform backend",
+    "Read-only test - no creation/deletion performed",
+    "Non-fatal check as per constraints"
+  ],
+  "overall_bucket_status": "PASS",
+  "probe_command": "gsutil ls -b gs://huyen1974-agent-data-tfstate-test",
+  "probe_result": {
+    "exit_code": 0,
+    "output": "gs://huyen1974-agent-data-tfstate-test/",
+    "status": "PASS"
+  },
+  "timestamp": "2024-01-XX"
+}

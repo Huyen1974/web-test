@@ -1,0 +1,14 @@
+{
+  "attributeCondition": "(attribute.repository=='Huyen1974/agent-data-test' && (attribute.ref.startsWith('refs/heads/') || attribute.ref.startsWith('refs/tags/'))) || (attribute.repository=='Huyen1974/agent-data-production' && (attribute.ref=='refs/heads/main' || attribute.ref.startsWith('refs/tags/')))",
+  "attributeMapping": {
+    "attribute.ref": "assertion.ref",
+    "attribute.repository": "assertion.repository",
+    "google.subject": "assertion.sub"
+  },
+  "displayName": "GitHub Provider",
+  "name": "projects/812872501910/locations/global/workloadIdentityPools/agent-data-pool/providers/github-provider",
+  "oidc": {
+    "issuerUri": "https://token.actions.githubusercontent.com"
+  },
+  "state": "ACTIVE"
+}

@@ -1,0 +1,6 @@
+{
+  "description": "WIF pool for agent-data-test and agent-data-production repos",
+  "displayName": "Agent Data Pool",
+  "name": "projects/812872501910/locations/global/workloadIdentityPools/agent-data-pool",
+  "state": "ACTIVE"
+}

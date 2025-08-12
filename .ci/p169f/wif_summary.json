@@ -1,0 +1,8 @@
+{
+  "condition_matches": true,
+  "pool_exists": true,
+  "provider_exists": true,
+  "resource_id": "projects/github-chatgpt-ggcloud/locations/global/workloadIdentityPools/agent-data-pool/providers/github-provider",
+  "resource_number": "projects/812872501910/locations/global/workloadIdentityPools/agent-data-pool/providers/github-provider",
+  "sa_has_wif_user": true
+}

@@ -1,0 +1,63 @@
+{
+  "evidence_location": ".ci/p169e/workflows_scan.json",
+  "expected_service_account": "chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com",
+  "expected_wif_provider": "projects/812872501910/locations/global/workloadIdentityPools/agent-data-pool/providers/github-provider",
+  "overall_workflows_status": "PARTIAL",
+  "summary": {
+    "central_repo_ready": true,
+    "prod_repo_missing_workflow": true,
+    "test_repo_needs_wif_auth": true
+  },
+  "timestamp": "2024-01-XX",
+  "workflow_analysis": {
+    "central_repo_sync_secrets": {
+      "auth_step_analysis": {
+        "provider_matches_expected": true,
+        "sa_matches_expected": true,
+        "service_account": "chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com",
+        "status": "PASS",
+        "uses_google_github_actions_auth_v2": true,
+        "workload_identity_provider": "projects/812872501910/locations/global/workloadIdentityPools/agent-data-pool/providers/github-provider"
+      },
+      "gsm_access": {
+        "secret_name": "gh_pat_sync_secrets",
+        "status": "PASS",
+        "stores_pat_locally": false,
+        "uses_gcloud_secrets": true
+      },
+      "overall_status": "PASS",
+      "permissions_check": {
+        "actions_read": "PRESENT",
+        "contents_read": "PRESENT",
+        "id_token_write": "PRESENT",
+        "status": "PASS"
+      },
+      "repo": "Huyen1974/chatgpt-githubnew",
+      "workflow_file": ".github/workflows/sync-secrets.yml"
+    },
+    "prod_repo_pass_gate": {
+      "exists": false,
+      "note": "No pass-gate.yml workflow found",
+      "repo": "Huyen1974/agent-data-production",
+      "status": "MISSING",
+      "workflow_file": ".github/workflows/pass-gate.yml"
+    },
+    "test_repo_pass_gate": {
+      "auth_step_analysis": {
+        "note": "No WIF authentication step found",
+        "status": "FAIL",
+        "uses_google_github_actions_auth_v2": false
+      },
+      "overall_status": "CONDITIONAL_FAIL",
+      "permissions_check": {
+        "id_token_write": "MISSING",
+        "note": "Uses default permissions, no explicit id-token: write",
+        "status": "FAIL"
+      },
+      "repo": "Huyen1974/agent-data-test",
+      "workflow_file": ".github/workflows/pass-gate.yml",
+      "workflow_purpose": "CI gate check only - may not need WIF auth"
+    }
+  },
+  "workflows_analyzed": 3
+}

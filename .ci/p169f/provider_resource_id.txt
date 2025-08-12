@@ -1,0 +1,1 @@
+projects/github-chatgpt-ggcloud/locations/global/workloadIdentityPools/agent-data-pool/providers/github-provider

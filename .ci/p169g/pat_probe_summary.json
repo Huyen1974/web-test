@@ -1,0 +1,8 @@
+{
+  "http_status": "200",
+  "prefix": "ghp_",
+  "result": "PASS",
+  "secret_source": "GSM:gh_pat_sync_secrets",
+  "test_endpoint": "https://api.github.com/user",
+  "timestamp": "2025-08-12T06:22:43Z"
+}

@@ -1,0 +1,22 @@
+{
+  "GCP_PROJECT_ID": {
+    "response": "Secret updated successfully",
+    "status_code": 204,
+    "success": true
+  },
+  "GCP_SERVICE_ACCOUNT": {
+    "response": "Secret updated successfully",
+    "status_code": 204,
+    "success": true
+  },
+  "GCP_WIF_POOL": {
+    "response": "Secret updated successfully",
+    "status_code": 204,
+    "success": true
+  },
+  "GCP_WIF_PROVIDER": {
+    "response": "Secret updated successfully",
+    "status_code": 204,
+    "success": true
+  }
+}
