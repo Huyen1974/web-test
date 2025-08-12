@@ -1,0 +1,8 @@
+{
+  "exists": true,
+  "has_id_token_write": true,
+  "service_account_ok": true,
+  "uses_auth_v2": true,
+  "uses_gsm_to_read_pat": true,
+  "uses_wif_provider_from_secret": true
+}

@@ -1,0 +1,8 @@
+{
+  "central_min_ok": true,
+  "head_sha_after": "f099937b7f9d96ab7a3e116bba58406d7e558a67",
+  "pat_http_200": true,
+  "timestamp_utc": "2025-08-12T08:05:46Z",
+  "wif_has_central": true,
+  "workflow_ok": true
+}
