@@ -1,0 +1,25 @@
+{
+  "destination_file": "/Users/nmhuyen/Documents/Manual Deploy/agent-data-langroid/.cursor/plan_files/PLAN MERGE TO LAW.md",
+  "format_changes": [
+    "Added ### prefix to numbered sections",
+    "Normalized bullets to - with proper indentation",
+    "Converted tables to pipe format",
+    "Preserved all HTML and inline code exactly"
+  ],
+  "source_file": "/Users/nmhuyen/Documents/Infor/K\u1ebf ho\u1ea1ch li\u00ean quan/Langdroid_Agent data/T\u00c0I LI\u1ec6U QUY PH\u1ea0M/PLAN MERGE TO LAW.md",
+  "status": "PASS",
+  "timestamp": "2025-01-09T12:00:00Z",
+  "verification": {
+    "checklists_ok": "PASS",
+    "code_hash_ok": "PASS",
+    "identifiers_ok": "PASS",
+    "json_parse": "N/A",
+    "keywords_ok": "PASS",
+    "numbers_units_ok": "PASS",
+    "section_lock": "PASS",
+    "sha256_A": "PASS",
+    "sha256_B": "PASS",
+    "tables_ok": "PASS",
+    "yaml_parse": "PASS"
+  }
+}

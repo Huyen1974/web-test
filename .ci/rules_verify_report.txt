@@ -1,0 +1,9 @@
+{
+  "result": {
+    "similarity_global": 0.974,
+    "similarity_project": 0.99041,
+    "anchors_global_ok": false,
+    "anchors_project_ok": false
+  },
+  "pass": false
+}

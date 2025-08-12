@@ -1,0 +1,62 @@
+{
+  "counts": {
+    "docx": {
+      "global": {
+        "BlockQuote": 0,
+        "BulletList": 0,
+        "CodeBlock": 0,
+        "Header": 0,
+        "OrderedList": 0,
+        "Table": 0
+      },
+      "project": {
+        "BlockQuote": 0,
+        "BulletList": 0,
+        "CodeBlock": 0,
+        "Header": 0,
+        "OrderedList": 0,
+        "Table": 0
+      }
+    },
+    "md": {
+      "global": {
+        "BlockQuote": 0,
+        "BulletList": 0,
+        "CodeBlock": 0,
+        "Header": 0,
+        "OrderedList": 0,
+        "Table": 0
+      },
+      "project": {
+        "BlockQuote": 0,
+        "BulletList": 0,
+        "CodeBlock": 0,
+        "Header": 0,
+        "OrderedList": 0,
+        "Table": 0
+      }
+    }
+  },
+  "lossless_equality": {
+    "global": false,
+    "project": false
+  },
+  "sha256": {
+    "docx_plain": {
+      "global": "75f6a9cae82b8c6ba2cd5538eade4e6646e761b86e65b23a969830e0424eec64",
+      "project": "1da212e778f339f1273cb8f55bd16ff3852d4270a5c787b7a2be4c8c861d8586"
+    },
+    "md_plain": {
+      "global": "e3f5c8a80f81dc505bc579733400f322d630dee63a755dabb2f88723c18b5d13",
+      "project": "5e7751171bbe3414f230e3c9a28e8dc4e02b12e3c504fc0bb20dd7bc7cd5a618"
+    }
+  },
+  "similarity": {
+    "global": 0.90506,
+    "project": 0.96886
+  },
+  "structural_parity": {
+    "global": true,
+    "project": true
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "anchors_ok": {
+    "global": true,
+    "project": true
+  },
+  "docx_sha256": {
+    "global": "c322d86a441aef2683a47901a4e02b981dd080c3bc50fbf3d9f032734a6c08af",
+    "project": "9cbf6ce7cf7b4f4419a1baba7632bb6fc9d8ed53adb567dfb18edb2287c7e2a7"
+  },
+  "md_sha256": {
+    "global": "6dd7c8b6c0dc2abf8c23442ccf8261a17ca8835fc86a5c13b8492168db468787",
+    "project": "2d7d6577b57e5c02402d1ab448d4a56dbc7c590107c67fee0664e0d894fa050a"
+  },
+  "similarity": {
+    "global": 0.9684278350515464,
+    "project": 0.9887044790505738
+  }
+}

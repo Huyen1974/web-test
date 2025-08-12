@@ -1,0 +1,24 @@
+{
+  "cleanup_results": {
+    "central_repo": {
+      "action": "deleted",
+      "repo": "Huyen1974/chatgpt-githubnew",
+      "secret_name": "GH_PAT_SYNC_SECRETS",
+      "status": "success"
+    },
+    "child_repos": [
+      {
+        "pat_secrets_found": 0,
+        "repo": "Huyen1974/agent-data-test",
+        "status": "clean"
+      },
+      {
+        "pat_secrets_found": 0,
+        "repo": "Huyen1974/agent-data-production",
+        "status": "clean"
+      }
+    ]
+  },
+  "summary": "All PAT secrets successfully removed from GitHub repos. PAT now only exists in Google Secret Manager.",
+  "timestamp": "2025-08-12T04:40:00Z"
+}

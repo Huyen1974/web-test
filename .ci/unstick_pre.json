@@ -1,0 +1,71 @@
+{
+  "pre_invariants": {
+    "C1_concurrency": true,
+    "C2_terraform_init": true,
+    "C2_terraform_validate": true,
+    "H1_count": 12,
+    "H1_heading_numbers": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "4.1",
+      "1",
+      "2",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9"
+    ],
+    "H1_heading_texts": [
+      "B\u1ed1i c\u1ea3nh & Ph\u1ea1m vi V\u1eadn h\u00e0nh",
+      "Quy t\u1eafc Qu\u1ea3n l\u00fd H\u1ea1 t\u1ea7ng (Terraform)",
+      "Qu\u1ea3n l\u00fd Artifacts & Docker Images",
+      "Qu\u1ea3n l\u00fd D\u1eef li\u1ec7u (Firestore & Metadata)",
+      "Quy t\u1eafc Qu\u1ea3n l\u00fd Qdrant",
+      "L\u01b0u tr\u1eef",
+      "L\u01b0u tr\u1eef",
+      "Quy t\u1eafc CI`/CD` & GitHub",
+      "Qu\u1ea3n l\u00fd Secrets (C\u1ef0C K\u1ef2 QUAN TR\u1eccNG)",
+      "Qu\u1ea3n l\u00fd Truy c\u1eadp (IAM)",
+      "Quy t\u1eafc V\u1eadn h\u00e0nh & T\u1ef1 s\u1eeda l\u1ed7i",
+      "Quy t\u1eafc B\u1ea3o v\u1ec7 RULES"
+    ],
+    "P1_placeholder_count": 9,
+    "P1_placeholders": [
+      "<standard-prefix>",
+      "<purpose>",
+      "<env>",
+      "<purpose>",
+      "<env>",
+      "< 5) v\u00e0 s\u1ebd g\u1eedi m\u1ed9t c\u1ea3nh b\u00e1o \u0111\u1eb7c bi\u1ec7t n\u1ebfu s\u1ed1 l\u01b0\u1ee3ng v\u01b0\u1ee3t ng\u01b0\u1ee1ng n\u00e0y.\n\n### 4. Qu\u1ea3n l\u00fd D\u1eef li\u1ec7u (Firestore & Metadata)\n\n#### 4.1. Quy t\u1eafc Qu\u1ea3n l\u00fd Qdrant\n- T\u00ean Cluster: Cluster b\u1ea1n l\u00e0m vi\u1ec7c c\u00f3 t\u00ean l\u00e0 `agent-data-vector-dev-useast4`.\n- T\u00ean Collection: T\u00ean collection B\u1eaeT BU\u1ed8C ph\u1ea3i theo \u0111\u1ecbnh d\u1ea1ng `<env>",
+      "<N>",
+      "<root-cause>",
+      "<root-cause>"
+    ],
+    "R1_14_days": 1,
+    "R1_30_days": 1,
+    "T1_bucket_names": [
+      "huyen1974-agent-data-artifacts-test`",
+      "huyen1974-agent-data-artifacts-production`",
+      "huyen1974-agent-data-knowledge-test`",
+      "huyen1974-agent-data-knowledge-production`",
+      "huyen1974-agent-data-logs-test`",
+      "huyen1974-agent-data-logs-production`",
+      "huyen1974-agent-data-qdrant-snapshots-test`",
+      "huyen1974-agent-data-qdrant-snapshots-production`",
+      "huyen1974-agent-data-source-test`",
+      "huyen1974-agent-data-source-production`",
+      "huyen1974-agent-data-tfstate-test`",
+      "huyen1974-agent-data-tfstate-production`",
+      "huyen1974-agent-data-backup-test`",
+      "huyen1974-agent-data-backup-production`"
+    ],
+    "T1_bucket_rows": 14,
+    "T1_secret_rows": 10
+  },
+  "sha256_src_A": "4238faf3595ea988aec4639f9b31a128ff7b08a9f8db79209920e71eef0f5d21",
+  "sha256_src_B": "e5d18a7be9c8410855feef60734804b843eabb4b742208b58c879fa927361ea9",
+  "source_file": "nhap_cursor/Nh\u00e1p_CS_AgentDT.md"
+}
