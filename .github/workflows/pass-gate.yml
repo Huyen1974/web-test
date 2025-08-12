@@ -176,49 +176,37 @@ jobs:
           (gsutil mb -p "${{ secrets.GCP_PROJECT_ID }}" -l asia-southeast1 gs://${TF_BACKEND_BUCKET} \
           && gsutil uniformbucketlevelaccess set on gs://${TF_BACKEND_BUCKET})
 
+      - name: Install jq for script dependencies
+        shell: bash -euo pipefail {0}
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -qy jq
+
       - name: Log start
         shell: bash -euo pipefail {0}
-        run: echo "::notice::⏱ terraform init+plan started at $(date -u)"
+        run: echo "::notice::⏱ terraform init+plan with self-healing started at $(date -u)"
 
-      - name: Terraform init
-        working-directory: terraform
-        shell: bash -euo pipefail {0}
-        run: terraform init -backend-config="bucket=${TF_BACKEND_BUCKET}" -input=false -no-color
-
-      - name: Terraform validate
-        working-directory: terraform
-        shell: bash -euo pipefail {0}
-        run: terraform validate
-
-      - name: Terraform plan
-        working-directory: terraform
+      - name: Terraform Plan with Self-Healing (max 2 attempts)
         shell: bash -euo pipefail {0}
         run: |
           SECONDS=0
-          # Run terraform plan in a way that handles prevent_destroy lifecycle
-          # Use explicit exit code handling instead of set +e
-          terraform plan \
-            -input=false \
-            -detailed-exitcode \
-            -refresh=false \
-            -lock=false \
-            -parallelism=2 || TF_EXIT=$?
-          TF_EXIT=${TF_EXIT:-0}
-          echo "TF_EXIT=$TF_EXIT" >>"$GITHUB_ENV"
-          echo "::notice::⏱ terraform plan finished in ${SECONDS}s"
+
+          # Set backend config for tf_plan.sh
+          export TF_BACKEND_BUCKET="${TF_BACKEND_BUCKET}"
+
+          # Create backend config for terraform init in tf_plan.sh
+          mkdir -p terraform/.tf_backend_config
+          cat > terraform/.tf_backend_config/backend.conf <<EOF
+          bucket = "${TF_BACKEND_BUCKET}"
+          prefix = "state"
+          EOF
+
+          # Run our self-healing terraform plan script
+          ./scripts/tf_plan.sh terraform
+
+          echo "::notice::⏱ terraform plan with self-healing finished in ${SECONDS}s"
           if [[ $SECONDS -gt 600 ]]; then
             echo "::error::Plan slower than 10 min (${SECONDS}s)"; exit 1
-          fi
-          # For CI plan checks, we accept:
-          # 0 = no changes, 2 = changes detected, 1 = errors
-          # But for prevent_destroy scenarios in plan-only, we treat it as warning
-          if [[ $TF_EXIT -eq 1 ]]; then
-            echo "::warning::Terraform plan has lifecycle conflicts (prevent_destroy), but this is plan-only"
-            echo "Plan completed with lifecycle warnings, treating as non-blocking for CI"
-            exit 0
-          elif [[ $TF_EXIT -ne 0 && $TF_EXIT -ne 2 ]]; then
-            echo "::error::Unexpected terraform exit code: $TF_EXIT"
-            exit $TF_EXIT
           fi
 
   secret-scan:
@@ -236,10 +224,32 @@ jobs:
         run: |
           trufflehog filesystem . --no-update --fail --exclude-paths .trufflehogignore
 
+  ci-hard-gate:
+    name: CI Hard Gate - Verify Success
+    runs-on: ubuntu-22.04
+    needs: [terraform-plan, secret-scan]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GitHub CLI and jq
+        shell: bash -euo pipefail {0}
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -qy jq
+
+      - name: Verify CI Hard Gate
+        shell: bash -euo pipefail {0}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🔐 CI Hard Gate: Verifying all upstream jobs succeeded"
+          ./scripts/ci_guard.sh "agent-data-langroid"
+
   agent-e2e:
     name: agent-e2e
     runs-on: ubuntu-22.04
-    needs: terraform-plan
+    needs: ci-hard-gate
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -272,7 +282,7 @@ jobs:
   gate:
     name: Pass Gate
     runs-on: ubuntu-22.04
-    needs: [terraform-validate, lint-only, terraform-plan, secret-scan, agent-e2e, manifest-drift-check]
+    needs: [terraform-validate, lint-only, terraform-plan, secret-scan, ci-hard-gate, agent-e2e, manifest-drift-check]
     if: ${{ always() }}
     steps:
       - name: Evaluate results of required jobs
