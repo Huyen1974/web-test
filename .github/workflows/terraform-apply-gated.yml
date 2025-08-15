@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   plan-only:
-    if: ${{ inputs.confirm == PLAN }}
+    if: ${{ github.event.inputs.confirm == PLAN }}
     name: plan-only (no-backend/no-apply)
     runs-on: ubuntu-22.04
     timeout-minutes: 20
@@ -86,7 +86,7 @@ jobs:
           path: tfplan.txt
 
   noop:
-    if: ${{ inputs.confirm == APPLY }}
+    if: ${{ github.event.inputs.confirm == APPLY }}
     runs-on: ubuntu-22.04
     steps:
       - run: echo "Gate acknowledged. Apply steps remain disabled in this stub."
