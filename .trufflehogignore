@@ -1,3 +1,10 @@
+governance/logs/.*
+.*\.log
+\.terraform/.*
+.*\.tfstate
+.*\.tfstate\.backup
+.*\.zip
+.*\.tar\.gz
 terraform/.*\.tfplan\.binary
 .*dummy-api-key-for-ci-testing.*
 vendor/Langroid/.*
