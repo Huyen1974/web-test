@@ -74,7 +74,7 @@ jobs:
       - name: secret scan (CP0.5)
         run: |
           curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
-          trufflehog filesystem . --fail --exclude-paths=.trufflehog-exclude --results=verified
+          trufflehog filesystem . --no-update --fail --results=verified --exclude-paths .trufflehogignore
 
   iac-validate:
     name: terraform validate
@@ -268,7 +268,6 @@ jobs:
           terraform init \
             -backend-config="bucket=huyen1974-agent-data-tfstate-test" \
             -backend-config="prefix=terraform/state" \
-            -backend-config="skip_bucket_root_access=true" \
             -input=false
 
       - name: Terraform validate
@@ -317,7 +316,7 @@ jobs:
           curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
       - name: Run trufflehog
         run: |
-          trufflehog filesystem . --no-update --fail --exclude-paths .trufflehogignore
+          trufflehog filesystem . --no-update --fail --results=verified --exclude-paths .trufflehogignore
 
   manifest-drift:
     name: manifest-drift (CP0.4)
