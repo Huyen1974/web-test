@@ -1,4 +1,7 @@
 name: Artifact Audit
+permissions:
+  contents: read
+
 on:
   schedule:
     - cron: '0 2 * * *'  # Runs at 02:00 UTC daily
@@ -20,6 +23,7 @@ jobs:
 
       - name: Slack notify (if configured)
         if: ${{ secrets.SLACK_WEBHOOK != '' }}
+        continue-on-error: true
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
         run: |
