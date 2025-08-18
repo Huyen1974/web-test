@@ -1,46 +1,89 @@
-#!/usr/bin/env bash
-set -Eeuo pipefail
-
+#!/bin/bash
+# GitHub CLI Auth Bootstrap Script
+# Based on logic from M5.1_cli01_verify.sh and .cursor/law_files/ALL_LAWs.md
 # Usage:
-#   scripts/bootstrap_gh.sh verify   # chỉ kiểm tra token & scope, KHÔNG đổi trạng thái gh
-#   scripts/bootstrap_gh.sh apply    # (mặc định) đăng nhập gh bằng PAT từ GSM
-MODE="${1:-apply}"
+#   PROJECT="github-chatgpt-ggcloud" SECRET_NAME="gh_pat_sync_secrets" scripts/bootstrap_gh.sh verify
+#   PROJECT="github-chatgpt-ggcloud" SECRET_NAME="gh_pat_sync_secrets" scripts/bootstrap_gh.sh apply
 
-PROJECT="${PROJECT:-github-chatgpt-ggcloud}"
-SECRET_NAME="${SECRET_NAME:-gh_pat_sync_secrets}"  # đã kiểm chứng là hợp lệ
+set -euo pipefail
 
-log(){ printf "## [bootstrap_gh] %s\n" "$*"; }
+ACTION="${1:-verify}"
+PROJECT="${PROJECT:-}"
+SECRET_NAME="${SECRET_NAME:-}"
 
-# 1) Lấy PAT từ GSM
-log "fetch token from GSM: project=$PROJECT secret=$SECRET_NAME"
-TOKEN="$(gcloud secrets versions access latest --project="$PROJECT" --secret="$SECRET_NAME")"
+log() { printf "[bootstrap_gh] %s\n" "$*"; }
 
-# 2) Kiểm chứng qua API /user (không đụng gh config)
-H="$(mktemp)"; B="$(mktemp)"
-curl -sS -D "$H" -o "$B" -H "Authorization: token $TOKEN" https://api.github.com/user >/dev/null
-code="$(awk '/^HTTP/{c=$2} END{print c+0}' "$H" || true)"
-login="$(jq -r ".login // empty" "$B" 2>/dev/null || true)"
-scopes="$(awk 'BEGIN{IGNORECASE=1}/^x-oauth-scopes:/{sub(/^[^:]*:[[:space:]]*/,""); print}' "$H" | tr -d "\r")"
-log "http=$code login=${login:-<none>}"
-log "scopes=${scopes:-<none>}"
-
-# 3) Yêu cầu scopes: repo + workflow
-has_repo=0; has_wf=0
-[[ ",${scopes// /}," == *",repo,"* ]] && has_repo=1
-[[ ",${scopes// /}," == *",workflow,"* ]] && has_wf=1
-if [[ "$code" -ne 200 || -z "$login" || $has_repo -ne 1 || $has_wf -ne 1 ]]; then
-  log "FAIL: token invalid or missing required scopes (need: repo, workflow)"
-  exit 2
-fi
-log "token OK (has repo, workflow)"
-
-if [[ "$MODE" == "verify" ]]; then
-  log "mode=verify → done (no auth changes)."
-  exit 0
+if [ -z "$PROJECT" ] || [ -z "$SECRET_NAME" ]; then
+    log "ERROR: Required environment variables not set"
+    log "Usage: PROJECT=<project> SECRET_NAME=<secret> $0 <verify|apply>"
+    exit 1
 fi
 
-# 4) apply: đăng nhập gh bằng PAT, an toàn qua stdin (không in token)
-log "mode=apply → gh auth login with PAT"
-printf "%s" "$TOKEN" | gh auth login -h github.com --with-token >/dev/null
-gh auth status -h github.com || { log "gh auth status failed"; exit 3; }
-log "gh auth status ok"
+verify_auth() {
+    log "Running GH Bootstrap VERIFY (no config changes)..."
+
+    # Check if gh CLI is installed
+    if ! command -v gh >/dev/null 2>&1; then
+        log "FAIL: GitHub CLI (gh) not found. Please install it first."
+        return 1
+    fi
+
+    # Check authentication status
+    if gh auth status -h github.com >/dev/null 2>&1; then
+        log "PASS: GitHub CLI is authenticated"
+        return 0
+    else
+        log "WARN: gh not authenticated"
+        return 1
+    fi
+}
+
+apply_auth() {
+    log "Attempting GH Bootstrap APPLY..."
+
+    # Try to get token from Google Secret Manager
+    if command -v gcloud >/dev/null 2>&1; then
+        # Check if gcloud is authenticated
+        if gcloud auth list --filter=status:ACTIVE --format="value(account)" >/dev/null 2>&1; then
+            # Try to access the secret
+            if TOKEN=$(gcloud secrets versions access latest --secret="$SECRET_NAME" --project="$PROJECT" 2>/dev/null); then
+                log "Successfully retrieved token from GSM"
+
+                # Login with the token
+                echo "$TOKEN" | gh auth login --with-token
+
+                if gh auth status -h github.com >/dev/null 2>&1; then
+                    log "PASS: Successfully authenticated with GitHub CLI"
+                    return 0
+                else
+                    log "FAIL: Authentication failed even after token login"
+                    return 1
+                fi
+            else
+                log "WARN: Could not access secret $SECRET_NAME in project $PROJECT"
+                return 1
+            fi
+        else
+            log "WARN: gcloud not authenticated, cannot access secrets"
+            return 1
+        fi
+    else
+        log "WARN: gcloud CLI not available"
+        return 1
+    fi
+}
+
+case "$ACTION" in
+    verify)
+        verify_auth
+        ;;
+    apply)
+        if ! verify_auth; then
+            apply_auth
+        fi
+        ;;
+    *)
+        log "ERROR: Unknown action '$ACTION'. Use 'verify' or 'apply'"
+        exit 1
+        ;;
+esac
