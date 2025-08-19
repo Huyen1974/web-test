@@ -24,8 +24,9 @@ jobs:
     steps:
       - name: Guard not satisfied (skip)
         if: ${{ !(inputs.confirm == 'YES' && env.TF_APPLY_ENABLED == 'true' && env.GCS_BACKEND_OK == 'true') }}
-        run: echo "::notice::Terraform apply gated; skipping by default."; exit 0
-
+        run: |
+          echo "::notice::Terraform apply gated; skipping by default."
+          exit 0
       - name: Checkout
         uses: actions/checkout@v4
 
