@@ -17,12 +17,12 @@ env:
 jobs:
   apply:
     # Only run when ALL guards satisfied (manual YES + flags true)
-    if: ${{ inputs.confirm == 'YES' && env.TF_APPLY_ENABLED == 'true' && env.GCS_BACKEND_OK == 'true' }}
+    if: ${{ github.event.inputs.confirm == 'YES' && env.TF_APPLY_ENABLED == 'true' && env.GCS_BACKEND_OK == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Guard not satisfied (skip fast-escape)
-        if: ${{ !(inputs.confirm == 'YES' && env.TF_APPLY_ENABLED == 'true' && env.GCS_BACKEND_OK == 'true') }}
+        if: ${{ !(github.event.inputs.confirm == 'YES' && env.TF_APPLY_ENABLED == 'true' && env.GCS_BACKEND_OK == 'true') }}
         run: echo "::notice::Terraform apply gated; skipping by default."; exit 0
 
       - name: Checkout
