@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-FN=$(gcloud functions describe manage_qdrant --region=asia-southeast1 --format='value(serviceConfig.uri)')
+FN=$(gcloud functions describe manage_qdrant --region=us-east4 --format='value(serviceConfig.uri)')
 echo "Function URL: $FN"
 
 echo "🔍 1. Testing status endpoint..."
