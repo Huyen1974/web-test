@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-FN="https://asia-southeast1-github-chatgpt-ggcloud.cloudfunctions.net/manage_qdrant"
+FN="https://us-east4-github-chatgpt-ggcloud.cloudfunctions.net/manage_qdrant"
 echo "Function URL: $FN"
 
 echo "🔍 1. Testing status endpoint..."
