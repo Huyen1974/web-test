@@ -161,8 +161,8 @@ class TestFixturePipeline:
                     "qdrant_region" in metadata
                 ), f"{output_key} should have qdrant_region in real mode"
                 assert (
-                    metadata["qdrant_region"] == "asia-southeast1"
-                ), f"{output_key} should use asia-southeast1 region"
+                    metadata["qdrant_region"] == "us-east4"
+                ), f"{output_key} should use us-east4 region"
 
                 # Content should have collection_info for real mode
                 content = output_data["content"]
