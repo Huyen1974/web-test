@@ -2,19 +2,24 @@ name: Cloud Run Deploy (Manual)
 on:
   workflow_dispatch:
     inputs:
-      image_tag:
-        description: Tag to deploy
-        default: "latest"
-      allow_unauthenticated:
-        description: Make service public
-        type: boolean
-        default: false
       service:
         description: Cloud Run service name
-        default: "agent-data-test"
-concurrency:
-  group: cloudrun-deploy-${{ github.ref }}
-  cancel-in-progress: true
+        default: agent-data-test
+        required: true
+      image_tag:
+        description: Image tag (e.g. SHA)
+        required: true
+      allow_unauthenticated:
+        description: Allow unauthenticated access
+        default: "false"
+        required: false
+      health_timeout:
+        description: Optional request timeout seconds (Cloud Run --timeout)
+        required: false
+      dry_run:
+        description: If true, only validate inputs and image URI (no deploy)
+        default: "true"
+        required: false
 permissions:
   contents: read
   id-token: write
@@ -26,9 +31,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Auth to GCP (WIF)
+      - name: Auth to Google Cloud (WIF)
+        id: auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
@@ -39,20 +46,51 @@ jobs:
         with:
           project_id: ${{ env.PROJECT_ID }}
 
-      - name: Deploy
-        shell: bash
+      - name: Compute image & flags (always runs)
+        id: prep
         run: |
-          SERVICE="${{ inputs.service }}"
-          TAG="${{ inputs.image_tag }}"
-          IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/${SERVICE}:${TAG}"
-          if [[ "${{ inputs.allow_unauthenticated }}" == "true" ]]; then
-            AUTH_FLAG="--allow-unauthenticated"
-          else
-            AUTH_FLAG="--no-allow-unauthenticated"
+          set -euo pipefail
+          SERVICE="${{ github.event.inputs.service }}"
+          TAG="${{ github.event.inputs.image_tag }}"
+          AUTH="${{ github.event.inputs.allow_unauthenticated }}"
+          HT="${{ github.event.inputs.health_timeout }}"
+          DRY="${{ github.event.inputs.dry_run }}"
+          if [[ -z "${SERVICE}" || -z "${TAG}" ]]; then
+            echo "service/tag missing"; exit 1
           fi
-          gcloud run deploy "$SERVICE" \
-            --image "$IMAGE" \
-            --region "$REGION" \
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.AR_REPO }}/${SERVICE}:${TAG}"
+          if [[ "${AUTH}" == "true" ]]; then AUTH_FLAG="--allow-unauthenticated"; else AUTH_FLAG="--no-allow-unauthenticated"; fi
+          HT_FLAG=""
+          if [[ -n "${HT}" ]]; then HT_FLAG="--timeout=${HT}"; fi
+          echo "IMAGE=${IMAGE}" >> "$GITHUB_ENV"
+          echo "AUTH_FLAG=${AUTH_FLAG}" >> "$GITHUB_ENV"
+          echo "HT_FLAG=${HT_FLAG}" >> "$GITHUB_ENV"
+          echo "SERVICE=${SERVICE}" >> "$GITHUB_ENV"
+          echo "DRY_RUN=${DRY}" >> "$GITHUB_ENV"
+          echo "Computed IMAGE=${IMAGE}" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Validate only (dry-run true)
+        if: ${{ env.DRY_RUN == 'true' }}
+        run: |
+          set -euo pipefail
+          [[ -n "${IMAGE}" ]] || { echo "Empty IMAGE"; exit 1; }
+          echo "Dry-run validation passed."
+
+      - name: Deploy to Cloud Run (when dry_run=false) — NO PORT
+        if: ${{ env.DRY_RUN != 'true' }}
+        run: |
+          set -euo pipefail
+          gcloud run deploy "${SERVICE}" \
+            --image "${IMAGE}" \
+            --region "${{ env.REGION }}" \
+            --project "${{ env.PROJECT_ID }}" \
             --platform managed \
-            $AUTH_FLAG \
+            ${AUTH_FLAG} ${HT_FLAG} \
             --quiet
+
+      - name: Show service state (post-deploy)
+        if: ${{ env.DRY_RUN != 'true' }}
+        run: |
+          gcloud run services describe "${SERVICE}" \
+            --region "${{ env.REGION }}" --platform managed \
+            --format="value(status.conditions[?type='Ready'].status,status.latestReadyRevisionName)"
