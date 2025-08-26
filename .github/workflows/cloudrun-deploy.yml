@@ -19,6 +19,11 @@ on:
         description: "Health-check timeout seconds (informational)"
         required: true
         default: "120"
+      dry_run:
+        description: "Dry-run deploy (no live changes)"
+        required: false
+        default: "true"
+        type: boolean
 
 permissions:
   contents: read
@@ -66,7 +71,7 @@ jobs:
             --timeout 300 \
             --execution-environment gen2 \
             --port 8080 \
-            --set-env-vars PORT=8080 \
+            
             --quiet
 
           echo "health_timeout(input)=$HT (informational only)"
