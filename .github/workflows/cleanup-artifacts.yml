@@ -1,0 +1,17 @@
+name: Cleanup Artifacts (Preview)
+on:
+  pull_request:
+    types: [labeled]
+jobs:
+  preview:
+    if: ${{ github.event.label.name == 'approved-cleanup' && github.repository_owner == 'Huyen1974' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Report candidate images (no delete)
+        run: |
+          echo "Preview only. No destructive actions."
+          echo "List images by repo via Artifact Registry:"
+          gcloud --version || true
+          echo "::notice:: Set up a follow-up manual job to delete after human approval."

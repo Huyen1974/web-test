@@ -1,0 +1,7 @@
+{
+  "kind": "infra_verify",
+  "cli_id": "M6_2-CLI-FIX-TEST-COUNT-STRICT-GUARD-02",
+  "ts": "20250826T083259Z",
+  "verify": "verify_setup.sh not present",
+  "plan": ""
+}
