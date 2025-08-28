@@ -1,0 +1,41 @@
+{
+  "artifact_registry": {
+    "available": "true",
+    "digest": "sha256:d9c5d9176838439efa3425c249bde6da75ce294ab23929f1e921e90acb11c1c3"
+  },
+  "ci_runs": {
+    "count": 0,
+    "head_sha": "edf4af4e89b9e68437cba8d966c9d27978987d3a"
+  },
+  "ci_status": "no_runs",
+  "cli_id": "M6_2-CLI-CR-READY-CLOSE-VERIFY-DIGEST-WATCH-02-FIXED",
+  "cloud_run": {
+    "image": "asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/agent-data/agent-data-test:latest",
+    "latestReadyRevision": "agent-data-test-00006-dps",
+    "ready": "True"
+  },
+  "continuity": {
+    "count": 4,
+    "files": [
+      ".ci/m6/cr_ready_close_evidence.json",
+      ".ci/m6/deploy_evidence_20250826T083259Z.json",
+      ".ci/m6/evidence_head_20250827T021449Z.json",
+      ".ci/m6/final_merge_evidence_20250827T075413Z.json"
+    ]
+  },
+  "digest_compare": {
+    "ar_digest": "sha256:d9c5d9176838439efa3425c249bde6da75ce294ab23929f1e921e90acb11c1c3",
+    "cr_digest": "sha256:d9c5d9176838439efa3425c249bde6da75ce294ab23929f1e921e90acb11c1c3",
+    "match": "true"
+  },
+  "kind": "cr_ready_close_verify_digest_watch",
+  "pr": {
+    "head_sha": "edf4af4e89b9e68437cba8d966c9d27978987d3a",
+    "number": "60",
+    "state": "OPEN",
+    "url": "https://github.com/Huyen1974/agent-data-test/pull/60"
+  },
+  "repo": "Huyen1974/agent-data-test",
+  "ts": "20250827T083355Z",
+  "wif_principalset_ok": true
+}

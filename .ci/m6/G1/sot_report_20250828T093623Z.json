@@ -1,0 +1,54 @@
+{
+  "cli_id": "M6_G1.01-PR-SOT+MERGEABILITY-CHECK.v2",
+  "g1_applicable": false,
+  "merged": {
+    "base": {
+      "branch": "main"
+    },
+    "head": {
+      "branch": "bootstrap/cloudrun-wf-main",
+      "sha": "a3f0c95afb4a0b904d09284617c246f0238b5ed9"
+    },
+    "isDraft": false,
+    "mergeState": "UNKNOWN",
+    "mergeable": "UNKNOWN",
+    "pr": 61,
+    "state": "MERGED",
+    "url": "https://github.com/Huyen1974/agent-data-test/pull/61"
+  },
+  "mode": "POST_MERGE_SOT",
+  "pr_items": [
+    {
+      "base": {
+        "branch": "main"
+      },
+      "head": {
+        "branch": "feat/m6-cloudrun-cicd",
+        "sha": "8e7bcc000c4a3216eca2c20680cdebe9706eec15"
+      },
+      "isDraft": false,
+      "mergeState": "BLOCKED",
+      "mergeable": "MERGEABLE",
+      "pr": 60,
+      "state": "OPEN",
+      "url": "https://github.com/Huyen1974/agent-data-test/pull/60"
+    },
+    {
+      "base": {
+        "branch": "main"
+      },
+      "head": {
+        "branch": "bootstrap/cloudrun-wf-main",
+        "sha": "a3f0c95afb4a0b904d09284617c246f0238b5ed9"
+      },
+      "isDraft": false,
+      "mergeState": "UNKNOWN",
+      "mergeable": "UNKNOWN",
+      "pr": 61,
+      "state": "MERGED",
+      "url": "https://github.com/Huyen1974/agent-data-test/pull/61"
+    }
+  ],
+  "superseded": true,
+  "ts": "20250828T093623Z"
+}

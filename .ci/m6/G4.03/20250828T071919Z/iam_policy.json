@@ -1,0 +1,16 @@
+{
+  "bindings": [
+    {
+      "members": [
+        "serviceAccount:cloudrun-service@github-chatgpt-ggcloud.iam.gserviceaccount.com"
+      ],
+      "role": "roles/secretmanager.secretAccessor"
+    },
+    {
+      "members": [
+        "serviceAccount:cloudrun-service@github-chatgpt-ggcloud.iam.gserviceaccount.com"
+      ],
+      "role": "roles/storage.objectViewer"
+    }
+  ]
+}

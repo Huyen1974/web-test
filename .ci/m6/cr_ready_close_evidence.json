@@ -1,0 +1,29 @@
+{
+  "artifact_registry": {
+    "latest_digest": "sha256:d9c5d9176838439efa3425c249bde6da75ce294ab23929f1e921e90acb11c1c3",
+    "latest_tag": "asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/agent-data/agent-data-test:latest"
+  },
+  "cli_id": "M6_2-CLI-CR-READY-CLOSE-VERIFY-DIGEST-WATCH-01-FIXED",
+  "cloud_run": {
+    "digest": "sha256:d9c5d9176838439efa3425c249bde6da75ce294ab23929f1e921e90acb11c1c3",
+    "image": "asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/agent-data/agent-data-test:latest",
+    "ready": "",
+    "region": "asia-southeast1",
+    "service": "agent-data-test"
+  },
+  "digest_match": "true",
+  "pr": {
+    "branch": "feat/m6-cloudrun-cicd",
+    "ci_watch": "no_runs",
+    "head_sha": "edf4af4e89b9e68437cba8d966c9d27978987d3a",
+    "number": "60",
+    "state": "OPEN"
+  },
+  "repo": "Huyen1974/agent-data-test",
+  "service_test": {
+    "accessible": "false",
+    "http_code": "403",
+    "url": "https://agent-data-test-pfne2mqwja-as.a.run.app"
+  },
+  "ts_utc": "20250827T081723Z"
+}

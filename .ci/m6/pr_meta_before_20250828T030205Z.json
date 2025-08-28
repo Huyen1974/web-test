@@ -1,0 +1,10 @@
+{
+  "baseRefName": "main",
+  "headRefName": "feat/m6-cloudrun-cicd",
+  "headRefOid": "edf4af4e89b9e68437cba8d966c9d27978987d3a",
+  "mergeStateStatus": "DIRTY",
+  "mergeable": "CONFLICTING",
+  "number": 60,
+  "state": "OPEN",
+  "url": "https://github.com/Huyen1974/agent-data-test/pull/60"
+}

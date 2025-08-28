@@ -1,0 +1,9 @@
+{
+  "image_summary": {
+    "digest": "sha256:d9c5d9176838439efa3425c249bde6da75ce294ab23929f1e921e90acb11c1c3",
+    "fully_qualified_digest": "asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/agent-data/agent-data-test@sha256:d9c5d9176838439efa3425c249bde6da75ce294ab23929f1e921e90acb11c1c3",
+    "registry": "asia-southeast1-docker.pkg.dev",
+    "repository": "agent-data",
+    "slsa_build_level": "unknown"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "metadata": {
+    "name": "agent-data-test"
+  },
+  "spec": {
+    "template": {
+      "spec": {
+        "serviceAccountName": "cloudrun-service@github-chatgpt-ggcloud.iam.gserviceaccount.com"
+      }
+    }
+  },
+  "status": {
+    "conditions": [
+      {
+        "status": "True",
+        "type": "Ready"
+      }
+    ],
+    "url": "https://agent-data-test-demo.a.run.app"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "artifact_registry": {
+    "available": true
+  },
+  "cicd_workflows": {
+    "build_exists": true,
+    "deploy_exists": true
+  },
+  "cli_id": "M6_2-CLI-FINAL-COMPREHENSIVE-ASSESSMENT",
+  "cloud_run": {
+    "image": "asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/agent-data/agent-data-test:latest",
+    "ready": "True",
+    "revision": "agent-data-test-00006-dps",
+    "url": "https://agent-data-test-pfne2mqwja-as.a.run.app"
+  },
+  "core_operational": true,
+  "evidence": {
+    "count": 36
+  },
+  "kind": "m6_final_comprehensive_assessment",
+  "m6_status": "OPERATIONAL_SUCCESS",
+  "pr": {
+    "head_sha": "edf4af4e89b9e68437cba8d966c9d27978987d3a",
+    "merge_state": "DIRTY",
+    "mergeable": "CONFLICTING",
+    "state": "OPEN",
+    "url": "https://github.com/Huyen1974/agent-data-test/pull/60"
+  },
+  "production": {
+    "operational": true,
+    "service_url": "https://agent-data-test-pfne2mqwja-as.a.run.app"
+  },
+  "service": {
+    "accessible": true,
+    "http_code": "403"
+  },
+  "timestamp": "20250827T093444Z"
+}

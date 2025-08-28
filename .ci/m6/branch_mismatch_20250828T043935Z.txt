@@ -1,0 +1,15 @@
+ANDON: Head branch 'null' does not match pattern '^feat/merge-to-laws$'.
+
+Current Analysis:
+  • Actual branch: null
+  • Expected pattern: ^feat/merge-to-laws$
+  • Match result: FAILED
+
+Guidance:
+ - Prefer aligning branch naming in future integration PRs to avoid history drift.
+ - If a remote head branch still exists, consider closing/renaming safely via a follow-up PR.
+ - This indicates the PR was merged with non-standard branch naming.
+
+Impact:
+ - This is a compliance violation per Repo/Branch rules (§2)
+ - Future PRs should follow the naming convention

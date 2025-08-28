@@ -1,0 +1,11 @@
+{
+  "kind": "cloud_run_ready",
+  "latestReadyRevision": "agent-data-test-00006-dps",
+  "ready": "True",
+  "region": "asia-southeast1",
+  "revision_digest": "",
+  "revision_image": "asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/agent-data/agent-data-test@sha256:79fd853ddf9e841519efc3320860b2df04ead95b636faaa2cf20d6f57356b5ae",
+  "service": "agent-data-test",
+  "service_url": "https://agent-data-test-pfne2mqwja-as.a.run.app",
+  "ts_utc": "2025-08-28T01:39:28Z"
+}

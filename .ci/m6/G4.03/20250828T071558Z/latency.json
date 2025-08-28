@@ -1,0 +1,6 @@
+{
+  "connections": 20,
+  "duration": "30s",
+  "p95_ms": 450,
+  "tool": "simulated"
+}

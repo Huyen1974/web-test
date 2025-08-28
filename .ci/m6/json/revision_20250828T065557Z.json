@@ -1,0 +1,15 @@
+{
+  "metadata": {
+    "annotations": {
+      "client.knative.dev/user-image": "asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/agent-data-test/agent-data-service@sha256:def1234567890def1234567890def1234567890def1234567890def1234567890"
+    },
+    "name": "agent-data-test-00001-def"
+  },
+  "spec": {
+    "containers": [
+      {
+        "image": "asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/agent-data-test/agent-data-service@sha256:def1234567890def1234567890def1234567890def1234567890def1234567890"
+      }
+    ]
+  }
+}

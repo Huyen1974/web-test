@@ -1,0 +1,11 @@
+{
+  "cli_id": "M6_2-CLI-PR60-FINAL-MERGE-WATCH-AND-EVIDENCE-03-CORRECTED",
+  "hp04_corrected": true,
+  "manual_action_required": true,
+  "merge_successful": false,
+  "method": "hp04_correction_with_manual_guidance",
+  "pr": "60",
+  "production_operational": true,
+  "result": "partial_success",
+  "ts": "20250827T075413Z"
+}
