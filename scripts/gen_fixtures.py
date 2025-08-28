@@ -41,7 +41,7 @@ def real_langroid_docchat_agent(query: str) -> dict[str, Any]:
 
     Uses:
     - OPENAI_API_KEY from environment
-    - Qdrant cluster (QDRANT_CLUSTER1_ID, QDRANT_CLUSTER1_KEY, asia-southeast1)
+    - Qdrant cluster (QDRANT_CLUSTER1_ID, QDRANT_CLUSTER1_KEY, us-east4)
     - Collection: test_documents (cleaned before run)
     - Embedding: text-embedding-3-small
     """
@@ -122,7 +122,7 @@ def real_langroid_docchat_agent(query: str) -> dict[str, Any]:
             "model_version": "langroid-0.58.0",
             "embedding_model": "text-embedding-3-small",
             "collection_name": "test_documents",
-            "qdrant_region": "asia-southeast1",
+            "qdrant_region": "us-east4",
             "mock_data": False,
         },
     }
