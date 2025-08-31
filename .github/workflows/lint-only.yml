@@ -280,7 +280,21 @@ jobs:
         working-directory: terraform
         run: |
           SECONDS=0
-          # Run terraform plan in a way that handles prevent_destroy lifecycle
+          # Run terraform plan truthfully; accept only 0 (no change) or 2 (changes)
+          set +e
+          terraform plan             -input=false             -detailed-exitcode             -refresh=false             -lock=false             -parallelism=2
+          TF_EXIT=$?
+          set -e
+          echo "TF_EXIT=$TF_EXIT" >>"$GITHUB_ENV"
+          echo "::notice::⏱ terraform plan finished in ${SECONDS}s"
+          if [[ $TF_EXIT -eq 0 || $TF_EXIT -eq 2 ]]; then
+            echo "::notice::Terraform plan exit $TF_EXIT (acceptable)"
+            exit 0
+          else
+            echo "::error::Terraform exited with code $TF_EXIT"
+            exit $TF_EXIT
+          fi
+
           set +e  # Don't exit on terraform errors
           terraform plan \
             -input=false \
