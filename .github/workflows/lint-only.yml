@@ -267,11 +267,7 @@ jobs:
       - name: Terraform init
         working-directory: terraform
         run: |
-          terraform init \
-            -backend-config="bucket=huyen1974-agent-data-tfstate-test" \
-            -backend-config="prefix=terraform/state" \
-            -input=false
-
+          terraform init -backend=false -input=false
       - name: Terraform validate
         working-directory: terraform
         run: terraform validate
@@ -282,7 +278,12 @@ jobs:
           SECONDS=0
           # Run terraform plan truthfully; accept only 0 (no change) or 2 (changes)
           set +e
-          terraform plan             -input=false             -detailed-exitcode             -refresh=false             -lock=false             -parallelism=2
+          terraform plan \
+            -input=false \
+            -detailed-exitcode \
+            -refresh=false \
+            -lock=false \
+            -parallelism=2
           TF_EXIT=$?
           set -e
           echo "TF_EXIT=$TF_EXIT" >>"$GITHUB_ENV"
@@ -294,33 +295,6 @@ jobs:
             echo "::error::Terraform exited with code $TF_EXIT"
             exit $TF_EXIT
           fi
-
-          set +e  # Don't exit on terraform errors
-          terraform plan \
-            -input=false \
-            -detailed-exitcode \
-            -refresh=false \
-            -lock=false \
-            -parallelism=2
-          TF_EXIT=$?
-          set -e  # Re-enable exit on error
-          echo "TF_EXIT=$TF_EXIT" >>"$GITHUB_ENV"
-          echo "::notice::⏱ terraform plan finished in ${SECONDS}s"
-          if [[ $SECONDS -gt 600 ]]; then
-            echo "::error::Plan slower than 10 min (${SECONDS}s)"; exit 1
-          fi
-          # For CI plan checks, we accept:
-          # 0 = no changes, 2 = changes detected, 1 = errors
-          # But for prevent_destroy scenarios in plan-only, we treat it as warning
-          if [[ $TF_EXIT -eq 1 ]]; then
-            echo "::warning::Terraform plan has lifecycle conflicts (prevent_destroy), but this is plan-only"
-            echo "Plan completed with lifecycle warnings, treating as non-blocking for CI"
-            exit 0
-          elif [[ $TF_EXIT -ne 0 && $TF_EXIT -ne 2 ]]; then
-            echo "::error::Unexpected terraform exit code: $TF_EXIT"
-            exit $TF_EXIT
-          fi
-
   secret-scan:
     name: secret-scan (CP0.5)
     needs: terraform-plan
