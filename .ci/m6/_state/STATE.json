@@ -18,6 +18,11 @@
       "ts": "2025-09-01T02:16:54Z"
     },
     "G4": {
+      "ci_greenwash_cleanup": {
+        "pass": false,
+        "pr": "https://github.com/Huyen1974/agent-data-test/pull/68",
+        "reason": "ci_or_patterns"
+      },
       "head": "161e7df3b99074b7c501bbfad8746d8ac6eb97de",
       "pass": false,
       "reason": "greenwashing_detected",
@@ -57,6 +62,15 @@
       },
       "gate": "G4",
       "ts": "2025-09-01T04:03:34Z"
+    },
+    {
+      "cli": "M6_G4.03-CI-GREENWASH-CLEANUP-PR",
+      "data": {
+        "cleanup_pr": "https://github.com/Huyen1974/agent-data-test/pull/68",
+        "pass": false,
+        "reason": "ci_or_patterns"
+      },
+      "gate": "G4"
     }
   ],
   "next_hint": "Commit m6 reports with [skip ci]",

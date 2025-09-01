@@ -1,0 +1,51 @@
+[
+  {
+    "continue_on_error": "",
+    "env_port": "",
+    "file": ".github/workflows/agent-e2e.yml",
+    "or_true": "",
+    "port_flag": ""
+  },
+  {
+    "continue_on_error": "",
+    "env_port": "",
+    "file": ".github/workflows/artifact-audit.yml",
+    "or_true": "",
+    "port_flag": ""
+  },
+  {
+    "continue_on_error": "",
+    "env_port": "",
+    "file": ".github/workflows/cloudrun-build.yml",
+    "or_true": "",
+    "port_flag": ""
+  },
+  {
+    "continue_on_error": "",
+    "env_port": "",
+    "file": ".github/workflows/cloudrun-deploy.yml",
+    "or_true": "",
+    "port_flag": ""
+  },
+  {
+    "continue_on_error": "236:        continue-on-error: true",
+    "env_port": "",
+    "file": ".github/workflows/lint-only.yml",
+    "or_true": "",
+    "port_flag": ""
+  },
+  {
+    "continue_on_error": "",
+    "env_port": "",
+    "file": ".github/workflows/pass-gate.yml",
+    "or_true": "",
+    "port_flag": ""
+  },
+  {
+    "continue_on_error": "",
+    "env_port": "",
+    "file": ".github/workflows/secrets-audit.yml",
+    "or_true": "",
+    "port_flag": ""
+  }
+]
