@@ -18,10 +18,11 @@
       "ts": "2025-09-01T02:16:54Z"
     },
     "G4": {
-      "head": "66484ed90aa3c68d61563baed6be67ad3398786c",
+      "head": "161e7df3b99074b7c501bbfad8746d8ac6eb97de",
       "pass": false,
-      "reason": "latency_p95_too_high_or_probe_failed",
-      "ts": "2025-09-01T02:46:13Z"
+      "reason": "greenwashing_detected",
+      "ts": "2025-09-01T04:03:34Z",
+      "url": "https://agent-data-test-pfne2mqwja-as.a.run.app"
     }
   },
   "head_sha": "1af4f87a5187843080fda9b2b1eca9fdadc1c42b",
@@ -45,6 +46,17 @@
       },
       "gate": "G4",
       "ts": "2025-09-01T02:46:13Z"
+    },
+    {
+      "cli": "M6_G4.02-CR-URL-FIX+HTTP-PROBE-RETRY",
+      "data": {
+        "head": "161e7df3b99074b7c501bbfad8746d8ac6eb97de",
+        "pass": false,
+        "reason": "greenwashing_detected",
+        "url": "https://agent-data-test-pfne2mqwja-as.a.run.app"
+      },
+      "gate": "G4",
+      "ts": "2025-09-01T04:03:34Z"
     }
   ],
   "next_hint": "Commit m6 reports with [skip ci]",

@@ -1,0 +1,24 @@
+{
+  "ci_greenwash_audit": {
+    "continue_on_error": true,
+    "greenwashing_detected": true,
+    "locations": {
+      "coe": ".github/workflows/terraform-apply-gated.yml.envfix.20250815T100712Z:45:        continue-on-error: true\n.github/workflows/secrets-audit.yml.bak:61:        continue-on-error: true  # Allow warnings (exit code 2) to pass\n.github/workflows/lint-only.yml.bak:261:      continue-on-error: true\n.github/workflows/terraform-apply-gated.yml.bak.20250815T105125Z:51:        continue-on-error: true\n.github/workflows/terraform-apply-gated.yml.bak.20250815T102112Z:51:        continue-on-error: true\n.github/workflows/terraform-apply-gated.yml.fix.20250815T095533Z:45:        continue-on-error: true\n.github/workflows/terraform-apply-gated.yml.bak.20250816T094244Z:51:        continue-on-error: true\n.github/workflows/terraform-apply-gated.yml.bak.20250815T095349Z:45:        continue-on-error: true\n.github/workflows/terraform-apply-gated.yml.bak.20250815T112118Z:51:        continue-on-error: true\n.github/workflows/terraform-apply-gated.yml.fix2.20250815T095720Z:45:        continue-on-error: true\n.github/workflows/lint-only.yml:236:        continue-on-error: true\n.github/workflows/lint-only.yml.bak.20250816T055759Z:236:        continue-on-error: true",
+      "or_true": ""
+    },
+    "or_true": false
+  },
+  "cli_id": "M6_G4.02-CR-URL-FIX+HTTP-PROBE-RETRY",
+  "head": "161e7df3b99074b7c501bbfad8746d8ac6eb97de",
+  "http_probe": {
+    "majority_good": false,
+    "p50_ms": 310,
+    "p95_ms": 680,
+    "samples": 20,
+    "url": "https://agent-data-test-pfne2mqwja-as.a.run.app"
+  },
+  "pass": false,
+  "reason": "greenwashing_detected",
+  "ts_utc": "2025-09-01T04:03:34Z",
+  "url": "https://agent-data-test-pfne2mqwja-as.a.run.app"
+}

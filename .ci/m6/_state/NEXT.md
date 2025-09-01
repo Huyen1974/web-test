@@ -1,2 +1,2 @@
 Next:
-- ANDON: Provide missing URL/creds or remove dangerous flags, then rerun G4.
+- ANDON: greenwashing_detected. Nếu service private, cung cấp creds tạm (WIF/SA) hoặc cấp URL public.
