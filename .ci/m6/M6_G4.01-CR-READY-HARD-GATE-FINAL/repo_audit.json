@@ -1,0 +1,14 @@
+{
+  "deploy_scan": {
+    "continue_on_error": true,
+    "env_port": false,
+    "or_true": false,
+    "port_flag": false
+  },
+  "head": "66484ed90aa3c68d61563baed6be67ad3398786c",
+  "service_guess": {
+    "name": "",
+    "region": "",
+    "url": "https://agent-data-test-pfne2mqwja-as.a.run.app\""
+  }
+}

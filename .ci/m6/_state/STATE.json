@@ -16,6 +16,12 @@
       "pass": true,
       "pr": 62,
       "ts": "2025-09-01T02:16:54Z"
+    },
+    "G4": {
+      "head": "66484ed90aa3c68d61563baed6be67ad3398786c",
+      "pass": false,
+      "reason": "latency_p95_too_high_or_probe_failed",
+      "ts": "2025-09-01T02:46:13Z"
     }
   },
   "head_sha": "1af4f87a5187843080fda9b2b1eca9fdadc1c42b",
@@ -29,6 +35,16 @@
       },
       "gate": "G3",
       "ts": "2025-09-01T02:16:54Z"
+    },
+    {
+      "cli": "M6_G4.01-CR-READY-HARD-GATE-FINAL",
+      "data": {
+        "head": "66484ed90aa3c68d61563baed6be67ad3398786c",
+        "pass": false,
+        "reason": "latency_p95_too_high_or_probe_failed"
+      },
+      "gate": "G4",
+      "ts": "2025-09-01T02:46:13Z"
     }
   ],
   "next_hint": "Commit m6 reports with [skip ci]",

@@ -1,2 +1,2 @@
 Next:
-- If pass=true ⇒ proceed to G4 (Cloud Run READY hard-gate, still Qdrant suspended unless required).
+- ANDON: Provide missing URL/creds or remove dangerous flags, then rerun G4.
