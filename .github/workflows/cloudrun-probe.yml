@@ -1,0 +1,94 @@
+name: Cloud Run Probe (G4)
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Cloud Run URL (audience)"
+        required: true
+        type: string
+      samples:
+        description: "Number of HTTP samples"
+        required: false
+        default: "20"
+      ok_min:
+        description: "Minimum OK ratio (0..1)"
+        required: false
+        default: "0.90"
+      p95_max_ms:
+        description: "P95 threshold (ms)"
+        required: false
+        default: "1500"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Auth (ID token via WIF)
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+          token_format: 'id_token'
+          audience: ${{ inputs.url }}
+
+      - name: Probe with ID token
+        id: probe
+        shell: bash
+        env:
+          URL: ${{ inputs.url }}
+          SAMPLES: ${{ inputs.samples }}
+          OK_MIN: ${{ inputs.ok_min }}
+          P95_MAX_MS: ${{ inputs.p95_max_ms }}
+          ID_TOKEN: ${{ steps.auth.outputs.id_token }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ID_TOKEN:-}" ]; then
+            echo "id_token empty ⇒ missing WIF secrets or auth failure" >&2
+            echo "M6_PROBE_SUMMARY={\"pass\":false,\"reason\":\"missing_wif_secrets\"}" >> $GITHUB_STEP_SUMMARY
+            echo "pass=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          echo "idx,status,time_total" > probe_raw.csv
+          for i in $(seq 1 "${SAMPLES}"); do
+            read -r CODE TIME <<<"$(curl -sS -o /dev/null -w "%{http_code} %{time_total}" -H "Authorization: Bearer ${ID_TOKEN}" "${URL}")"
+            echo "$i,$CODE,$TIME" >> probe_raw.csv
+            sleep 0.2
+          done
+          python3 - <<'PY' probe_raw.csv "${OK_MIN}" "${P95_MAX_MS}" > probe_summary.json
+          import json,sys,statistics
+          csv, okmin, p95max = sys.argv[1], float(sys.argv[2]), float(sys.argv[3])
+          rows=[]
+          with open(csv) as f:
+            next(f)
+            for line in f:
+              i,c,t=line.strip().split(","); rows.append((int(i),int(c),float(t)))
+          ms=[t*1000 for _,c,t in rows if t>0]
+          p50 = statistics.median(ms) if ms else None
+          p95 = (statistics.quantiles(ms, n=20)[18] if len(ms)>=20 else (max(ms) if ms else None))
+          ok = [1 for _,c,_ in rows if 200<=c<300]
+          ratio = (sum(ok)/len(rows)) if rows else 0.0
+          passed = (ratio>=okmin) and (p95 is not None and p95<=p95max)
+          json.dump({"samples":len(rows),"ok_ratio":ratio,"p50_ms":p50,"p95_ms":p95,"pass":passed}, sys.stdout)
+          PY
+          cat probe_summary.json
+          PASS="$(jq -r '.pass' probe_summary.json)"
+          echo "pass=${PASS}" >> $GITHUB_OUTPUT
+          echo "M6_PROBE_SUMMARY=$(cat probe_summary.json)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cr-probe-summary
+          path: |
+            probe_raw.csv
+            probe_summary.json
