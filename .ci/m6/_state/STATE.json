@@ -10,7 +10,27 @@
     "watch_table_md": ".ci/ci_watch_table.md"
   },
   "gate": "G0",
+  "gates": {
+    "G3": {
+      "head_sha": "d110d3725ffd02b338b8d51588cd09e36a57d3b2",
+      "pass": true,
+      "pr": 62,
+      "ts": "2025-09-01T02:16:54Z"
+    }
+  },
   "head_sha": "1af4f87a5187843080fda9b2b1eca9fdadc1c42b",
+  "history": [
+    {
+      "cli": "M6_G3.01-PR62-CI-WATCH-FINAL",
+      "data": {
+        "head_sha": "d110d3725ffd02b338b8d51588cd09e36a57d3b2",
+        "pass": true,
+        "pr": 62
+      },
+      "gate": "G3",
+      "ts": "2025-09-01T02:16:54Z"
+    }
+  ],
   "next_hint": "Commit m6 reports with [skip ci]",
   "notes": "verify:PASS (fresh); gh:logged-in; origin:agent-data-test",
   "sot": {

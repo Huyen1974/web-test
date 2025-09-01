@@ -1,0 +1,19 @@
+{
+  "ci": {
+    "bad_runs": 0
+  },
+  "cli_id": "M6_G3.01-PR62-CI-WATCH-FINAL",
+  "pass": true,
+  "pr": {
+    "evidence": {
+      "meta": ".ci/m6/M6_G3.01-PR62-CI-WATCH-FINAL/pr_62.json",
+      "runs": ".ci/m6/M6_G3.01-PR62-CI-WATCH-FINAL/runs_pr_62.json",
+      "watch_table": ".ci/m6/M6_G3.01-PR62-CI-WATCH-FINAL/ci_watch_pr_62.md"
+    },
+    "head_sha": "d110d3725ffd02b338b8d51588cd09e36a57d3b2",
+    "state": "MERGED",
+    "url": "https://github.com/Huyen1974/agent-data-test/pull/62"
+  },
+  "repo": "Huyen1974/agent-data-test",
+  "ts_utc": "2025-09-01T02:16:54Z"
+}
