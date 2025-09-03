@@ -1,9 +1,0 @@
-{
-  "url": "https://agent-data-test-pfne2mqwja-as.a.run.app",
-  "samples": 20,
-  "ok": 19,
-  "total": 20,
-  "ok_ratio": 0.95,
-  "p50_ms": 435,
-  "p95_ms": 720
-}

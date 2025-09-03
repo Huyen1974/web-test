@@ -1,8 +1,0 @@
-[SESSION STARTUP]
-Run `./CLI.POSTBOOT.250.sh` (or `make postboot`). Then show a concise DoD:
-- marker (.ci/.bootstrap_done)
-- sop.pass (.ci/sop_bootstrap_check/summary.json)
-- gh auth status
-- origin remote
-
-If gh not logged in, allow the script to apply using token from env or GSM, then re-run verify. Do not push.

@@ -1,9 +1,0 @@
-=== PREFLIGHT DoD ===
-[ok] bootstrap/bin/bootstrap_gh.sh
-[ok] bootstrap/bin/sop_bootstrap_check.sh
-[ok] scripts/bootstrap_gh.sh
-[ok] scripts/sop_bootstrap_check.sh
-[ok] .git/hooks/pre-commit
-[ok] guard_bootstrap.yml
-[ok] .ci/bootstrap_gh.sha256=1fc009591c1d813f95464fee36021391630fd96a7602b7d1ad0ac74127432969
-RESULT: PASS — Ready to reboot test.

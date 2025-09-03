@@ -1,2 +1,0 @@
-CPG3.2 ENV subset not ok
-CPG4.2b Budget MTD>=8 USD or missing

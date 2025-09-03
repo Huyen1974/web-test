@@ -1,7 +1,0 @@
-{
-  "base": 1,
-  "baseline": "test_manifest_baseline.txt",
-  "drift": "3",
-  "kind": "hp04_manifest",
-  "real": 4
-}

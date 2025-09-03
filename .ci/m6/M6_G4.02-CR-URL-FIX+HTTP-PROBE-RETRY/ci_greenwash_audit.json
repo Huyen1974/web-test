@@ -1,9 +1,0 @@
-{
-  "continue_on_error": true,
-  "greenwashing_detected": true,
-  "locations": {
-    "coe": ".github/workflows/terraform-apply-gated.yml.envfix.20250815T100712Z:45:        continue-on-error: true\n.github/workflows/secrets-audit.yml.bak:61:        continue-on-error: true  # Allow warnings (exit code 2) to pass\n.github/workflows/lint-only.yml.bak:261:      continue-on-error: true\n.github/workflows/terraform-apply-gated.yml.bak.20250815T105125Z:51:        continue-on-error: true\n.github/workflows/terraform-apply-gated.yml.bak.20250815T102112Z:51:        continue-on-error: true\n.github/workflows/terraform-apply-gated.yml.fix.20250815T095533Z:45:        continue-on-error: true\n.github/workflows/terraform-apply-gated.yml.bak.20250816T094244Z:51:        continue-on-error: true\n.github/workflows/terraform-apply-gated.yml.bak.20250815T095349Z:45:        continue-on-error: true\n.github/workflows/terraform-apply-gated.yml.bak.20250815T112118Z:51:        continue-on-error: true\n.github/workflows/terraform-apply-gated.yml.fix2.20250815T095720Z:45:        continue-on-error: true\n.github/workflows/lint-only.yml:236:        continue-on-error: true\n.github/workflows/lint-only.yml.bak.20250816T055759Z:236:        continue-on-error: true",
-    "or_true": ""
-  },
-  "or_true": false
-}

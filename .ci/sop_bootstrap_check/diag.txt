@@ -1,5 +1,0 @@
-/opt/homebrew/bin/gh
-gh version 2.63.2 (2024-12-05)
-https://github.com/cli/cli/releases/tag/v2.63.2
-/usr/bin/git
-git version 2.39.5 (Apple Git-154)
