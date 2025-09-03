@@ -1,0 +1,9 @@
+[SESSION STARTUP]
+Please run the post-boot quickcheck now and report a short DoD.
+
+Steps:
+1) Run: `./CLI.POSTBOOT.250.sh` (safe, idempotent)
+2) Paste DoD snapshot: marker state, sop.pass, gh status, and origin remote.
+3) If verify fails, the script will apply then re-verify. Do not push any commits.
+
+If anything is missing, suggest the smallest fix and ask before changing SoT under `bootstrap/bin/`.
