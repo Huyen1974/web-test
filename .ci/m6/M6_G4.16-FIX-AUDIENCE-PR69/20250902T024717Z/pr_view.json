@@ -1,0 +1,13 @@
+{
+  "number": 69,
+  "title": "Fix Cloud Run probe auth flow (audience mismatch)",
+  "state": "MERGED",
+  "isDraft": false,
+  "mergeStateStatus": "CLEAN",
+  "baseRefName": "main",
+  "headRefName": "fix/cloudrun-probe-auth",
+  "author": {
+    "login": "developer"
+  },
+  "mergeable": "MERGEABLE"
+}

@@ -1,0 +1,10 @@
+{
+  "pass_thresholds": {
+    "ok_ratio": ">=0.90",
+    "p95_ms": "<=1500"
+  },
+  "observed": {
+    "ok_ratio": "",
+    "p95_ms": ""
+  }
+}

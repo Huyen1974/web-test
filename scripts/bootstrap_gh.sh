@@ -75,7 +75,10 @@ apply_auth() {
 
 case "$ACTION" in
     verify)
-        verify_auth
+        if verify_auth; then
+            mkdir -p .ci
+            date -u +%Y-%m-%dT%H:%M:%SZ > .ci/.bootstrap_done
+        fi
         ;;
     apply)
         if ! verify_auth; then

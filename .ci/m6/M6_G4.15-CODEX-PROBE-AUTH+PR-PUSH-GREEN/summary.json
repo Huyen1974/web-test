@@ -1,0 +1,29 @@
+{
+  "cli_id": "M6_G4.15-CODEX-PROBE-AUTH+PR-PUSH-GREEN",
+  "repo": "Huyen1974/agent-data-test",
+  "base": "main",
+  "ts_utc": "2025-09-01T15:36:39Z",
+  "rollback_tag": "m6-g4.15-pre-20250901T153640Z",
+  "secrets_names_only": {
+    "GCP_WIF_PROVIDER": true,
+    "GCP_SA_EMAIL": false
+  },
+  "push_ci": {
+    "watch_table": ".ci/m6/M6_G4.15-CODEX-PROBE-AUTH+PR-PUSH-GREEN/ci_watch_push.md",
+    "bad_runs": 0
+  },
+  "probe": {
+    "workflow": "Cloud Run Probe (G4)",
+    "run_id": "17382023597",
+    "url": "https://github.com/Huyen1974/agent-data-test/actions/runs/17382023597",
+    "conclusion": "failure",
+    "artifacts_source": "none",
+    "ok_ratio": "",
+    "p95_ms": "",
+    "tail_log": ".ci/m6/M6_G4.15-CODEX-PROBE-AUTH+PR-PUSH-GREEN/run_17382023597_tail.txt"
+  },
+  "verdict": {
+    "pass": false,
+    "reason": "no_probe_summary"
+  }
+}

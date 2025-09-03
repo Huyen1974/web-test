@@ -1,0 +1,15 @@
+name: guard_bootstrap
+on:
+  push:
+  pull_request:
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify bootstrap scaffold exists
+        run: |
+          test -x bootstrap/bin/bootstrap_gh.sh
+          test -x bootstrap/bin/sop_bootstrap_check.sh
+          test -x scripts/bootstrap_gh.sh
+          test -x scripts/sop_bootstrap_check.sh

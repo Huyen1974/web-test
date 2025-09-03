@@ -1,0 +1,17 @@
+{
+  "ci": {
+    "bad_runs_push": 0
+  },
+  "cli_id": "M6_G4.10-CODEX-WIF-SECRETS-SYNC+PROBE-FINALIZE",
+  "evidence": {
+    "probe_summary": ".ci/m6/M6_G4.10-CODEX-WIF-SECRETS-SYNC+PROBE-FINALIZE/artifacts/probe_summary.json",
+    "probe_watch": ".ci/m6/M6_G4.10-CODEX-WIF-SECRETS-SYNC+PROBE-FINALIZE/ci_watch_probe.md",
+    "push_watch": ".ci/m6/M6_G4.10-CODEX-WIF-SECRETS-SYNC+PROBE-FINALIZE/ci_watch_push_6f2ed22d4eec27af03d1ff1cf859a4e78cb02a76.md"
+  },
+  "probe": {
+    "ok_ratio": null,
+    "p95_ms": null
+  },
+  "ts_utc": "2025-09-01T13:33:14Z",
+  "url": "https://agent-data-test-pfne2mqwja-as.a.run.app"
+}

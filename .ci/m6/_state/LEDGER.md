@@ -5,3 +5,5 @@
 2025-09-01T02:46:13Z M6_G4.01-CR-READY-HARD-GATE-FINAL head=66484ed90aa3c68d61563baed6be67ad3398786c pass=false reason=latency_p95_too_high_or_probe_failed
 2025-09-01T04:03:34Z M6_G4.02-CR-URL-FIX+HTTP-PROBE-RETRY head=161e7df3b99074b7c501bbfad8746d8ac6eb97de pass=false reason=greenwashing_detected url=https://agent-data-test-pfne2mqwja-as.a.run.app
 2025-09-01T04:14:17Z M6_G4.03-CI-GREENWASH-CLEANUP-PR pr=https://github.com/Huyen1974/agent-data-test/pull/68 pass=false bad_runs=1 reason=ci_or_patterns
+2025-09-01T13:33:14Z	M6_G4.10-CODEX-WIF-SECRETS-SYNC+PROBE-FINALIZE	push_bad=0	probe_ok=null	p95=null
+2025-09-01T14:57:14Z	M6_G4.13-CODEX-SECRET-SYNC+WIF-SELFTEST+PROBE-PASS	ok=null	p95=null	pass=false	reason=no_probe_summary_or_auth
