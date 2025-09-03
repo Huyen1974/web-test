@@ -1,1 +1,0 @@
-PASS: PR#null | merge=null | runs=0fail | jobs=0fail | DriftGate=OK | Branch=NON_COMPLIANT_NOTED

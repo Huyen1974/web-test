@@ -1,3 +1,0 @@
-Symbol	Workflow	Title	Event	Status/Conclusion	Duration(s)	URL
-=================================================================================
-➖\t(no runs)\t-\tpull_request\t-\t-\t-

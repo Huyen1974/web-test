@@ -1,9 +1,0 @@
-{
-  "deleted_branch": true,
-  "merge_end": "2025-08-28T03:37:15Z",
-  "merge_start": "2025-08-28T03:37:13Z",
-  "merged": true,
-  "method": "squash",
-  "rollback_tag": "m6-premerge-pr60-20250828T033614Z",
-  "tag_pushed": true
-}
