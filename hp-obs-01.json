@@ -1,4 +1,7 @@
 {
-  "displayName": "Agent Data — M6 Ops Dashboard",
-  "gridLayout": { "columns": 1, "widgets": [] }
+  "displayName": "Agent Data \u2014 M6 Ops Dashboard",
+  "gridLayout": {
+    "columns": 1,
+    "widgets": []
+  }
 }

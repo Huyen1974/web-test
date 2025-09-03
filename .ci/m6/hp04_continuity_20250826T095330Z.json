@@ -1,10 +1,10 @@
 {
-  "kind": "hp04_continuity",
-  "cli_id": "M6_2-CLI-PREMERGE-CONTINUITY-GUARDS-AUTO-FINAL-05",
-  "ts": "20250826T095330Z",
   "baseline_count": 53,
-  "real_count": 53,
-  "drift_zero": true,
+  "baseline_format": "single_number",
+  "cli_id": "M6_2-CLI-PREMERGE-CONTINUITY-GUARDS-AUTO-FINAL-05",
   "continuity_maintained": true,
-  "baseline_format": "single_number"
+  "drift_zero": true,
+  "kind": "hp04_continuity",
+  "real_count": 53,
+  "ts": "20250826T095330Z"
 }

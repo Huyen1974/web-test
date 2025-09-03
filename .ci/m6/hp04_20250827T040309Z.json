@@ -1,7 +1,7 @@
 {
   "hp04": {
-    "drift_zero": false,
     "base_count": "1",
+    "drift_zero": false,
     "real_count": "0",
     "ts": "20250827T040309Z"
   }
