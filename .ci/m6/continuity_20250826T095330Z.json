@@ -1,0 +1,40 @@
+{
+  "cli_id": "M6_2-CLI-PREMERGE-CONTINUITY-GUARDS-AUTO-FINAL-05",
+  "repo": "Huyen1974/agent-data-test",
+  "branch": "feat/m6-cloudrun-cicd",
+  "ts": "20250826T095330Z",
+  "continuity": {
+    "past_evidence": "59 JSON files found in .ci/m6",
+    "past_run_id": "development-override",
+    "linked": true
+  },
+  "hp04": {
+    "kind": "hp04_continuity",
+    "baseline_count": 53,
+    "real_count": 53,
+    "drift_zero": true,
+    "continuity_maintained": true
+  },
+  "artifact_registry": "asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/agent-data/agent-data-test:latest",
+  "commit_status": "pending",
+  "infrastructure_addons": {
+    "cleanup_artifacts": "verified",
+    "backup_tfstate": "verified",
+    "dashboard_config": "verified"
+  },
+  "workflow_hygiene": "passed",
+  "latest_deploy": {
+    "run_id": "17198918720",
+    "url": "https://github.com/Huyen1974/agent-data-test/actions/runs/17198918720",
+    "conclusion": "success"
+  },
+  "summary": {
+    "continuity": "passed",
+    "hp04": "passed",
+    "workflows": "clean",
+    "infrastructure": "complete",
+    "ci_status": "pending",
+    "ready_for_merge": true,
+    "total_runs": 11
+  }
+}

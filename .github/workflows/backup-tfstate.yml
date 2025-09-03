@@ -1,0 +1,17 @@
+name: Backup TFState (Gated)
+on:
+  schedule:
+    - cron: '0 1 1 * *'  # 01:00 UTC monthly
+  workflow_dispatch:
+jobs:
+  backup:
+    if: ${{ vars.TF_BACKUP_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check bucket var
+        run: |
+          if [ -z "${{ vars.GCS_BACKUP_BUCKET }}" ]; then
+            echo "No bucket configured, skipping."; exit 0
+          fi
+          echo "Would copy terraform.tfstate to gs://${{ vars.GCS_BACKUP_BUCKET }}/tfstate_${GITHUB_RUN_ID}.json"
+          # Actual copy intentionally omitted for safety in M6; enable in next phase after approval.
