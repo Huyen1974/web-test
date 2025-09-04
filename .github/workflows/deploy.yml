@@ -31,22 +31,31 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-      - name: Deploy (primary image)
-        id: deploy_primary
-        continue-on-error: true
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Select image to deploy
+        id: pick
+        shell: bash
+        run: |
+          set -euo pipefail
+          PRIMARY="${IMAGE_PRIMARY}"
+          FALLBACK="${FALLBACK_IMAGE}"
+          echo "Checking for primary image: $PRIMARY"
+          if gcloud artifacts docker images describe "$PRIMARY" >/dev/null 2>&1; then
+            echo "image=$PRIMARY" >> "$GITHUB_OUTPUT"
+            echo "region=$REGION" >> "$GITHUB_OUTPUT"
+            echo "::notice::Using primary image"
+          else
+            echo "::warning::Primary image not found. Falling back to $FALLBACK"
+            echo "image=$FALLBACK" >> "$GITHUB_OUTPUT"
+            echo "region=$FALLBACK_REGION" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: ${{ env.SERVICE }}
-          region: ${{ env.REGION }}
-          image: ${{ env.IMAGE_PRIMARY }}
+          region: ${{ steps.pick.outputs.region }}
+          image: ${{ steps.pick.outputs.image }}
           flags: --allow-unauthenticated
-
-      - name: Deploy (fallback image)
-        if: steps.deploy_primary.outcome != 'success'
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: ${{ env.SERVICE }}
-          region: ${{ env.FALLBACK_REGION }}
-          image: ${{ env.FALLBACK_IMAGE }}
-          flags: --allow-unauthenticated
-
