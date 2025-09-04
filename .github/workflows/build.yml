@@ -15,7 +15,10 @@ jobs:
       PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
       REGION: asia-southeast1
       AR_REPO: agent-data-test
+      IMAGE_NAME: agent-data-test
       IMAGE_PATH: asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/agent-data-test/agent-data-test:latest
+      FALLBACK_REGION: ${{ secrets.GCP_REGION }}
+      FALLBACK_AR_REPO: agent-data
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,7 +42,24 @@ jobs:
         run: gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
 
       - name: Build Docker image
-        run: docker build -t "$IMAGE_PATH" .
+        run: |
+          docker build -t "$IMAGE_PATH" . \
+            && docker tag "$IMAGE_PATH" "${FALLBACK_REGION}-docker.pkg.dev/${PROJECT_ID}/${FALLBACK_AR_REPO}/${IMAGE_NAME}:latest"
 
-      - name: Push Docker image
-        run: docker push "$IMAGE_PATH"
+      - name: Push Docker image (with fallback)
+        shell: bash
+        run: |
+          set +e
+          echo "Pushing primary: $IMAGE_PATH"
+          docker push "$IMAGE_PATH"
+          STATUS=$?
+          if [[ $STATUS -ne 0 ]]; then
+            echo "::warning::Primary push failed (likely repo missing). Trying fallback repository..."
+            FB_IMAGE="${FALLBACK_REGION}-docker.pkg.dev/${PROJECT_ID}/${FALLBACK_AR_REPO}/${IMAGE_NAME}:latest"
+            # Ensure fallback repo exists
+            gcloud artifacts repositories describe "$FALLBACK_AR_REPO" --location="$FALLBACK_REGION" >/dev/null 2>&1 || \
+            gcloud artifacts repositories create "$FALLBACK_AR_REPO" --repository-format=docker --location="$FALLBACK_REGION" || true
+            gcloud auth configure-docker "${FALLBACK_REGION}-docker.pkg.dev" --quiet
+            echo "Pushing fallback: $FB_IMAGE"
+            docker push "$FB_IMAGE"
+          fi
