@@ -47,6 +47,17 @@ class ChatResponse(BaseModel):
     content: str
 
 
+# Backward-compatible aliases expected by legacy unit tests
+class MessageRequest(BaseModel):
+    message: str
+    session_id: str | None = None
+
+
+class MessageResponse(BaseModel):
+    response: str
+    session_id: str | None = None
+
+
 # Initialize a single AgentData instance (reuse across requests)
 agent_config = AgentDataConfig()
 # Avoid external vector store dependencies in default server runtime
