@@ -1,0 +1,37 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_PATH: asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/agent-data-test/agent-data-test:latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker asia-southeast1-docker.pkg.dev --quiet
+
+      - name: Build Docker image
+        run: docker build -t "$IMAGE_PATH" .
+
+      - name: Push Docker image
+        run: docker push "$IMAGE_PATH"
+
