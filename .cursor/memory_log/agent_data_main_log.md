@@ -16,4 +16,3 @@
 
 ## Notes
 - The foundational class structure for the core RAG agent is now complete and verified against all project quality gates.
-

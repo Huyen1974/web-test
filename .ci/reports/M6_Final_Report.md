@@ -74,50 +74,50 @@ Flags:
                                  filtered_unverified. Defaults to
                                  verified,unverified,unknown.
       --[no-]no-color            Disable colorized output
-      --[no-]allow-verification-overlap  
+      --[no-]allow-verification-overlap
                                  Allow verification of similar credentials
                                  across detectors
       --[no-]filter-unverified   Only output first unverified result per
                                  chunk per detector if there are more than one
                                  results.
-      --filter-entropy=FILTER-ENTROPY  
+      --filter-entropy=FILTER-ENTROPY
                                  Filter unverified results with Shannon entropy.
                                  Start with 3.0.
       --config=CONFIG            Path to configuration file.
-      --[no-]print-avg-detector-time  
+      --[no-]print-avg-detector-time
                                  Print the average time spent on each detector.
       --[no-]no-update           Don't check for updates.
       --[no-]fail                Exit with code 183 if results are found.
       --verifier=VERIFIER ...    Set custom verification endpoints.
-      --[no-]custom-verifiers-only  
+      --[no-]custom-verifiers-only
                                  Only use custom verification endpoints.
-      --detector-timeout=DETECTOR-TIMEOUT  
+      --detector-timeout=DETECTOR-TIMEOUT
                                  Maximum time to spend scanning chunks per
                                  detector (e.g., 30s).
-      --archive-max-size=ARCHIVE-MAX-SIZE  
+      --archive-max-size=ARCHIVE-MAX-SIZE
                                  Maximum size of archive to scan. (Byte units
                                  eg. 512B, 2KB, 4MB)
-      --archive-max-depth=ARCHIVE-MAX-DEPTH  
+      --archive-max-depth=ARCHIVE-MAX-DEPTH
                                  Maximum depth of archive to scan.
-      --archive-timeout=ARCHIVE-TIMEOUT  
+      --archive-timeout=ARCHIVE-TIMEOUT
                                  Maximum time to spend extracting an archive.
       --include-detectors="all"  Comma separated list of detector types to
                                  include. Protobuf name or IDs may be used,
                                  as well as ranges.
-      --exclude-detectors=EXCLUDE-DETECTORS  
+      --exclude-detectors=EXCLUDE-DETECTORS
                                  Comma separated list of detector types to
                                  exclude. Protobuf name or IDs may be used,
                                  as well as ranges. IDs defined here take
                                  precedence over the include list.
-      --[no-]no-verification-cache  
+      --[no-]no-verification-cache
                                  Disable verification caching
-      --[no-]force-skip-binaries  
+      --[no-]force-skip-binaries
                                  Force skipping binaries.
-      --[no-]force-skip-archives  
+      --[no-]force-skip-archives
                                  Force skipping archives.
-      --[no-]skip-additional-refs  
+      --[no-]skip-additional-refs
                                  Skip additional references.
-      --user-agent-suffix=USER-AGENT-SUFFIX  
+      --user-agent-suffix=USER-AGENT-SUFFIX
                                  Suffix to add to User-Agent.
       --[no-]version             Show application version.
 
