@@ -36,3 +36,6 @@ def test_preflight_missing_var(monkeypatch: pytest.MonkeyPatch):
     # main() should return non-zero
     with patch("builtins.print"):
         assert preflight_main() == 1
+
+
+# CI trigger: no-op change to exercise Lint Only workflow
