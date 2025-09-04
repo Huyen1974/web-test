@@ -9,7 +9,8 @@ import agent_data.main as _main  # noqa: F401
 # Import server and agent modules to ensure coverage collection for package code
 import agent_data.server as _server  # noqa: F401
 
-pytestmark = pytest.mark.unit
+# Mark this as an end-to-end test; exclude from unit-only CI runs
+pytestmark = pytest.mark.e2e
 
 
 @pytest.fixture(scope="module")
