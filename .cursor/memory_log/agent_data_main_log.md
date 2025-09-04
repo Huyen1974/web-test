@@ -113,3 +113,21 @@
 - **Test Coverage:** PASSED (Total: 83.85%, : 91%).
 - **CI Status:** PASSED (Verified green on commit ).
 - **Push Verification:** PASSED (Local and remote are in sync).
+---
+# Project Log: Firestore Integration Tests (ID 2.3)
+
+- **Status:** COMPLETED
+- **Completion Date:** 2025-09-04
+- **Final Commit SHA:** ab6a836d4b936f8d24447f5c8dd1f6fee163ed90
+
+## Key Deliverables
+- **Integration Tests:**  created.
+- **Functionality Tested:**
+    - Firestore tools: , , .
+    - Ingestion override logic ( calling ).
+- **Methodology:** Used mocking for the Firestore client to ensure tests are isolated and fast.
+
+## Verification Passed ("Log First")
+- **Pytest:** All tests PASSED.
+- **Test Coverage:** PASSED (Total: 83.85%, : 91%).
+- **Push Verification:** PASSED (Local and remote are in sync).
