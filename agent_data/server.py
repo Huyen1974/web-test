@@ -3,7 +3,6 @@ Agent Data Langroid Server - FastAPI server for agent data operations
 """
 
 import logging
-from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,18 +39,18 @@ class HealthResponse(BaseModel):
 
 class MessageRequest(BaseModel):
     message: str
-    session_id: Optional[str] = None
+    session_id: str | None = None
 
 
 class MessageResponse(BaseModel):
     response: str
-    session_id: Optional[str] = None
+    session_id: str | None = None
 
 
 # Initialize a single AgentData instance (reuse across requests)
 agent_config = AgentDataConfig()
 # Avoid external vector store dependencies in default server runtime
-setattr(agent_config, "vecdb", None)
+agent_config.vecdb = None
 agent = AgentData(agent_config)
 
 
@@ -98,9 +97,8 @@ async def chat(request: MessageRequest):
 
         if gcs_uri is not None:
             # Special-case: allow local fixture ingestion for E2E without GCS creds
-            if (
-                "huyen1974-agent-data-knowledge-test" in gcs_uri
-                and gcs_uri.endswith("/e2e_doc.txt")
+            if "huyen1974-agent-data-knowledge-test" in gcs_uri and gcs_uri.endswith(
+                "/e2e_doc.txt"
             ):
                 try:
                     from pathlib import Path

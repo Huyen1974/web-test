@@ -20,4 +20,3 @@ def test_server_ingest_and_query_local_fixture():
     )
     assert r2.status_code == 200
     assert "framework" in r2.json()["response"].lower()
-

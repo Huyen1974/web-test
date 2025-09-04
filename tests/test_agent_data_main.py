@@ -68,7 +68,9 @@ def test_gcs_ingest_is_registered_tool():
 
 @pytest.mark.unit
 @patch("agent_data.main.storage")
-def test_gcs_ingest_download_success(mock_storage: MagicMock, monkeypatch: pytest.MonkeyPatch):
+def test_gcs_ingest_download_success(
+    mock_storage: MagicMock, monkeypatch: pytest.MonkeyPatch
+):
     """Mock a successful GCS download via storage.Client and ensure it's called."""
 
     # Arrange: mock storage client, bucket, and blob
@@ -86,7 +88,9 @@ def test_gcs_ingest_download_success(mock_storage: MagicMock, monkeypatch: pytes
 
     # Act + Assert within patched ingest_doc_paths
     # Ensure caching path executes by faking file reads to return content
-    monkeypatch.setattr("pathlib.Path.read_text", lambda self, **kwargs: "Framework text" )
+    monkeypatch.setattr(
+        "pathlib.Path.read_text", lambda self, **kwargs: "Framework text"
+    )
 
     with patch.object(
         agent, "ingest_doc_paths", return_value="Mock ingestion result."

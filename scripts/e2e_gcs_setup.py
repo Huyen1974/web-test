@@ -18,9 +18,9 @@ import sys
 from pathlib import Path
 
 try:
-    from google.cloud import storage  # type: ignore
     from google.api_core import exceptions  # type: ignore
-except Exception as e:  # pragma: no cover - import-time availability check
+    from google.cloud import storage  # type: ignore
+except Exception:  # pragma: no cover - import-time availability check
     print(
         "ERROR: google-cloud-storage is required. Install with: pip install google-cloud-storage",
         file=sys.stderr,
@@ -33,7 +33,9 @@ BUCKET_NAME = "huyen1974-agent-data-knowledge-test"
 BLOB_NAME = "e2e_doc.txt"
 
 # Project-root-relative path to the local fixture
-FIXTURE_PATH = Path(__file__).resolve().parents[1] / "agent_data" / "fixtures" / "e2e_doc.txt"
+FIXTURE_PATH = (
+    Path(__file__).resolve().parents[1] / "agent_data" / "fixtures" / "e2e_doc.txt"
+)
 
 
 def upload() -> int:
@@ -84,7 +86,9 @@ def cleanup() -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="E2E GCS fixture manager")
-    parser.add_argument("action", choices=["upload", "cleanup"], help="Action to perform")
+    parser.add_argument(
+        "action", choices=["upload", "cleanup"], help="Action to perform"
+    )
     args = parser.parse_args(argv)
 
     if args.action == "upload":
