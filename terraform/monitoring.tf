@@ -7,9 +7,9 @@ resource "google_monitoring_dashboard" "agent_data_prom_dashboard" {
       columns = 12
       tiles = [
         {
-          xPos  = 0
-          yPos  = 0
-          width = 6
+          xPos   = 0
+          yPos   = 0
+          width  = 6
           height = 3
           widget = {
             title = "HTTP Requests (last 5m increase)"
@@ -22,9 +22,9 @@ resource "google_monitoring_dashboard" "agent_data_prom_dashboard" {
           }
         },
         {
-          xPos  = 0
-          yPos  = 3
-          width = 12
+          xPos   = 0
+          yPos   = 3
+          width  = 12
           height = 6
           widget = {
             title = "Request Latency (p50 / p90)"
