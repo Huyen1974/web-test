@@ -12,6 +12,9 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     env:
+      PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      REGION: asia-southeast1
+      AR_REPO: agent-data-test
       IMAGE_PATH: asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/agent-data-test/agent-data-test:latest
     steps:
       - name: Checkout
@@ -26,12 +29,17 @@ jobs:
       - name: Setup gcloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Ensure Artifact Registry exists
+        run: |
+          gcloud artifacts repositories describe "$AR_REPO" --location="$REGION" >/dev/null 2>&1 || \
+          gcloud artifacts repositories create "$AR_REPO" --repository-format=docker --location="$REGION" \
+            --description="Agent Data Docker images" || echo "WARN: repo may already exist or insufficient perms"
+
       - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker asia-southeast1-docker.pkg.dev --quiet
+        run: gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
 
       - name: Build Docker image
         run: docker build -t "$IMAGE_PATH" .
 
       - name: Push Docker image
         run: docker push "$IMAGE_PATH"
-
