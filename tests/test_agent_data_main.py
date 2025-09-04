@@ -210,6 +210,91 @@ def test_gcs_ingest_invalid_uri_empty_blob():
     assert "Failed to download" in res
 
 
+# ==== Firestore tool skeleton tests ====
+
+
+@pytest.mark.unit
+@patch("agent_data.main.firestore")
+def test_add_metadata_tool_calls_firestore(mock_firestore: MagicMock):
+    """Ensure add_metadata parses JSON and calls Firestore .set with dict."""
+
+    # Arrange Firestore mock chain
+    client = mock_firestore.Client.return_value
+    coll = client.collection.return_value
+    doc_ref = coll.document.return_value
+
+    cfg = AgentDataConfig()
+    cfg.vecdb = None
+    agent = AgentData(cfg)
+
+    # Act
+    result = agent.add_metadata(document_id="doc1", metadata_json='{"data":"test"}')
+
+    # Assert
+    assert "saved" in result
+    doc_ref.set.assert_called_once_with({"data": "test"})
+
+
+@pytest.mark.unit
+@patch("agent_data.main.firestore")
+def test_get_metadata_tool_returns_json(mock_firestore: MagicMock):
+    """Ensure get_metadata returns JSON from Firestore doc."""
+
+    client = mock_firestore.Client.return_value
+    coll = client.collection.return_value
+    doc_ref = coll.document.return_value
+    # Mock a document snapshot
+    doc = MagicMock()
+    doc.exists = True
+    doc.to_dict.return_value = {"data": "mock_value"}
+    doc_ref.get.return_value = doc
+
+    cfg = AgentDataConfig()
+    cfg.vecdb = None
+    agent = AgentData(cfg)
+
+    out = agent.get_metadata("doc1")
+    assert out == '{"data": "mock_value"}' or out == '{"data":"mock_value"}'
+
+
+@pytest.mark.unit
+@patch("agent_data.main.firestore")
+def test_get_metadata_tool_not_found(mock_firestore: MagicMock):
+    """Ensure get_metadata returns not-found when doc does not exist."""
+
+    client = mock_firestore.Client.return_value
+    coll = client.collection.return_value
+    doc_ref = coll.document.return_value
+    doc = MagicMock()
+    doc.exists = False
+    doc_ref.get.return_value = doc
+
+    cfg = AgentDataConfig()
+    cfg.vecdb = None
+    agent = AgentData(cfg)
+
+    out = agent.get_metadata("doc1")
+    assert "Metadata not found" in out
+
+
+@pytest.mark.unit
+@patch("agent_data.main.firestore")
+def test_update_status_tool_calls_firestore(mock_firestore: MagicMock):
+    """Ensure update_ingestion_status calls Firestore .update with correct dict."""
+
+    client = mock_firestore.Client.return_value
+    coll = client.collection.return_value
+    doc_ref = coll.document.return_value
+
+    cfg = AgentDataConfig()
+    cfg.vecdb = None
+    agent = AgentData(cfg)
+
+    out = agent.update_ingestion_status(document_id="doc1", status="completed")
+    assert "updated to 'completed'" in out
+    doc_ref.update.assert_called_once_with({"ingestion_status": "completed"})
+
+
 @pytest.mark.unit
 @patch("agent_data.main.storage")
 def test_gcs_ingest_handles_api_error(mock_storage: MagicMock):

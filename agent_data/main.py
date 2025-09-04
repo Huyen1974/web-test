@@ -13,6 +13,7 @@ References:
 
 from __future__ import annotations
 
+import json
 import tempfile
 from pathlib import Path
 
@@ -22,6 +23,12 @@ try:
 except Exception:  # pragma: no cover - optional dependency at import time
     storage = None  # type: ignore
     exceptions = None  # type: ignore
+
+# Optional Firestore import
+try:
+    from google.cloud import firestore  # type: ignore
+except Exception:  # pragma: no cover - optional dependency at import time
+    firestore = None  # type: ignore
 
 from langroid.agent.special.doc_chat_agent import (
     DocChatAgent,
@@ -65,6 +72,9 @@ class AgentData(DocChatAgent):
     - Reuse Plan A1
     """
 
+    # Firestore collection to store document metadata
+    METADATA_COLLECTION = "metadata_test"
+
     def __init__(self, config: AgentDataConfig) -> None:
         """Initialize an AgentData instance with the provided configuration.
 
@@ -85,6 +95,15 @@ class AgentData(DocChatAgent):
             self.tools.append("gcs_ingest")
         # Keep a simple preview/cache of last ingested text content (for demo/tests)
         self.last_ingested_text: str | None = None
+
+        # Initialize Firestore client
+        # TODO: Mock this client in unit tests
+        self.db = None
+        try:
+            if firestore is not None:
+                self.db = firestore.Client()  # type: ignore[attr-defined]
+        except Exception:
+            self.db = None
 
     @tool
     def gcs_ingest(self, gcs_uri: str) -> str:
@@ -169,3 +188,82 @@ class AgentData(DocChatAgent):
                 return f"GCS API error for URI {gcs_uri}: {e}"
             # Fallback for any other error
             return f"Failed to download from GCS for URI {gcs_uri}: {e}"
+
+    @tool
+    def add_metadata(self, document_id: str, metadata_json: str) -> str:
+        """Adds or overwrites metadata for a given document ID in Firestore.
+
+        Args:
+            document_id (str): The unique identifier for the document.
+            metadata_json (str): A JSON string representing the metadata to add.
+        Returns:
+            str: A confirmation message or error detail.
+        """
+
+        if "add_metadata" not in self.tools:
+            self.tools.append("add_metadata")
+
+        if self.db is None:
+            return "Firestore client not initialized."
+        try:
+            data = json.loads(metadata_json)
+        except Exception as e:  # pragma: no cover
+            return f"Invalid metadata JSON: {e}"
+
+        try:
+            self.db.collection(self.METADATA_COLLECTION).document(document_id).set(data)
+            return f"Metadata for {document_id} saved."
+        except Exception as e:  # pragma: no cover
+            return f"Failed to add metadata for {document_id}: {e}"
+
+    @tool
+    def get_metadata(self, document_id: str) -> str:
+        """Retrieves the metadata for a given document ID from Firestore.
+
+        Args:
+            document_id (str): The unique identifier for the document to retrieve.
+        Returns:
+            str: A JSON string of the metadata, or an error message.
+        """
+
+        if "get_metadata" not in self.tools:
+            self.tools.append("get_metadata")
+
+        if self.db is None:
+            return "Firestore client not initialized."
+        try:
+            doc_ref = self.db.collection(self.METADATA_COLLECTION).document(document_id)
+            doc = doc_ref.get()
+            if getattr(doc, "exists", False):
+                try:
+                    return json.dumps(doc.to_dict())
+                except Exception:
+                    return str(doc.to_dict())
+            else:
+                return f"Metadata not found for {document_id}."
+        except Exception as e:  # pragma: no cover
+            return f"Failed to get metadata for {document_id}: {e}"
+
+    @tool
+    def update_ingestion_status(self, document_id: str, status: str) -> str:
+        """Updates the ingestion status for a document in Firestore.
+
+        Args:
+            document_id (str): The unique identifier for the document.
+            status (str): The new status (e.g., 'pending', 'completed', 'failed').
+        Returns:
+            str: A confirmation message or error detail.
+        """
+
+        if "update_ingestion_status" not in self.tools:
+            self.tools.append("update_ingestion_status")
+
+        if self.db is None:
+            return "Firestore client not initialized."
+        try:
+            self.db.collection(self.METADATA_COLLECTION).document(document_id).update(
+                {"ingestion_status": status}
+            )
+            return f"Ingestion status for {document_id} updated to '{status}'."
+        except Exception as e:  # pragma: no cover
+            return f"Failed to update status for {document_id}: {e}"
