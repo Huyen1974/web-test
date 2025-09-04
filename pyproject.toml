@@ -55,6 +55,7 @@ dependencies = [
     "click>=8.1.0",
     "rich>=13.5.0",
     "typer>=0.9.0",
+    "prometheus-fastapi-instrumentator",
 ]
 
 [project.optional-dependencies]

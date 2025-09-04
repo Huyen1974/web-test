@@ -24,4 +24,3 @@
 - The project now has a complete, automated CI/CD pipeline.
 - Pushing code to the `main` branch automatically triggers a build and deployment to a live Cloud Run service.
 - All CI warnings have been resolved, and the pipeline uses standardized, constitution-compliant resource paths.
-

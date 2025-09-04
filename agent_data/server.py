@@ -6,6 +6,7 @@ import logging
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
 
 from agent_data.main import AgentData, AgentDataConfig
@@ -20,6 +21,15 @@ app = FastAPI(
     description="Multi-agent knowledge management system built with Langroid framework",
     version="0.1.0",
 )
+
+# Prometheus metrics exporter
+instrumentator = Instrumentator().instrument(app)
+
+
+@app.on_event("startup")
+async def _startup():
+    instrumentator.expose(app)
+
 
 # Add CORS middleware
 app.add_middleware(
