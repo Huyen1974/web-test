@@ -22,13 +22,8 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# Prometheus metrics exporter
-instrumentator = Instrumentator().instrument(app)
-
-
-@app.on_event("startup")
-async def _startup():
-    instrumentator.expose(app)
+# Prometheus metrics exporter (expose metrics endpoint immediately)
+Instrumentator().instrument(app).expose(app)
 
 
 # Add CORS middleware
