@@ -107,27 +107,6 @@ async def ingest(message: ChatMessage):
     """Ingest documents by providing a GCS URI in `text`."""
     try:
         gcs_uri = (message.text or message.message or "").strip()
-
-        # Special-case: local fixture ingestion for E2E without GCS creds
-        if "huyen1974-agent-data-knowledge-test" in gcs_uri and gcs_uri.endswith(
-            "/e2e_doc.txt"
-        ):
-            try:
-                from pathlib import Path
-
-                fixture_path = (
-                    Path(__file__).resolve().parent / "fixtures" / "e2e_doc.txt"
-                )
-                if fixture_path.exists():
-                    agent.last_ingested_text = fixture_path.read_text(
-                        encoding="utf-8", errors="ignore"
-                    )
-                    msg = "Simulated local ingestion of E2E document fixture."
-                    return ChatResponse(
-                        response=msg, content=msg, session_id=message.session_id
-                    )
-            except Exception:
-                pass
         result = agent.gcs_ingest(gcs_uri)
         return ChatResponse(
             response=str(result), content=str(result), session_id=message.session_id

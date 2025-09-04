@@ -12,3 +12,12 @@ resource "google_artifact_registry_repository" "agent_data_docker_repo" {
     managed_by  = "terraform"
   }
 }
+
+# Standard repository per deployment convention
+resource "google_artifact_registry_repository" "agent_data_test" {
+  project       = "github-chatgpt-ggcloud"
+  location      = "asia-southeast1"
+  repository_id = "agent-data-test"
+  description   = "Docker repository for agent-data-test"
+  format        = "DOCKER"
+}

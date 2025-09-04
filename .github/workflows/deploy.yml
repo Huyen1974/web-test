@@ -20,10 +20,7 @@ jobs:
       PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
       REGION: asia-southeast1
       SERVICE: agent-data-test
-      IMAGE_PRIMARY: asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/agent-data-test/agent-data-test:latest
-      FALLBACK_REGION: ${{ secrets.GCP_REGION }}
-      FALLBACK_REPO: agent-data
-      FALLBACK_IMAGE: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/agent-data/agent-data-test:latest
+      IMAGE: asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/agent-data-test/agent-data-test:latest
     steps:
       - name: Authenticate to Google Cloud (WIF)
         uses: google-github-actions/auth@v2
@@ -34,28 +31,10 @@ jobs:
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Select image to deploy
-        id: pick
-        shell: bash
-        run: |
-          set -euo pipefail
-          PRIMARY="${IMAGE_PRIMARY}"
-          FALLBACK="${FALLBACK_IMAGE}"
-          echo "Checking for primary image: $PRIMARY"
-          if gcloud artifacts docker images describe "$PRIMARY" >/dev/null 2>&1; then
-            echo "image=$PRIMARY" >> "$GITHUB_OUTPUT"
-            echo "region=$REGION" >> "$GITHUB_OUTPUT"
-            echo "::notice::Using primary image"
-          else
-            echo "::warning::Primary image not found. Falling back to $FALLBACK"
-            echo "image=$FALLBACK" >> "$GITHUB_OUTPUT"
-            echo "region=$FALLBACK_REGION" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: ${{ env.SERVICE }}
-          region: ${{ steps.pick.outputs.region }}
-          image: ${{ steps.pick.outputs.image }}
+          region: ${{ env.REGION }}
+          image: ${{ env.IMAGE }}
           flags: --allow-unauthenticated
