@@ -131,3 +131,18 @@
 - **Pytest:** All tests PASSED.
 - **Test Coverage:** PASSED (Total: 83.85%, : 91%).
 - **Push Verification:** PASSED (Local and remote are in sync).
+---
+# Project Log: FastAPI Wrapper (ID 3.1)
+
+- **Status:** COMPLETED
+- **Completion Date:** 2025-09-04
+- **Final Commit SHA:** 3bdd05d9749dd721596222b07cf0318d98d5295d
+
+## Key Deliverables
+- **Standardized API:** `agent_data/server.py` updated with separate `/ingest` and `/chat` endpoints using Pydantic models.
+- **Unit Tests:** `tests/test_server.py` created with mocked tests for the new endpoints.
+- **E2E Test Update:** `tests/e2e/test_gcs_ingestion_e2e.py` updated to align with the new API structure.
+
+## Verification Passed ("Log First")
+- **CI Status:** PASSED (https://github.com/Huyen1974/agent-data-test/actions/runs/17455225922).
+- **Test Coverage:** PASSED (Overall coverage remains >= 80%).
