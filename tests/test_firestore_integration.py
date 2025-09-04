@@ -16,7 +16,7 @@ def test_add_metadata_success(mock_client_cls: MagicMock):
     cfg.vecdb = None
     agent = AgentData(cfg)
 
-    out = agent.add_metadata("doc1", "{\"k\": \"v\"}")
+    out = agent.add_metadata("doc1", '{"k": "v"}')
     assert "saved" in out
     doc.set.assert_called_once_with({"k": "v"})
 
@@ -90,4 +90,3 @@ def test_ingest_override_calls_add_metadata(
     mock_super_ingest.assert_called_once()
     assert mock_add_metadata.call_count == len(paths)
     assert "Ingestion complete." in msg
-
