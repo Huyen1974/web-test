@@ -1,0 +1,52 @@
+name: Deploy to Cloud Run
+
+on:
+  workflow_run:
+    workflows: ["Build and Push Docker Image"]
+    types:
+      - completed
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      REGION: asia-southeast1
+      SERVICE: agent-data-test
+      IMAGE_PRIMARY: asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/agent-data-test/agent-data-test:latest
+      FALLBACK_REGION: ${{ secrets.GCP_REGION }}
+      FALLBACK_REPO: agent-data
+      FALLBACK_IMAGE: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/agent-data/agent-data-test:latest
+    steps:
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Deploy (primary image)
+        id: deploy_primary
+        continue-on-error: true
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE }}
+          region: ${{ env.REGION }}
+          image: ${{ env.IMAGE_PRIMARY }}
+          flags: --allow-unauthenticated
+
+      - name: Deploy (fallback image)
+        if: steps.deploy_primary.outcome != 'success'
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE }}
+          region: ${{ env.FALLBACK_REGION }}
+          image: ${{ env.FALLBACK_IMAGE }}
+          flags: --allow-unauthenticated
+
