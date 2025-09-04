@@ -38,4 +38,4 @@ def test_preflight_missing_var(monkeypatch: pytest.MonkeyPatch):
         assert preflight_main() == 1
 
 
-# CI trigger: no-op change to exercise Lint Only workflow (3)
+# CI trigger: no-op change to exercise Lint Only workflow (4)
