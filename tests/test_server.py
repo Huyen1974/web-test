@@ -44,5 +44,4 @@ def test_health_endpoint_ok():
     resp = client.get("/health")
     assert resp.status_code == 200
     body = resp.json()
-    assert set(["status", "version", "langroid_available"]).issubset(body.keys())
-
+    assert {"status", "version", "langroid_available"}.issubset(body.keys())
