@@ -65,3 +65,19 @@
 - **E2E Test Status:** PASSED (within full test suite).
 - **Test Coverage:** PASSED (Total: 83.26%).
 - **Push Verification:** PASSED (Local and remote are in sync).
+---
+# Project Log: FirestoreMetadataTool (ID 2.1)
+
+- **Status:** COMPLETED
+- **Completion Date:** 2025-09-04
+- **Final Commit SHA:** 5e61301610aa446a22068d93f75778b7d56aa9b9
+
+## Key Deliverables
+- **Tool Implementations:** , ,  methods in .
+- **Functionality:** Agent can now perform CRUD operations for document metadata in Firestore.
+- **Unit Tests:** Comprehensive tests for all three tools, using mocking for the Firestore client to verify , , and  calls.
+
+## Verification Passed ("Log First")
+- **Pre-commit:** All checks PASSED.
+- **Test Coverage:** PASSED (Total: 83.39%, : 91%).
+- **Push Verification:** PASSED (Local and remote are in sync).
