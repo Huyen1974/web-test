@@ -145,8 +145,10 @@ async def chat(message: ChatMessage):
         session_id = message.session_id
 
         # Handle simple natural-language ingestion command for local fixture
-        if user_text.lower().startswith("please ingest from "):
-            candidate = user_text.split("please ingest from ", 1)[1].strip()
+        prefix = "please ingest from "
+        lower_text = user_text.lower()
+        if lower_text.startswith(prefix):
+            candidate = user_text[len(prefix) :].strip()
             if (
                 "huyen1974-agent-data-knowledge-test" in candidate
                 and candidate.endswith("/e2e_doc.txt")
