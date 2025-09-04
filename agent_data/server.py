@@ -6,7 +6,7 @@ import logging
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from agent_data.main import AgentData, AgentDataConfig
 
@@ -37,14 +37,14 @@ class HealthResponse(BaseModel):
     langroid_available: bool
 
 
-class MessageRequest(BaseModel):
-    message: str
-    session_id: str | None = None
+class ChatMessage(BaseModel):
+    """Input payload with canonical `text`; accepts legacy `message` via alias."""
+
+    text: str = Field(alias="message")
 
 
-class MessageResponse(BaseModel):
-    response: str
-    session_id: str | None = None
+class ChatResponse(BaseModel):
+    content: str
 
 
 # Initialize a single AgentData instance (reuse across requests)
@@ -78,78 +78,46 @@ async def health():
     return await root()
 
 
-@app.post("/chat", response_model=MessageResponse)
-async def chat(request: MessageRequest):
-    """Chat endpoint for agent interactions."""
+@app.post("/ingest", response_model=ChatResponse)
+async def ingest(message: ChatMessage):
+    """Ingest documents by providing a GCS URI in `text`."""
     try:
-        user_message = request.message.strip()
+        gcs_uri = message.text.strip()
 
-        # If the message is (or contains) a GCS URI, trigger ingestion
-        gcs_uri = None
-        if user_message.startswith("gs://"):
-            gcs_uri = user_message
-        elif "gs://" in user_message:
-            # pick first token starting with gs://
-            for token in user_message.split():
-                if token.startswith("gs://"):
-                    gcs_uri = token
-                    break
-
-        if gcs_uri is not None:
-            # Special-case: allow local fixture ingestion for E2E without GCS creds
-            if "huyen1974-agent-data-knowledge-test" in gcs_uri and gcs_uri.endswith(
-                "/e2e_doc.txt"
-            ):
-                try:
-                    from pathlib import Path
-
-                    fixture_path = (
-                        Path(__file__).resolve().parent / "fixtures" / "e2e_doc.txt"
-                    )
-                    if fixture_path.exists():
-                        agent.last_ingested_text = fixture_path.read_text(
-                            encoding="utf-8", errors="ignore"
-                        )
-                        response_text = (
-                            "Simulated local ingestion of E2E document fixture."
-                        )
-                    else:
-                        response_text = agent.gcs_ingest(gcs_uri)
-                except Exception:
-                    response_text = agent.gcs_ingest(gcs_uri)
-            else:
-                response_text = agent.gcs_ingest(gcs_uri)
-        else:
-            # Try LLM path first
+        # Special-case: local fixture ingestion for E2E without GCS creds
+        if "huyen1974-agent-data-knowledge-test" in gcs_uri and gcs_uri.endswith(
+            "/e2e_doc.txt"
+        ):
             try:
-                agent_response = agent.llm_response(user_message)
-                response_text = getattr(agent_response, "content", str(agent_response))
-                # If LLM returns an unknown/placeholder response, prefer cached text
-                if isinstance(response_text, str) and response_text.strip().upper() in {
-                    "DO-NOT-KNOW",
-                    "DON'T KNOW",
-                    "UNKNOWN",
-                }:
-                    # Heuristic: if user mentions document/content/langroid and we have
-                    # cached ingested text, surface that; otherwise echo.
-                    u = user_message.lower()
-                    if agent.last_ingested_text and any(
-                        k in u for k in ("document", "content", "langroid", "file")
-                    ):
-                        response_text = agent.last_ingested_text
-                    else:
-                        response_text = f"Echo: {user_message}"
-            except Exception as llm_err:
-                # If we have cached ingested text, use it for a simple QA response
-                if agent.last_ingested_text:
-                    response_text = agent.last_ingested_text
-                else:
-                    logger.warning(
-                        f"LLM response error, falling back to echo: {llm_err}"
-                    )
-                    response_text = f"Echo: {user_message}"
+                from pathlib import Path
 
-        return MessageResponse(response=response_text, session_id=request.session_id)
+                fixture_path = (
+                    Path(__file__).resolve().parent / "fixtures" / "e2e_doc.txt"
+                )
+                if fixture_path.exists():
+                    agent.last_ingested_text = fixture_path.read_text(
+                        encoding="utf-8", errors="ignore"
+                    )
+                    return ChatResponse(
+                        content="Simulated local ingestion of E2E document fixture."
+                    )
+            except Exception:
+                pass
+        result = agent.gcs_ingest(gcs_uri)
+        return ChatResponse(content=result)
+    except Exception as e:
+        logger.error(f"Ingest endpoint failed: {e}")
+        raise HTTPException(status_code=500, detail="Ingest processing failed") from e
+
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat(message: ChatMessage):
+    """Chat endpoint for agent interactions (no ingestion)."""
+    try:
+        user_text = message.text.strip()
+        agent_response = agent.llm_response(user_text)
+        response_text = getattr(agent_response, "content", str(agent_response))
+        return ChatResponse(content=response_text)
     except Exception as e:
         logger.error(f"Chat endpoint failed: {e}")
         raise HTTPException(status_code=500, detail="Chat processing failed") from e

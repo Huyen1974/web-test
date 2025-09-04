@@ -46,8 +46,8 @@ def test_full_ingestion_and_query_flow(setup_and_teardown_gcs):
     # Step 1: Ask the server to ingest from GCS
     ingest_uri = "gs://huyen1974-agent-data-knowledge-test/e2e_doc.txt"
     r1 = requests.post(
-        "http://127.0.0.1:8000/chat",
-        json={"message": f"Please ingest the document from {ingest_uri}"},
+        "http://127.0.0.1:8000/ingest",
+        json={"text": ingest_uri},
         timeout=30,
     )
     assert r1.status_code == 200
@@ -55,13 +55,13 @@ def test_full_ingestion_and_query_flow(setup_and_teardown_gcs):
     # Step 2: Ask a question about the ingested content
     r2 = requests.post(
         "http://127.0.0.1:8000/chat",
-        json={"message": "What does the document say about Langroid?"},
+        json={"text": "What does the document say about Langroid?"},
         timeout=30,
     )
     assert r2.status_code == 200
 
     # Expect the response to mention 'framework' per the fixture content
     body = r2.json()
-    # Our server returns {'response': ...}
-    content = body.get("response", "")
+    # Our server returns {'content': ...}
+    content = body.get("content", "")
     assert "framework" in content.lower()

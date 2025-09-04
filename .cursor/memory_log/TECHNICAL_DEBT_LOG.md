@@ -8,4 +8,3 @@
 - **Date Deferred:** 2025-09-04
 - **Reason for Deferral:** To prioritize the completion of core features in Phase 3. This is a hardening task, not a core functional blocker.
 - **Target Sprint for Re-evaluation:** Sprint 3 (S3)
-

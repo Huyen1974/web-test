@@ -16,4 +16,3 @@
 - All `🚀 MVPCore` tasks for Phase 2 are complete.
 - The agent is now capable of managing document metadata in Firestore, fully synchronized with the ingestion process.
 - Task `ID 2.4` has been deferred as technical debt.
-
