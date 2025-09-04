@@ -6,7 +6,7 @@ import logging
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from agent_data.main import AgentData, AgentDataConfig
 
@@ -38,12 +38,13 @@ class HealthResponse(BaseModel):
 
 
 class ChatMessage(BaseModel):
-    """Input payload with canonical `text`; accepts legacy `message` via alias.
+    """Input payload supporting both `text` and legacy `message` keys.
 
     Includes optional `session_id` for compatibility with tests.
     """
 
-    text: str = Field(alias="message")
+    text: str | None = None
+    message: str | None = None
     session_id: str | None = None
 
 
@@ -105,7 +106,7 @@ async def health():
 async def ingest(message: ChatMessage):
     """Ingest documents by providing a GCS URI in `text`."""
     try:
-        gcs_uri = message.text.strip()
+        gcs_uri = (message.text or message.message or "").strip()
 
         # Special-case: local fixture ingestion for E2E without GCS creds
         if "huyen1974-agent-data-knowledge-test" in gcs_uri and gcs_uri.endswith(
@@ -140,7 +141,7 @@ async def ingest(message: ChatMessage):
 async def chat(message: ChatMessage):
     """Chat endpoint for agent interactions (no ingestion)."""
     try:
-        user_text = message.text.strip()
+        user_text = (message.text or message.message or "").strip()
         session_id = message.session_id
 
         # Handle simple natural-language ingestion command for local fixture
