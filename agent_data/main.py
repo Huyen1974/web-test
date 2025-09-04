@@ -15,11 +15,10 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from typing import Tuple
 
 try:
-    from google.cloud import storage  # type: ignore
     from google.api_core import exceptions  # type: ignore
+    from google.cloud import storage  # type: ignore
 except Exception:  # pragma: no cover - optional dependency at import time
     storage = None  # type: ignore
     exceptions = None  # type: ignore
@@ -29,14 +28,17 @@ from langroid.agent.special.doc_chat_agent import (
     DocChatAgentConfig,
 )
 from langroid.agent.tool_message import ToolMessage  # noqa: F401
+
 try:  # prefer canonical location
     from langroid.agent.chat_agent import tool  # type: ignore
 except Exception:  # pragma: no cover - compatibility shim for older Langroid
+
     def tool(func=None, *args, **kwargs):  # type: ignore
         def _wrap(f):
             return f
 
         return _wrap(func) if callable(func) else _wrap
+
 
 __all__ = ["AgentDataConfig", "AgentData"]
 
@@ -81,6 +83,8 @@ class AgentData(DocChatAgent):
         self.tools = getattr(self, "tools", []) or []
         if "gcs_ingest" not in self.tools:
             self.tools.append("gcs_ingest")
+        # Keep a simple preview/cache of last ingested text content (for demo/tests)
+        self.last_ingested_text: str | None = None
 
     @tool
     def gcs_ingest(self, gcs_uri: str) -> str:
@@ -101,7 +105,7 @@ class AgentData(DocChatAgent):
                 f"and try again. URI: {gcs_uri}"
             )
 
-        def parse_gcs_uri(uri: str) -> Tuple[str, str]:
+        def parse_gcs_uri(uri: str) -> tuple[str, str]:
             if not uri.startswith("gs://"):
                 raise ValueError(
                     f"Invalid GCS URI '{uri}'. Expected format: gs://<bucket>/<path>"
@@ -135,17 +139,22 @@ class AgentData(DocChatAgent):
                 ingestion_result = None
                 try:
                     ingestion_result = self.ingest_doc_paths([str(local_path)])
-                except Exception as ingest_err:  # pragma: no cover - integration fallback
-                    ingestion_result = (
-                        f"Ingestion skipped or failed: {ingest_err}"
-                    )
+                except (
+                    Exception
+                ) as ingest_err:  # pragma: no cover - integration fallback
+                    ingestion_result = f"Ingestion skipped or failed: {ingest_err}"
+
+                # Best-effort: cache text for simple QA when vecdb/LLM are absent
+                try:
+                    text = local_path.read_text(encoding="utf-8", errors="ignore")
+                    self.last_ingested_text = text[:10000]
+                except Exception:
+                    pass
 
                 # Note: local_path resides in a TemporaryDirectory and will be
                 # cleaned up on context exit; we return the ingestion result
                 # for confirmation in logs or tooling.
-                return (
-                    f"Successfully downloaded and ingested {gcs_uri}. Result: {ingestion_result}"
-                )
+                return f"Successfully downloaded and ingested {gcs_uri}. Result: {ingestion_result}"
 
         except Exception as e:
             # Handle common GCS exceptions with clearer messages

@@ -1,0 +1,2 @@
+The Langroid framework enables building complex LLM applications with structured agents.
+
