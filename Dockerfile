@@ -33,6 +33,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy application code
 COPY agent_data/ /app/agent_data/
 
-EXPOSE 8000
+EXPOSE 8080
 
-CMD ["uvicorn", "agent_data.server:app", "--host", "0.0.0.0", "--port", "8000"]
+# Use Cloud Run provided $PORT or default to 8080
+CMD ["bash", "-lc", "uvicorn agent_data.server:app --host 0.0.0.0 --port ${PORT:-8080}"]
