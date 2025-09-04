@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 
 try:
@@ -104,6 +105,55 @@ class AgentData(DocChatAgent):
                 self.db = firestore.Client()  # type: ignore[attr-defined]
         except Exception:
             self.db = None
+
+    def ingest_doc_paths(self, paths, *args, **kwargs) -> str:
+        """Overrides the parent method to automatically persist metadata to Firestore after successful ingestion.
+
+        Calls the parent ingestion to process the documents, then attempts to
+        persist initial metadata per input path. Errors during metadata
+        persistence are swallowed so they don't affect ingestion success.
+
+        Returns:
+            str: A summary message including ingestion result and metadata outcome.
+        """
+
+        # Execute the standard ingestion (vector store, parsing, etc.)
+        parent_result = super().ingest_doc_paths(paths, *args, **kwargs)
+
+        # Normalize paths into a list of strings (ignore bytes for metadata doc_id)
+        if isinstance(paths, (str, bytes)):
+            norm_paths = [paths]
+        else:
+            norm_paths = list(paths)
+
+        saved_ids: list[str] = []
+        errors: list[str] = []
+
+        for p in norm_paths:
+            if isinstance(p, bytes):
+                # Cannot infer an id from raw bytes; skip metadata persistence
+                continue
+            try:
+                doc_id = Path(p).name
+                initial_metadata = {
+                    "source_uri": p,
+                    "ingestion_status": "completed",
+                    "timestamp_utc": datetime.now(UTC).isoformat(),
+                }
+                _ = self.add_metadata(doc_id, json.dumps(initial_metadata))
+                saved_ids.append(doc_id)
+            except Exception as e:  # pragma: no cover
+                errors.append(f"{p}: {e}")
+
+        meta_note = (
+            f"metadata saved for {len(saved_ids)} doc(s): {', '.join(saved_ids)}"
+            if saved_ids
+            else "no metadata saved"
+        )
+        if errors:
+            meta_note += f"; {len(errors)} error(s) during metadata save"
+
+        return f"Ingestion complete. Result: {parent_result}. Metadata: {meta_note}."
 
     @tool
     def gcs_ingest(self, gcs_uri: str) -> str:

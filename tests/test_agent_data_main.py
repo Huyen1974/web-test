@@ -296,6 +296,35 @@ def test_update_status_tool_calls_firestore(mock_firestore: MagicMock):
 
 
 @pytest.mark.unit
+@patch("agent_data.main.firestore")
+@patch("agent_data.main.AgentData.add_metadata")
+@patch("langroid.agent.special.doc_chat_agent.DocChatAgent.ingest_doc_paths")
+def test_ingest_doc_paths_override_saves_metadata(
+    mock_super_ingest: MagicMock,
+    mock_add_metadata: MagicMock,
+    mock_firestore: MagicMock,
+):
+    """Override calls parent ingest and persists metadata per path (skip bytes)."""
+
+    mock_super_ingest.return_value = "OK"
+    cfg = AgentDataConfig()
+    cfg.vecdb = None
+    agent = AgentData(cfg)
+
+    paths = ["/path/to/doc1.txt", "/path/to/doc2.pdf", b"bytes-content"]
+    out = agent.ingest_doc_paths(paths=paths)
+
+    # Parent called once with the same positional paths list
+    mock_super_ingest.assert_called_once()
+    called_args, called_kwargs = mock_super_ingest.call_args
+    assert called_args[0] == paths
+
+    # add_metadata called for two string paths only
+    assert mock_add_metadata.call_count == 2
+    assert "Ingestion complete." in out
+
+
+@pytest.mark.unit
 @patch("agent_data.main.storage")
 def test_gcs_ingest_handles_api_error(mock_storage: MagicMock):
     """Simulate a generic Google API error during download."""
