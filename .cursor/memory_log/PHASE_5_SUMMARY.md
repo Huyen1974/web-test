@@ -12,4 +12,3 @@
 ### ID 5.2: Pub/Sub A2A events
 - Implemented a full Agent-to-Agent (A2A) communication pipeline using Google Cloud Pub/Sub and Langroid's `Task` API.
 - The agent can now receive and process tasks asynchronously from other services.
-

@@ -18,4 +18,3 @@ The project has delivered a functional, end-to-end knowledge management agent wi
 - **Security:** Hardened with vulnerability scanning (Trivy) and strict CI quality gates.
 
 All development phases (0 through 5) for the MVP are now complete and verified. Remaining `Hardening` and `FutureScale` tasks have been logged as technical debt for future sprints.
-
