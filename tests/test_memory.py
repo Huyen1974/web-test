@@ -1,7 +1,8 @@
 import sys
 import types
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import patch, Mock
 
 # Provide a lightweight stub for langroid if not available locally
 if "langroid.agent.chat_history" not in sys.modules:
@@ -26,7 +27,9 @@ pytestmark = pytest.mark.unit
 
 def test_init_sets_attributes_and_calls_super():
     client = Mock()
-    with patch("langroid.agent.chat_history.ChatHistory.__init__", return_value=None) as super_init:
+    with patch(
+        "langroid.agent.chat_history.ChatHistory.__init__", return_value=None
+    ) as super_init:
         inst = FirestoreChatHistory(session_id="session-123", firestore_client=client)
         super_init.assert_called_once()
 
