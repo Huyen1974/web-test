@@ -7,4 +7,3 @@ resource "google_pubsub_topic" "agent_data_tasks_test" {
     service     = "agent-data"
   }
 }
-
