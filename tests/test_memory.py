@@ -4,8 +4,12 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-# Provide a lightweight stub for langroid if not available locally
-if "langroid.agent.chat_history" not in sys.modules:
+# Provide a lightweight stub for langroid only if import truly fails
+try:  # prefer the real package when available (e.g., in CI)
+    import importlib
+
+    importlib.import_module("langroid.agent.chat_history")
+except Exception:
     langroid = types.ModuleType("langroid")
     agent_mod = types.ModuleType("langroid.agent")
     ch_mod = types.ModuleType("langroid.agent.chat_history")
