@@ -5,4 +5,3 @@ module "agent_data_service_test" {
   service_name = "agent-data-test"
   image_path   = "asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/agent-data-test/agent-data-test:latest"
 }
-

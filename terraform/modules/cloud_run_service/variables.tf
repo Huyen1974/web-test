@@ -17,4 +17,3 @@ variable "image_path" {
   description = "Container image path in Artifact Registry"
   type        = string
 }
-
