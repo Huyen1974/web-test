@@ -4,6 +4,7 @@ resource "google_pubsub_topic" "billing_alerts_topic" {
 }
 
 resource "google_billing_budget" "r_and_d_budget" {
+  count           = var.billing_account_id == "" ? 0 : 1
   billing_account = var.billing_account_id
 
   display_name = "R&D Budget (Plan V12)"

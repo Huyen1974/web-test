@@ -38,4 +38,5 @@ variable "qdrant_api_key" {
 variable "billing_account_id" {
   description = "GCP Billing Account ID (e.g., 000000-000000-000000)"
   type        = string
+  default     = ""
 }
