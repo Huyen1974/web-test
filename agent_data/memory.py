@@ -53,7 +53,9 @@ class FirestoreChatHistory(ChatHistory):
         Raises:
             NotImplementedError: This is a placeholder method.
         """
-        raise NotImplementedError("FirestoreChatHistory.add_messages is not implemented yet")
+        raise NotImplementedError(
+            "FirestoreChatHistory.add_messages is not implemented yet"
+        )
 
     def get_messages(self):  # type: ignore[override]
         """Retrieve messages for the current session.
@@ -65,7 +67,9 @@ class FirestoreChatHistory(ChatHistory):
         Raises:
             NotImplementedError: This is a placeholder method.
         """
-        raise NotImplementedError("FirestoreChatHistory.get_messages is not implemented yet")
+        raise NotImplementedError(
+            "FirestoreChatHistory.get_messages is not implemented yet"
+        )
 
     def clear(self):  # type: ignore[override]
         """Clear all messages for the current session.
@@ -74,4 +78,3 @@ class FirestoreChatHistory(ChatHistory):
             NotImplementedError: This is a placeholder method.
         """
         raise NotImplementedError("FirestoreChatHistory.clear is not implemented yet")
-
