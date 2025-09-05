@@ -1,27 +1,6 @@
-import sys
-import types
 from unittest.mock import Mock, patch
 
 import pytest
-
-# Provide a lightweight stub for langroid only if import truly fails
-try:  # prefer the real package when available (e.g., in CI)
-    import importlib
-
-    importlib.import_module("langroid.agent.chat_history")
-except Exception:
-    langroid = types.ModuleType("langroid")
-    agent_mod = types.ModuleType("langroid.agent")
-    ch_mod = types.ModuleType("langroid.agent.chat_history")
-
-    class ChatHistory:  # minimal stub for import
-        def __init__(self, *args, **kwargs):
-            pass
-
-    ch_mod.ChatHistory = ChatHistory
-    sys.modules["langroid"] = langroid
-    sys.modules["langroid.agent"] = agent_mod
-    sys.modules["langroid.agent.chat_history"] = ch_mod
 
 from agent_data.memory import FirestoreChatHistory
 
