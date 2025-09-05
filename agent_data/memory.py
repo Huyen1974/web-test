@@ -11,7 +11,13 @@ task.
 
 from typing import Any
 
-from langroid.agent.chat_history import ChatHistory
+try:  # Prefer real Langroid ChatHistory when available
+    from langroid.agent.chat_history import ChatHistory  # type: ignore
+except Exception:  # Fallback stub to avoid hard dependency at import time
+
+    class ChatHistory:  # type: ignore
+        def __init__(self) -> None:
+            pass
 
 
 class FirestoreChatHistory(ChatHistory):

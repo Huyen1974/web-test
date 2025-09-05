@@ -11,7 +11,7 @@ pytestmark = pytest.mark.unit
 def test_init_sets_attributes_and_calls_super():
     client = Mock()
     with patch(
-        "langroid.agent.chat_history.ChatHistory.__init__", return_value=None
+        "agent_data.memory.ChatHistory.__init__", return_value=None
     ) as super_init:
         inst = FirestoreChatHistory(session_id="session-123", firestore_client=client)
         super_init.assert_called_once()
