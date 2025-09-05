@@ -53,6 +53,7 @@ def get_firestore_ids(client: object) -> set[str]:
 
 
 def main() -> int:
+    # CI nudge: trigger Lint Only workflow after lint fixes
     # Initialize Qdrant client if library and env are available
     qdrant_url = os.getenv("QDRANT_URL") or os.getenv("QDRANT_HOST")
     qdrant_api_key = os.getenv("QDRANT_API_KEY")
