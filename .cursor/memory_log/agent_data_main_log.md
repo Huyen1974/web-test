@@ -148,6 +148,21 @@
 - **Test Coverage:** PASSED (Overall coverage remains >= 80%).
 
 ---
+# Project Log: E2E Validation Phase (Phase 6)
+
+- **Status:** COMPLETED
+- **Completion Date:** 2025-09-05
+- **Final Commit SHA:** a8af1b30735f42329507b4d568bf8000c6d44bbe
+
+## Key Deliverables
+- **Live E2E Test Scripts:** Created `test_live_gcs_to_firestore.py` and `test_live_rag_pipeline.py`.
+- **Dedicated Workflow:** Created `live_e2e_tests.yml` to run E2E tests in a controlled environment with live secrets.
+- **Full Pipeline Verification:** Successfully executed the live E2E tests, verifying the entire data flow from GCS ingest to Firestore metadata creation and the full RAG query-response loop with Qdrant and OpenAI.
+
+## Verification Passed ("Log First")
+- **Live E2E CI Status:** PASSED (https://github.com/Huyen1974/agent-data-test/actions/runs/17488126790).
+
+---
 # Project Log: Pub/Sub A2A Events (ID 5.2)
 
 - **Status:** COMPLETED
