@@ -1,0 +1,58 @@
+name: Live E2E Tests
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  run-live-tests:
+    runs-on: ubuntu-22.04
+    env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      GCP_WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER }}
+      # Optional overrides for discovery
+      GCP_REGION: asia-southeast1
+      GCP_RUN_SERVICE: agent-data-test
+
+      # External service credentials
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      QDRANT_API_KEY: ${{ secrets.QDRANT_CLUSTER1_KEY }}
+      # If available, provide the Qdrant endpoint; cleanup is best-effort
+      QDRANT_URL: ${{ secrets.QDRANT_CLUSTER1_ENDPOINT }}
+
+      # Enable live e2e tests (tests are skipped unless this is set)
+      E2E_LIVE_ENABLE: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e . pytest pytest-cov httpx
+
+      - name: Run live E2E tests
+        run: |
+          pytest -m e2e -q
+
