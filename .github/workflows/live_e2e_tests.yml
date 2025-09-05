@@ -56,4 +56,5 @@ jobs:
 
       - name: Run live E2E tests
         run: |
-          pytest -m e2e -q
+          # Override repo addopts (unit-only + coverage threshold) for live E2E run
+          pytest -m e2e -q -o addopts=""
