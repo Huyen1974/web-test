@@ -187,6 +187,23 @@ def test_gcs_ingest_invalid_uri_returns_failure_message():
 
 
 @pytest.mark.unit
+@patch("agent_data.main.FirestoreChatHistory")
+def test_agent_data_initializes_firestore_history(mock_fsh):
+    """AgentData should initialize FirestoreChatHistory and assign to history.
+
+    Verifies the integration point by asserting the class is instantiated
+    once and the resulting instance is assigned to agent.history.
+    """
+
+    cfg = AgentDataConfig()
+    cfg.vecdb = None
+    agent = AgentData(cfg)
+
+    mock_fsh.assert_called_once()
+    assert agent.history is mock_fsh.return_value
+
+
+@pytest.mark.unit
 def test_gcs_ingest_invalid_uri_missing_object_path():
     """URI missing object path should be handled with failure message."""
 
