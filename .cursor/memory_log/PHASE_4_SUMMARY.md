@@ -20,4 +20,3 @@
 
 ## Final State
 - The project now has a foundational observability stack (metrics, dashboards, alerts) and an enhanced security posture with automated vulnerability scanning.
-
