@@ -1,3 +1,4 @@
+// Budget and billing alerts infrastructure
 resource "google_pubsub_topic" "billing_alerts_topic" {
   name = "billing-alerts-topic"
 }
@@ -31,4 +32,3 @@ resource "google_billing_budget" "r_and_d_budget" {
     schema_version = "1.0"
   }
 }
-
