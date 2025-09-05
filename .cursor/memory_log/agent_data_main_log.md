@@ -146,3 +146,18 @@
 ## Verification Passed ("Log First")
 - **CI Status:** PASSED (https://github.com/Huyen1974/agent-data-test/actions/runs/17455225922).
 - **Test Coverage:** PASSED (Overall coverage remains >= 80%).
+
+---
+# Project Log: Terraform Module for Cloud Run + AR (ID 3.4)
+
+- **Status:** COMPLETED
+- **Completion Date:** 2025-09-05
+- **Final Commit SHA:** 901f416
+
+## Key Deliverables
+- **Terraform Module:** Created a reusable module at `terraform/modules/cloud_run_service/` for the Cloud Run service and Artifact Registry repository.
+- **Refactoring:** The root Terraform configuration now calls this module, making the IaC cleaner and more reusable.
+- **Verification:** The refactoring was verified via `terraform plan` and a successful CI run on the `main` branch.
+
+## Verification Passed ("Log First")
+- **CI Status:** PASSED (Run URL: [https://github.com/Huyen1974/agent-data-test/actions/runs/17481990520](https://github.com/Huyen1974/agent-data-test/actions/runs/17481990520)).
