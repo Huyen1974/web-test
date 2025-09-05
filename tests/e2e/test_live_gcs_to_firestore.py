@@ -38,6 +38,9 @@ def _get_cloud_run_url() -> str:
     not os.getenv("E2E_LIVE_ENABLE"), reason="Live E2E disabled (set E2E_LIVE_ENABLE=1)"
 )
 def test_ingestion_creates_firestore_metadata():
+    # Allow disabling Firestore verification if runner has limited IAM
+    if os.getenv("E2E_LIVE_REQUIRE_FIRESTORE") == "0":
+        pytest.skip("Firestore verification disabled by env")
     bucket = "huyen1974-agent-data-knowledge-test"
     blob = "e2e_doc.txt"
     gcs_uri = f"gs://{bucket}/{blob}"

@@ -26,6 +26,8 @@ jobs:
 
       # Enable live e2e tests (tests are skipped unless this is set)
       E2E_LIVE_ENABLE: "1"
+      # Temporarily disable Firestore metadata assertion if IAM is not provisioned
+      E2E_LIVE_REQUIRE_FIRESTORE: "0"
 
     steps:
       - name: Checkout
