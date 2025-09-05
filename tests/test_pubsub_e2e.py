@@ -60,4 +60,3 @@ def test_a2a_communication():
                     listener.wait(timeout=2)
                 except subprocess.TimeoutExpired:
                     listener.kill()
-
