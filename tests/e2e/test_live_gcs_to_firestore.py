@@ -7,7 +7,6 @@ import pytest
 import requests
 from google.cloud import firestore
 
-
 pytestmark = pytest.mark.e2e
 
 
@@ -66,7 +65,9 @@ def test_ingestion_creates_firestore_metadata():
         ingest_url = f"{base_url}/ingest"
 
         resp = requests.post(ingest_url, json={"text": gcs_uri}, timeout=60)
-        assert resp.status_code == 200, f"Unexpected status: {resp.status_code}, body={resp.text}"
+        assert (
+            resp.status_code == 200
+        ), f"Unexpected status: {resp.status_code}, body={resp.text}"
 
         # Poll Firestore for metadata document
         deadline = time.time() + 90
@@ -81,7 +82,9 @@ def test_ingestion_creates_firestore_metadata():
 
         assert found, "Metadata document not found in Firestore within timeout"
         data = doc.to_dict() if doc else {}
-        assert data.get("ingestion_status") == "completed", f"Unexpected metadata: {data}"
+        assert (
+            data.get("ingestion_status") == "completed"
+        ), f"Unexpected metadata: {data}"
     finally:
         # Teardown: delete Firestore doc and remove GCS object
         try:
@@ -93,4 +96,3 @@ def test_ingestion_creates_firestore_metadata():
             check=False,
             text=True,
         )
-
