@@ -54,3 +54,4 @@ jobs:
 
       - name: Push Docker image
         run: docker push "$IMAGE_PATH"
+# no-op: trigger Lint Only workflow for 5.1 formatting verification
