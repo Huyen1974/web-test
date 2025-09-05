@@ -6,7 +6,6 @@ import time
 import pytest
 import requests
 
-
 pytestmark = pytest.mark.e2e
 
 
@@ -104,4 +103,3 @@ def test_full_rag_pipeline():
             text=True,
         )
         _qdrant_cleanup_collection()
-
