@@ -12,7 +12,6 @@ follow‑up task.
 from __future__ import annotations
 
 import os
-from typing import Iterable, Set
 
 try:  # Optional imports — script remains runnable without these
     from google.cloud import firestore  # type: ignore
@@ -25,7 +24,7 @@ except Exception:  # pragma: no cover
     QdrantClient = None  # type: ignore
 
 
-def get_qdrant_ids(client: object) -> Set[str]:
+def get_qdrant_ids(client: object) -> set[str]:
     """Return the set of vector IDs currently in Qdrant (placeholder).
 
     Args:
@@ -39,7 +38,7 @@ def get_qdrant_ids(client: object) -> Set[str]:
     return {"vector_1", "vector_2", "orphan_vector_3"}
 
 
-def get_firestore_ids(client: object) -> Set[str]:
+def get_firestore_ids(client: object) -> set[str]:
     """Return the set of document IDs present in Firestore (placeholder).
 
     Args:
@@ -60,7 +59,9 @@ def main() -> int:
     qdrant_client = None
     if QdrantClient is not None and qdrant_url and qdrant_api_key:
         try:  # prefer REST for portability
-            qdrant_client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key, prefer_grpc=False)
+            qdrant_client = QdrantClient(
+                url=qdrant_url, api_key=qdrant_api_key, prefer_grpc=False
+            )
         except Exception:
             qdrant_client = None
 
@@ -91,4 +92,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
