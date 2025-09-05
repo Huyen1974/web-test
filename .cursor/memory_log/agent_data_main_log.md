@@ -148,6 +148,23 @@
 - **Test Coverage:** PASSED (Overall coverage remains >= 80%).
 
 ---
+# Project Log: Pub/Sub A2A Events (ID 5.2)
+
+- **Status:** COMPLETED
+- **Completion Date:** 2025-09-05
+- **Final Commit SHA:** c66bf114b110709d483ced1bf5ca560fbdb7c92e
+
+## Key Deliverables
+- **Listener:** `agent_data/pubsub_listener.py` created to listen for tasks on a Pub/Sub topic.
+- **Sender:** `agent_data/pubsub_sender.py` created to publish tasks to a Pub/Sub topic.
+- **E2E Test:** `tests/test_pubsub_e2e.py` created to verify the A2A communication loop in a CI-friendly manner using a file-based queue.
+- **Infrastructure:** `terraform/pubsub.tf` created to provision the required Pub/Sub topic.
+
+## Verification Passed ("Log First")
+- **CI Status:** PASSED (Run URL: [https://github.com/Huyen1974/agent-data-test/actions/runs/17485232539](https://github.com/Huyen1974/agent-data-test/actions/runs/17485232539)).
+- **Functionality:** The full agent-to-agent communication loop was verified.
+
+---
 # Project Log: Terraform Module for Cloud Run + AR (ID 3.4)
 
 - **Status:** COMPLETED
