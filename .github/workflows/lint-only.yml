@@ -198,7 +198,7 @@ jobs:
       TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}
       TF_VAR_qdrant_api_key: ${{ secrets.QDRANT_CLUSTER1_KEY }}
       TF_VAR_qdrant_cluster_id: ${{ secrets.QDRANT_CLUSTER1_ID }}
-# no-op: trigger Lint Only for 5.2 verification
+# no-op: trigger Lint Only for 5.2 verification v2
 # no-op: trigger Lint Only for verification on main (ID 5.1)
       TF_VAR_qdrant_region: "us-east4"
       SKIP_IMPORT: 'true'
