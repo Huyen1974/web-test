@@ -18,6 +18,8 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
+from agent_data.memory import FirestoreChatHistory
+
 try:
     from google.api_core import exceptions  # type: ignore
     from google.cloud import storage  # type: ignore
@@ -87,6 +89,20 @@ class AgentData(DocChatAgent):
         """
 
         super().__init__(config)
+        # Initialize Firestore client before setting up history backend
+        self.db = None
+        try:
+            if firestore is not None:
+                self.db = firestore.Client()  # type: ignore[attr-defined]
+        except Exception:
+            self.db = None
+
+        # Integrate Firestore-backed chat history
+        session_id = "session_test_001"
+        self.history = FirestoreChatHistory(
+            session_id=session_id, firestore_client=self.db
+        )
+
         # Track tool registrations for simple verification/tests.
         # In full Langroid integration, tool enablement is handled via
         # ToolMessage classes and enable_message(); here we maintain
@@ -97,14 +113,7 @@ class AgentData(DocChatAgent):
         # Keep a simple preview/cache of last ingested text content (for demo/tests)
         self.last_ingested_text: str | None = None
 
-        # Initialize Firestore client
-        # TODO: Mock this client in unit tests
-        self.db = None
-        try:
-            if firestore is not None:
-                self.db = firestore.Client()  # type: ignore[attr-defined]
-        except Exception:
-            self.db = None
+        # Firestore client already initialized above to support history backend
 
     def ingest_doc_paths(self, paths, *args, **kwargs) -> str:
         """Overrides the parent method to automatically persist metadata to Firestore after successful ingestion.
