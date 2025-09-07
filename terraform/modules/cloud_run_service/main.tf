@@ -16,9 +16,4 @@ resource "google_cloud_run_v2_service" "default" {
       image = var.image_path
     }
   }
-
-  traffic {
-    percent = 100
-    type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
-  }
 }
