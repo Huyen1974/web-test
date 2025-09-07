@@ -5,6 +5,10 @@ terraform {
       source  = "hashicorp/google"
       version = "~> 4.84"
     }
+    archive = {
+      source  = "hashicorp/archive"
+      version = ">= 2.4.0"
+    }
   }
 }
 
