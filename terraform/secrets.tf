@@ -5,7 +5,11 @@ resource "google_secret_manager_secret" "qdrant_api" {
   project   = var.project_id
 
   replication {
-    automatic = true
+    user_managed {
+      replicas {
+        location = "asia-southeast1"
+      }
+    }
   }
 
   labels = {

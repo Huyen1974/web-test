@@ -130,7 +130,8 @@ class AgentData(DocChatAgent):
         parent_result = super().ingest_doc_paths(paths, *args, **kwargs)
 
         # Normalize paths into a list of strings (ignore bytes for metadata doc_id)
-        if isinstance(paths, str | bytes):
+        # Accept either a single path or an iterable of paths
+        if isinstance(paths, (str, bytes)):
             norm_paths = [paths]
         else:
             norm_paths = list(paths)

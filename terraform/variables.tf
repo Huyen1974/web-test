@@ -24,10 +24,6 @@ variable "qdrant_cluster_id" {
   type        = string
 }
 
-variable "qdrant_region" {
-  description = "Qdrant region"
-  type        = string
-}
 
 variable "qdrant_api_key" {
   description = "Qdrant API key"

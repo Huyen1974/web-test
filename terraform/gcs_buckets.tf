@@ -15,7 +15,7 @@ locals {
 resource "google_storage_bucket" "huyen1974_agent_data_artifacts_test" {
   project       = var.project_id
   name          = "huyen1974-agent-data-artifacts-${var.env}"
-  location      = "us-east4"
+  location      = "asia-southeast1"
   storage_class = "STANDARD"
   force_destroy = false
 
@@ -41,7 +41,7 @@ resource "google_storage_bucket" "huyen1974_agent_data_artifacts_test" {
 resource "google_storage_bucket" "huyen1974_agent_data_knowledge_test" {
   project       = var.project_id
   name          = "huyen1974-agent-data-knowledge-${var.env}"
-  location      = "us-east4"
+  location      = "asia-southeast1"
   storage_class = "STANDARD"
   force_destroy = false
 
@@ -67,7 +67,7 @@ resource "google_storage_bucket" "huyen1974_agent_data_knowledge_test" {
 resource "google_storage_bucket" "huyen1974_agent_data_logs_test" {
   project       = var.project_id
   name          = "huyen1974-agent-data-logs-${var.env}"
-  location      = "us-east4"
+  location      = "asia-southeast1"
   storage_class = "STANDARD"
   force_destroy = false
 
@@ -93,7 +93,7 @@ resource "google_storage_bucket" "huyen1974_agent_data_logs_test" {
 resource "google_storage_bucket" "huyen1974_agent_data_qdrant_snapshots_test" {
   project       = var.project_id
   name          = "huyen1974-agent-data-qdrant-snapshots-${var.env}"
-  location      = "us-east4"
+  location      = "asia-southeast1"
   storage_class = "STANDARD"
   force_destroy = false
 
@@ -119,7 +119,7 @@ resource "google_storage_bucket" "huyen1974_agent_data_qdrant_snapshots_test" {
 resource "google_storage_bucket" "huyen1974_agent_data_source_test" {
   project       = var.project_id
   name          = "huyen1974-agent-data-source-${var.env}"
-  location      = "us-east4"
+  location      = "asia-southeast1"
   storage_class = "STANDARD"
   force_destroy = false
 
@@ -145,7 +145,7 @@ resource "google_storage_bucket" "huyen1974_agent_data_source_test" {
 resource "google_storage_bucket" "huyen1974_agent_data_tfstate_test" {
   project       = var.project_id
   name          = "huyen1974-agent-data-tfstate-${var.env}"
-  location      = "us-east4"
+  location      = "asia-southeast1"
   storage_class = "STANDARD"
   force_destroy = false
 
