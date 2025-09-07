@@ -1,17 +1,55 @@
-name: Backup TFState (Gated)
+name: Backup Terraform State
+
 on:
-  schedule:
-    - cron: '0 1 1 * *'  # 01:00 UTC monthly
   workflow_dispatch:
+  schedule:
+    - cron: '0 18 * * 0' # 18:00 UTC every Sunday
+
 jobs:
   backup:
-    if: ${{ vars.TF_BACKUP_ENABLED == 'true' }}
+    name: Backup tfstate to GCS
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required for Workload Identity Federation
+
     steps:
-      - name: Check bucket var
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Auth to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: github-chatgpt-ggcloud
+
+      - name: Backup tfstate with gsutil
+        shell: bash
         run: |
-          if [ -z "${{ vars.GCS_BACKUP_BUCKET }}" ]; then
-            echo "No bucket configured, skipping."; exit 0
+          set -euo pipefail
+          TS=$(date -u +'%Y-%m-%d-%H%M%S')
+          SRC_DIR="gs://huyen1974-agent-data-tfstate-test/terraform/state"
+          DEST_BUCKET="gs://huyen1974-agent-data-backup-test"
+
+          # Prefer default.tfstate; otherwise back up all *.tfstate files with timestamped names
+          if gsutil -q stat "${SRC_DIR}/default.tfstate"; then
+            SRC="${SRC_DIR}/default.tfstate"
+            DEST="${DEST_BUCKET}/tfstate-backup-${TS}.json"
+            gsutil cp "${SRC}" "${DEST}"
+            echo "Backed up ${SRC} to ${DEST}"
+          else
+            echo "default.tfstate not found; backing up all .tfstate files in ${SRC_DIR}"
+            for f in $(gsutil ls "${SRC_DIR}/*.tfstate" 2>/dev/null || true); do
+              base=$(basename "${f}")
+              name_no_ext=${base%.tfstate}
+              dest="${DEST_BUCKET}/tfstate-${name_no_ext}-backup-${TS}.json"
+              gsutil cp "${f}" "${dest}"
+              echo "Backed up ${f} to ${dest}"
+            done
           fi
-          echo "Would copy terraform.tfstate to gs://${{ vars.GCS_BACKUP_BUCKET }}/tfstate_${GITHUB_RUN_ID}.json"
-          # Actual copy intentionally omitted for safety in M6; enable in next phase after approval.
+
