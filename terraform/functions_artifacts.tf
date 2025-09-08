@@ -10,7 +10,7 @@ locals {
 
 data "archive_file" "mark_src" {
   type        = "zip"
-  source_dir  = "${path.root}/functions/mark_stale_artifacts"
+  source_dir  = abspath("${path.root}/../functions/mark_stale_artifacts")
   output_path = "${path.module}/.build/mark_stale_artifacts.zip"
 }
 
@@ -54,7 +54,7 @@ resource "google_cloudfunctions2_function" "mark_stale" {
 
 data "archive_file" "report_src" {
   type        = "zip"
-  source_dir  = "${path.root}/functions/report_stale_artifacts"
+  source_dir  = abspath("${path.root}/../functions/report_stale_artifacts")
   output_path = "${path.module}/.build/report_stale_artifacts.zip"
 }
 
@@ -148,7 +148,7 @@ resource "google_cloud_scheduler_job" "report_weekly" {
 # Ingest processor: Pub/Sub-triggered function to handle async ingest
 data "archive_file" "ingest_processor_src" {
   type        = "zip"
-  source_dir  = "${path.root}/functions/ingest_processor"
+  source_dir  = abspath("${path.root}/../functions/ingest_processor")
   output_path = "${path.module}/.build/ingest_processor.zip"
 }
 
