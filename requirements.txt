@@ -343,7 +343,9 @@ prettytable==3.16.0
 primp==0.15.0
     # via duckduckgo-search
 prometheus-client==0.22.1
-    # via prometheus-fastapi-instrumentator
+    # via
+    #   prometheus-fastapi-instrumentator
+    #   starlette-prometheus
 prometheus-fastapi-instrumentator==7.1.0
     # via agent-data-langroid (pyproject.toml)
 propcache==0.3.2
@@ -532,6 +534,9 @@ starlette==0.47.1
     #   fastapi
     #   mcp
     #   prometheus-fastapi-instrumentator
+    #   starlette-prometheus
+starlette-prometheus==0.10.0
+    # via agent-data-langroid (pyproject.toml)
 sympy==1.14.0
     # via onnxruntime
 tenacity==8.5.0

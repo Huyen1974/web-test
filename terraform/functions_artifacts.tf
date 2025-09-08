@@ -193,3 +193,28 @@ resource "google_cloudfunctions2_function" "ingest_processor" {
     retry_policy   = "RETRY_POLICY_RETRY"
   }
 }
+
+# Allow Eventarc service account to invoke the function's underlying Cloud Run service
+resource "google_cloud_run_service_iam_member" "ingest_eventarc_invoker" {
+  location = google_cloudfunctions2_function.ingest_processor.location
+  project  = var.project_id
+  service  = google_cloudfunctions2_function.ingest_processor.service_config[0].service
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:service-${data.google_project.cur.number}@gcp-sa-eventarc.iam.gserviceaccount.com"
+}
+
+resource "google_cloud_run_service_iam_member" "ingest_pubsub_invoker" {
+  location = google_cloudfunctions2_function.ingest_processor.location
+  project  = var.project_id
+  service  = google_cloudfunctions2_function.ingest_processor.service_config[0].service
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:service-${data.google_project.cur.number}@gcp-sa-pubsub.iam.gserviceaccount.com"
+}
+
+resource "google_cloud_run_service_iam_member" "ingest_compute_invoker" {
+  location = google_cloudfunctions2_function.ingest_processor.location
+  project  = var.project_id
+  service  = google_cloudfunctions2_function.ingest_processor.service_config[0].service
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${data.google_project.cur.number}-compute@developer.gserviceaccount.com"
+}

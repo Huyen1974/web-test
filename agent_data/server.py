@@ -9,7 +9,8 @@ from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from prometheus_fastapi_instrumentator import Instrumentator
+from starlette_prometheus import PrometheusMiddleware, metrics
+from prometheus_client import Counter, Histogram
 from pydantic import BaseModel
 
 from agent_data.main import AgentData, AgentDataConfig
@@ -36,8 +37,20 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# Prometheus metrics exporter (expose metrics endpoint immediately)
-Instrumentator().instrument(app).expose(app)
+# Prometheus metrics exporter via starlette-prometheus
+app.add_middleware(PrometheusMiddleware)
+app.add_route("/metrics", metrics)
+
+# Custom business metrics
+INGEST_SUCCESS = Counter(
+    "agent_ingest_success_total", "Number of successful ingest requests"
+)
+CHAT_MESSAGES = Counter(
+    "agent_chat_messages_total", "Number of chat messages processed"
+)
+RAG_LATENCY = Histogram(
+    "agent_rag_query_latency_seconds", "Latency of RAG queries (seconds)"
+)
 
 
 # Add CORS middleware
@@ -144,6 +157,10 @@ async def ingest(message: ChatMessage):
             # In local/dev without pubsub client, simulate acceptance
             logger.warning("Pub/Sub client not available; simulating queued ingest")
             msg = json.dumps({"gcs_uri": gcs_uri, "simulated": True})
+            try:
+                INGEST_SUCCESS.inc()
+            except Exception:
+                pass
             return ChatResponse(
                 response=f"Accepted ingest request (simulated): {msg}",
                 content=f"Accepted ingest request (simulated): {msg}",
@@ -199,6 +216,10 @@ async def ingest(message: ChatMessage):
         except Exception:
             pass
 
+        try:
+            INGEST_SUCCESS.inc()
+        except Exception:
+            pass
         return ChatResponse(response=ack, content=ack, session_id=message.session_id)
     except Exception as e:
         logger.error(f"Ingest endpoint failed: {e}")
@@ -250,7 +271,15 @@ async def chat(message: ChatMessage):
                     pass
 
         # Normal agent reply path with deterministic fallback used in tests
+        import time
+
+        _t0 = time.perf_counter()
         agent_reply = agent.llm_response(user_text)
+        _dt = max(0.0, time.perf_counter() - _t0)
+        try:
+            RAG_LATENCY.observe(_dt)
+        except Exception:
+            pass
         reply_text = (getattr(agent_reply, "content", None) or "").strip()
 
         # If agent gives an unhelpful/unknown answer, craft a stable fallback
@@ -268,6 +297,11 @@ async def chat(message: ChatMessage):
         try:
             if getattr(agent, "history", None) is not None:
                 agent.history.add_messages({"role": "assistant", "content": reply_text})  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
+        try:
+            CHAT_MESSAGES.inc()
         except Exception:
             pass
 

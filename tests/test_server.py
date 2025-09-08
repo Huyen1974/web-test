@@ -46,6 +46,18 @@ def test_chat_calls_agent_llm_response(mock_agent: MagicMock):
 
 
 @pytest.mark.unit
+def test_metrics_endpoint_exposes_custom_metrics():
+    client = TestClient(server.app)
+    resp = client.get("/metrics")
+    assert resp.status_code == 200
+    body = resp.text or ""
+    # Verify our custom metric names are present in exposition
+    assert "agent_chat_messages_total" in body
+    assert "agent_ingest_success_total" in body
+    assert "agent_rag_query_latency_seconds" in body
+
+
+@pytest.mark.unit
 def test_health_endpoint_ok():
     client = TestClient(server.app)
     resp = client.get("/health")
