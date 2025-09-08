@@ -11,7 +11,7 @@ REQUIRED_VARS=(
     "GCP_PROJECT_ID"
     "GCP_SERVICE_ACCOUNT"
     "GCP_WIF_PROVIDER"
-    "GCP_WIF_POOL"
+    # "GCP_WIF_POOL"  # optional; WIF provider is sufficient for this workflow
     "GCP_SA_KEY_JSON"
     "OPENAI_API_KEY"
     "QDRANT_CLOUD_MGMT_KEY"
