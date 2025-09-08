@@ -55,3 +55,5 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+# CI note: touching this file triggers Lint Only workflow on push.
