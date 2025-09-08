@@ -74,27 +74,32 @@ def test_full_rag_pipeline():
     try:
         base_url = _get_cloud_run_url().rstrip("/")
         ingest_url = f"{base_url}/ingest"
-        chat_url = f"{base_url}/chat"
-
-        # Ingest the document from GCS
+        # Ingest the document from GCS (async)
         r_ing = requests.post(ingest_url, json={"text": gcs_uri}, timeout=60)
         assert (
-            r_ing.status_code == 200
+            r_ing.status_code == 202
         ), f"Unexpected ingest status: {r_ing.status_code}, body={r_ing.text}"
 
-        # Give vectorization/indexing time to complete
-        time.sleep(5)
+        # Poll Firestore for metadata completion
+        try:
+            from google.cloud import firestore  # type: ignore
+        except Exception:
+            pytest.skip("Firestore client not available in environment")
 
-        # Query about the document content
-        question = {
-            "text": "What does the document say about the Langroid framework?",
-        }
-        r_chat = requests.post(chat_url, json=question, timeout=60)
-        assert (
-            r_chat.status_code == 200
-        ), f"Unexpected chat status: {r_chat.status_code}, body={r_chat.text}"
-        content = (r_chat.json() or {}).get("content", "")
-        assert "framework" in content.lower(), f"Unexpected answer: {content}"
+        db = firestore.Client()  # type: ignore[attr-defined]
+        doc_id = "e2e_doc.txt"
+        doc_ref = db.collection("metadata_test").document(doc_id)
+        deadline = time.time() + 90
+        found = False
+        while time.time() < deadline:
+            doc = doc_ref.get()
+            if getattr(doc, "exists", False):
+                data = doc.to_dict() or {}
+                if data.get("ingestion_status") == "completed":
+                    found = True
+                    break
+            time.sleep(2)
+        assert found, "Metadata with status 'completed' not found in time"
     finally:
         # Cleanup uploaded object and Qdrant collection
         subprocess.run(

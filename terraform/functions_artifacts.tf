@@ -144,3 +144,52 @@ resource "google_cloud_scheduler_job" "report_weekly" {
     }
   }
 }
+
+# Ingest processor: Pub/Sub-triggered function to handle async ingest
+data "archive_file" "ingest_processor_src" {
+  type        = "zip"
+  source_dir  = "${path.root}/functions/ingest_processor"
+  output_path = "${path.module}/.build/ingest_processor.zip"
+}
+
+resource "google_storage_bucket_object" "ingest_processor_src" {
+  name         = "functions/ingest_processor.zip"
+  bucket       = local.src_bucket
+  content_type = "application/zip"
+  source       = data.archive_file.ingest_processor_src.output_path
+}
+
+resource "google_cloudfunctions2_function" "ingest_processor" {
+  name        = "ingest-processor"
+  location    = local.fn_region
+  description = "Process async ingest messages from Pub/Sub and write metadata"
+
+  build_config {
+    runtime     = "python311"
+    entry_point = "handle"
+    source {
+      storage_source {
+        bucket = google_storage_bucket_object.ingest_processor_src.bucket
+        object = google_storage_bucket_object.ingest_processor_src.name
+      }
+    }
+  }
+
+  service_config {
+    available_memory      = "256M"
+    timeout_seconds       = 120
+    service_account_email = "${data.google_project.cur.number}-compute@developer.gserviceaccount.com"
+    environment_variables = {
+      PROJECT_ID          = var.project_id
+      REGION              = var.region
+      METADATA_COLLECTION = "metadata_test"
+    }
+  }
+
+  event_trigger {
+    trigger_region = var.region
+    event_type     = "google.cloud.pubsub.topic.v1.messagePublished"
+    pubsub_topic   = google_pubsub_topic.agent_data_tasks_test.id
+    retry_policy   = "RETRY_POLICY_RETRY"
+  }
+}

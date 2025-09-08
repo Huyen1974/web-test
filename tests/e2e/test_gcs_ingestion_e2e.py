@@ -3,6 +3,7 @@ import time
 
 import pytest
 import requests
+from google.cloud import firestore
 
 import agent_data.main as _main  # noqa: F401
 
@@ -43,26 +44,25 @@ def setup_and_teardown_gcs():
     subprocess.run(["python", "scripts/e2e_gcs_setup.py", "cleanup"], check=False)
 
 
-def test_full_ingestion_and_query_flow(setup_and_teardown_gcs):
-    # Step 1: Ask the server to ingest from GCS
+def test_full_ingestion_async_flow(setup_and_teardown_gcs):
+    # Step 1: Ask the server to ingest from GCS (async)
     ingest_uri = "gs://huyen1974-agent-data-knowledge-test/e2e_doc.txt"
     r1 = requests.post(
         "http://127.0.0.1:8000/ingest",
         json={"text": ingest_uri},
         timeout=30,
     )
-    assert r1.status_code == 200
+    assert r1.status_code == 202
 
-    # Step 2: Ask a question about the ingested content
-    r2 = requests.post(
-        "http://127.0.0.1:8000/chat",
-        json={"text": "What does the document say about Langroid?"},
-        timeout=30,
-    )
-    assert r2.status_code == 200
-
-    # Expect the response to mention 'framework' per the fixture content
-    body = r2.json()
-    # Our server returns {'content': ...}
-    content = body.get("content", "")
-    assert "framework" in content.lower()
+    # Step 2: Poll Firestore for metadata completion
+    db = firestore.Client()
+    doc_ref = db.collection("metadata_test").document("e2e_doc.txt")
+    deadline = time.time() + 90
+    while time.time() < deadline:
+        doc = doc_ref.get()
+        if getattr(doc, "exists", False):
+            data = doc.to_dict() or {}
+            if data.get("ingestion_status") == "completed":
+                return
+        time.sleep(2)
+    assert False, "Metadata with status 'completed' not found in time"

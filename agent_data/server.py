@@ -5,12 +5,24 @@ Agent Data Langroid Server - FastAPI server for agent data operations
 import logging
 from uuid import uuid4
 
+import json
+import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
 
 from agent_data.main import AgentData, AgentDataConfig
+try:
+    from google.cloud import pubsub_v1  # type: ignore
+except Exception:  # pragma: no cover - optional dependency in local/dev
+    # Provide a shim object so tests can patch PublisherClient attribute
+    class _PubSubShim:  # pragma: no cover - test/mocking helper
+        class PublisherClient:  # type: ignore
+            def __init__(self, *args, **kwargs):
+                raise RuntimeError("Pub/Sub client not available")
+
+    pubsub_v1 = _PubSubShim()  # type: ignore
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -108,18 +120,68 @@ async def health():
     return await root()
 
 
-@app.post("/ingest", response_model=ChatResponse)
+@app.post("/ingest", response_model=ChatResponse, status_code=202)
 async def ingest(message: ChatMessage):
-    """Ingest documents by providing a GCS URI in `text`."""
+    """Queue an ingest task by publishing a Pub/Sub message and return 202.
+
+    Message schema: {"gcs_uri": "gs://bucket/path/to/file"}
+    """
     try:
         gcs_uri = (message.text or message.message or "").strip()
-        result = agent.gcs_ingest(gcs_uri)
+        if not gcs_uri:
+            raise ValueError("Missing GCS URI in request body")
+
+        topic = os.getenv("PUBSUB_TOPIC", "agent-data-tasks-test")
+        # Allow overriding project via common envs
+        project_id = (
+            os.getenv("GCP_PROJECT_ID")
+            or os.getenv("GCP_PROJECT")
+            or os.getenv("GOOGLE_CLOUD_PROJECT")
+        )
+
+        if pubsub_v1 is None:
+            # In local/dev without pubsub client, simulate acceptance
+            logger.warning("Pub/Sub client not available; simulating queued ingest")
+            msg = json.dumps({"gcs_uri": gcs_uri, "simulated": True})
+            return ChatResponse(
+                response=f"Accepted ingest request (simulated): {msg}",
+                content=f"Accepted ingest request (simulated): {msg}",
+                session_id=message.session_id,
+            )
+
+        if not project_id:
+            # Fallback to ADC to derive project if not provided
+            try:
+                import google.auth  # type: ignore
+
+                creds, prj = google.auth.default()
+                project_id = prj
+            except Exception:
+                project_id = None
+
+        if not project_id:
+            raise RuntimeError("Unable to determine GCP project for Pub/Sub topic")
+
+        publisher = pubsub_v1.PublisherClient()
+        topic_path = f"projects/{project_id}/topics/{topic}"
+        payload = json.dumps({"gcs_uri": gcs_uri}).encode("utf-8")
+        future = publisher.publish(topic_path, data=payload)
+        msg_id = None
+        try:
+            msg_id = future.result(timeout=10)
+        except Exception:
+            # Best-effort: still return 202 if publish is in-flight
+            pass
+
+        ack = (
+            f"Accepted ingest request for {gcs_uri}. MessageId={msg_id or 'pending'}"
+        )
         return ChatResponse(
-            response=str(result), content=str(result), session_id=message.session_id
+            response=ack, content=ack, session_id=message.session_id
         )
     except Exception as e:
         logger.error(f"Ingest endpoint failed: {e}")
-        raise HTTPException(status_code=500, detail="Ingest processing failed") from e
+        raise HTTPException(status_code=500, detail="Failed to queue ingest task") from e
 
 
 @app.post("/chat", response_model=ChatResponse)

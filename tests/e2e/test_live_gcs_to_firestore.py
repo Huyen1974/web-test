@@ -69,7 +69,7 @@ def test_ingestion_creates_firestore_metadata():
 
         resp = requests.post(ingest_url, json={"text": gcs_uri}, timeout=60)
         assert (
-            resp.status_code == 200
+            resp.status_code == 202
         ), f"Unexpected status: {resp.status_code}, body={resp.text}"
 
         # Poll Firestore for metadata document

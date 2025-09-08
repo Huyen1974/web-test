@@ -118,8 +118,15 @@ class AgentData(DocChatAgent):
         except Exception:
             self.db = None
 
-        # Integrate Firestore-backed chat history (lazy per-session)
+        # Integrate Firestore-backed chat history (initialize default session if possible)
         self.history = None
+        try:
+            if self.db is not None:
+                self.history = FirestoreChatHistory(
+                    session_id="default", firestore_client=self.db
+                )
+        except Exception:
+            self.history = None
 
         # Track tool registrations for simple verification/tests.
         # In full Langroid integration, tool enablement is handled via

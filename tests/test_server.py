@@ -7,17 +7,24 @@ import agent_data.server as server
 
 
 @pytest.mark.unit
-@patch("agent_data.server.agent")
-def test_ingest_calls_agent_gcs_ingest(mock_agent: MagicMock):
+@patch("agent_data.server.pubsub_v1.PublisherClient")
+def test_ingest_publishes_to_pubsub(mock_pub: MagicMock):
     client = TestClient(server.app)
-    mock_agent.gcs_ingest.return_value = "ok"
+    # Setup mock publish future
+    future = MagicMock()
+    future.result.return_value = "msg-123"
+    mock_pub.return_value.publish.return_value = future
 
     payload = {"text": "gs://test-bucket/test.pdf"}
     resp = client.post("/ingest", json=payload)
 
-    assert resp.status_code == 200
-    # Ensure the agent method was called with the exact URI
-    mock_agent.gcs_ingest.assert_called_once_with("gs://test-bucket/test.pdf")
+    assert resp.status_code == 202
+    mock_pub.assert_called_once()
+    # Verify publish invoked with JSON payload containing gcs_uri
+    args, kwargs = mock_pub.return_value.publish.call_args
+    assert "projects" in args[0] and "/topics/" in args[0]
+    sent = kwargs.get("data") or (args[1] if len(args) > 1 else b"")
+    assert b"test-bucket/test.pdf" in sent
     assert isinstance(resp.json().get("content"), str)
 
 
