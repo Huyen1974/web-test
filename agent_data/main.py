@@ -89,6 +89,27 @@ class AgentData(DocChatAgent):
         """
 
         super().__init__(config)
+
+        # Load optional system prompts from prompts/ repository
+        self.system_prompt: str | None = None
+        self.summarization_prompt: str | None = None
+
+        try:
+            project_root = Path(__file__).resolve().parents[1]
+            prompts_dir = project_root / "prompts"
+            if prompts_dir.is_dir():
+                rag_path = prompts_dir / "rag_system_prompt.md"
+                if rag_path.exists():
+                    self.system_prompt = rag_path.read_text(encoding="utf-8").strip()
+                sum_path = prompts_dir / "summarization_prompt.md"
+                if sum_path.exists():
+                    self.summarization_prompt = sum_path.read_text(
+                        encoding="utf-8"
+                    ).strip()
+        except Exception:
+            # Non-fatal: continue without prompts if not present
+            self.system_prompt = self.system_prompt or None
+            self.summarization_prompt = self.summarization_prompt or None
         # Initialize Firestore client before setting up history backend
         self.db = None
         try:
