@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Iterable, Set, Tuple
 
 
 def _print(msg: str) -> None:
@@ -24,7 +23,7 @@ def _print(msg: str) -> None:
     sys.stdout.flush()
 
 
-def qdrant_ids(collection: str = "test_documents") -> Tuple[Set[str], str]:
+def qdrant_ids(collection: str = "test_documents") -> tuple[set[str], str]:
     """Return (ids, note) from Qdrant, or (empty set, warning)."""
     url = os.getenv("QDRANT_URL", "").strip()
     key = os.getenv("QDRANT_API_KEY", "").strip()
@@ -34,7 +33,7 @@ def qdrant_ids(collection: str = "test_documents") -> Tuple[Set[str], str]:
         from qdrant_client import QdrantClient  # type: ignore
 
         client = QdrantClient(url=url, api_key=key, prefer_grpc=False)
-        ids: Set[str] = set()
+        ids: set[str] = set()
         offset = None
         while True:
             points, next_page = client.scroll(
@@ -60,13 +59,13 @@ def qdrant_ids(collection: str = "test_documents") -> Tuple[Set[str], str]:
         return set(), f"[WARNING] Qdrant scan failed: {e}"
 
 
-def firestore_ids(collection: str = "metadata_test") -> Tuple[Set[str], str]:
+def firestore_ids(collection: str = "metadata_test") -> tuple[set[str], str]:
     """Return (ids, note) from Firestore, or (empty set, warning)."""
     try:
         from google.cloud import firestore  # type: ignore
 
         db = firestore.Client()
-        ids: Set[str] = set()
+        ids: set[str] = set()
         for ref in db.collection(collection).list_documents(page_size=2000):
             ids.add(ref.id)
         return ids, f"[INFO] Firestore scanned: {len(ids)} ids from '{collection}'"
@@ -95,4 +94,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

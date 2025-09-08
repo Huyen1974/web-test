@@ -1,4 +1,5 @@
 import os
+
 import pytest
 import requests
 
@@ -12,4 +13,3 @@ def test_canary_health_endpoint():
     assert r.status_code == 200
     body = r.json()
     assert body.get("status") == "healthy"
-

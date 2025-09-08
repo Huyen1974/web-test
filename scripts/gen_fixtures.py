@@ -110,7 +110,11 @@ def real_langroid_docchat_agent(query: str) -> dict[str, Any]:
         "is functioning correctly and will return richer results once the "
         "relevant knowledge has been indexed."
     )
-    if not content_str or content_str.strip().upper() in {"DO-NOT-KNOW", "UNKNOWN"} or len(content_str.strip()) <= 50:
+    if (
+        not content_str
+        or content_str.strip().upper() in {"DO-NOT-KNOW", "UNKNOWN"}
+        or len(content_str.strip()) <= 50
+    ):
         content_str = fallback
 
     return {

@@ -18,4 +18,3 @@ echo "[PASS] Cloud Run Service Account permissions are correct."
 
 echo "--------------------------------------------------"
 echo "[LOG] Script finished. All connectivity checks passed."
-

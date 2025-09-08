@@ -39,4 +39,3 @@ pytest -q -m e2e --no-cov
 echo "[PASS] Phase 3 Complete. Full E2E test with Firestore validation successful."
 echo "--------------------------------------------------"
 echo "[LOG] Script finished. Metadata flow is now fully verified."
-

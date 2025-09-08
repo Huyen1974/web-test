@@ -59,4 +59,3 @@ Ghi chú ước tính: Số liệu chi phí phụ thuộc giá theo region, cấ
 - [ ] Thiết lập workflow lịch backup (Cloud Scheduler/GA cron) → lưu snapshot vào GCS.
 - [ ] Chạy migration, xác nhận dữ liệu, chạy E2E & Data Lifecycle.
 - [ ] Cập nhật tài liệu vận hành/DR runbook (khôi phục từ snapshot).
-

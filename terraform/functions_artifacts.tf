@@ -3,9 +3,9 @@ data "google_project" "cur" {
 }
 
 locals {
-  fn_region     = var.region
-  src_bucket    = google_storage_bucket.huyen1974_agent_data_artifacts_test.name
-  appspot_sa    = "${data.google_project.cur.project_id}@appspot.gserviceaccount.com"
+  fn_region  = var.region
+  src_bucket = google_storage_bucket.huyen1974_agent_data_artifacts_test.name
+  appspot_sa = "${data.google_project.cur.project_id}@appspot.gserviceaccount.com"
 }
 
 data "archive_file" "mark_src" {
@@ -15,10 +15,10 @@ data "archive_file" "mark_src" {
 }
 
 resource "google_storage_bucket_object" "mark_src" {
-  name   = "functions/mark_stale_artifacts.zip"
-  bucket = local.src_bucket
+  name         = "functions/mark_stale_artifacts.zip"
+  bucket       = local.src_bucket
   content_type = "application/zip"
-  source = data.archive_file.mark_src.output_path
+  source       = data.archive_file.mark_src.output_path
 }
 
 resource "google_cloudfunctions2_function" "mark_stale" {
@@ -38,9 +38,9 @@ resource "google_cloudfunctions2_function" "mark_stale" {
   }
 
   service_config {
-    available_memory   = "256M"
-    timeout_seconds    = 120
-    ingress_settings   = "ALLOW_INTERNAL_AND_GCLB"
+    available_memory = "256M"
+    timeout_seconds  = 120
+    ingress_settings = "ALLOW_INTERNAL_AND_GCLB"
     environment_variables = {
       PROJECT_ID     = var.project_id
       REGION         = var.region
@@ -59,10 +59,10 @@ data "archive_file" "report_src" {
 }
 
 resource "google_storage_bucket_object" "report_src" {
-  name   = "functions/report_stale_artifacts.zip"
-  bucket = local.src_bucket
+  name         = "functions/report_stale_artifacts.zip"
+  bucket       = local.src_bucket
   content_type = "application/zip"
-  source = data.archive_file.report_src.output_path
+  source       = data.archive_file.report_src.output_path
 }
 
 resource "google_cloudfunctions2_function" "report_stale" {
@@ -82,9 +82,9 @@ resource "google_cloudfunctions2_function" "report_stale" {
   }
 
   service_config {
-    available_memory   = "256M"
-    timeout_seconds    = 120
-    ingress_settings   = "ALLOW_INTERNAL_AND_GCLB"
+    available_memory = "256M"
+    timeout_seconds  = 120
+    ingress_settings = "ALLOW_INTERNAL_AND_GCLB"
     environment_variables = {
       PROJECT_ID        = var.project_id
       REGION            = var.region
@@ -144,4 +144,3 @@ resource "google_cloud_scheduler_job" "report_weekly" {
     }
   }
 }
-

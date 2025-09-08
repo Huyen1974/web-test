@@ -17,4 +17,3 @@
 **4. NỢ KỸ THUẬT TỒN ĐỌNG:**
 * **[NỢ-01] Xác minh Metadata:** Luồng E2E đã tạm thời bỏ qua việc xác minh dữ liệu được ghi vào Firestore (`E2E_LIVE_REQUIRE_FIRESTORE=0`). Đây là khoản nợ kỹ thuật ưu tiên cao nhất cần được giải quyết.
 * **[NỢ-02] Cảnh báo Pytest:** Cần đăng ký `e2e` marker trong file `pytest.ini` để loại bỏ cảnh báo khi chạy kiểm thử.
-

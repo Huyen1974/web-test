@@ -49,4 +49,3 @@ jobs:
             --source functions/report_stale_artifacts \
             --entry-point handle --trigger-http --no-allow-unauthenticated \
             --set-env-vars PROJECT_ID=$PROJECT_ID,REGION=$REGION,AR_REPO=agent-data-test,AR_PACKAGE=agent-data-test,SLACK_SECRET_NAME=SLACK_WEBHOOK_URL
-

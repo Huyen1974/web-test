@@ -34,4 +34,3 @@ terraform apply -auto-approve "tfplan"
 echo "[PASS] Phase 3 Complete. Infrastructure has been deployed."
 echo "--------------------------------------------------"
 echo "[LOG] Script finished. Step 6.6 executed successfully."
-

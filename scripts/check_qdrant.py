@@ -3,8 +3,6 @@ import json
 import subprocess
 import sys
 
-from typing import Optional
-
 
 def get_secret(project: str, name: str) -> str:
     return subprocess.check_output(
@@ -21,7 +19,7 @@ def get_secret(project: str, name: str) -> str:
     ).strip()
 
 
-def get_first_cluster_id(project: str) -> Optional[str]:
+def get_first_cluster_id(project: str) -> str | None:
     mgmt_key = get_secret(project, "Qdrant_cloud_management_key")
     acc = "b7093834-20e9-4206-8ea0-025b6994b319"
     base = "https://api.cloud.qdrant.io/api/cluster/v1"

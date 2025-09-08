@@ -30,19 +30,27 @@ def main() -> int:
         ]
     )
     svc = json.loads(svc_json)
-    sa = (
-        (((svc.get("spec") or {}).get("template") or {}).get("spec") or {}).get(
-            "serviceAccount"
-        )
-        or None
-    )
+    sa = (((svc.get("spec") or {}).get("template") or {}).get("spec") or {}).get(
+        "serviceAccount"
+    ) or None
     if not sa:
         # Default compute service account
-        proj_number = run(["gcloud", "projects", "describe", project, "--format", "value(projectNumber)"])
+        proj_number = run(
+            [
+                "gcloud",
+                "projects",
+                "describe",
+                project,
+                "--format",
+                "value(projectNumber)",
+            ]
+        )
         sa = f"{proj_number}-compute@developer.gserviceaccount.com"
 
     # Check IAM roles on project policy
-    policy_json = run(["gcloud", "projects", "get-iam-policy", project, "--format", "json"])
+    policy_json = run(
+        ["gcloud", "projects", "get-iam-policy", project, "--format", "json"]
+    )
     policy = json.loads(policy_json)
     want_roles = {
         "roles/secretmanager.secretAccessor",
@@ -54,7 +62,10 @@ def main() -> int:
 
     missing = want_roles - have_roles
     if missing:
-        print(f"[FAIL] SA {sa} missing roles: {', '.join(sorted(missing))}", file=sys.stderr)
+        print(
+            f"[FAIL] SA {sa} missing roles: {', '.join(sorted(missing))}",
+            file=sys.stderr,
+        )
         return 1
 
     print(f"[OK] Service Account {sa} has required roles.")
@@ -63,4 +74,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

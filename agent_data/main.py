@@ -127,11 +127,14 @@ class AgentData(DocChatAgent):
         """
 
         # Execute the standard ingestion (vector store, parsing, etc.)
-        parent_result = super().ingest_doc_paths(paths, *args, **kwargs)
+        try:
+            parent_result = super().ingest_doc_paths(paths, *args, **kwargs)
+        except Exception as e:  # Always persist metadata even if parent ingestion fails
+            parent_result = f"Ingestion skipped or failed: {e}"
 
         # Normalize paths into a list of strings (ignore bytes for metadata doc_id)
         # Accept either a single path or an iterable of paths
-        if isinstance(paths, (str, bytes)):
+        if isinstance(paths, str | bytes):
             norm_paths = [paths]
         else:
             norm_paths = list(paths)

@@ -64,4 +64,3 @@ jobs:
           QDRANT_API_KEY: ${{ steps.qdrant.outputs.qdrant_key }}
         run: |
           python scripts/check_orphan_vectors.py
-

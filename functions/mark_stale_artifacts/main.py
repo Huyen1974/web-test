@@ -3,17 +3,16 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import google.auth
 from google.auth.transport.requests import AuthorizedSession, Request
-
 
 API = "https://artifactregistry.googleapis.com/v1"
 
 
 def _utcnow() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
+    return dt.datetime.now(dt.UTC)
 
 
 def _parse_time(s: str) -> dt.datetime:
@@ -24,14 +23,18 @@ def _parse_time(s: str) -> dt.datetime:
 
 
 def _authed_session() -> AuthorizedSession:
-    creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+    creds, _ = google.auth.default(
+        scopes=["https://www.googleapis.com/auth/cloud-platform"]
+    )
     if not creds.valid:
         creds.refresh(Request())
     return AuthorizedSession(creds)
 
 
-def _list_versions(sess: AuthorizedSession, project: str, location: str, repo: str, package: str) -> List[Dict[str, Any]]:
-    versions: List[Dict[str, Any]] = []
+def _list_versions(
+    sess: AuthorizedSession, project: str, location: str, repo: str, package: str
+) -> list[dict[str, Any]]:
+    versions: list[dict[str, Any]] = []
     parent = f"projects/{project}/locations/{location}/repositories/{repo}/packages/{package}"
     url = f"{API}/{parent}/versions"
     page_token = None
@@ -49,7 +52,15 @@ def _list_versions(sess: AuthorizedSession, project: str, location: str, repo: s
     return versions
 
 
-def _create_tag(sess: AuthorizedSession, project: str, location: str, repo: str, package: str, tag: str, version_name: str) -> None:
+def _create_tag(
+    sess: AuthorizedSession,
+    project: str,
+    location: str,
+    repo: str,
+    package: str,
+    tag: str,
+    version_name: str,
+) -> None:
     parent = f"projects/{project}/locations/{location}/repositories/{repo}/packages/{package}"
     url = f"{API}/{parent}/tags?tagId={tag}"
     body = {"version": version_name}
@@ -63,18 +74,24 @@ def _create_tag(sess: AuthorizedSession, project: str, location: str, repo: str,
 
 
 def handle(request):  # Cloud Functions v2 HTTP entrypoint
-    project = os.getenv("PROJECT_ID", os.getenv("GCP_PROJECT", "github-chatgpt-ggcloud"))
+    project = os.getenv(
+        "PROJECT_ID", os.getenv("GCP_PROJECT", "github-chatgpt-ggcloud")
+    )
     location = os.getenv("REGION", "asia-southeast1")
     repo = os.getenv("AR_REPO", "agent-data-test")
     package = os.getenv("AR_PACKAGE", "agent-data-test")
-    important_tags = {t.strip() for t in os.getenv("IMPORTANT_TAGS", "latest,stable").split(",") if t.strip()}
+    important_tags = {
+        t.strip()
+        for t in os.getenv("IMPORTANT_TAGS", "latest,stable").split(",")
+        if t.strip()
+    }
     ttl_days = int(os.getenv("TTL_DAYS", "14"))
 
     sess = _authed_session()
     versions = _list_versions(sess, project, location, repo, package)
 
     threshold = _utcnow() - dt.timedelta(days=ttl_days)
-    stale_marked: List[Tuple[str, str]] = []
+    stale_marked: list[tuple[str, str]] = []
     kept: int = 0
 
     for v in versions:
@@ -117,4 +134,3 @@ def handle(request):  # Cloud Functions v2 HTTP entrypoint
         200,
         {"Content-Type": "application/json"},
     )
-

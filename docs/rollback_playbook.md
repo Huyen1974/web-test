@@ -75,4 +75,3 @@ gcloud run services describe "$SERVICE" --project="$PROJECT" --region="$REGION" 
 ```
 
 Gợi ý: Có thể dùng script `scripts/manage_traffic.sh` để tự động hoá promote/rollback.
-

@@ -2,26 +2,29 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Dict, List
+from typing import Any
 
 import google.auth
+import requests
 from google.auth.transport.requests import AuthorizedSession, Request
 from google.cloud import secretmanager  # type: ignore
-import requests
-
 
 API = "https://artifactregistry.googleapis.com/v1"
 
 
 def _authed_session() -> AuthorizedSession:
-    creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+    creds, _ = google.auth.default(
+        scopes=["https://www.googleapis.com/auth/cloud-platform"]
+    )
     if not creds.valid:
         creds.refresh(Request())
     return AuthorizedSession(creds)
 
 
-def _list_versions(sess: AuthorizedSession, project: str, location: str, repo: str, package: str) -> List[Dict[str, Any]]:
-    versions: List[Dict[str, Any]] = []
+def _list_versions(
+    sess: AuthorizedSession, project: str, location: str, repo: str, package: str
+) -> list[dict[str, Any]]:
+    versions: list[dict[str, Any]] = []
     parent = f"projects/{project}/locations/{location}/repositories/{repo}/packages/{package}"
     url = f"{API}/{parent}/versions"
     page_token = None
@@ -41,12 +44,16 @@ def _list_versions(sess: AuthorizedSession, project: str, location: str, repo: s
 
 def _get_secret(project: str, name: str) -> str:
     client = secretmanager.SecretManagerServiceClient()
-    res = client.access_secret_version(request={"name": f"projects/{project}/secrets/{name}/versions/latest"})
+    res = client.access_secret_version(
+        request={"name": f"projects/{project}/secrets/{name}/versions/latest"}
+    )
     return res.payload.data.decode("utf-8")
 
 
 def handle(request):
-    project = os.getenv("PROJECT_ID", os.getenv("GCP_PROJECT", "github-chatgpt-ggcloud"))
+    project = os.getenv(
+        "PROJECT_ID", os.getenv("GCP_PROJECT", "github-chatgpt-ggcloud")
+    )
     location = os.getenv("REGION", "asia-southeast1")
     repo = os.getenv("AR_REPO", "agent-data-test")
     package = os.getenv("AR_PACKAGE", "agent-data-test")
@@ -55,7 +62,7 @@ def handle(request):
     sess = _authed_session()
     versions = _list_versions(sess, project, location, repo, package)
 
-    stale_versions: List[Dict[str, Any]] = []
+    stale_versions: list[dict[str, Any]] = []
     for v in versions:
         tags = []
         for t in v.get("relatedTags", []) or []:
@@ -82,4 +89,3 @@ def handle(request):
         pass
 
     return json.dumps(summary), 200, {"Content-Type": "application/json"}
-
