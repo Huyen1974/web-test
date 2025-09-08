@@ -20,7 +20,7 @@ import os
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import functions_framework
 
@@ -109,7 +109,7 @@ def handle(event):
         # Pub/Sub message schema under CloudEvent
         msg = (event.data or {}).get("message", {})
         raw = msg.get("data")
-        payload: Dict[str, Any] = {}
+        payload: dict[str, Any] = {}
         if raw:
             try:
                 payload = json.loads(base64.b64decode(raw).decode("utf-8"))

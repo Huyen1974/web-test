@@ -1,7 +1,4 @@
 import types
-from datetime import datetime, timezone
-
-import pytest
 
 from agent_data.memory import FirestoreChatHistory
 
@@ -78,4 +75,3 @@ def test_firestore_chat_history_add_get_clear():
     hist.clear()
     msgs2 = hist.get_messages()
     assert msgs2 == []
-

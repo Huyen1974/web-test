@@ -1,10 +1,8 @@
-import time
 
 import pytest
 from fastapi.testclient import TestClient
 
 import agent_data.server as server
-
 
 pytestmark = pytest.mark.e2e
 
