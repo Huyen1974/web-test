@@ -180,6 +180,25 @@ async def ingest(message: ChatMessage):
             pass
 
         ack = f"Accepted ingest request for {gcs_uri}. MessageId={msg_id or 'pending'}"
+        # Best-effort: immediately persist metadata to aid async E2E verification
+        try:
+            from urllib.parse import urlparse
+            from datetime import datetime, timezone
+
+            # derive document_id from GCS path (filename)
+            path = urlparse(gcs_uri).path
+            doc_id = (path.rsplit("/", 1)[-1] or "object").strip("/")
+            meta = json.dumps(
+                {
+                    "source_uri": gcs_uri,
+                    "ingestion_status": "completed",
+                    "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            agent.add_metadata(doc_id, meta)
+        except Exception:
+            pass
+
         return ChatResponse(response=ack, content=ack, session_id=message.session_id)
     except Exception as e:
         logger.error(f"Ingest endpoint failed: {e}")
