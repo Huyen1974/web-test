@@ -65,4 +65,4 @@ def test_full_ingestion_async_flow(setup_and_teardown_gcs):
             if data.get("ingestion_status") == "completed":
                 return
         time.sleep(2)
-    assert False, "Metadata with status 'completed' not found in time"
+    raise AssertionError("Metadata with status 'completed' not found in time")

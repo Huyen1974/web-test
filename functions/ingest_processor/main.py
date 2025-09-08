@@ -74,7 +74,9 @@ def _download_if_possible(gcs_uri: str) -> str | None:
             # Return path for potential future processing
             return str(local)
     except Exception as e:  # pragma: no cover
-        logger.error(json.dumps({"event": "download_error", "uri": gcs_uri, "error": str(e)}))
+        logger.error(
+            json.dumps({"event": "download_error", "uri": gcs_uri, "error": str(e)})
+        )
         return None
 
 
@@ -94,7 +96,9 @@ def _write_metadata(gcs_uri: str, status: str = "completed") -> dict[str, Any]:
         db.collection(collection).document(doc_id).set(data)
         return data
     except Exception as e:  # pragma: no cover
-        logger.error(json.dumps({"event": "firestore_error", "uri": gcs_uri, "error": str(e)}))
+        logger.error(
+            json.dumps({"event": "firestore_error", "uri": gcs_uri, "error": str(e)})
+        )
         return data
 
 
@@ -110,9 +114,13 @@ def handle(event):
             try:
                 payload = json.loads(base64.b64decode(raw).decode("utf-8"))
             except Exception:
-                payload = {"gcs_uri": base64.b64decode(raw).decode("utf-8", errors="ignore")}
+                payload = {
+                    "gcs_uri": base64.b64decode(raw).decode("utf-8", errors="ignore")
+                }
 
-        gcs_uri = (payload.get("gcs_uri") or payload.get("uri") or payload.get("path") or "").strip()
+        gcs_uri = (
+            payload.get("gcs_uri") or payload.get("uri") or payload.get("path") or ""
+        ).strip()
         if not gcs_uri:
             logger.error(json.dumps({"event": "invalid_message", "payload": payload}))
             return
@@ -122,7 +130,8 @@ def handle(event):
 
         # Persist metadata as completed
         doc = _write_metadata(gcs_uri, status="completed")
-        logger.info(json.dumps({"event": "ingest_done", "gcs_uri": gcs_uri, "metadata": doc}))
+        logger.info(
+            json.dumps({"event": "ingest_done", "gcs_uri": gcs_uri, "metadata": doc})
+        )
     except Exception as e:  # pragma: no cover
         logger.error(json.dumps({"event": "handler_error", "error": str(e)}))
-

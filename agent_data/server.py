@@ -13,6 +13,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
 
 from agent_data.main import AgentData, AgentDataConfig
+
 try:
     from google.cloud import pubsub_v1  # type: ignore
 except Exception:  # pragma: no cover - optional dependency in local/dev
@@ -173,15 +174,13 @@ async def ingest(message: ChatMessage):
             # Best-effort: still return 202 if publish is in-flight
             pass
 
-        ack = (
-            f"Accepted ingest request for {gcs_uri}. MessageId={msg_id or 'pending'}"
-        )
-        return ChatResponse(
-            response=ack, content=ack, session_id=message.session_id
-        )
+        ack = f"Accepted ingest request for {gcs_uri}. MessageId={msg_id or 'pending'}"
+        return ChatResponse(response=ack, content=ack, session_id=message.session_id)
     except Exception as e:
         logger.error(f"Ingest endpoint failed: {e}")
-        raise HTTPException(status_code=500, detail="Failed to queue ingest task") from e
+        raise HTTPException(
+            status_code=500, detail="Failed to queue ingest task"
+        ) from e
 
 
 @app.post("/chat", response_model=ChatResponse)
