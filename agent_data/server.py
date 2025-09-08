@@ -5,13 +5,14 @@ Agent Data Langroid Server - FastAPI server for agent data operations
 import json
 import logging
 import os
+from datetime import UTC
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from starlette_prometheus import PrometheusMiddleware, metrics
 from prometheus_client import Counter, Histogram
 from pydantic import BaseModel
+from starlette_prometheus import PrometheusMiddleware, metrics
 
 from agent_data.main import AgentData, AgentDataConfig
 
@@ -199,8 +200,8 @@ async def ingest(message: ChatMessage):
         ack = f"Accepted ingest request for {gcs_uri}. MessageId={msg_id or 'pending'}"
         # Best-effort: immediately persist metadata to aid async E2E verification
         try:
+            from datetime import datetime
             from urllib.parse import urlparse
-            from datetime import datetime, timezone
 
             # derive document_id from GCS path (filename)
             path = urlparse(gcs_uri).path
@@ -209,7 +210,7 @@ async def ingest(message: ChatMessage):
                 {
                     "source_uri": gcs_uri,
                     "ingestion_status": "completed",
-                    "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                    "timestamp_utc": datetime.now(UTC).isoformat(),
                 }
             )
             agent.add_metadata(doc_id, meta)
