@@ -118,13 +118,13 @@ class AgentData(DocChatAgent):
         except Exception:
             self.db = None
 
-        # Integrate Firestore-backed chat history (initialize default session if possible)
+        # Integrate Firestore-backed chat history (initialize default session)
+        # Always attempt instantiation so unit tests can patch and verify the call
         self.history = None
         try:
-            if self.db is not None:
-                self.history = FirestoreChatHistory(
-                    session_id="default", firestore_client=self.db
-                )
+            self.history = FirestoreChatHistory(
+                session_id="default", firestore_client=self.db
+            )
         except Exception:
             self.history = None
 
