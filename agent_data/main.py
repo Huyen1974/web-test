@@ -118,11 +118,8 @@ class AgentData(DocChatAgent):
         except Exception:
             self.db = None
 
-        # Integrate Firestore-backed chat history
-        session_id = "session_test_001"
-        self.history = FirestoreChatHistory(
-            session_id=session_id, firestore_client=self.db
-        )
+        # Integrate Firestore-backed chat history (lazy per-session)
+        self.history = None
 
         # Track tool registrations for simple verification/tests.
         # In full Langroid integration, tool enablement is handled via
@@ -135,6 +132,19 @@ class AgentData(DocChatAgent):
         self.last_ingested_text: str | None = None
 
         # Firestore client already initialized above to support history backend
+
+    # -------- Session helpers --------
+    def set_session(self, session_id: str) -> None:
+        """Bind this agent to a session-backed chat history if Firestore is available."""
+        try:
+            if self.db is not None:
+                self.history = FirestoreChatHistory(
+                    session_id=session_id, firestore_client=self.db
+                )
+            else:
+                self.history = None
+        except Exception:
+            self.history = None
 
     def ingest_doc_paths(self, paths, *args, **kwargs) -> str:
         """Overrides the parent method to automatically persist metadata to Firestore after successful ingestion.

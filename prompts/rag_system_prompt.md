@@ -7,4 +7,3 @@ Goals:
 Guidelines:
 - If information is insufficient, state the limitation explicitly and suggest next steps.
 - When appropriate, propose ingestion of additional sources to improve answers.
-

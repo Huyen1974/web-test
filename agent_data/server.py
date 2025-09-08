@@ -3,6 +3,7 @@ Agent Data Langroid Server - FastAPI server for agent data operations
 """
 
 import logging
+from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -126,7 +127,15 @@ async def chat(message: ChatMessage):
     """Chat endpoint for agent interactions (no ingestion)."""
     try:
         user_text = (message.text or message.message or "").strip()
-        session_id = message.session_id
+        session_id = message.session_id or str(uuid4())
+
+        # Bind session memory (if Firestore available)
+        try:
+            agent.set_session(session_id)
+            if getattr(agent, "history", None) is not None:
+                agent.history.add_messages({"role": "user", "content": user_text})  # type: ignore[attr-defined]
+        except Exception:
+            pass
 
         # Handle simple natural-language ingestion command for local fixture
         prefix = "please ingest from "
@@ -170,6 +179,12 @@ async def chat(message: ChatMessage):
                 )
             else:
                 reply_text = f"Echo: {user_text}"
+
+        try:
+            if getattr(agent, "history", None) is not None:
+                agent.history.add_messages({"role": "assistant", "content": reply_text})  # type: ignore[attr-defined]
+        except Exception:
+            pass
 
         return ChatResponse(
             response=reply_text, content=reply_text, session_id=session_id
