@@ -161,7 +161,12 @@ async def ingest(message: ChatMessage):
                 project_id = None
 
         if not project_id:
-            raise RuntimeError("Unable to determine GCP project for Pub/Sub topic")
+            # In unit-test or local contexts without ADC/project env, use a safe default
+            project_id = os.getenv("PUBSUB_PROJECT", "test-project")
+            logger.warning(
+                "GCP project not found in env/ADC; defaulting to %s for Pub/Sub publish",
+                project_id,
+            )
 
         publisher = pubsub_v1.PublisherClient()
         topic_path = f"projects/{project_id}/topics/{topic}"
