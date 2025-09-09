@@ -6,6 +6,10 @@ A modern knowledge management system built with Langroid for Google Cloud Platfo
 
 <!-- CI status check 0.4r -->
 
+## Project Journal
+
+Xem nhật ký dự án và các báo cáo tổng kết theo giai đoạn tại: [PROJECT_JOURNAL.md](PROJECT_JOURNAL.md)
+
 ## Project Overview
 
 Agent Data Langroid is a next-generation agent-based data management system that leverages the power of Langroid framework to provide intelligent document processing, semantic search, and knowledge management capabilities. This project is designed to work seamlessly with Google Cloud services including Cloud Storage, Firestore, and Qdrant vector databases.
