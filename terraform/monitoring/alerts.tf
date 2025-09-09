@@ -71,4 +71,3 @@ resource "google_monitoring_alert_policy" "high_error_rate" {
 
   notification_channels = [google_monitoring_notification_channel.email_ops.name]
 }
-
