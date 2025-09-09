@@ -18,4 +18,3 @@ gcloud monitoring dashboards create \
 
 echo "Done. List dashboards:"
 gcloud monitoring dashboards list --project="$PROJECT_ID" --format='table(name, displayName)'
-
