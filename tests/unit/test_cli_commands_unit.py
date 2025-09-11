@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from click.testing import CliRunner
 
+import agent_data as pkg
 from agent_data import cli
 
 
@@ -19,7 +20,7 @@ def test_cli_info_prints_metadata():
 def test_cli_test_command_success(monkeypatch):
     # Force dependencies to all True to avoid env differences
     monkeypatch.setattr(
-        cli, "check_dependencies", lambda: {"langroid": True, "fastapi": True}
+        pkg, "check_dependencies", lambda: {"langroid": True, "fastapi": True}
     )
     runner = CliRunner()
     res = runner.invoke(cli.main, ["test"])
