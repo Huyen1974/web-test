@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -92,4 +90,3 @@ def test_kb_crud_endpoints_unit(monkeypatch):
     r3 = client.delete(f"/documents/{doc_id}", headers={"x-api-key": "test-key"})
     assert r3.status_code == 200
     assert r3.json()["status"] == "deleted"
-

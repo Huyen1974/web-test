@@ -25,4 +25,3 @@ def test_pubsub_listener_reads_from_file_and_prints(capsys, monkeypatch):
         out = capsys.readouterr().out
         assert "Initializing Pub/Sub task listener..." in out
         assert "RECEIVED: Hello from sender agent!" in out
-

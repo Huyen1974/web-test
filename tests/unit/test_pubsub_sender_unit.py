@@ -26,4 +26,3 @@ def test_pubsub_sender_writes_to_file_and_prints(capsys, monkeypatch):
         # Assert printed output
         out = capsys.readouterr().out
         assert "SENT: Hello from sender agent!" in out
-
