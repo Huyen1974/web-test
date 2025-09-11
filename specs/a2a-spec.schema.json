@@ -1,42 +1,71 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.org/a2a-spec.schema.json",
-  "title": "Agent-Agent Communication Spec",
-  "type": "object",
-  "required": ["id", "title", "acceptance"],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
   "properties": {
-    "id": {
-      "type": "string",
-      "pattern": "^[A-Z][A-Z0-9_.-]*$",
-      "description": "Unique requirement ID used in @req:<ID> tags"
-    },
-    "title": { "type": "string" },
-    "description": { "type": "string" },
-    "doc_cite": {
-      "type": ["string", "null"],
-      "description": "Source document reference (URL or canonical identifier)"
-    },
-    "tags": { "type": "array", "items": { "type": "string" } },
-    "owners": { "type": "array", "items": { "type": "string" } },
     "acceptance": {
-      "type": "array",
       "items": {
         "oneOf": [
-          { "type": "string" },
           {
-            "type": "object",
-            "required": ["test"],
+            "type": "string"
+          },
+          {
             "additionalProperties": false,
             "properties": {
-              "test": { "type": "string", "description": "Path to acceptance test" },
-              "notes": { "type": "string" }
-            }
+              "notes": {
+                "type": "string"
+              },
+              "test": {
+                "description": "Path to acceptance test",
+                "type": "string"
+              }
+            },
+            "required": [
+              "test"
+            ],
+            "type": "object"
           }
         ]
       },
-      "minItems": 1
+      "minItems": 1,
+      "type": "array"
+    },
+    "description": {
+      "type": "string"
+    },
+    "doc_cite": {
+      "description": "Source document reference (URL or canonical identifier)",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "description": "Unique requirement ID used in @req:<ID> tags",
+      "pattern": "^[A-Z][A-Z0-9_.-]*$",
+      "type": "string"
+    },
+    "owners": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "tags": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "title": {
+      "type": "string"
     }
   },
-  "additionalProperties": true
+  "required": [
+    "id",
+    "title",
+    "acceptance"
+  ],
+  "title": "Agent-Agent Communication Spec",
+  "type": "object"
 }
-

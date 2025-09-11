@@ -6,16 +6,14 @@ import csv
 import html
 import io
 import json
-import os
 import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any
 
 import yaml
 from jsonschema import Draft202012Validator  # type: ignore
-
 
 RE_REQ = re.compile(r"@req:([A-Za-z0-9_.-]+)")
 
@@ -23,35 +21,37 @@ RE_REQ = re.compile(r"@req:([A-Za-z0-9_.-]+)")
 @dataclass
 class Spec:
     path: Path
-    data: Dict[str, Any]
+    data: dict[str, Any]
     id: str
     title: str
     doc_cite: str | None
-    acceptance: List[str]
+    acceptance: list[str]
 
 
 @dataclass
 class Findings:
-    invalid_specs: List[Tuple[Path, str]] = field(default_factory=list)
-    missing_acceptance: List[Tuple[str, Path]] = field(default_factory=list)
-    orphans: List[Tuple[Path, str, str]] = field(default_factory=list)  # (path, id, reason)
-    duplicate_doc_cites: List[Tuple[str, List[str]]] = field(
+    invalid_specs: list[tuple[Path, str]] = field(default_factory=list)
+    missing_acceptance: list[tuple[str, Path]] = field(default_factory=list)
+    orphans: list[tuple[Path, str, str]] = field(
+        default_factory=list
+    )  # (path, id, reason)
+    duplicate_doc_cites: list[tuple[str, list[str]]] = field(
         default_factory=list
     )  # (doc_cite, ids)
-    unknown_req_ids: List[Tuple[str, Path]] = field(default_factory=list)
+    unknown_req_ids: list[tuple[str, Path]] = field(default_factory=list)
 
 
-def load_schema(schema_path: Path) -> Dict[str, Any]:
+def load_schema(schema_path: Path) -> dict[str, Any]:
     with schema_path.open("r", encoding="utf-8") as f:
         return json.load(f)
 
 
-def read_specs(specs_dir: Path, schema_path: Path) -> Tuple[List[Spec], Findings]:
+def read_specs(specs_dir: Path, schema_path: Path) -> tuple[list[Spec], Findings]:
     findings = Findings()
     schema = load_schema(schema_path)
     validator = Draft202012Validator(schema)
 
-    specs: List[Spec] = []
+    specs: list[Spec] = []
     for path in sorted(specs_dir.glob("*.a2a-spec.yml")):
         try:
             with path.open("r", encoding="utf-8") as f:
@@ -63,9 +63,7 @@ def read_specs(specs_dir: Path, schema_path: Path) -> Tuple[List[Spec], Findings
         # Validate against schema
         errors = sorted(validator.iter_errors(raw), key=lambda e: e.path)
         if errors:
-            msg = ", ".join(
-                f"{list(err.path)}: {err.message}" for err in errors
-            )
+            msg = ", ".join(f"{list(err.path)}: {err.message}" for err in errors)
             findings.invalid_specs.append((path, msg))
             continue
 
@@ -75,7 +73,7 @@ def read_specs(specs_dir: Path, schema_path: Path) -> Tuple[List[Spec], Findings
 
         # Normalize acceptance to a list of strings (paths)
         acceptance_items = raw.get("acceptance") or []
-        acceptance_paths: List[str] = []
+        acceptance_paths: list[str] = []
         for item in acceptance_items:
             if isinstance(item, str):
                 acceptance_paths.append(item)
@@ -99,30 +97,24 @@ def read_specs(specs_dir: Path, schema_path: Path) -> Tuple[List[Spec], Findings
     return specs, findings
 
 
-def scan_code_for_req_ids(root: Path) -> Dict[str, List[Path]]:
-    matches: Dict[str, List[Path]] = {}
-    exclude_dirs = {
-        ".git",
-        ".venv",
-        "venv",
-        ".ruff_cache",
-        ".mypy_cache",
-        ".pytest_cache",
-        ".bin",
-        "bootstrap",
-        "terraform/.terraform",
-        "htmlcov",
-    }
+def scan_code_for_req_ids(root: Path) -> dict[str, list[Path]]:
+    matches: dict[str, list[Path]] = {}
     for path in root.rglob("*"):
         if not path.is_file():
             continue
         # Fast exclude by parts
         parts = set(path.parts)
-        if parts & {".git", ".venv", "venv", ".ruff_cache", ".pytest_cache", ".mypy_cache", ".bin"}:
+        if parts & {
+            ".git",
+            ".venv",
+            "venv",
+            ".ruff_cache",
+            ".pytest_cache",
+            ".mypy_cache",
+            ".bin",
+        }:
             continue
-        if any(
-            str(path).startswith(str(root / d)) for d in ["terraform/.terraform"]
-        ):
+        if any(str(path).startswith(str(root / d)) for d in ["terraform/.terraform"]):
             continue
         # Only scan reasonable text files
         if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".pdf", ".ico", ".zip"}:
@@ -136,7 +128,7 @@ def scan_code_for_req_ids(root: Path) -> Dict[str, List[Path]]:
     return matches
 
 
-def check_acceptance_files(specs: List[Spec], root: Path, findings: Findings) -> None:
+def check_acceptance_files(specs: list[Spec], root: Path, findings: Findings) -> None:
     for spec in specs:
         for rel in spec.acceptance:
             # Normalize path relative to repo root
@@ -145,14 +137,14 @@ def check_acceptance_files(specs: List[Spec], root: Path, findings: Findings) ->
                 findings.missing_acceptance.append((spec.id, Path(rel)))
 
 
-def detect_orphans_and_duplicates(specs: List[Spec], findings: Findings) -> None:
+def detect_orphans_and_duplicates(specs: list[Spec], findings: Findings) -> None:
     # Orphans: missing or blank doc_cite
     for spec in specs:
         if not spec.doc_cite or not str(spec.doc_cite).strip():
             findings.orphans.append((spec.path, spec.id, "missing doc_cite"))
 
     # Duplicates: same doc_cite used by multiple IDs
-    by_cite: Dict[str, List[str]] = {}
+    by_cite: dict[str, list[str]] = {}
     for spec in specs:
         if spec.doc_cite:
             by_cite.setdefault(spec.doc_cite, []).append(spec.id)
@@ -161,24 +153,30 @@ def detect_orphans_and_duplicates(specs: List[Spec], findings: Findings) -> None
             findings.duplicate_doc_cites.append((cite, ids))
 
 
-def write_rtm_html(dest: Path, specs: List[Spec], req_refs: Dict[str, List[Path]]) -> None:
+def write_rtm_html(
+    dest: Path, specs: list[Spec], req_refs: dict[str, list[Path]]
+) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     buf = io.StringIO()
     buf.write("<html><head><meta charset='utf-8'><title>RTM</title>\n")
-    buf.write("<style>body{font-family:sans-serif} table{border-collapse:collapse} td,th{border:1px solid #ccc;padding:4px}</style>")
+    buf.write(
+        "<style>body{font-family:sans-serif} table{border-collapse:collapse} td,th{border:1px solid #ccc;padding:4px}</style>"
+    )
     buf.write("</head><body>\n<h1>Requirements Traceability Matrix</h1>\n")
-    buf.write("<table>\n<tr><th>ID</th><th>Title</th><th>Doc Cite</th><th>Acceptance</th><th>Refs in Code</th></tr>\n")
+    buf.write(
+        "<table>\n<tr><th>ID</th><th>Title</th><th>Doc Cite</th><th>Acceptance</th><th>Refs in Code</th></tr>\n"
+    )
     for s in sorted(specs, key=lambda x: x.id):
         acc = "<br>".join(html.escape(a) for a in s.acceptance) or "&nbsp;"
         refs = req_refs.get(s.id, [])
         refs_s = "<br>".join(html.escape(str(p)) for p in sorted(set(refs))) or "&nbsp;"
         buf.write(
-            "<tr>" \
-            f"<td>{html.escape(s.id)}</td>" \
-            f"<td>{html.escape(s.title)}</td>" \
-            f"<td>{html.escape(s.doc_cite or '')}</td>" \
-            f"<td>{acc}</td>" \
-            f"<td>{refs_s}</td>" \
+            "<tr>"
+            f"<td>{html.escape(s.id)}</td>"
+            f"<td>{html.escape(s.title)}</td>"
+            f"<td>{html.escape(s.doc_cite or '')}</td>"
+            f"<td>{acc}</td>"
+            f"<td>{refs_s}</td>"
             "</tr>\n"
         )
     buf.write("</table>\n</body></html>\n")
@@ -196,11 +194,13 @@ def write_orphans_csv(dest: Path, findings: Findings) -> None:
             w.writerow(["", ";".join(ids), "duplicate doc_cite", cite])
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description="SpecRunner for A2A specs (Standard-as-Code)"
     )
-    ap.add_argument("--specs-dir", default="specs", help="Directory with *.a2a-spec.yml")
+    ap.add_argument(
+        "--specs-dir", default="specs", help="Directory with *.a2a-spec.yml"
+    )
     ap.add_argument(
         "--schema", default="specs/a2a-spec.schema.json", help="JSON schema path"
     )
@@ -214,7 +214,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     specs_dir = (root / args.specs_dir).resolve()
     schema_path = (root / args.schema).resolve()
 
-    specs: List[Spec] = []
+    specs: list[Spec] = []
     findings = Findings()
 
     if not schema_path.exists():
@@ -227,7 +227,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         findings.orphans.extend(findings0.orphans)
         findings.duplicate_doc_cites.extend(findings0.duplicate_doc_cites)
     else:
-        print(f"::notice::No specs directory found at {specs_dir}, skipping spec validation")
+        print(
+            f"::notice::No specs directory found at {specs_dir}, skipping spec validation"
+        )
 
     # Check acceptance files
     check_acceptance_files(specs, root, findings)
@@ -272,4 +274,3 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
