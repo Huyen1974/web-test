@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from click.testing import CliRunner
-
 import pytest
+from click.testing import CliRunner
 
 from agent_data import cli
 
@@ -26,4 +25,3 @@ def test_cli_test_command_success(monkeypatch):
     res = runner.invoke(cli.main, ["test"])
     assert res.exit_code == 0
     assert "All dependencies available" in res.output
-

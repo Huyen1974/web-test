@@ -5,7 +5,6 @@ from fastapi.testclient import TestClient
 
 import agent_data.server as server
 
-
 pytestmark = pytest.mark.unit
 
 
@@ -37,4 +36,3 @@ def test_kb_firestore_missing(monkeypatch):
         headers={"x-api-key": "secret"},
     )
     assert r.status_code == 500
-
