@@ -70,6 +70,20 @@ jobs:
       - name: unit tests
         run: pytest
 
+      # Standard-as-Code: SpecRunner gate (CP0.6)
+      - name: SpecRunner (Standard-as-Code)
+        run: |
+          python tools/specrunner/main.py --rtm artifacts/rtm.html --orphans artifacts/orphans.csv
+
+      - name: Upload SpecRunner artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: specrunner-artifacts
+          path: |
+            artifacts/rtm.html
+            artifacts/orphans.csv
+
       # Secret scan (CP0.5)
       - name: secret scan (CP0.5)
         run: |

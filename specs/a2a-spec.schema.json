@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/a2a-spec.schema.json",
+  "title": "Agent-Agent Communication Spec",
+  "type": "object",
+  "required": ["id", "title", "acceptance"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_.-]*$",
+      "description": "Unique requirement ID used in @req:<ID> tags"
+    },
+    "title": { "type": "string" },
+    "description": { "type": "string" },
+    "doc_cite": {
+      "type": ["string", "null"],
+      "description": "Source document reference (URL or canonical identifier)"
+    },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "owners": { "type": "array", "items": { "type": "string" } },
+    "acceptance": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "required": ["test"],
+            "additionalProperties": false,
+            "properties": {
+              "test": { "type": "string", "description": "Path to acceptance test" },
+              "notes": { "type": "string" }
+            }
+          }
+        ]
+      },
+      "minItems": 1
+    }
+  },
+  "additionalProperties": true
+}
+
