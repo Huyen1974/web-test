@@ -39,6 +39,9 @@ class Findings:
         default_factory=list
     )  # (doc_cite, ids)
     unknown_req_ids: list[tuple[str, Path]] = field(default_factory=list)
+    duplicate_ids: list[tuple[str, list[str]]] = field(
+        default_factory=list
+    )  # (id, paths)
 
 
 def load_schema(schema_path: Path) -> dict[str, Any]:
@@ -153,6 +156,15 @@ def detect_orphans_and_duplicates(specs: list[Spec], findings: Findings) -> None
             findings.duplicate_doc_cites.append((cite, ids))
 
 
+def detect_duplicate_ids(specs: list[Spec], findings: Findings) -> None:
+    by_id: dict[str, list[str]] = {}
+    for s in specs:
+        by_id.setdefault(s.id, []).append(str(s.path))
+    for sid, paths in sorted(by_id.items()):
+        if len(paths) > 1:
+            findings.duplicate_ids.append((sid, paths))
+
+
 def write_rtm_html(
     dest: Path, specs: list[Spec], req_refs: dict[str, list[Path]]
 ) -> None:
@@ -183,6 +195,25 @@ def write_rtm_html(
     dest.write_text(buf.getvalue(), encoding="utf-8")
 
 
+def write_rtm_json(
+    dest: Path, specs: list[Spec], req_refs: dict[str, list[Path]]
+) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    items: list[dict[str, Any]] = []
+    for s in sorted(specs, key=lambda x: x.id):
+        items.append(
+            {
+                "id": s.id,
+                "title": s.title,
+                "doc_cite": s.doc_cite,
+                "acceptance": list(s.acceptance),
+                "refs": sorted({str(p) for p in req_refs.get(s.id, [])}),
+                "path": str(s.path),
+            }
+        )
+    dest.write_text(json.dumps(items, indent=2), encoding="utf-8")
+
+
 def write_orphans_csv(dest: Path, findings: Findings) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     with dest.open("w", encoding="utf-8", newline="") as f:
@@ -194,25 +225,65 @@ def write_orphans_csv(dest: Path, findings: Findings) -> None:
             w.writerow(["", ";".join(ids), "duplicate doc_cite", cite])
 
 
+def write_speclint_json(dest: Path, findings: Findings) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "invalid_specs": [(str(p), msg) for p, msg in findings.invalid_specs],
+        "missing_acceptance": [(sid, str(p)) for sid, p in findings.missing_acceptance],
+        "orphans": [(str(p), sid, reason) for p, sid, reason in findings.orphans],
+        "duplicate_doc_cites": [
+            (cite, ids) for cite, ids in findings.duplicate_doc_cites
+        ],
+        "duplicate_ids": [(sid, paths) for sid, paths in findings.duplicate_ids],
+        "unknown_req_ids": [(sid, str(p)) for sid, p in findings.unknown_req_ids],
+    }
+    dest.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description="SpecRunner for A2A specs (Standard-as-Code)"
     )
     ap.add_argument(
-        "--specs-dir", default="specs", help="Directory with *.a2a-spec.yml"
+        "--config",
+        default="tools/specrunner/specrunner.yml",
+        help="Config YAML path",
     )
+    ap.add_argument("--specs-dir", default=None, help="Directory with *.a2a-spec.yml")
+    ap.add_argument("--schema", default=None, help="JSON schema path")
+    ap.add_argument("--rtm", dest="rtm_html", default=None, help="RTM HTML output path")
+    ap.add_argument("--rtm-json", default=None, help="RTM JSON output path")
+    ap.add_argument("--orphans", default=None, help="Orphans CSV output path")
+    ap.add_argument("--speclint", default=None, help="Spec lint JSON output path")
     ap.add_argument(
-        "--schema", default="specs/a2a-spec.schema.json", help="JSON schema path"
-    )
-    ap.add_argument("--rtm", default="artifacts/rtm.html", help="RTM HTML output path")
-    ap.add_argument(
-        "--orphans", default="artifacts/orphans.csv", help="Orphans CSV output path"
+        "--strict", action="store_true", help="Fail on unknown @req IDs in code"
     )
     args = ap.parse_args(argv)
 
+    # Load config if exists
+    cfg_path = Path(args.config)
+    cfg: dict[str, Any] = {}
+    if cfg_path.exists():
+        try:
+            cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+        except Exception as e:
+            print(f"::warning::Failed to parse config {cfg_path}: {e}")
+
+    def pick(key: str, default: Any) -> Any:
+        val = getattr(args, key, None)
+        return val if val not in (None, "") else cfg.get(key, default)
+
     root = Path.cwd()
-    specs_dir = (root / args.specs_dir).resolve()
-    schema_path = (root / args.schema).resolve()
+    specs_dir = (root / pick("specs_dir", "specs")).resolve()
+    schema_path = (root / pick("schema", "specs/a2a-spec.schema.json")).resolve()
+    rtm_html = root / pick("rtm_html", "artifacts/rtm.html")
+    rtm_json = root / pick("rtm_json", "artifacts/rtm.json")
+    orphans_csv = root / pick("orphans", "artifacts/orphans.csv")
+    speclint_json = root / pick("speclint", "artifacts/speclint.json")
+    doc_cite_pattern = pick(
+        "doc_cite_pattern", r"^(https?://[^\s]+|DOC:[A-Za-z0-9_.:/-]+)$"
+    )
+    strict = bool(args.strict)
 
     specs: list[Spec] = []
     findings = Findings()
@@ -231,6 +302,19 @@ def main(argv: list[str] | None = None) -> int:
             f"::notice::No specs directory found at {specs_dir}, skipping spec validation"
         )
 
+    # Validate doc_cite with regex if present
+    try:
+        re_doc = re.compile(str(doc_cite_pattern))
+    except re.error as e:
+        print(f"::warning::Invalid doc_cite_pattern '{doc_cite_pattern}': {e}")
+        re_doc = None
+    if re_doc is not None:
+        for s in specs:
+            if s.doc_cite and not re_doc.match(s.doc_cite):
+                findings.invalid_specs.append(
+                    (s.path, f"doc_cite does not match pattern: {s.doc_cite}")
+                )
+
     # Check acceptance files
     check_acceptance_files(specs, root, findings)
 
@@ -239,17 +323,18 @@ def main(argv: list[str] | None = None) -> int:
     spec_ids = {s.id for s in specs}
     for rid, paths in req_refs.items():
         if spec_ids and rid not in spec_ids:
-            # Only warn for unknown IDs (do not fail pipeline yet)
-            # Users can add a spec later.
             for p in paths:
                 findings.unknown_req_ids.append((rid, p))
 
-    # Orphans + duplicates
+    # Detect duplicates
     detect_orphans_and_duplicates(specs, findings)
+    detect_duplicate_ids(specs, findings)
 
     # Write artifacts
-    write_rtm_html(root / args.rtm, specs, req_refs)
-    write_orphans_csv(root / args.orphans, findings)
+    write_rtm_html(rtm_html, specs, req_refs)
+    write_rtm_json(rtm_json, specs, req_refs)
+    write_orphans_csv(orphans_csv, findings)
+    write_speclint_json(speclint_json, findings)
 
     # Summary
     print("SpecRunner Summary:")
@@ -258,13 +343,18 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  missing_acceptance: {len(findings.missing_acceptance)}")
     print(f"  orphans: {len(findings.orphans)}")
     print(f"  duplicate_doc_cites: {len(findings.duplicate_doc_cites)}")
-    print(f"  unknown_req_ids (warning): {len(findings.unknown_req_ids)}")
+    print(f"  duplicate_ids: {len(findings.duplicate_ids)}")
+    print(
+        f"  unknown_req_ids ({'strict' if strict else 'warning'}): {len(findings.unknown_req_ids)}"
+    )
 
     violations = (
         len(findings.invalid_specs)
         + len(findings.missing_acceptance)
         + len(findings.orphans)
         + len(findings.duplicate_doc_cites)
+        + len(findings.duplicate_ids)
+        + (len(findings.unknown_req_ids) if strict else 0)
     )
     if violations:
         print("::error::SpecRunner detected violations; see artifacts for details")

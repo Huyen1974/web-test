@@ -73,7 +73,7 @@ jobs:
       # Standard-as-Code: SpecRunner gate (CP0.6)
       - name: SpecRunner (Standard-as-Code)
         run: |
-          python tools/specrunner/main.py --rtm artifacts/rtm.html --orphans artifacts/orphans.csv
+          python tools/specrunner/main.py --config tools/specrunner/specrunner.yml
 
       - name: Upload SpecRunner artifacts
         if: always()
@@ -82,7 +82,9 @@ jobs:
           name: specrunner-artifacts
           path: |
             artifacts/rtm.html
+            artifacts/rtm.json
             artifacts/orphans.csv
+            artifacts/speclint.json
 
       # Secret scan (CP0.5)
       - name: secret scan (CP0.5)
