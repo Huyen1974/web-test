@@ -59,7 +59,7 @@ jobs:
               --region "$REGION" \
               --platform managed \
               $AUTH_FLAG \
-              --quiet; then
+              --quiet 2>&1 | tee /tmp/deploy_service.out; then
               echo "Deploy succeeded on attempt $attempt"
               break
             fi
@@ -116,7 +116,7 @@ jobs:
                 --platform managed \
                 --tag "$REV_TAG" \
                 --no-traffic \
-                --quiet | tee "$DEPLOY_OUT"; then
+                --quiet 2>&1 | tee "$DEPLOY_OUT"; then
               echo "Canary deploy succeeded on attempt $attempt"
               break
             fi
