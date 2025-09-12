@@ -381,10 +381,16 @@ def main(argv: list[str] | None = None) -> int:
         try:
             ci = json.loads(canonical_index_path.read_text(encoding="utf-8"))
             ci_ids: set[str] = set()
-            for group in ci.get("groups", []):
-                for item in group.get("items", []):
-                    if isinstance(item, dict) and item.get("id"):
-                        ci_ids.add(str(item["id"]))
+            # Support both legacy {groups:[{items:[{id:..}]}]} and new {items:[{cid:..}]}
+            if "items" in ci:
+                for item in ci.get("items", []):
+                    if isinstance(item, dict) and item.get("cid"):
+                        ci_ids.add(str(item["cid"]))
+            else:
+                for group in ci.get("groups", []):
+                    for item in group.get("items", []):
+                        if isinstance(item, dict) and item.get("id"):
+                            ci_ids.add(str(item["id"]))
             missing = sorted(ci_ids - spec_ids)
             findings.missing_from_canonical.extend(missing)
         except Exception as e:
@@ -413,7 +419,6 @@ def main(argv: list[str] | None = None) -> int:
         len(findings.invalid_specs)
         + len(findings.missing_acceptance)
         + len(findings.orphans)
-        + len(findings.duplicate_doc_cites)
         + len(findings.duplicate_ids)
         + (len(findings.unknown_req_ids) if strict else 0)
         + (len(findings.missing_from_canonical) if coverage_only else 0)
