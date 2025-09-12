@@ -13,7 +13,11 @@ RE_RULE = re.compile(r"^\[(?P<code>[A-Z]{2,})\]\s*(?P<title>.+)$")
 RE_NUM = re.compile(r"^\s*\d+\.\s+(?P<text>.+)$")
 RE_ENVELOPE_MARK = re.compile(r"Message Envelope\s*v?2\.\d", re.IGNORECASE)
 RE_JSON_FIELD = re.compile(r"^\s*\"(?P<field>[a-zA-Z0-9_\-]+)\"\s*:\s*")
-RE_LEVEL_MUST = re.compile(r"\b(MUST|BẮT BUỘC)\b", re.IGNORECASE)
+# Normative keywords (EN + VI, case-insensitive, NFC-insensitive-ish)
+RE_LEVEL_MUST = re.compile(
+    r"\b(MUST(\s+NOT)?|REQUIRED|SHALL|SHOULD(\s+NOT)?|RECOMMENDED|BẮT\s*BUỘC|KHÔNG\s*ĐƯỢC|PHẢI|KHÔNG\s*PHẢI|NÊN|KHÔNG\s*NÊN)\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -49,8 +53,12 @@ def extract(src: Path) -> dict:
         phase: str = "PF",
         level: str = "SHOULD",
     ):
-        counters[prefix] += 1
-        cid = f"{prefix}.{counters[prefix]}"
+        # If prefix already includes a '.' assume it is a stable ID (e.g., ENV.version)
+        if "." in prefix:
+            cid = prefix
+        else:
+            counters[prefix] += 1
+            cid = f"{prefix}.{counters[prefix]}"
         doc_cite = f"MD:{src}#L{line_no}"
         if doc_cite in seen_doc:
             return
@@ -66,16 +74,22 @@ def extract(src: Path) -> dict:
             )
         )
 
-    # Pass 1: Envelope fields
+    # Pass 1: Envelope fields (robust parser)
+    # Detect block after the heading; accept both inline JSON and pseudo-blocks
     in_env = False
+    brace_depth = 0
     for i, line in enumerate(lines, start=1):
         if RE_ENVELOPE_MARK.search(line):
             in_env = True
+            brace_depth = 0
             continue
         if in_env:
-            if line.strip().startswith("}"):
-                in_env = False
-                continue
+            stripped = line.strip()
+            if "{" in stripped:
+                brace_depth += stripped.count("{")
+            if "}" in stripped:
+                brace_depth -= stripped.count("}")
+            # capture top-level and nested one-liner subfields
             m = RE_JSON_FIELD.match(line)
             if m:
                 field = m.group("field")
@@ -85,13 +99,31 @@ def extract(src: Path) -> dict:
                     else "SHOULD"
                 )
                 emit(
-                    "ENV",
+                    f"ENV.{field}",
                     "Envelope",
                     f"Envelope field '{field}' present and validated",
                     i,
                     phase="PF",
                     level=lvl,
                 )
+                # If the value is an inline object (e.g., {"sub":..., "roles": [...]})
+                if "{" in line and "}" in line and line.index("{") < line.rindex("}"):
+                    inner = line[line.index("{") : line.rindex("}") + 1]
+                    for subf in re.findall(r"\"([a-zA-Z0-9_\-]+)\"\s*:\s*", inner):
+                        if subf == field:
+                            continue
+                        emit(
+                            f"ENV.{field}.{subf}",
+                            "Envelope",
+                            f"Envelope sub-field '{field}.{subf}' present and validated",
+                            i,
+                            phase="PF",
+                            level="SHOULD",
+                        )
+            # Exit when we leave the JSON block (brace balanced and saw at least once)
+            if brace_depth <= 0 and stripped.startswith("}"):
+                in_env = False
+                continue
 
     # Pass 2: Numbered rules and MUST/BẮT BUỘC sentences
     current_group = ""
@@ -198,10 +230,10 @@ def extract(src: Path) -> dict:
                 level="MUST",
             )
 
-    # Normative lines detection for coverage (MUST/SHOULD/REQUIRED/BẮT BUỘC)
+    # Normative lines detection for coverage (expanded multi-lingual)
     normative_lines: list[dict] = []
     for i, raw in enumerate(lines, start=1):
-        if re.search(r"\b(MUST|SHOULD|REQUIRED|BẮT BUỘC)\b", raw, re.IGNORECASE):
+        if RE_LEVEL_MUST.search(raw):
             tline = raw.strip()
             if "Rate Limiting" in tline:
                 group = "Errors/TTL/Quota"
@@ -260,6 +292,7 @@ def main() -> int:
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     payload = extract(src)
+    # Sort by CID for idempotence
     payload["items"] = sorted(payload["items"], key=lambda x: x["cid"])  # type: ignore[index]
     out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     print(f"Wrote canonical index to {out}")
