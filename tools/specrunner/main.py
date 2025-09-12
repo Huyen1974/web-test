@@ -56,7 +56,7 @@ def read_specs(specs_dir: Path, schema_path: Path) -> tuple[list[Spec], Findings
     validator = Draft202012Validator(schema)
 
     specs: list[Spec] = []
-    for path in sorted(specs_dir.glob("*.a2a-spec.yml")):
+    for path in sorted(specs_dir.rglob("*.a2a-spec.yml")):
         try:
             with path.open("r", encoding="utf-8") as f:
                 raw = yaml.safe_load(f) or {}
@@ -71,32 +71,39 @@ def read_specs(specs_dir: Path, schema_path: Path) -> tuple[list[Spec], Findings
             findings.invalid_specs.append((path, msg))
             continue
 
-        sid = str(raw.get("id"))
-        title = str(raw.get("title", ""))
-        doc_cite = raw.get("doc_cite")
-
-        # Normalize acceptance to a list of strings (paths)
-        acceptance_items = raw.get("acceptance") or []
-        acceptance_paths: list[str] = []
-        for item in acceptance_items:
-            if isinstance(item, str):
-                acceptance_paths.append(item)
-            elif isinstance(item, dict) and "test" in item:
-                acceptance_paths.append(str(item["test"]))
-            else:
-                findings.invalid_specs.append(
-                    (path, f"Invalid acceptance item: {item!r}")
+        # Support grouped format: a file with top-level 'items' list
+        def parse_one(obj: dict) -> None:
+            sid = str(obj.get("id"))
+            title = str(obj.get("title", ""))
+            doc_cite = obj.get("doc_cite")
+            acceptance_items = obj.get("acceptance") or []
+            acceptance_paths: list[str] = []
+            for item in acceptance_items:
+                if isinstance(item, str):
+                    acceptance_paths.append(item)
+                elif isinstance(item, dict) and "test" in item:
+                    acceptance_paths.append(str(item["test"]))
+                else:
+                    findings.invalid_specs.append(
+                        (path, f"Invalid acceptance item: {item!r}")
+                    )
+            specs.append(
+                Spec(
+                    path=path,
+                    data=obj,
+                    id=sid,
+                    title=title,
+                    doc_cite=str(doc_cite) if doc_cite else None,
+                    acceptance=acceptance_paths,
                 )
-        specs.append(
-            Spec(
-                path=path,
-                data=raw,
-                id=sid,
-                title=title,
-                doc_cite=str(doc_cite) if doc_cite else None,
-                acceptance=acceptance_paths,
             )
-        )
+
+        if isinstance(raw, dict) and "items" in raw:
+            for it in raw.get("items", []):
+                if isinstance(it, dict):
+                    parse_one(it)
+        else:
+            parse_one(raw)
 
     return specs, findings
 

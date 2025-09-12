@@ -39,6 +39,7 @@ def extract(src: Path) -> dict:
 
     items: list[CanonItem] = []
     counters: dict[str, int] = defaultdict(int)
+    seen_doc: set[str] = set()
 
     def emit(
         prefix: str,
@@ -51,6 +52,9 @@ def extract(src: Path) -> dict:
         counters[prefix] += 1
         cid = f"{prefix}.{counters[prefix]}"
         doc_cite = f"MD:{src}#L{line_no}"
+        if doc_cite in seen_doc:
+            return
+        seen_doc.add(doc_cite)
         items.append(
             CanonItem(
                 cid=cid,
@@ -194,10 +198,33 @@ def extract(src: Path) -> dict:
                 level="MUST",
             )
 
+    # Normative lines detection for coverage (MUST/SHOULD/REQUIRED/BẮT BUỘC)
+    normative_lines: list[dict] = []
+    for i, raw in enumerate(lines, start=1):
+        if re.search(r"\b(MUST|SHOULD|REQUIRED|BẮT BUỘC)\b", raw, re.IGNORECASE):
+            tline = raw.strip()
+            if "Rate Limiting" in tline:
+                group = "Errors/TTL/Quota"
+            elif any(k in tline for k in ["Hàng đợi", "DLQ", "retry"]):
+                group = "Async & State"
+            elif any(
+                k in tline.lower()
+                for k in ["capabilities", "registry", "deprecation", "heartbeat"]
+            ):
+                group = "Registry/Versioning"
+            elif any(k in tline for k in ["Pub/Sub", "HTTP"]):
+                group = "Transport"
+            elif any(k in tline for k in ["resource_links", "Signed URL"]):
+                group = "Artifact"
+            else:
+                group = "Envelope"
+            normative_lines.append({"line": i, "text": tline, "group": group})
+
     payload = {
         "constitution_commit": git_commit_hash(src),
         "source": str(src),
         "count": len(items),
+        "normative_lines": normative_lines,
         "items": [
             {
                 "cid": it.cid,

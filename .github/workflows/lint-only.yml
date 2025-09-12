@@ -73,6 +73,8 @@ jobs:
       # Standard-as-Code: SpecRunner gate (CP0.6)
       - name: SpecRunner (Standard-as-Code)
         run: |
+          # Build grouped specs (PF/RO/SG/INF)
+          python tools/build_group_specs.py
           python tools/specrunner/main.py --config tools/specrunner/specrunner.yml
 
       - name: Upload SpecRunner artifacts
@@ -85,6 +87,8 @@ jobs:
             artifacts/rtm.json
             artifacts/orphans.csv
             artifacts/speclint.json
+            artifacts/uncovered_lines.txt
+            artifacts/coverage_by_group.json
 
       # Coverage-only verification (Doc → Spec = 100%)
       - name: SpecRunner (Coverage-only)

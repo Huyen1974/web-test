@@ -1,6 +1,6 @@
 {
-  "constitution_commit": "f3f990328e7e461df3ba0159c1fc71a5e2680664",
-  "count": 78,
+  "constitution_commit": "ce428f1490b6107da43044ce8ff4986d92ec0c91",
+  "count": 71,
   "items": [
     {
       "cid": "ART.1",
@@ -379,62 +379,6 @@
       "text": "**Gi\u1edbi h\u1ea1n T\u1ea7n su\u1ea5t (Rate Limiting):** (Tinh ch\u1ec9nh) Ngo\u00e0i c\u00e1c header X-RateLimit-*, c\u00e1c Agent x\u1eed l\u00fd qua Pub/Sub c\u0169ng ph\u1ea3i c\u00f3 c\u01a1 ch\u1ebf enforce quota d\u1ef1a tr\u00ean principal v\u00e0 tenant_id; \u0111\u1ed3ng b\u1ed9 tr\u1ea3 X-RateLimit-Limit / X-RateLimit-Remaining / Retry-After; b\u1ea5t \u0111\u1ed3ng b\u1ed9 tr\u1ea3 event l\u1ed7i n\u1ebfu v\u01b0\u1ee3t."
     },
     {
-      "cid": "ERQ.2",
-      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L153",
-      "group": "Errors/TTL/Quota",
-      "level": "MUST",
-      "phase": "RO",
-      "text": "Metric a2a_requests_total MUST be emitted with required labels"
-    },
-    {
-      "cid": "ERQ.3",
-      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L153",
-      "group": "Errors/TTL/Quota",
-      "level": "MUST",
-      "phase": "RO",
-      "text": "Metric a2a_latency_ms MUST be emitted with required labels"
-    },
-    {
-      "cid": "ERQ.4",
-      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L153",
-      "group": "Errors/TTL/Quota",
-      "level": "MUST",
-      "phase": "RO",
-      "text": "Metric a2a_dlq_total MUST be emitted with required labels"
-    },
-    {
-      "cid": "ERQ.5",
-      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L153",
-      "group": "Errors/TTL/Quota",
-      "level": "MUST",
-      "phase": "RO",
-      "text": "Metric a2a_retries_total MUST be emitted with required labels"
-    },
-    {
-      "cid": "ERQ.6",
-      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L155",
-      "group": "Errors/TTL/Quota",
-      "level": "MUST",
-      "phase": "RO",
-      "text": "ACK P95 \u2264 1s"
-    },
-    {
-      "cid": "ERQ.7",
-      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L155",
-      "group": "Errors/TTL/Quota",
-      "level": "MUST",
-      "phase": "RO",
-      "text": "Job-done P95 \u2264 ETA + 60s"
-    },
-    {
-      "cid": "ERQ.8",
-      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L155",
-      "group": "Errors/TTL/Quota",
-      "level": "MUST",
-      "phase": "RO",
-      "text": "DLQ/ng\u00e0y \u2264 0.1%"
-    },
-    {
       "cid": "REG.1",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L160",
       "group": "Registry/Versioning",
@@ -625,6 +569,53 @@
       "level": "SHOULD",
       "phase": "PF",
       "text": "T\u00e0i li\u1ec7u v\u1ec1 MCP (Anthropic) - Changelog Jun 18 2025: security (OAuth Resource Servers, RFC 8707), structured output (tool results/resource links), elicitation (request info)."
+    }
+  ],
+  "normative_lines": [
+    {
+      "group": "Envelope",
+      "line": 29,
+      "text": "payload.schema_version MUST map t\u1edbi m\u1ed9t JSON Schema trong repo schemas/\u2026; CI BLOCK n\u1ebfu payload kh\u00f4ng validate. SDK TS/Python MUST be generated t\u1eeb OpenAPI/JSON-Schema; kh\u00f4ng merge n\u1ebfu SDK kh\u00f4ng \u0111\u1ed3ng b\u1ed9."
+    },
+    {
+      "group": "Artifact",
+      "line": 31,
+      "text": "2. **C\u1ea5u tr\u00fac Phong b\u00ec Tin nh\u1eafn (Message Envelope v2.2 - B\u1eaeT BU\u1ed8C):** (B\u1ed5 sung resource_links, context_id, v\u00e0 quy \u0111\u1ecbnh encryption cho payload sensitive.)"
+    },
+    {
+      "group": "Envelope",
+      "line": 93,
+      "text": "8. **H\u1ee7y t\u00e1c v\u1ee5:** M\u1ed9t Agent c\u00f3 th\u1ec3 g\u1eedi m\u1ed9t h\u00e0nh \u0111\u1ed9ng *.cancel. N\u1ebfu t\u00e1c v\u1ee5 \u0111ang \u1edf tr\u1ea1ng th\u00e1i RUNNING, n\u00f3 s\u1ebd chuy\u1ec3n sang CANCELLED v\u00e0 k\u00edch ho\u1ea1t h\u00e0nh \u0111\u1ed9ng b\u00f9 tr\u1eeb (compensation) n\u1ebfu c\u1ea7n; semantics at-least-once, \u0111\u00edch MUST dedupe theo idempotency_key v\u00e0 b\u1ecf qua out-of-order n\u1ebfu seq < last_seq_seen."
+    },
+    {
+      "group": "Artifact",
+      "line": 111,
+      "text": "14. **(Tinh ch\u1ec9nh)** N\u1ebfu payload qu\u00e1 l\u1edbn, artifact_uri b\u1eaft bu\u1ed9c ph\u1ea3i l\u00e0 m\u1ed9t GCS Signed URL **ch\u1ec9 cho ph\u00e9p \u0111\u1ecdc (GET-only)**, c\u00f3 **TTL \u2264 15 ph\u00fat**, \u0111i k\u00e8m v\u1edbi artifact_hash (SHA-256), MIME whitelist, fixed bucket, no-list."
+    },
+    {
+      "group": "Envelope",
+      "line": 139,
+      "text": "Th\u00f4ng \u0111i\u1ec7p t\u1eeb external agents B\u1eaeT BU\u1ed8C ph\u1ea3i k\u00e8m ch\u1eef k\u00fd JWS (thu\u1eadt to\u00e1n Ed25519/EdDSA); header ph\u1ea3i c\u00f3 kid (key ID) v\u00e0 ch\u00ednh s\u00e1ch lu\u00e2n chuy\u1ec3n kh\u00f3a l\u00e0 90 ng\u00e0y. C\u00e1c y\u00eau c\u1ea7u c\u00f3 thu\u1eadt to\u00e1n kh\u00f4ng n\u1eb1m trong danh s\u00e1ch cho ph\u00e9p s\u1ebd b\u1ecb t\u1eeb ch\u1ed1i.."
+    },
+    {
+      "group": "Async & State",
+      "line": 147,
+      "text": "3. **H\u00e0ng \u0111\u1ee3i & DLQ:** (Gi\u1eef nguy\u00ean t\u1eeb v3.0) B\u1eaft bu\u1ed9c c\u00f3 DLQ, retry 6 l\u1ea7n v\u1edbi exponential backoff + jitter; DLQ redrive th\u1ee7 c\u00f4ng v\u1edbi audit (d\u00f9ng tool TD-APP-02)."
+    },
+    {
+      "group": "Envelope",
+      "line": 153,
+      "text": "6. **(B\u1ed5 sung)** Metrics b\u1eaft bu\u1ed9c: a2a_requests_total, a2a_latency_ms, a2a_dlq_total, a2a_retries_total (v\u1edbi nh\u00e3n: action, tenant, principal, status, error.code); monitor quota points MCP advanced (Jun 18 2025)."
+    },
+    {
+      "group": "Registry/Versioning",
+      "line": 160,
+      "text": "*Heartbeat: M\u1ed7i agent B\u1eaeT BU\u1ed8C ph\u1ea3i g\u1eedi m\u1ed9t tin nh\u1eafn heartbeat \u0111\u1ebfn Registry theo chu k\u1ef3 (v\u00ed d\u1ee5: 5 ph\u00fat/l\u1ea7n). Registry s\u1ebd l\u01b0u l\u1ea1i last_seen_at v\u00e0 c\u00f3 th\u1ec3 \u0111\u00e1nh d\u1ea5u agent l\u00e0 degraded n\u1ebfu kh\u00f4ng nh\u1eadn \u0111\u01b0\u1ee3c heartbeat, cho ph\u00e9p c\u00e1c Process Agent c\u00f3 th\u1ec3 ch\u1ee7 \u0111\u1ed9ng gi\u1ea3m t\u1ea3i ho\u1eb7c \u0111\u1ecbnh tuy\u1ebfn l\u1ea1i c\u00e1c t\u00e1c v\u1ee5. *"
+    },
+    {
+      "group": "Registry/Versioning",
+      "line": 170,
+      "text": "Agent Data duy tr\u00ec registry li\u1ec7t k\u00ea actions, action_version, transports, max_payload_bytes c\u1ee7a t\u1eebng agent; /mcp/capabilities MUST kh\u1edbp registry (CI so kh\u1edbp)."
     }
   ],
   "source": "docs/agent-a2a-constitution-v5.md"
