@@ -1,4 +1,4 @@
 CI trigger file to run Lint Only workflow for latest commit.
 
-Update: re-run Lint Only after SpecRunner duplicate-doc fix @ $(date -u +%Y-%m-%dT%H:%M:%SZ)
+Update: trigger Lint Only for 11.4.2 hardened gates @ $(date -u +%Y-%m-%dT%H:%M:%SZ)
 Trigger for metrics exporter integration.
