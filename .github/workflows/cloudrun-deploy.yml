@@ -108,15 +108,15 @@ jobs:
           REV_TAG="canary-${GITHUB_SHA::7}"
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
           echo "rev_tag=${REV_TAG}" >> "$GITHUB_OUTPUT"
-
+          DEPLOY_OUT="/tmp/deploy_canary.out"
           for attempt in 1 2 3; do
             if gcloud run deploy "$SERVICE" \
-              --image "$IMAGE" \
-              --region "$REGION" \
-              --platform managed \
-              --tag "$REV_TAG" \
-              --no-traffic \
-              --quiet; then
+                --image "$IMAGE" \
+                --region "$REGION" \
+                --platform managed \
+                --tag "$REV_TAG" \
+                --no-traffic \
+                --quiet | tee "$DEPLOY_OUT"; then
               echo "Canary deploy succeeded on attempt $attempt"
               break
             fi
@@ -129,19 +129,24 @@ jobs:
             fi
           done
 
+          # Extract direct canary URL from deploy output
+          CANARY_URL=$(grep -Eo 'https://[a-zA-Z0-9.-]+' "$DEPLOY_OUT" | tail -1 || true)
+          if [[ -z "$CANARY_URL" ]]; then
+            echo "ERROR: failed to parse canary URL from deploy output" >&2
+            exit 1
+          fi
+          echo "url=${CANARY_URL}" >> "$GITHUB_OUTPUT"
+
       - name: Resolve canary URL
         id: resolve
         shell: bash
         run: |
           set -euo pipefail
-          SERVICE="${{ inputs.service || 'agent-data-test' }}"
-          REV_TAG="${{ steps.canary.outputs.rev_tag }}"
-          URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --format "value(status.traffic[?(@.tag=='${REV_TAG}')].url)")
+          URL="${{ steps.canary.outputs.url }}"
           if [[ -z "$URL" ]]; then
-            echo "Failed to resolve canary URL for tag $REV_TAG" >&2
+            echo "Failed to resolve canary URL from deploy output" >&2
             exit 1
           fi
-          echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "Canary URL: $URL"
 
       - name: Setup Python
