@@ -1,0 +1,5 @@
+id: ART.17
+title: "Thông điệp từ external agents BẮT BUỘC phải kèm chữ ký JWS (thuật toán Ed25519/EdDSA); header phải có kid (key ID) và chính sách luân chuyển khóa là 90 ngày. Các yêu cầu có thuật toán không nằm trong danh sách cho phép sẽ bị từ chối.."
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L139
+acceptance:
+  - README.md

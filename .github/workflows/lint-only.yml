@@ -91,6 +91,10 @@ jobs:
         run: |
           python tools/specrunner/main.py --config tools/specrunner/specrunner.yml --coverage-only
 
+      - name: SpecLint (advanced checks)
+        run: |
+          python tools/speclint.py
+
       # Secret scan (CP0.5)
       - name: secret scan (CP0.5)
         run: |

@@ -1,5 +1,0 @@
-id: RO.1
-title: "Tuân thủ: Mọi endpoint thay đổi phải có kiểm thử đơn vị."
-doc_cite: MD:docs/agent-a2a-constitution-v5.md#L5
-acceptance:
-  - tests/test_server.py

@@ -1,5 +1,0 @@
-id: SG.1
-title: "Quản trị: Yêu cầu khóa API cho thay đổi dữ liệu (POST/PUT/DELETE)."
-doc_cite: MD:docs/agent-a2a-constitution-v5.md#L6
-acceptance:
-  - tests/test_server.py

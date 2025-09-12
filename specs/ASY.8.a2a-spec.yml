@@ -1,0 +1,5 @@
+id: ASY.8
+title: "SLOs tối thiểu: ACK P95 ≤ 1s, Job-done P95 ≤ ETA + 60s, DLQ/ngày ≤ 0.1%."
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L155
+acceptance:
+  - README.md

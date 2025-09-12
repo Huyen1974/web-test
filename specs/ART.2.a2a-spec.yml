@@ -1,0 +1,5 @@
+id: ART.2
+title: "**Máy trạng thái & Quy tắc Phản hồi (State Machine & Response - Tinh chỉnh):** (Bổ sung các trạng thái và quy tắc hủy tác vụ đầy đủ.)"
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L83
+acceptance:
+  - README.md

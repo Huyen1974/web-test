@@ -1,0 +1,5 @@
+id: TRN.14
+title: "Mã nguồn mẫu cho Langroid ToolMessage triển khai Message Envelope v2.2 (hybrid MCP/A2A, adapter Apr 2025)."
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L206
+acceptance:
+  - README.md

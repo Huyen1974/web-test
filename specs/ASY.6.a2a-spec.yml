@@ -1,0 +1,5 @@
+id: ASY.6
+title: "(Giữ nguyên từ v3.0) trace_id phải được truyền suốt."
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L151
+acceptance:
+  - README.md

@@ -1,0 +1,5 @@
+id: TRN.6
+title: "**Nguyên tắc Xác minh Độc lập (Independent Verification):** (Giữ nguyên từ v3.0) Một Agent không được coi là hoàn thành nhiệm vụ chỉ dựa trên lời xác nhận của Agent khác; nó phải tự mình xác minh kết quả cuối cùng."
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L17
+acceptance:
+  - README.md
