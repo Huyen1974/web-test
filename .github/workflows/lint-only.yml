@@ -1,4 +1,5 @@
 name: Lint Only
+# aligned with baseline commit 64fc0c4
 on:
   push:
     paths:
