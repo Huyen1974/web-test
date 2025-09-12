@@ -219,9 +219,13 @@ def write_orphans_csv(dest: Path, findings: Findings) -> None:
     with dest.open("w", encoding="utf-8", newline="") as f:
         w = csv.writer(f)
         w.writerow(["spec_path", "id", "reason", "doc_cite_or_value"])
-        for path, sid, reason in findings.orphans:
+        # Sort orphans by ID for deterministic output
+        for path, sid, reason in sorted(findings.orphans, key=lambda x: x[1]):
             w.writerow([str(path), sid, reason, ""])
-        for cite, ids in findings.duplicate_doc_cites:
+        # Sort duplicates section deterministically as well
+        for cite, ids in sorted(
+            findings.duplicate_doc_cites, key=lambda x: ",".join(sorted(x[1]))
+        ):
             w.writerow(["", ";".join(ids), "duplicate doc_cite", cite])
 
 
