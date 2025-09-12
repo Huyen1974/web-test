@@ -388,7 +388,7 @@ def main(argv: list[str] | None = None) -> int:
         # Check acceptance files
         check_acceptance_files(specs, root, findings)
 
-        # Scan for @req:IDs in codebase
+        # Scan for at-req markers in codebase
         req_refs = scan_code_for_req_ids(root)
         for rid, paths in req_refs.items():
             if spec_ids and rid not in spec_ids:

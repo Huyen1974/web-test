@@ -1,0 +1,242 @@
+items:
+- id: ENV.1
+  title: Envelope field 'version' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L37
+  acceptance:
+  - README.md
+- id: ENV.10
+  title: Envelope field 'ttl_sec' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L55
+  acceptance:
+  - README.md
+- id: ENV.11
+  title: Envelope field 'idempotency_key' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L57
+  acceptance:
+  - README.md
+- id: ENV.12
+  title: Envelope field 'seq' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L59
+  acceptance:
+  - README.md
+- id: ENV.13
+  title: Envelope field 'action' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L61
+  acceptance:
+  - README.md
+- id: ENV.14
+  title: Envelope field 'action_version' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L63
+  acceptance:
+  - README.md
+- id: ENV.15
+  title: Envelope field 'context_id' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L65
+  acceptance:
+  - README.md
+- id: ENV.16
+  title: Envelope field 'resource_links' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L67
+  acceptance:
+  - README.md
+- id: ENV.17
+  title: Envelope field 'payload' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L69
+  acceptance:
+  - README.md
+- id: ENV.18
+  title: Envelope field 'schema_version' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L71
+  acceptance:
+  - README.md
+- id: ENV.2
+  title: Envelope field 'request_id' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L39
+  acceptance:
+  - README.md
+- id: ENV.3
+  title: Envelope field 'correlation_id' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L41
+  acceptance:
+  - README.md
+- id: ENV.4
+  title: Envelope field 'causation_id' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L43
+  acceptance:
+  - README.md
+- id: ENV.5
+  title: Envelope field 'trace_id' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L45
+  acceptance:
+  - README.md
+- id: ENV.6
+  title: Envelope field 'tenant_id' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L47
+  acceptance:
+  - README.md
+- id: ENV.7
+  title: Envelope field 'data_locality' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L49
+  acceptance:
+  - README.md
+- id: ENV.8
+  title: Envelope field 'principal' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L51
+  acceptance:
+  - README.md
+- id: ENV.9
+  title: Envelope field 'timestamp' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L53
+  acceptance:
+  - README.md
+- id: REG.1
+  title: '*Heartbeat: Mỗi agent BẮT BUỘC phải gửi một tin nhắn heartbeat đến Registry
+    theo chu kỳ (ví dụ: 5 phút/lần). Registry sẽ lưu lại last_seen_at và có thể đánh
+    dấu agent là degraded nếu không nhận được heartbeat, cho phép các Process Agent
+    có thể chủ động giảm tải hoặc định tuyến lại các tác vụ. *'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L160
+  acceptance:
+  - README.md
+- id: REG.10
+  title: 'Multi-agent E2E Test: Mô phỏng một quy trình hoàn chỉnh (ví dụ: Codex →
+    Process Agent → Data Agent → Verifier Agent) và đo lường SLOs (P95 ≤1s ACK).'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L184
+  acceptance:
+  - README.md
+- id: REG.2
+  title: '**Các Service Chuẩn hóa:** (Bổ sung action_version.)'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L162
+  acceptance:
+  - README.md
+- id: REG.3
+  title: (Giữ nguyên từ v3.0) /healthz, /readyz, /evidence/{job_id}.
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L164
+  acceptance:
+  - README.md
+- id: REG.4
+  title: '**(Tinh chỉnh)** /mcp/capabilities: Công bố envelope_versions, danh sách
+    actions (kèm action_version và max_payload_bytes), và transports; thêm /acp/capabilities
+    cho merger ACP-A2A.'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L166
+  acceptance:
+  - README.md
+- id: REG.5
+  title: Agent Data duy trì registry liệt kê actions, action_version, transports,
+    max_payload_bytes của từng agent; /mcp/capabilities MUST khớp registry (CI so
+    khớp).
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L170
+  acceptance:
+  - README.md
+- id: REG.6
+  title: Bộ Kiểm thử Hợp chuẩn (Conformance Test Suite):** (Bổ sung các bài test mới.)
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L176
+  acceptance:
+  - README.md
+- id: REG.7
+  title: Envelope Validation, Idempotency Test, Error Handling Test, Security Test,
+    Large-payload Test, Out-of-order Test, TTL Test, Evidence Test.
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L178
+  acceptance:
+  - README.md
+- id: REG.8
+  title: 'Version-negotiation Test: Client gửi một action_version không được hỗ trợ
+    và phải nhận về lỗi INVALID_ARGUMENT + gợi ý phiên bản.'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L180
+  acceptance:
+  - README.md
+- id: REG.9
+  title: 'Cancel/Compensation Test: Gửi yêu cầu hủy khi tác vụ đang chạy và xác nhận
+    nhận được sự kiện *.cancelled hoặc *.compensated.'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L182
+  acceptance:
+  - README.md
+- id: TRN.1
+  title: '**Nguyên tắc Tương thích Mở (Interoperability First):** (Tinh chỉnh từ v3.0)
+    Hệ thống ưu tiên áp dụng các giao thức mở được cộng đồng công nhận (ví dụ: MCP
+    của Anthropic với cập nhật security và structured output Jun 18 2025, A2A/Google
+    với toolkit secure enterprise Jul 31 2025, ACP/IBM merger với A2A dưới LF AI Aug
+    29 2025, OAS/HuggingFace cho open collab MMORPG AI NPC) và theo dõi các xu hướng
+    hợp nhất tiêu chuẩn (ví dụ: sự hợp nhất của A2A/Google và ACP/IBM dưới LF AI)
+    để đảm bảo khả năng tương tác rộng rãi, tận dụng adapter hiện có như Langroid
+    MCP adapter v0.53.0 (Apr 2025) và LangChain MCP streamable HTTP (May 8 2025).'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L7
+  acceptance:
+  - README.md
+- id: TRN.10
+  title: Tài liệu về A2A/ACP (LF AI) - Merger Aug 29 2025 (IBM contribute BeeAI open-source).
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L198
+  acceptance:
+  - README.md
+- id: TRN.11
+  title: Tài liệu về OpenAI Function Calling.
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L200
+  acceptance:
+  - README.md
+- id: TRN.12
+  title: Tài liệu về OAS/HuggingFace (MMORPG AI NPC, SmolAgents code-based 2025).
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L202
+  acceptance:
+  - README.md
+- id: TRN.13
+  title: '**Ví dụ Mã nguồn:**'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L204
+  acceptance:
+  - README.md
+- id: TRN.14
+  title: Mã nguồn mẫu cho Langroid ToolMessage triển khai Message Envelope v2.2 (hybrid
+    MCP/A2A, adapter Apr 2025).
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L206
+  acceptance:
+  - README.md
+- id: TRN.2
+  title: '**Nguyên tắc Chuẩn hóa Giao thức (Standardized Protocol):** (Giữ nguyên
+    từ v3.0) Mọi giao tiếp trực tiếp giữa các Agent phải tuân thủ một giao thức chung,
+    có cấu trúc.'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L9
+  acceptance:
+  - README.md
+- id: TRN.3
+  title: '**Nguyên tắc Chuyên môn hóa (Specialization):** (Giữ nguyên từ v3.0) Mỗi
+    Agent được thiết kế để giải quyết một nhóm vấn đề cụ thể và chỉ làm tốt nhất việc
+    đó.'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L11
+  acceptance:
+  - README.md
+- id: TRN.4
+  title: '**Nguyên tắc Bất đồng bộ (Asynchronous-First):** (Giữ nguyên từ v3.0) Giao
+    tiếp qua hàng đợi tin nhắn (Message Queue) như Pub/Sub là phương thức được ưu
+    tiên.'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L13
+  acceptance:
+  - README.md
+- id: TRN.5
+  title: '**Nguyên tắc Idempotency:** (Giữ nguyên từ v3.0) Mọi hành động làm thay
+    đổi trạng thái phải được thiết kế để có thể thực thi lại nhiều lần mà không gây
+    ra kết quả ngoài ý muốn.'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L15
+  acceptance:
+  - README.md
+- id: TRN.6
+  title: '**Nguyên tắc Xác minh Độc lập (Independent Verification):** (Giữ nguyên
+    từ v3.0) Một Agent không được coi là hoàn thành nhiệm vụ chỉ dựa trên lời xác
+    nhận của Agent khác; nó phải tự mình xác minh kết quả cuối cùng.'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L17
+  acceptance:
+  - README.md
+- id: TRN.7
+  title: '(Giữ nguyên từ v3.0) Hỗ trợ 2 kênh: HTTP và Pub/Sub.'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L105
+  acceptance:
+  - README.md
+- id: TRN.8
+  title: '**Liên kết đến các Tiêu chuẩn:**'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L194
+  acceptance:
+  - README.md
+- id: TRN.9
+  title: 'Tài liệu về MCP (Anthropic) - Changelog Jun 18 2025: security (OAuth Resource
+    Servers, RFC 8707), structured output (tool results/resource links), elicitation
+    (request info).'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L196
+  acceptance:
+  - README.md

@@ -1,0 +1,70 @@
+items:
+- id: ASY.1
+  title: '**Nguyên tắc Mở rộng và Bền bỉ (Scalability & Resilience):** (Tinh chỉnh
+    từ v3.0) Hệ thống phải được thiết kế để xử lý hàng trăm Agent và quy trình đồng
+    thời, với cơ chế tự phục hồi (retry, DLQ) và phân tải, đồng thời tận dụng mã nguồn
+    hiện có từ các framework như LangChain CrewAI (multi-agent teams, MCP streamable
+    May 8 2025) hoặc Langroid MAP (delegation Sep 2025) để giảm thiểu viết mã mới.'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L19
+  acceptance:
+  - README.md
+- id: ASY.10
+  title: (Bổ sung các thuật ngữ mới như A2A, ACP, OAS, MCP, Saga, DLQ, SLOs...)
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L268
+  acceptance:
+  - README.md
+- id: ASY.2
+  title: '**Tiêu chuẩn Áp dụng:** (Tinh chỉnh từ v3.0) Nền tảng là **OpenAI Function
+    Calling**, được thực thi thông qua một **Message Envelope** chuẩn hóa, hybrid
+    với MCP structured output (Jun 18 2025) để hỗ trợ tool results/resource links.'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L25
+  acceptance:
+  - README.md
+- id: ASY.3
+  title: payload.schema_version MUST map tới một JSON Schema trong repo schemas/…;
+    CI BLOCK nếu payload không validate. SDK TS/Python MUST be generated từ OpenAPI/JSON-Schema;
+    không merge nếu SDK không đồng bộ.
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L29
+  acceptance:
+  - README.md
+- id: ASY.4
+  title: '**Hàng đợi & DLQ:** (Giữ nguyên từ v3.0) Bắt buộc có DLQ, retry 6 lần với
+    exponential backoff + jitter; DLQ redrive thủ công với audit (dùng tool TD-APP-02).'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L147
+  acceptance:
+  - README.md
+- id: ASY.5
+  title: '**Giám sát & Truy vết (Trace & Observability):** (Bổ sung metric retry.)'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L149
+  acceptance:
+  - README.md
+- id: ASY.6
+  title: (Giữ nguyên từ v3.0) trace_id phải được truyền suốt.
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L151
+  acceptance:
+  - README.md
+- id: ASY.7
+  title: '**(Bổ sung)** Metrics bắt buộc: a2a_requests_total, a2a_latency_ms, a2a_dlq_total,
+    a2a_retries_total (với nhãn: action, tenant, principal, status, error.code); monitor
+    quota points MCP advanced (Jun 18 2025).'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L153
+  acceptance:
+  - README.md
+- id: ASY.8
+  title: 'SLOs tối thiểu: ACK P95 ≤ 1s, Job-done P95 ≤ ETA + 60s, DLQ/ngày ≤ 0.1%.'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L155
+  acceptance:
+  - README.md
+- id: ASY.9
+  title: '**Bảng thuật ngữ:**'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L266
+  acceptance:
+  - README.md
+- id: ERQ.1
+  title: '**Giới hạn Tần suất (Rate Limiting):** (Tinh chỉnh) Ngoài các header X-RateLimit-*,
+    các Agent xử lý qua Pub/Sub cũng phải có cơ chế enforce quota dựa trên principal
+    và tenant_id; đồng bộ trả X-RateLimit-Limit / X-RateLimit-Remaining / Retry-After;
+    bất đồng bộ trả event lỗi nếu vượt.'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L145
+  acceptance:
+  - README.md
