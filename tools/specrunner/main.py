@@ -72,7 +72,7 @@ def read_specs(specs_dir: Path, schema_path: Path) -> tuple[list[Spec], Findings
             continue
 
         # Support grouped format: a file with top-level 'items' list
-        def parse_one(obj: dict) -> None:
+        def parse_one(obj: dict, src_path: Path) -> None:
             sid = str(obj.get("id"))
             title = str(obj.get("title", ""))
             doc_cite = obj.get("doc_cite")
@@ -85,11 +85,11 @@ def read_specs(specs_dir: Path, schema_path: Path) -> tuple[list[Spec], Findings
                     acceptance_paths.append(str(item["test"]))
                 else:
                     findings.invalid_specs.append(
-                        (path, f"Invalid acceptance item: {item!r}")
+                        (src_path, f"Invalid acceptance item: {item!r}")
                     )
             specs.append(
                 Spec(
-                    path=path,
+                    path=src_path,
                     data=obj,
                     id=sid,
                     title=title,
@@ -101,9 +101,9 @@ def read_specs(specs_dir: Path, schema_path: Path) -> tuple[list[Spec], Findings
         if isinstance(raw, dict) and "items" in raw:
             for it in raw.get("items", []):
                 if isinstance(it, dict):
-                    parse_one(it)
+                    parse_one(it, path)
         else:
-            parse_one(raw)
+            parse_one(raw, path)
 
     return specs, findings
 
