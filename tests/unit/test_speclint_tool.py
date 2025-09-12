@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from tools.speclint import parse_doc_ref, load_canonical
+from tools.speclint import load_canonical, parse_doc_ref
 
 
 @pytest.mark.unit
@@ -28,4 +28,3 @@ def test_load_canonical_collects_ids(tmp_path: Path):
     path.write_text(json.dumps(data), encoding="utf-8")
     out = load_canonical(path)
     assert out.get("_ids") == {"ENV.version", "ENV.request_id"}
-

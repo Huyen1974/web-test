@@ -32,5 +32,6 @@ def test_extractor_parses_env_fields(tmp_path: Path):
     assert "ENV.version" in ids
     assert "ENV.request_id" in ids
     assert "ENV.action" in ids
-    assert any("BẮT BUỘC" in str(it.get("text", "")) for it in payload["normative_lines"])  # normative detection (VI)
-
+    assert any(
+        "BẮT BUỘC" in str(it.get("text", "")) for it in payload["normative_lines"]
+    )  # normative detection (VI)
