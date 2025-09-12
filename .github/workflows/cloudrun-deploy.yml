@@ -42,6 +42,7 @@ jobs:
       - name: Deploy
         shell: bash
         run: |
+          set -euo pipefail
           SERVICE="${{ inputs.service }}"
           TAG="${{ inputs.image_tag }}"
           IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/${SERVICE}:${TAG}"
@@ -50,12 +51,26 @@ jobs:
           else
             AUTH_FLAG="--no-allow-unauthenticated"
           fi
-          gcloud run deploy "$SERVICE" \
-            --image "$IMAGE" \
-            --region "$REGION" \
-            --platform managed \
-            $AUTH_FLAG \
-            --quiet
+
+          # Retry to mitigate occasional ABORTED resource version conflicts
+          for attempt in 1 2 3; do
+            if gcloud run deploy "$SERVICE" \
+              --image "$IMAGE" \
+              --region "$REGION" \
+              --platform managed \
+              $AUTH_FLAG \
+              --quiet; then
+              echo "Deploy succeeded on attempt $attempt"
+              break
+            fi
+            if [[ $attempt -lt 3 ]]; then
+              echo "WARN: deploy attempt $attempt failed; retrying in 10s..."
+              sleep 10
+            else
+              echo "ERROR: deploy failed after $attempt attempts"
+              exit 1
+            fi
+          done
 
   deploy-canary:
     name: Deploy Canary (no-traffic)
@@ -93,13 +108,26 @@ jobs:
           REV_TAG="canary-${GITHUB_SHA::7}"
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
           echo "rev_tag=${REV_TAG}" >> "$GITHUB_OUTPUT"
-          gcloud run deploy "$SERVICE" \
-            --image "$IMAGE" \
-            --region "$REGION" \
-            --platform managed \
-            --tag "$REV_TAG" \
-            --no-traffic \
-            --quiet
+
+          for attempt in 1 2 3; do
+            if gcloud run deploy "$SERVICE" \
+              --image "$IMAGE" \
+              --region "$REGION" \
+              --platform managed \
+              --tag "$REV_TAG" \
+              --no-traffic \
+              --quiet; then
+              echo "Canary deploy succeeded on attempt $attempt"
+              break
+            fi
+            if [[ $attempt -lt 3 ]]; then
+              echo "WARN: canary deploy attempt $attempt failed; retrying in 10s..."
+              sleep 10
+            else
+              echo "ERROR: canary deploy failed after $attempt attempts"
+              exit 1
+            fi
+          done
 
       - name: Resolve canary URL
         id: resolve
