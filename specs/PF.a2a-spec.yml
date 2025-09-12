@@ -1,0 +1,5 @@
+id: PF.1
+title: "Nền tảng: API /chat phải phản hồi trong 5s với fallback an toàn."
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L4
+acceptance:
+  - tests/test_server.py

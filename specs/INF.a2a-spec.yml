@@ -1,0 +1,5 @@
+id: INF.1
+title: "Hạ tầng: Dịch vụ phải xuất /metrics và health /health."
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L3
+acceptance:
+  - tests/test_server.py

@@ -42,6 +42,7 @@ class Findings:
     duplicate_ids: list[tuple[str, list[str]]] = field(
         default_factory=list
     )  # (id, paths)
+    missing_from_canonical: list[str] = field(default_factory=list)
 
 
 def load_schema(schema_path: Path) -> dict[str, Any]:
@@ -211,6 +212,8 @@ def write_rtm_json(
                 "path": str(s.path),
             }
         )
+    # Ensure deterministic order by id
+    items = sorted(items, key=lambda x: x["id"])  # type: ignore[index]
     dest.write_text(json.dumps(items, indent=2), encoding="utf-8")
 
 
@@ -240,6 +243,7 @@ def write_speclint_json(dest: Path, findings: Findings) -> None:
         ],
         "duplicate_ids": [(sid, paths) for sid, paths in findings.duplicate_ids],
         "unknown_req_ids": [(sid, str(p)) for sid, p in findings.unknown_req_ids],
+        "missing_from_canonical": list(findings.missing_from_canonical),
     }
     dest.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
@@ -261,6 +265,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--speclint", default=None, help="Spec lint JSON output path")
     ap.add_argument(
         "--strict", action="store_true", help="Fail on unknown @req IDs in code"
+    )
+    ap.add_argument(
+        "--coverage-only", action="store_true", help="Only verify Doc→Spec coverage"
+    )
+    ap.add_argument(
+        "--canonical-index", default=None, help="Path to canonical_index.json"
     )
     args = ap.parse_args(argv)
 
@@ -285,9 +295,15 @@ def main(argv: list[str] | None = None) -> int:
     orphans_csv = root / pick("orphans", "artifacts/orphans.csv")
     speclint_json = root / pick("speclint", "artifacts/speclint.json")
     doc_cite_pattern = pick(
-        "doc_cite_pattern", r"^(https?://[^\s]+|DOC:[A-Za-z0-9_.:/-]+)$"
+        "doc_cite_pattern",
+        r"^(https?://[^\s]+|DOC:[A-Za-z0-9_.:/-]+|MD:[^#]+#L[0-9]+)$",
+    )
+    constitution_path = root / pick(
+        "constitution_path", "docs/agent-a2a-constitution-v5.md"
     )
     strict = bool(args.strict)
+    coverage_only = bool(args.coverage_only)
+    canonical_index_path = root / pick("canonical_index", "specs/canonical_index.json")
 
     specs: list[Spec] = []
     findings = Findings()
@@ -318,21 +334,61 @@ def main(argv: list[str] | None = None) -> int:
                 findings.invalid_specs.append(
                     (s.path, f"doc_cite does not match pattern: {s.doc_cite}")
                 )
+    # Verify MD:<path>#L<line> references if constitution exists
+    if constitution_path.exists():
+        for s in specs:
+            dc = s.doc_cite or ""
+            if dc.startswith("MD:") and "#L" in dc:
+                try:
+                    path_part, line_part = dc[3:].split("#L", 1)
+                    md_path = (root / path_part).resolve()
+                    line_no = int(line_part)
+                    if not md_path.exists():
+                        findings.invalid_specs.append(
+                            (s.path, f"doc_cite MD path not found: {md_path}")
+                        )
+                        continue
+                    lines = md_path.read_text(encoding="utf-8").splitlines()
+                    if line_no < 1 or line_no > len(lines):
+                        findings.invalid_specs.append(
+                            (s.path, f"doc_cite line out of range: L{line_no}")
+                        )
+                except Exception as e:
+                    findings.invalid_specs.append(
+                        (s.path, f"doc_cite parse error: {dc} ({e})")
+                    )
 
-    # Check acceptance files
-    check_acceptance_files(specs, root, findings)
-
-    # Scan for @req:IDs in codebase
-    req_refs = scan_code_for_req_ids(root)
+    # Coverage-only flow skips acceptance and code scanning
+    req_refs: dict[str, list[Path]] = {}
     spec_ids = {s.id for s in specs}
-    for rid, paths in req_refs.items():
-        if spec_ids and rid not in spec_ids:
-            for p in paths:
-                findings.unknown_req_ids.append((rid, p))
+    if not coverage_only:
+        # Check acceptance files
+        check_acceptance_files(specs, root, findings)
+
+        # Scan for @req:IDs in codebase
+        req_refs = scan_code_for_req_ids(root)
+        for rid, paths in req_refs.items():
+            if spec_ids and rid not in spec_ids:
+                for p in paths:
+                    findings.unknown_req_ids.append((rid, p))
 
     # Detect duplicates
     detect_orphans_and_duplicates(specs, findings)
     detect_duplicate_ids(specs, findings)
+
+    # Coverage vs canonical index
+    if canonical_index_path.exists():
+        try:
+            ci = json.loads(canonical_index_path.read_text(encoding="utf-8"))
+            ci_ids: set[str] = set()
+            for group in ci.get("groups", []):
+                for item in group.get("items", []):
+                    if isinstance(item, dict) and item.get("id"):
+                        ci_ids.add(str(item["id"]))
+            missing = sorted(ci_ids - spec_ids)
+            findings.missing_from_canonical.extend(missing)
+        except Exception as e:
+            print(f"::warning::Failed to parse canonical index: {e}")
 
     # Write artifacts
     write_rtm_html(rtm_html, specs, req_refs)
@@ -351,6 +407,7 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"  unknown_req_ids ({'strict' if strict else 'warning'}): {len(findings.unknown_req_ids)}"
     )
+    print(f"  missing_from_canonical: {len(findings.missing_from_canonical)}")
 
     violations = (
         len(findings.invalid_specs)
@@ -359,6 +416,7 @@ def main(argv: list[str] | None = None) -> int:
         + len(findings.duplicate_doc_cites)
         + len(findings.duplicate_ids)
         + (len(findings.unknown_req_ids) if strict else 0)
+        + (len(findings.missing_from_canonical) if coverage_only else 0)
     )
     if violations:
         print("::error::SpecRunner detected violations; see artifacts for details")
