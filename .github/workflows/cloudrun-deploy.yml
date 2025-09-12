@@ -132,8 +132,13 @@ jobs:
           # Extract direct canary URL from deploy output
           CANARY_URL=$(grep -Eo 'https://[a-zA-Z0-9.-]+' "$DEPLOY_OUT" | tail -1 || true)
           if [[ -z "$CANARY_URL" ]]; then
-            echo "ERROR: failed to parse canary URL from deploy output" >&2
-            exit 1
+            echo "WARN: failed to parse canary URL from deploy output; deriving from base service URL"
+            BASE_URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --format 'value(status.url)' || true)
+            if [[ -z "$BASE_URL" ]]; then
+              echo "ERROR: unable to resolve base service URL for canary derivation" >&2
+              exit 1
+            fi
+            CANARY_URL="${BASE_URL/https:\/\//https://$REV_TAG---}"
           fi
           echo "url=${CANARY_URL}" >> "$GITHUB_OUTPUT"
 
