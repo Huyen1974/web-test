@@ -9,4 +9,3 @@ speclint: artifacts/speclint.json
 
 # Require doc_cite to be either a valid http(s) URL or a canonical DOC: identifier
 doc_cite_pattern: '^(https?://[^\s]+|DOC:[A-Za-z0-9_.:/-]+)$'
-
