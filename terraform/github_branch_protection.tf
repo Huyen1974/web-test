@@ -24,15 +24,10 @@ variable "required_status_checks" {
   default     = ["Lint Only"]
 }
 
-data "github_repository" "this" {
-  count = var.enable_github_branch_protection ? 1 : 0
-  name  = var.github_repository
-}
-
 resource "github_branch_protection_v3" "main" {
-  count         = var.enable_github_branch_protection ? 1 : 0
-  repository_id = data.github_repository.this[0].node_id
-  pattern       = var.branch_name
+  count      = var.enable_github_branch_protection ? 1 : 0
+  repository = var.github_repository
+  branch     = var.branch_name
 
   enforce_admins                  = true
   require_conversation_resolution = true

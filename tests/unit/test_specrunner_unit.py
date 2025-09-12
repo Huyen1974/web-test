@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -33,7 +32,7 @@ title: Duplicate ID example A
 doc_cite: DOC:ABC
 acceptance:
   - {acc}
-""".strip()
+""".strip(),
     )
     _write_spec(
         specs_dir,
@@ -44,7 +43,7 @@ title: Duplicate ID example B
 doc_cite: DOC:ABC
 acceptance:
   - {acc}
-""".strip()
+""".strip(),
     )
 
     rtm_json = tmp_path / "rtm.json"
@@ -90,7 +89,7 @@ title: Invalid doc cite
 doc_cite: not_a_valid_cite
 acceptance:
   - {acc}
-""".strip()
+""".strip(),
     )
 
     speclint_json = tmp_path / "speclint.json"
@@ -125,7 +124,7 @@ id: REQ.ORPH
 title: Missing doc cite
 acceptance:
   - {acc}
-""".strip()
+""".strip(),
     )
 
     speclint_json = tmp_path / "speclint.json"
@@ -143,4 +142,3 @@ acceptance:
     data = json.loads(speclint_json.read_text(encoding="utf-8"))
     ids = {sid for _p, sid, _reason in data.get("orphans", [])}
     assert "REQ.ORPH" in ids
-
