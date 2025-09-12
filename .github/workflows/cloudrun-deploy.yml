@@ -152,6 +152,7 @@ jobs:
             echo "Failed to resolve canary URL from deploy output" >&2
             exit 1
           fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "Canary URL: $URL"
 
       - name: Setup Python
