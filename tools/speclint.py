@@ -2,9 +2,7 @@
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 import yaml
 
@@ -24,8 +22,8 @@ def load_canonical(path: Path) -> set[str]:
     return ids
 
 
-def read_specs(specs_dir: Path) -> List[Tuple[str, str, Path]]:
-    out: List[Tuple[str, str, Path]] = []
+def read_specs(specs_dir: Path) -> list[tuple[str, str, Path]]:
+    out: list[tuple[str, str, Path]] = []
     for p in sorted(specs_dir.glob("*.a2a-spec.yml")):
         try:
             raw = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
@@ -50,7 +48,7 @@ def width_of_doc_line(md_ref: str, root: Path) -> int:
     return -1
 
 
-def main(argv: List[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     root = Path.cwd()
     specs_dir = root / "specs"
     canonical_path = root / "specs" / "canonical_index.json"
@@ -71,14 +69,16 @@ def main(argv: List[str] | None = None) -> int:
             errors += 1
 
     # Overlap check
-    by_cite: Dict[str, List[str]] = {}
+    by_cite: dict[str, list[str]] = {}
     for sid, dc, _p in specs:
         if dc:
             by_cite.setdefault(dc, []).append(sid)
     for dc, ids in by_cite.items():
         if len(set(ids)) > 1:
             # Warn for overlap to allow intentional grouping, do not fail gate
-            print(f"::warning::doc_cite overlapped by multiple specs: {dc} -> {sorted(set(ids))}")
+            print(
+                f"::warning::doc_cite overlapped by multiple specs: {dc} -> {sorted(set(ids))}"
+            )
 
     # Width check (warn only)
     for sid, dc, _p in specs:

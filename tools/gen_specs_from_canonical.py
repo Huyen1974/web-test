@@ -12,7 +12,9 @@ def sanitize_filename(text: str) -> str:
 
 def main() -> int:
     root = Path.cwd()
-    canon = json.loads((root / "specs" / "canonical_index.json").read_text(encoding="utf-8"))
+    canon = json.loads(
+        (root / "specs" / "canonical_index.json").read_text(encoding="utf-8")
+    )
     items = canon.get("items") or []
     out_dir = root / "specs"
     count = 0
@@ -27,10 +29,10 @@ def main() -> int:
         # Compose YAML content
         title = text.strip().replace("\n", " ")
         title = title.replace('"', '\\"')
-        safe_title = title.replace('{', '(').replace('}', ')')
+        safe_title = title.replace("{", "(").replace("}", ")")
         yml = [
             f"id: {cid}",
-            f"title: \"{safe_title}\"",
+            f'title: "{safe_title}"',
             f"doc_cite: {doc_cite}",
             "acceptance:",
             "  - README.md",
