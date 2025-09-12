@@ -6,4 +6,3 @@
 [SG] Quản trị: Yêu cầu khóa API cho thay đổi dữ liệu (POST/PUT/DELETE).
 [INF] Hạ tầng: Ghi nhận Prometheus counter cho sự kiện chính.
 [PF] Nền tảng: Hỗ trợ id phiên trong tương tác người dùng.
-

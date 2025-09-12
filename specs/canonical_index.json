@@ -1,14 +1,13 @@
 {
   "constitution_commit": "461f944ee5305d4e33e9e6a2a4c31f00e87370a3",
-  "source": "docs/agent-a2a-constitution-v5.md",
   "groups": [
     {
       "code": "INF",
       "items": [
         {
           "id": "INF.1",
-          "title": "H\u1ea1 t\u1ea7ng: D\u1ecbch v\u1ee5 ph\u1ea3i xu\u1ea5t /metrics v\u00e0 health /health.",
-          "line": 3
+          "line": 3,
+          "title": "H\u1ea1 t\u1ea7ng: D\u1ecbch v\u1ee5 ph\u1ea3i xu\u1ea5t /metrics v\u00e0 health /health."
         }
       ]
     },
@@ -17,8 +16,8 @@
       "items": [
         {
           "id": "PF.1",
-          "title": "N\u1ec1n t\u1ea3ng: API /chat ph\u1ea3i ph\u1ea3n h\u1ed3i trong 5s v\u1edbi fallback an to\u00e0n.",
-          "line": 4
+          "line": 4,
+          "title": "N\u1ec1n t\u1ea3ng: API /chat ph\u1ea3i ph\u1ea3n h\u1ed3i trong 5s v\u1edbi fallback an to\u00e0n."
         }
       ]
     },
@@ -27,8 +26,8 @@
       "items": [
         {
           "id": "RO.1",
-          "title": "Tu\u00e2n th\u1ee7: M\u1ecdi endpoint thay \u0111\u1ed5i ph\u1ea3i c\u00f3 ki\u1ec3m th\u1eed \u0111\u01a1n v\u1ecb.",
-          "line": 5
+          "line": 5,
+          "title": "Tu\u00e2n th\u1ee7: M\u1ecdi endpoint thay \u0111\u1ed5i ph\u1ea3i c\u00f3 ki\u1ec3m th\u1eed \u0111\u01a1n v\u1ecb."
         }
       ]
     },
@@ -37,10 +36,11 @@
       "items": [
         {
           "id": "SG.1",
-          "title": "Qu\u1ea3n tr\u1ecb: Y\u00eau c\u1ea7u kh\u00f3a API cho thay \u0111\u1ed5i d\u1eef li\u1ec7u (POST/PUT/DELETE).",
-          "line": 6
+          "line": 6,
+          "title": "Qu\u1ea3n tr\u1ecb: Y\u00eau c\u1ea7u kh\u00f3a API cho thay \u0111\u1ed5i d\u1eef li\u1ec7u (POST/PUT/DELETE)."
         }
       ]
     }
-  ]
+  ],
+  "source": "docs/agent-a2a-constitution-v5.md"
 }

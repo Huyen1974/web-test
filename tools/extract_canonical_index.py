@@ -7,8 +7,6 @@ import re
 import subprocess
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List
-
 
 RE_RULE = re.compile(r"^\[(?P<code>[A-Z]{2,})\]\s*(?P<title>.+)$")
 
@@ -23,8 +21,8 @@ def git_commit_hash(path: Path) -> str:
 
 def extract(src: Path) -> dict:
     text = src.read_text(encoding="utf-8")
-    groups: Dict[str, List[dict]] = defaultdict(list)
-    counters: Dict[str, int] = defaultdict(int)
+    groups: dict[str, list[dict]] = defaultdict(list)
+    counters: dict[str, int] = defaultdict(int)
     for idx, line in enumerate(text.splitlines(), start=1):
         m = RE_RULE.match(line.strip())
         if not m:
@@ -37,7 +35,9 @@ def extract(src: Path) -> dict:
             rid = f"{code}.1"
             groups[code].append({"id": rid, "title": title, "line": idx})
 
-    ordered = [{"code": code, "items": groups.get(code, [])} for code in sorted(groups.keys())]
+    ordered = [
+        {"code": code, "items": groups.get(code, [])} for code in sorted(groups.keys())
+    ]
     return {
         "constitution_commit": git_commit_hash(src),
         "source": str(src),
@@ -46,7 +46,9 @@ def extract(src: Path) -> dict:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Extract canonical index from constitution")
+    ap = argparse.ArgumentParser(
+        description="Extract canonical index from constitution"
+    )
     ap.add_argument(
         "--source",
         default="docs/agent-a2a-constitution-v5.md",
