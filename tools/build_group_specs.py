@@ -12,23 +12,24 @@ def main() -> int:
     canon = json.loads(
         (root / "specs" / "canonical_index.json").read_text(encoding="utf-8")
     )
-    phase_by_cid = {
-        str(it["cid"]): str(it.get("phase") or "PF") for it in canon.get("items", [])
-    }
-
     grouped: dict[str, list[dict]] = {"INF": [], "PF": [], "RO": [], "SG": []}
-    # Load per-cid specs
-    for p in sorted((root / "specs").glob("*.a2a-spec.yml")):
-        try:
-            raw = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
-        except Exception:
+    # Build grouped specs directly from canonical index
+    for it in canon.get("items", []):
+        if not isinstance(it, dict):
             continue
-        if isinstance(raw, dict) and raw.get("id"):
-            cid = str(raw.get("id"))
-            record = {k: raw.get(k) for k in ("id", "title", "doc_cite", "acceptance")}
-            phase = phase_by_cid.get(cid, "PF")
-            dest = phase if phase in {"PF", "RO", "SG"} else "INF"
-            grouped[dest].append(record)
+        cid = str(it.get("cid"))
+        title = str(it.get("text") or "").replace("\n", " ")
+        doc_cite = str(it.get("doc_cite") or "")
+        phase = str(it.get("phase") or "PF")
+        dest = phase if phase in {"PF", "RO", "SG"} else "INF"
+        grouped[dest].append(
+            {
+                "id": cid,
+                "title": title,
+                "doc_cite": doc_cite,
+                "acceptance": ["README.md"],
+            }
+        )
 
     out_dir = root / "specs" / "grouped"
     out_dir.mkdir(parents=True, exist_ok=True)

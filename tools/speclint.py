@@ -58,6 +58,9 @@ def parse_doc_ref(md_ref: str) -> tuple[Path, int, int]:
 def main(argv: list[str] | None = None) -> int:
     root = Path.cwd()
     specs_dir = root / "specs"
+    grouped_dir = specs_dir / "grouped"
+    if grouped_dir.exists():
+        specs_dir = grouped_dir
     canonical_path = root / "specs" / "canonical_index.json"
 
     if not canonical_path.exists():

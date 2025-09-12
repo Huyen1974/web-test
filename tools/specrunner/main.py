@@ -65,11 +65,27 @@ def read_specs(specs_dir: Path, schema_path: Path) -> tuple[list[Spec], Findings
             continue
 
         # Validate against schema
-        errors = sorted(validator.iter_errors(raw), key=lambda e: e.path)
-        if errors:
-            msg = ", ".join(f"{list(err.path)}: {err.message}" for err in errors)
-            findings.invalid_specs.append((path, msg))
-            continue
+        if isinstance(raw, dict) and "items" in raw:
+            item_errors: list[str] = []
+            for idx, it in enumerate(raw.get("items", [])):
+                if not isinstance(it, dict):
+                    item_errors.append(f"[items[{idx}]]: not an object")
+                    continue
+                errs = sorted(validator.iter_errors(it), key=lambda e: e.path)
+                if errs:
+                    item_errors.extend(
+                        f"[items[{idx}]] {list(err.path)}: {err.message}"
+                        for err in errs
+                    )
+            if item_errors:
+                findings.invalid_specs.append((path, "; ".join(item_errors)))
+                continue
+        else:
+            errors = sorted(validator.iter_errors(raw), key=lambda e: e.path)
+            if errors:
+                msg = ", ".join(f"{list(err.path)}: {err.message}" for err in errors)
+                findings.invalid_specs.append((path, msg))
+                continue
 
         # Support grouped format: a file with top-level 'items' list
         def parse_one(obj: dict, src_path: Path) -> None:

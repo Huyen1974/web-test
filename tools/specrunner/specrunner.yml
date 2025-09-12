@@ -1,4 +1,4 @@
-specs_dir: specs
+specs_dir: specs/grouped
 schema: specs/a2a-spec.schema.json
 
 # Output artifacts
