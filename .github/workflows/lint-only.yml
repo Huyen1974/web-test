@@ -75,7 +75,7 @@ jobs:
         run: |
           # Build grouped specs (PF/RO/SG/INF)
           python tools/build_group_specs.py
-          python tools/specrunner/main.py --config tools/specrunner/specrunner.yml
+          python tools/specrunner/main.py --config tools/specrunner/specrunner.yml --strict
 
       - name: Upload SpecRunner artifacts
         if: always()

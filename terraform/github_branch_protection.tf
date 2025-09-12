@@ -37,6 +37,11 @@ resource "github_branch_protection_v3" "main" {
     contexts = var.required_status_checks
   }
 
+  required_pull_request_reviews {
+    required_approving_review_count = 1
+    require_code_owner_reviews      = true
+  }
+
   # Minimal review requirements can be enabled later if needed
   # required_pull_request_reviews {
   #   dismiss_stale_reviews           = true
