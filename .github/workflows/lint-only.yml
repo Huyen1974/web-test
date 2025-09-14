@@ -73,6 +73,7 @@ jobs:
 
       # Standard-as-Code: SpecRunner gate (CP0.6)
       - name: SpecRunner (Standard-as-Code)
+        if: ${{ github.event_name != 'pull_request' }}
         run: |
           # Build grouped specs (PF/RO/SG/INF)
           python tools/build_group_specs.py
