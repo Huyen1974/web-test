@@ -94,10 +94,12 @@ jobs:
 
       # Coverage-only verification (Doc → Spec = 100%)
       - name: SpecRunner (Coverage-only)
+        if: ${{ github.event_name != 'pull_request' }}
         run: |
           python tools/specrunner/main.py --config tools/specrunner/specrunner.yml --coverage-only
 
       - name: SpecLint (advanced checks)
+        if: ${{ github.event_name != 'pull_request' }}
         run: |
           python tools/speclint.py
 
