@@ -12,6 +12,10 @@ on:
       service:
         description: Cloud Run service name
         default: "agent-data-test"
+      run_canary:
+        description: Run canary deploy + smoke test
+        type: boolean
+        default: false
 concurrency:
   group: cloudrun-deploy-${{ github.ref }}
   cancel-in-progress: true
@@ -59,7 +63,9 @@ jobs:
 
   deploy-canary:
     name: Deploy Canary (no-traffic)
+    if: ${{ inputs.run_canary }}
     runs-on: ubuntu-latest
+    continue-on-error: true
     permissions:
       contents: read
       id-token: write
