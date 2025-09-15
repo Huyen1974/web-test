@@ -1,0 +1,5 @@
+id: ASY.4
+title: "**Hàng đợi & DLQ:** (Giữ nguyên từ v3.0) Bắt buộc có DLQ, retry 6 lần với exponential backoff + jitter; DLQ redrive thủ công với audit (dùng tool TD-APP-02)."
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L147
+acceptance:
+  - README.md

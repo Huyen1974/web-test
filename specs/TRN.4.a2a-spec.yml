@@ -1,0 +1,5 @@
+id: TRN.4
+title: "**Nguyên tắc Bất đồng bộ (Asynchronous-First):** (Giữ nguyên từ v3.0) Giao tiếp qua hàng đợi tin nhắn (Message Queue) như Pub/Sub là phương thức được ưu tiên."
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L13
+acceptance:
+  - README.md

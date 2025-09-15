@@ -1,0 +1,5 @@
+id: ART.13
+title: "**Mô hình Kiến trúc:** (Tinh chỉnh) Áp dụng mẫu thiết kế **Saga**, được hiện thực hóa bằng **Google Cloud Workflows** hoặc các framework điều phối đa-agent như **LangChain CrewAI** (multi-agent teams, MCP streamable May 8 2025) hoặc Langroid MAP (delegation Sep 2025)."
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L125
+acceptance:
+  - README.md

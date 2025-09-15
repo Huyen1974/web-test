@@ -1,0 +1,5 @@
+id: ERQ.5
+title: "Metric a2a_retries_total MUST be emitted with required labels"
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L153
+acceptance:
+  - README.md

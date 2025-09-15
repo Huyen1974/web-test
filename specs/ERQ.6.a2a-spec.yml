@@ -1,0 +1,5 @@
+id: ERQ.6
+title: "ACK P95 ≤ 1s"
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L155
+acceptance:
+  - README.md

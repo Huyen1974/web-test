@@ -1,0 +1,5 @@
+id: REG.1
+title: "*Heartbeat: Mỗi agent BẮT BUỘC phải gửi một tin nhắn heartbeat đến Registry theo chu kỳ (ví dụ: 5 phút/lần). Registry sẽ lưu lại last_seen_at và có thể đánh dấu agent là degraded nếu không nhận được heartbeat, cho phép các Process Agent có thể chủ động giảm tải hoặc định tuyến lại các tác vụ. *"
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L160
+acceptance:
+  - README.md

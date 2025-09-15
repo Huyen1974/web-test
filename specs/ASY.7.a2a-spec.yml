@@ -1,0 +1,5 @@
+id: ASY.7
+title: "**(Bổ sung)** Metrics bắt buộc: a2a_requests_total, a2a_latency_ms, a2a_dlq_total, a2a_retries_total (với nhãn: action, tenant, principal, status, error.code); monitor quota points MCP advanced (Jun 18 2025)."
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L153
+acceptance:
+  - README.md

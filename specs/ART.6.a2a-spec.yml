@@ -1,0 +1,5 @@
+id: ART.6
+title: "**Bất đồng bộ:** Trả về ACKED, sau đó phát các sự kiện *.running, *.done."
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L91
+acceptance:
+  - README.md

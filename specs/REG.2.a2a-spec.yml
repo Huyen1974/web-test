@@ -1,0 +1,5 @@
+id: REG.2
+title: "**Các Service Chuẩn hóa:** (Bổ sung action_version.)"
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L162
+acceptance:
+  - README.md

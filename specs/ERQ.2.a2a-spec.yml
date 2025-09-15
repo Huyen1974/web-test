@@ -1,0 +1,5 @@
+id: ERQ.2
+title: "Metric a2a_requests_total MUST be emitted with required labels"
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L153
+acceptance:
+  - README.md

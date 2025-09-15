@@ -1,0 +1,5 @@
+id: ASY.1
+title: "**Nguyên tắc Mở rộng và Bền bỉ (Scalability & Resilience):** (Tinh chỉnh từ v3.0) Hệ thống phải được thiết kế để xử lý hàng trăm Agent và quy trình đồng thời, với cơ chế tự phục hồi (retry, DLQ) và phân tải, đồng thời tận dụng mã nguồn hiện có từ các framework như LangChain CrewAI (multi-agent teams, MCP streamable May 8 2025) hoặc Langroid MAP (delegation Sep 2025) để giảm thiểu viết mã mới."
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L19
+acceptance:
+  - README.md

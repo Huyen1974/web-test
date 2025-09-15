@@ -1,0 +1,5 @@
+id: TRN.5
+title: "**Nguyên tắc Idempotency:** (Giữ nguyên từ v3.0) Mọi hành động làm thay đổi trạng thái phải được thiết kế để có thể thực thi lại nhiều lần mà không gây ra kết quả ngoài ý muốn."
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L15
+acceptance:
+  - README.md

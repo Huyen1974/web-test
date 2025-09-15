@@ -1,0 +1,5 @@
+id: ART.7
+title: "**Hủy tác vụ:** Một Agent có thể gửi một hành động *.cancel. Nếu tác vụ đang ở trạng thái RUNNING, nó sẽ chuyển sang CANCELLED và kích hoạt hành động bù trừ (compensation) nếu cần; semantics at-least-once, đích MUST dedupe theo idempotency_key và bỏ qua out-of-order nếu seq < last_seq_seen."
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L93
+acceptance:
+  - README.md

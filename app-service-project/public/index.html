@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Firebase Authentication Test</title>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 40px; background: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 90vh; }
+    .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
+    button { background-color: #007aff; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 16px; cursor: pointer; transition: background-color 0.3s; margin-top: 20px; }
+    button:hover { background-color: #005ecb; }
+    .user-info { display: flex; flex-direction: column; align-items: center; gap: 15px; }
+    .user-info img { width: 80px; height: 80px; border-radius: 50%; }
+    .user-info p { margin: 0; }
+    .user-name { font-weight: bold; font-size: 18px; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>Xác thực Người dùng</h1>
+    <div id="auth-container">
+      </div>
+  </div>
+
+  <script>
+    // Firebase Configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyA3nEhCqAl7XsOljcDY_z9_7g02NG8SAwY",
+      authDomain: "github-chatgpt-ggcloud.firebaseapp.com",
+      projectId: "github-chatgpt-ggcloud",
+      storageBucket: "github-chatgpt-ggcloud.firebasestorage.app",
+      messagingSenderId: "812872501910",
+      appId: "1:812872501910:web:71a92d4200a187c55250b7",
+      measurementId: "G-MVYG2LN378"
+    };
+
+    // Khởi tạo Firebase
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+
+    const authContainer = document.getElementById('auth-container');
+
+    // Hàm xử lý đăng nhập
+    function signIn() {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      auth.signInWithPopup(provider).catch(error => {
+        console.error("Lỗi đăng nhập:", error);
+        alert("Đăng nhập thất bại: " + error.message);
+      });
+    }
+
+    // Hàm xử lý đăng xuất
+    function signOut() {
+      auth.signOut();
+    }
+
+    // Lắng nghe sự thay đổi trạng thái đăng nhập
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        // Người dùng đã đăng nhập
+        authContainer.innerHTML = `
+          <div class="user-info">
+            <img src="${user.photoURL}" alt="Ảnh đại diện">
+            <p class="user-name">${user.displayName}</p>
+            <p>${user.email}</p>
+            <button onclick="signOut()">Đăng xuất</button>
+          </div>
+        `;
+      } else {
+        // Người dùng đã đăng xuất
+        authContainer.innerHTML = '<button onclick="signIn()">Đăng nhập bằng Google</button>';
+      }
+    });
+  </script>
+
+</body>
+</html>

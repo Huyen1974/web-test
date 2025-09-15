@@ -1,0 +1,5 @@
+id: TRN.1
+title: "**Nguyên tắc Tương thích Mở (Interoperability First):** (Tinh chỉnh từ v3.0) Hệ thống ưu tiên áp dụng các giao thức mở được cộng đồng công nhận (ví dụ: MCP của Anthropic với cập nhật security và structured output Jun 18 2025, A2A/Google với toolkit secure enterprise Jul 31 2025, ACP/IBM merger với A2A dưới LF AI Aug 29 2025, OAS/HuggingFace cho open collab MMORPG AI NPC) và theo dõi các xu hướng hợp nhất tiêu chuẩn (ví dụ: sự hợp nhất của A2A/Google và ACP/IBM dưới LF AI) để đảm bảo khả năng tương tác rộng rãi, tận dụng adapter hiện có như Langroid MCP adapter v0.53.0 (Apr 2025) và LangChain MCP streamable HTTP (May 8 2025)."
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L7
+acceptance:
+  - README.md

@@ -1,0 +1,5 @@
+id: REG.8
+title: "Version-negotiation Test: Client gửi một action_version không được hỗ trợ và phải nhận về lỗi INVALID_ARGUMENT + gợi ý phiên bản."
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L180
+acceptance:
+  - README.md

@@ -1,0 +1,5 @@
+id: REG.3
+title: "(Giữ nguyên từ v3.0) /healthz, /readyz, /evidence/{job_id}."
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L164
+acceptance:
+  - README.md

@@ -1,0 +1,5 @@
+id: ERQ.8
+title: "DLQ/ngày ≤ 0.1%"
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L155
+acceptance:
+  - README.md

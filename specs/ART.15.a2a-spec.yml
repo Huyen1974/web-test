@@ -1,0 +1,5 @@
+id: ART.15
+title: "Hợp đồng Bằng chứng Xác minh: Verifier Agent trả về các trường artifact_uri, artifact_hash, content_type, evidence_ts, source_kind."
+doc_cite: MD:docs/agent-a2a-constitution-v5.md#L129
+acceptance:
+  - README.md
