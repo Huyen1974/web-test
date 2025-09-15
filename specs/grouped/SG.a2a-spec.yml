@@ -1,116 +1,76 @@
-items:
-- id: ART.1
-  title: '**Cấu trúc Phong bì Tin nhắn (Message Envelope v2.2 - BẮT BUỘC):** (Bổ sung
-    resource_links, context_id, và quy định encryption cho payload sensitive.)'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L31
-  acceptance:
-  - README.md
-- id: ART.10
-  title: '**(Bổ sung)** Nếu một tin nhắn bị xử lý sau khi ttl_sec đã hết hạn, Agent
-    phải từ chối và trả về lỗi EXPIRED. Nếu vượt quota, trả lỗi RATE_LIMIT_EXCEEDED.'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L99
-  acceptance:
-  - README.md
-- id: ART.11
-  title: '**Quy tắc Vận chuyển & Tải lớn (Transport & Large Payloads):** (Tinh chỉnh
-    chính sách Signed URL siết chặt.)'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L101
-  acceptance:
-  - README.md
-- id: ART.12
-  title: '**(Tinh chỉnh)** Nếu payload quá lớn, artifact_uri bắt buộc phải là một
-    GCS Signed URL **chỉ cho phép đọc (GET-only)**, có **TTL ≤ 15 phút**, đi kèm với
-    artifact_hash (SHA-256), MIME whitelist, fixed bucket, no-list.'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L111
-  acceptance:
-  - README.md
-- id: ART.13
-  title: '**Mô hình Kiến trúc:** (Tinh chỉnh) Áp dụng mẫu thiết kế **Saga**, được
-    hiện thực hóa bằng **Google Cloud Workflows** hoặc các framework điều phối đa-agent
-    như **LangChain CrewAI** (multi-agent teams, MCP streamable May 8 2025) hoặc Langroid
-    MAP (delegation Sep 2025).'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L125
-  acceptance:
-  - README.md
-- id: ART.14
-  title: '**Hệ thống Agent Chuyên biệt:** (Giữ nguyên từ v3.0) Process Agent, Data
-    Agent, Verifier Agent, Notifier Agent.'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L127
-  acceptance:
-  - README.md
-- id: ART.15
-  title: '**Hợp đồng Bằng chứng Xác minh (Verifier Artifact Contract):** (Giữ nguyên
-    từ v3.0) Verifier Agent khi tạo bằng chứng phải trả về đối tượng có cấu trúc:
-    { "artifact_uri", "artifact_hash", "content_type", "evidence_ts", "source_kind"
-    }.'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L129
-  acceptance:
-  - README.md
-- id: ART.16
-  title: '**Xác thực Agent-to-Agent (A2A):** (Tinh chỉnh) principal trong Message
-    Envelope phải được xác thực qua Google Cloud IAM hoặc JWT. Các client bên ngoài
-    phải tuân thủ các tiêu chuẩn bảo mật nâng cao như **OAuth 2.0 Resource Indicators
-    (RFC 8707)** (MCP Jun 18 2025 chống malicious).'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L135
-  acceptance:
-  - README.md
-- id: ART.17
-  title: Thông điệp từ external agents BẮT BUỘC phải kèm chữ ký JWS (thuật toán Ed25519/EdDSA);
-    header phải có kid (key ID) và chính sách luân chuyển khóa là 90 ngày. Các yêu
-    cầu có thuật toán không nằm trong danh sách cho phép sẽ bị từ chối..
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L139
-  acceptance:
-  - README.md
-- id: ART.18
-  title: Mã nguồn mẫu cho một Saga đơn giản trên Google Cloud Workflows (tích hợp
-    LangChain CrewAI).
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L260
-  acceptance:
-  - README.md
-- id: ART.2
-  title: '**Máy trạng thái & Quy tắc Phản hồi (State Machine & Response - Tinh chỉnh):**
-    (Bổ sung các trạng thái và quy tắc hủy tác vụ đầy đủ.)'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L83
-  acceptance:
-  - README.md
-- id: ART.3
-  title: '**Máy trạng thái:** Một tác vụ sẽ đi qua các trạng thái: ACKED → RUNNING
-    → (SUCCEEDED | FAILED) → (COMPENSATED? | CANCELLED?).'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L85
-  acceptance:
-  - README.md
-- id: ART.4
-  title: '**Phản hồi:**'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L87
-  acceptance:
-  - README.md
-- id: ART.5
-  title: '**Đồng bộ (<2s):** Trả về SUCCEEDED hoặc FAILED.'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L89
-  acceptance:
-  - README.md
-- id: ART.6
-  title: '**Bất đồng bộ:** Trả về ACKED, sau đó phát các sự kiện *.running, *.done.'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L91
-  acceptance:
-  - README.md
-- id: ART.7
-  title: '**Hủy tác vụ:** Một Agent có thể gửi một hành động *.cancel. Nếu tác vụ
-    đang ở trạng thái RUNNING, nó sẽ chuyển sang CANCELLED và kích hoạt hành động
-    bù trừ (compensation) nếu cần; semantics at-least-once, đích MUST dedupe theo
-    idempotency_key và bỏ qua out-of-order nếu seq < last_seq_seen.'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L93
-  acceptance:
-  - README.md
-- id: ART.8
-  title: '**Phân loại Lỗi & TTL (Error Taxonomy & TTL):** (Bổ sung mã lỗi EXPIRED
-    và RATE_LIMIT_EXCEEDED.)'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L95
-  acceptance:
-  - README.md
-- id: ART.9
-  title: '(Giữ nguyên từ v3.0) Mã lỗi chuẩn: UNAUTHORIZED (401), FORBIDDEN (403),
-    NOT_FOUND (404)...'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L97
-  acceptance:
-  - README.md
+spec_text: |
+  # File 3: sg_security.yml (Phần IV – 33 ID, Cover Security & Governance)
+  - id: SG-SEC-001
+    title: Xác thực Agent-to-Agent (A2A) - principal trong Message Envelope phải được xác thực qua Google Cloud IAM hoặc JWT
+    spec_ref: Phần IV §1
+    doc_cite: MD:L121
+    acceptance:
+      tests: ["tests/sg/test_auth.py::test_principal_iam_jwt"]
+      code_markers: ["@req:SG-SEC-001"]
+      runtime_assertions: []
+  - id: SG-SEC-002
+    title: Các client bên ngoài phải tuân thủ OAuth 2.0 Resource Indicators (RFC 8707) (MCP Jun 18 2025 chống malicious)
+    spec_ref: Phần IV §1
+    doc_cite: MD:L135-L136
+    acceptance:
+      tests: ["tests/sg/test_auth.py::test_oauth_rfc8707"]
+      code_markers: ["@req:SG-SEC-002"]
+      runtime_assertions: []
+  - id: SG-INT-001
+    title: Thông điệp từ external agents MUST kèm JWS; verify trước enqueue; reject nếu thuật toán không allowlist
+    spec_ref: Phần IV §1 (Bổ sung Integrity)
+    doc_cite: MD:L139-L141
+    acceptance:
+      tests: ["tests/sg/test_integrity.py::test_jws_verify_enqueue_allowlist"]
+      code_markers: ["@req:SG-INT-001"]
+      runtime_assertions: []
+  - id: SG-JWS-001
+    title: JWS thuật toán Ed25519/EdDSA (allowlist), header kid (key ID), SHOULD rotate 90 ngày
+    spec_ref: Phần IV §1 (Bổ sung Integrity)
+    doc_cite: MD:L139-L141
+    acceptance:
+      tests: ["tests/sg/test_jws.py::test_ed25519_kid_rotate_config_shold"]
+      code_markers: ["@req:SG-JWS-001"]
+      runtime_assertions: ["reject if not allowed"]
+  - id: SG-PROF-001
+    title: Security profiles: A2A-Basic (nội bộ) & A2A-External (yêu cầu JWS, throttle chặt hơn)
+    spec_ref: Phần IV §1 (Bổ sung Profiles)
+    doc_cite: MD:L143
+    acceptance:
+      tests: ["tests/sg/test_profiles.py::test_basic_external_throttle"]
+      code_markers: ["@req:SG-PROF-001"]
+      runtime_assertions: []
+  - id: SG-PROF-002
+    title: A2A-External throttle chặt hơn Basic (config-check test: external_qps < internal_qps)
+    spec_ref: Phần IV §1
+    doc_cite: MD:L143
+    acceptance:
+      tests: ["tests/sg/test_profiles.py::test_external_throttle_config_is_tighter"]
+      code_markers: ["@req:SG-PROF-002"]
+      runtime_assertions: []
+  - id: SG-RATE-001
+    title: Giới hạn Tần suất (Rate Limiting) - Ngoài X-RateLimit-*, enforce quota principal/tenant_id; đồng bộ trả X-RateLimit-Limit/Remaining/Retry-After (tính theo policy, không phải eta_sec); SHOULD numeric seconds cho 429; bất đồng bộ event lỗi nếu vượt
+    spec_ref: Phần IV §2
+    doc_cite: MD:L145
+    acceptance:
+      tests: ["tests/sg/test_rate_limit.py::test_quota_headers_event_policy_numeric"]
+      code_markers: ["@req:SG-RATE-001"]
+      runtime_assertions: ["RATE_LIMIT_EXCEEDED on exceed"]
+  - id: SG-DLQ-001
+    title: Hàng đợi & DLQ - Bắt buộc DLQ, retry 6 lần exponential backoff + jitter; DLQ redrive thủ công với audit (dùng tool TD-APP-02; MUST log actor/lý do/số lượng)
+    spec_ref: Phần IV §3
+    doc_cite: MD:L147
+    acceptance:
+      tests: ["tests/sg/test_dlq.py::test_retry6_redrive_audit_record"]
+      code_markers: ["@req:SG-DLQ-001"]
+      runtime_assertions: []
+  - id: SG-OBS-001
+    title: Giám sát & Truy vết - trace_id phải được truyền suốt
+    spec_ref: Phần IV §4
+    doc_cite: MD:L151
+    acceptance:
+      tests: ["tests/sg/test_observability.py::test_trace_propagation"]
+      code_markers: ["@req:SG-OBS-001"]
+      runtime_assertions: []
+  - id: SG-MET-001
+    title: Metrics bắt buộc: a2a_requests_total
