@@ -3,6 +3,7 @@ Auto-generated PF requirement markers.
 This module exists to host marker comments for PF specs so that tooling
 can locate them in the codebase.
 """
+
 # @req:PF-ENV-001 - Tiêu chuẩn Áp dụng - Nền tảng OpenAI Function Calling hybrid MCP structured output (Jun 18 2025) hỗ trợ tool results/resource links
 # @req:PF-ENV-002 - payload.schema_version MUST map tới JSON Schema in repo schemas/; CI BLOCK nếu payload không validate
 # @req:PF-ENV-003 - SDK TS/Python MUST be generated từ OpenAPI/JSON-Schema; không merge nếu SDK không đồng bộ
