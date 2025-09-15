@@ -1,6 +1,6 @@
 {
-  "constitution_commit": "ce428f1490b6107da43044ce8ff4986d92ec0c91",
-  "count": 71,
+  "constitution_commit": "7f559109a5081c92009c7c1e2e42cfdda68e0240",
+  "count": 72,
   "items": [
     {
       "cid": "ART.1",
@@ -14,7 +14,7 @@
       "cid": "ART.10",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L99",
       "group": "Artifact",
-      "level": "SHOULD",
+      "level": "MUST",
       "phase": "SG",
       "text": "**(B\u1ed5 sung)** N\u1ebfu m\u1ed9t tin nh\u1eafn b\u1ecb x\u1eed l\u00fd sau khi ttl_sec \u0111\u00e3 h\u1ebft h\u1ea1n, Agent ph\u1ea3i t\u1eeb ch\u1ed1i v\u00e0 tr\u1ea3 v\u1ec1 l\u1ed7i EXPIRED. N\u1ebfu v\u01b0\u1ee3t quota, tr\u1ea3 l\u1ed7i RATE_LIMIT_EXCEEDED."
     },
@@ -54,7 +54,7 @@
       "cid": "ART.15",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L129",
       "group": "Artifact",
-      "level": "SHOULD",
+      "level": "MUST",
       "phase": "SG",
       "text": "**H\u1ee3p \u0111\u1ed3ng B\u1eb1ng ch\u1ee9ng X\u00e1c minh (Verifier Artifact Contract):** (Gi\u1eef nguy\u00ean t\u1eeb v3.0) Verifier Agent khi t\u1ea1o b\u1eb1ng ch\u1ee9ng ph\u1ea3i tr\u1ea3 v\u1ec1 \u0111\u1ed1i t\u01b0\u1ee3ng c\u00f3 c\u1ea5u tr\u00fac: { \"artifact_uri\", \"artifact_hash\", \"content_type\", \"evidence_ts\", \"source_kind\" }."
     },
@@ -62,7 +62,7 @@
       "cid": "ART.16",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L135",
       "group": "Artifact",
-      "level": "SHOULD",
+      "level": "MUST",
       "phase": "SG",
       "text": "**X\u00e1c th\u1ef1c Agent-to-Agent (A2A):** (Tinh ch\u1ec9nh) principal trong Message Envelope ph\u1ea3i \u0111\u01b0\u1ee3c x\u00e1c th\u1ef1c qua Google Cloud IAM ho\u1eb7c JWT. C\u00e1c client b\u00ean ngo\u00e0i ph\u1ea3i tu\u00e2n th\u1ee7 c\u00e1c ti\u00eau chu\u1ea9n b\u1ea3o m\u1eadt n\u00e2ng cao nh\u01b0 **OAuth 2.0 Resource Indicators (RFC 8707)** (MCP Jun 18 2025 ch\u1ed1ng malicious)."
     },
@@ -150,7 +150,7 @@
       "cid": "ASY.1",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L19",
       "group": "Async & State",
-      "level": "SHOULD",
+      "level": "MUST",
       "phase": "RO",
       "text": "**Nguy\u00ean t\u1eafc M\u1edf r\u1ed9ng v\u00e0 B\u1ec1n b\u1ec9 (Scalability & Resilience):** (Tinh ch\u1ec9nh t\u1eeb v3.0) H\u1ec7 th\u1ed1ng ph\u1ea3i \u0111\u01b0\u1ee3c thi\u1ebft k\u1ebf \u0111\u1ec3 x\u1eed l\u00fd h\u00e0ng tr\u0103m Agent v\u00e0 quy tr\u00ecnh \u0111\u1ed3ng th\u1eddi, v\u1edbi c\u01a1 ch\u1ebf t\u1ef1 ph\u1ee5c h\u1ed3i (retry, DLQ) v\u00e0 ph\u00e2n t\u1ea3i, \u0111\u1ed3ng th\u1eddi t\u1eadn d\u1ee5ng m\u00e3 ngu\u1ed3n hi\u1ec7n c\u00f3 t\u1eeb c\u00e1c framework nh\u01b0 LangChain CrewAI (multi-agent teams, MCP streamable May 8 2025) ho\u1eb7c Langroid MAP (delegation Sep 2025) \u0111\u1ec3 gi\u1ea3m thi\u1ec3u vi\u1ebft m\u00e3 m\u1edbi."
     },
@@ -198,7 +198,7 @@
       "cid": "ASY.6",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L151",
       "group": "Async & State",
-      "level": "SHOULD",
+      "level": "MUST",
       "phase": "RO",
       "text": "(Gi\u1eef nguy\u00ean t\u1eeb v3.0) trace_id ph\u1ea3i \u0111\u01b0\u1ee3c truy\u1ec1n su\u1ed1t."
     },
@@ -227,39 +227,7 @@
       "text": "**B\u1ea3ng thu\u1eadt ng\u1eef:**"
     },
     {
-      "cid": "ENV.1",
-      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L37",
-      "group": "Envelope",
-      "level": "SHOULD",
-      "phase": "PF",
-      "text": "Envelope field 'version' present and validated"
-    },
-    {
-      "cid": "ENV.10",
-      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L55",
-      "group": "Envelope",
-      "level": "SHOULD",
-      "phase": "PF",
-      "text": "Envelope field 'ttl_sec' present and validated"
-    },
-    {
-      "cid": "ENV.11",
-      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L57",
-      "group": "Envelope",
-      "level": "SHOULD",
-      "phase": "PF",
-      "text": "Envelope field 'idempotency_key' present and validated"
-    },
-    {
-      "cid": "ENV.12",
-      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L59",
-      "group": "Envelope",
-      "level": "SHOULD",
-      "phase": "PF",
-      "text": "Envelope field 'seq' present and validated"
-    },
-    {
-      "cid": "ENV.13",
+      "cid": "ENV.action",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L61",
       "group": "Envelope",
       "level": "MUST",
@@ -267,7 +235,7 @@
       "text": "Envelope field 'action' present and validated"
     },
     {
-      "cid": "ENV.14",
+      "cid": "ENV.action_version",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L63",
       "group": "Envelope",
       "level": "SHOULD",
@@ -275,55 +243,7 @@
       "text": "Envelope field 'action_version' present and validated"
     },
     {
-      "cid": "ENV.15",
-      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L65",
-      "group": "Envelope",
-      "level": "SHOULD",
-      "phase": "PF",
-      "text": "Envelope field 'context_id' present and validated"
-    },
-    {
-      "cid": "ENV.16",
-      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L67",
-      "group": "Envelope",
-      "level": "SHOULD",
-      "phase": "PF",
-      "text": "Envelope field 'resource_links' present and validated"
-    },
-    {
-      "cid": "ENV.17",
-      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L69",
-      "group": "Envelope",
-      "level": "SHOULD",
-      "phase": "PF",
-      "text": "Envelope field 'payload' present and validated"
-    },
-    {
-      "cid": "ENV.18",
-      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L71",
-      "group": "Envelope",
-      "level": "SHOULD",
-      "phase": "PF",
-      "text": "Envelope field 'schema_version' present and validated"
-    },
-    {
-      "cid": "ENV.2",
-      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L39",
-      "group": "Envelope",
-      "level": "MUST",
-      "phase": "PF",
-      "text": "Envelope field 'request_id' present and validated"
-    },
-    {
-      "cid": "ENV.3",
-      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L41",
-      "group": "Envelope",
-      "level": "SHOULD",
-      "phase": "PF",
-      "text": "Envelope field 'correlation_id' present and validated"
-    },
-    {
-      "cid": "ENV.4",
+      "cid": "ENV.causation_id",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L43",
       "group": "Envelope",
       "level": "SHOULD",
@@ -331,23 +251,23 @@
       "text": "Envelope field 'causation_id' present and validated"
     },
     {
-      "cid": "ENV.5",
-      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L45",
+      "cid": "ENV.context_id",
+      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L65",
       "group": "Envelope",
       "level": "SHOULD",
       "phase": "PF",
-      "text": "Envelope field 'trace_id' present and validated"
+      "text": "Envelope field 'context_id' present and validated"
     },
     {
-      "cid": "ENV.6",
-      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L47",
+      "cid": "ENV.correlation_id",
+      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L41",
       "group": "Envelope",
       "level": "SHOULD",
       "phase": "PF",
-      "text": "Envelope field 'tenant_id' present and validated"
+      "text": "Envelope field 'correlation_id' present and validated"
     },
     {
-      "cid": "ENV.7",
+      "cid": "ENV.data_locality",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L49",
       "group": "Envelope",
       "level": "SHOULD",
@@ -355,7 +275,23 @@
       "text": "Envelope field 'data_locality' present and validated"
     },
     {
-      "cid": "ENV.8",
+      "cid": "ENV.idempotency_key",
+      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L57",
+      "group": "Envelope",
+      "level": "SHOULD",
+      "phase": "PF",
+      "text": "Envelope field 'idempotency_key' present and validated"
+    },
+    {
+      "cid": "ENV.payload",
+      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L69",
+      "group": "Envelope",
+      "level": "SHOULD",
+      "phase": "PF",
+      "text": "Envelope field 'payload' present and validated"
+    },
+    {
+      "cid": "ENV.principal",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L51",
       "group": "Envelope",
       "level": "SHOULD",
@@ -363,7 +299,47 @@
       "text": "Envelope field 'principal' present and validated"
     },
     {
-      "cid": "ENV.9",
+      "cid": "ENV.request_id",
+      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L39",
+      "group": "Envelope",
+      "level": "MUST",
+      "phase": "PF",
+      "text": "Envelope field 'request_id' present and validated"
+    },
+    {
+      "cid": "ENV.resource_links",
+      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L67",
+      "group": "Envelope",
+      "level": "SHOULD",
+      "phase": "PF",
+      "text": "Envelope field 'resource_links' present and validated"
+    },
+    {
+      "cid": "ENV.schema_version",
+      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L71",
+      "group": "Envelope",
+      "level": "SHOULD",
+      "phase": "PF",
+      "text": "Envelope field 'schema_version' present and validated"
+    },
+    {
+      "cid": "ENV.seq",
+      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L59",
+      "group": "Envelope",
+      "level": "SHOULD",
+      "phase": "PF",
+      "text": "Envelope field 'seq' present and validated"
+    },
+    {
+      "cid": "ENV.tenant_id",
+      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L47",
+      "group": "Envelope",
+      "level": "SHOULD",
+      "phase": "PF",
+      "text": "Envelope field 'tenant_id' present and validated"
+    },
+    {
+      "cid": "ENV.timestamp",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L53",
       "group": "Envelope",
       "level": "MUST",
@@ -371,10 +347,34 @@
       "text": "Envelope field 'timestamp' present and validated"
     },
     {
+      "cid": "ENV.trace_id",
+      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L45",
+      "group": "Envelope",
+      "level": "SHOULD",
+      "phase": "PF",
+      "text": "Envelope field 'trace_id' present and validated"
+    },
+    {
+      "cid": "ENV.ttl_sec",
+      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L55",
+      "group": "Envelope",
+      "level": "SHOULD",
+      "phase": "PF",
+      "text": "Envelope field 'ttl_sec' present and validated"
+    },
+    {
+      "cid": "ENV.version",
+      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L37",
+      "group": "Envelope",
+      "level": "SHOULD",
+      "phase": "PF",
+      "text": "Envelope field 'version' present and validated"
+    },
+    {
       "cid": "ERQ.1",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L145",
       "group": "Errors/TTL/Quota",
-      "level": "SHOULD",
+      "level": "MUST",
       "phase": "RO",
       "text": "**Gi\u1edbi h\u1ea1n T\u1ea7n su\u1ea5t (Rate Limiting):** (Tinh ch\u1ec9nh) Ngo\u00e0i c\u00e1c header X-RateLimit-*, c\u00e1c Agent x\u1eed l\u00fd qua Pub/Sub c\u0169ng ph\u1ea3i c\u00f3 c\u01a1 ch\u1ebf enforce quota d\u1ef1a tr\u00ean principal v\u00e0 tenant_id; \u0111\u1ed3ng b\u1ed9 tr\u1ea3 X-RateLimit-Limit / X-RateLimit-Remaining / Retry-After; b\u1ea5t \u0111\u1ed3ng b\u1ed9 tr\u1ea3 event l\u1ed7i n\u1ebfu v\u01b0\u1ee3t."
     },
@@ -446,7 +446,7 @@
       "cid": "REG.8",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L180",
       "group": "Registry/Versioning",
-      "level": "SHOULD",
+      "level": "MUST",
       "phase": "PF",
       "text": "Version-negotiation Test: Client g\u1eedi m\u1ed9t action_version kh\u00f4ng \u0111\u01b0\u1ee3c h\u1ed7 tr\u1ee3 v\u00e0 ph\u1ea3i nh\u1eadn v\u1ec1 l\u1ed7i INVALID_ARGUMENT + g\u1ee3i \u00fd phi\u00ean b\u1ea3n."
     },
@@ -468,6 +468,14 @@
     },
     {
       "cid": "TRN.10",
+      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L196",
+      "group": "Transport",
+      "level": "SHOULD",
+      "phase": "PF",
+      "text": "T\u00e0i li\u1ec7u v\u1ec1 MCP (Anthropic) - Changelog Jun 18 2025: security (OAuth Resource Servers, RFC 8707), structured output (tool results/resource links), elicitation (request info)."
+    },
+    {
+      "cid": "TRN.11",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L198",
       "group": "Transport",
       "level": "SHOULD",
@@ -475,7 +483,7 @@
       "text": "T\u00e0i li\u1ec7u v\u1ec1 A2A/ACP (LF AI) - Merger Aug 29 2025 (IBM contribute BeeAI open-source)."
     },
     {
-      "cid": "TRN.11",
+      "cid": "TRN.12",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L200",
       "group": "Transport",
       "level": "SHOULD",
@@ -483,7 +491,7 @@
       "text": "T\u00e0i li\u1ec7u v\u1ec1 OpenAI Function Calling."
     },
     {
-      "cid": "TRN.12",
+      "cid": "TRN.13",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L202",
       "group": "Transport",
       "level": "SHOULD",
@@ -491,7 +499,7 @@
       "text": "T\u00e0i li\u1ec7u v\u1ec1 OAS/HuggingFace (MMORPG AI NPC, SmolAgents code-based 2025)."
     },
     {
-      "cid": "TRN.13",
+      "cid": "TRN.14",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L204",
       "group": "Transport",
       "level": "SHOULD",
@@ -499,7 +507,7 @@
       "text": "**V\u00ed d\u1ee5 M\u00e3 ngu\u1ed3n:**"
     },
     {
-      "cid": "TRN.14",
+      "cid": "TRN.15",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L206",
       "group": "Transport",
       "level": "SHOULD",
@@ -510,7 +518,7 @@
       "cid": "TRN.2",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L9",
       "group": "Transport",
-      "level": "SHOULD",
+      "level": "MUST",
       "phase": "PF",
       "text": "**Nguy\u00ean t\u1eafc Chu\u1ea9n h\u00f3a Giao th\u1ee9c (Standardized Protocol):** (Gi\u1eef nguy\u00ean t\u1eeb v3.0) M\u1ecdi giao ti\u1ebfp tr\u1ef1c ti\u1ebfp gi\u1eefa c\u00e1c Agent ph\u1ea3i tu\u00e2n th\u1ee7 m\u1ed9t giao th\u1ee9c chung, c\u00f3 c\u1ea5u tr\u00fac."
     },
@@ -534,7 +542,7 @@
       "cid": "TRN.5",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L15",
       "group": "Transport",
-      "level": "SHOULD",
+      "level": "MUST",
       "phase": "PF",
       "text": "**Nguy\u00ean t\u1eafc Idempotency:** (Gi\u1eef nguy\u00ean t\u1eeb v3.0) M\u1ecdi h\u00e0nh \u0111\u1ed9ng l\u00e0m thay \u0111\u1ed5i tr\u1ea1ng th\u00e1i ph\u1ea3i \u0111\u01b0\u1ee3c thi\u1ebft k\u1ebf \u0111\u1ec3 c\u00f3 th\u1ec3 th\u1ef1c thi l\u1ea1i nhi\u1ec1u l\u1ea7n m\u00e0 kh\u00f4ng g\u00e2y ra k\u1ebft qu\u1ea3 ngo\u00e0i \u00fd mu\u1ed1n."
     },
@@ -542,12 +550,20 @@
       "cid": "TRN.6",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L17",
       "group": "Transport",
-      "level": "SHOULD",
+      "level": "MUST",
       "phase": "PF",
       "text": "**Nguy\u00ean t\u1eafc X\u00e1c minh \u0110\u1ed9c l\u1eadp (Independent Verification):** (Gi\u1eef nguy\u00ean t\u1eeb v3.0) M\u1ed9t Agent kh\u00f4ng \u0111\u01b0\u1ee3c coi l\u00e0 ho\u00e0n th\u00e0nh nhi\u1ec7m v\u1ee5 ch\u1ec9 d\u1ef1a tr\u00ean l\u1eddi x\u00e1c nh\u1eadn c\u1ee7a Agent kh\u00e1c; n\u00f3 ph\u1ea3i t\u1ef1 m\u00ecnh x\u00e1c minh k\u1ebft qu\u1ea3 cu\u1ed1i c\u00f9ng."
     },
     {
       "cid": "TRN.7",
+      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L103",
+      "group": "Transport",
+      "level": "MUST",
+      "phase": "PF",
+      "text": "Fairness & Backpressure: C\u00e1c subscriber tr\u00ean Pub/Sub ph\u1ea3i thi\u1ebft l\u1eadp max_outstanding_bytes/messages v\u00e0 gi\u1edbi h\u1ea1n x\u1eed l\u00fd \u0111\u1ed3ng th\u1eddi cho m\u1ed7i tenant (per-tenant concurrency cap) \u0111\u1ec3 \u0111\u1ea3m b\u1ea3o s\u1ef1 c\u00f4ng b\u1eb1ng. Khi nh\u1eadn \u0111\u01b0\u1ee3c l\u1ed7i RATE_LIMIT_EXCEEDED, client ph\u1ea3i th\u1ef1c hi\u1ec7n backoff theo header Retry-After."
+    },
+    {
+      "cid": "TRN.8",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L105",
       "group": "Transport",
       "level": "SHOULD",
@@ -555,23 +571,35 @@
       "text": "(Gi\u1eef nguy\u00ean t\u1eeb v3.0) H\u1ed7 tr\u1ee3 2 k\u00eanh: HTTP v\u00e0 Pub/Sub."
     },
     {
-      "cid": "TRN.8",
+      "cid": "TRN.9",
       "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L194",
       "group": "Transport",
       "level": "SHOULD",
       "phase": "PF",
       "text": "**Li\u00ean k\u1ebft \u0111\u1ebfn c\u00e1c Ti\u00eau chu\u1ea9n:**"
-    },
-    {
-      "cid": "TRN.9",
-      "doc_cite": "MD:docs/agent-a2a-constitution-v5.md#L196",
-      "group": "Transport",
-      "level": "SHOULD",
-      "phase": "PF",
-      "text": "T\u00e0i li\u1ec7u v\u1ec1 MCP (Anthropic) - Changelog Jun 18 2025: security (OAuth Resource Servers, RFC 8707), structured output (tool results/resource links), elicitation (request info)."
     }
   ],
   "normative_lines": [
+    {
+      "group": "Envelope",
+      "line": 9,
+      "text": "2. **Nguy\u00ean t\u1eafc Chu\u1ea9n h\u00f3a Giao th\u1ee9c (Standardized Protocol):** (Gi\u1eef nguy\u00ean t\u1eeb v3.0) M\u1ecdi giao ti\u1ebfp tr\u1ef1c ti\u1ebfp gi\u1eefa c\u00e1c Agent ph\u1ea3i tu\u00e2n th\u1ee7 m\u1ed9t giao th\u1ee9c chung, c\u00f3 c\u1ea5u tr\u00fac."
+    },
+    {
+      "group": "Envelope",
+      "line": 15,
+      "text": "5. **Nguy\u00ean t\u1eafc Idempotency:** (Gi\u1eef nguy\u00ean t\u1eeb v3.0) M\u1ecdi h\u00e0nh \u0111\u1ed9ng l\u00e0m thay \u0111\u1ed5i tr\u1ea1ng th\u00e1i ph\u1ea3i \u0111\u01b0\u1ee3c thi\u1ebft k\u1ebf \u0111\u1ec3 c\u00f3 th\u1ec3 th\u1ef1c thi l\u1ea1i nhi\u1ec1u l\u1ea7n m\u00e0 kh\u00f4ng g\u00e2y ra k\u1ebft qu\u1ea3 ngo\u00e0i \u00fd mu\u1ed1n."
+    },
+    {
+      "group": "Envelope",
+      "line": 17,
+      "text": "6. **Nguy\u00ean t\u1eafc X\u00e1c minh \u0110\u1ed9c l\u1eadp (Independent Verification):** (Gi\u1eef nguy\u00ean t\u1eeb v3.0) M\u1ed9t Agent kh\u00f4ng \u0111\u01b0\u1ee3c coi l\u00e0 ho\u00e0n th\u00e0nh nhi\u1ec7m v\u1ee5 ch\u1ec9 d\u1ef1a tr\u00ean l\u1eddi x\u00e1c nh\u1eadn c\u1ee7a Agent kh\u00e1c; n\u00f3 ph\u1ea3i t\u1ef1 m\u00ecnh x\u00e1c minh k\u1ebft qu\u1ea3 cu\u1ed1i c\u00f9ng."
+    },
+    {
+      "group": "Async & State",
+      "line": 19,
+      "text": "7. **Nguy\u00ean t\u1eafc M\u1edf r\u1ed9ng v\u00e0 B\u1ec1n b\u1ec9 (Scalability & Resilience):** (Tinh ch\u1ec9nh t\u1eeb v3.0) H\u1ec7 th\u1ed1ng ph\u1ea3i \u0111\u01b0\u1ee3c thi\u1ebft k\u1ebf \u0111\u1ec3 x\u1eed l\u00fd h\u00e0ng tr\u0103m Agent v\u00e0 quy tr\u00ecnh \u0111\u1ed3ng th\u1eddi, v\u1edbi c\u01a1 ch\u1ebf t\u1ef1 ph\u1ee5c h\u1ed3i (retry, DLQ) v\u00e0 ph\u00e2n t\u1ea3i, \u0111\u1ed3ng th\u1eddi t\u1eadn d\u1ee5ng m\u00e3 ngu\u1ed3n hi\u1ec7n c\u00f3 t\u1eeb c\u00e1c framework nh\u01b0 LangChain CrewAI (multi-agent teams, MCP streamable May 8 2025) ho\u1eb7c Langroid MAP (delegation Sep 2025) \u0111\u1ec3 gi\u1ea3m thi\u1ec3u vi\u1ebft m\u00e3 m\u1edbi."
+    },
     {
       "group": "Envelope",
       "line": 29,
@@ -588,9 +616,29 @@
       "text": "8. **H\u1ee7y t\u00e1c v\u1ee5:** M\u1ed9t Agent c\u00f3 th\u1ec3 g\u1eedi m\u1ed9t h\u00e0nh \u0111\u1ed9ng *.cancel. N\u1ebfu t\u00e1c v\u1ee5 \u0111ang \u1edf tr\u1ea1ng th\u00e1i RUNNING, n\u00f3 s\u1ebd chuy\u1ec3n sang CANCELLED v\u00e0 k\u00edch ho\u1ea1t h\u00e0nh \u0111\u1ed9ng b\u00f9 tr\u1eeb (compensation) n\u1ebfu c\u1ea7n; semantics at-least-once, \u0111\u00edch MUST dedupe theo idempotency_key v\u00e0 b\u1ecf qua out-of-order n\u1ebfu seq < last_seq_seen."
     },
     {
+      "group": "Envelope",
+      "line": 99,
+      "text": "11. **(B\u1ed5 sung)** N\u1ebfu m\u1ed9t tin nh\u1eafn b\u1ecb x\u1eed l\u00fd sau khi ttl_sec \u0111\u00e3 h\u1ebft h\u1ea1n, Agent ph\u1ea3i t\u1eeb ch\u1ed1i v\u00e0 tr\u1ea3 v\u1ec1 l\u1ed7i EXPIRED. N\u1ebfu v\u01b0\u1ee3t quota, tr\u1ea3 l\u1ed7i RATE_LIMIT_EXCEEDED."
+    },
+    {
+      "group": "Transport",
+      "line": 103,
+      "text": "Fairness & Backpressure: C\u00e1c subscriber tr\u00ean Pub/Sub ph\u1ea3i thi\u1ebft l\u1eadp max_outstanding_bytes/messages v\u00e0 gi\u1edbi h\u1ea1n x\u1eed l\u00fd \u0111\u1ed3ng th\u1eddi cho m\u1ed7i tenant (per-tenant concurrency cap) \u0111\u1ec3 \u0111\u1ea3m b\u1ea3o s\u1ef1 c\u00f4ng b\u1eb1ng. Khi nh\u1eadn \u0111\u01b0\u1ee3c l\u1ed7i RATE_LIMIT_EXCEEDED, client ph\u1ea3i th\u1ef1c hi\u1ec7n backoff theo header Retry-After."
+    },
+    {
       "group": "Artifact",
       "line": 111,
       "text": "14. **(Tinh ch\u1ec9nh)** N\u1ebfu payload qu\u00e1 l\u1edbn, artifact_uri b\u1eaft bu\u1ed9c ph\u1ea3i l\u00e0 m\u1ed9t GCS Signed URL **ch\u1ec9 cho ph\u00e9p \u0111\u1ecdc (GET-only)**, c\u00f3 **TTL \u2264 15 ph\u00fat**, \u0111i k\u00e8m v\u1edbi artifact_hash (SHA-256), MIME whitelist, fixed bucket, no-list."
+    },
+    {
+      "group": "Envelope",
+      "line": 129,
+      "text": "3. **H\u1ee3p \u0111\u1ed3ng B\u1eb1ng ch\u1ee9ng X\u00e1c minh (Verifier Artifact Contract):** (Gi\u1eef nguy\u00ean t\u1eeb v3.0) Verifier Agent khi t\u1ea1o b\u1eb1ng ch\u1ee9ng ph\u1ea3i tr\u1ea3 v\u1ec1 \u0111\u1ed1i t\u01b0\u1ee3ng c\u00f3 c\u1ea5u tr\u00fac: { \"artifact_uri\", \"artifact_hash\", \"content_type\", \"evidence_ts\", \"source_kind\" }."
+    },
+    {
+      "group": "Envelope",
+      "line": 135,
+      "text": "1. **X\u00e1c th\u1ef1c Agent-to-Agent (A2A):** (Tinh ch\u1ec9nh) principal trong Message Envelope ph\u1ea3i \u0111\u01b0\u1ee3c x\u00e1c th\u1ef1c qua Google Cloud IAM ho\u1eb7c JWT. C\u00e1c client b\u00ean ngo\u00e0i ph\u1ea3i tu\u00e2n th\u1ee7 c\u00e1c ti\u00eau chu\u1ea9n b\u1ea3o m\u1eadt n\u00e2ng cao nh\u01b0 **OAuth 2.0 Resource Indicators (RFC 8707)** (MCP Jun 18 2025 ch\u1ed1ng malicious)."
     },
     {
       "group": "Envelope",
@@ -598,9 +646,19 @@
       "text": "Th\u00f4ng \u0111i\u1ec7p t\u1eeb external agents B\u1eaeT BU\u1ed8C ph\u1ea3i k\u00e8m ch\u1eef k\u00fd JWS (thu\u1eadt to\u00e1n Ed25519/EdDSA); header ph\u1ea3i c\u00f3 kid (key ID) v\u00e0 ch\u00ednh s\u00e1ch lu\u00e2n chuy\u1ec3n kh\u00f3a l\u00e0 90 ng\u00e0y. C\u00e1c y\u00eau c\u1ea7u c\u00f3 thu\u1eadt to\u00e1n kh\u00f4ng n\u1eb1m trong danh s\u00e1ch cho ph\u00e9p s\u1ebd b\u1ecb t\u1eeb ch\u1ed1i.."
     },
     {
+      "group": "Errors/TTL/Quota",
+      "line": 145,
+      "text": "2. **Gi\u1edbi h\u1ea1n T\u1ea7n su\u1ea5t (Rate Limiting):** (Tinh ch\u1ec9nh) Ngo\u00e0i c\u00e1c header X-RateLimit-*, c\u00e1c Agent x\u1eed l\u00fd qua Pub/Sub c\u0169ng ph\u1ea3i c\u00f3 c\u01a1 ch\u1ebf enforce quota d\u1ef1a tr\u00ean principal v\u00e0 tenant_id; \u0111\u1ed3ng b\u1ed9 tr\u1ea3 X-RateLimit-Limit / X-RateLimit-Remaining / Retry-After; b\u1ea5t \u0111\u1ed3ng b\u1ed9 tr\u1ea3 event l\u1ed7i n\u1ebfu v\u01b0\u1ee3t."
+    },
+    {
       "group": "Async & State",
       "line": 147,
       "text": "3. **H\u00e0ng \u0111\u1ee3i & DLQ:** (Gi\u1eef nguy\u00ean t\u1eeb v3.0) B\u1eaft bu\u1ed9c c\u00f3 DLQ, retry 6 l\u1ea7n v\u1edbi exponential backoff + jitter; DLQ redrive th\u1ee7 c\u00f4ng v\u1edbi audit (d\u00f9ng tool TD-APP-02)."
+    },
+    {
+      "group": "Envelope",
+      "line": 151,
+      "text": "5. (Gi\u1eef nguy\u00ean t\u1eeb v3.0) trace_id ph\u1ea3i \u0111\u01b0\u1ee3c truy\u1ec1n su\u1ed1t."
     },
     {
       "group": "Envelope",
@@ -616,6 +674,11 @@
       "group": "Registry/Versioning",
       "line": 170,
       "text": "Agent Data duy tr\u00ec registry li\u1ec7t k\u00ea actions, action_version, transports, max_payload_bytes c\u1ee7a t\u1eebng agent; /mcp/capabilities MUST kh\u1edbp registry (CI so kh\u1edbp)."
+    },
+    {
+      "group": "Envelope",
+      "line": 180,
+      "text": "6. Version-negotiation Test: Client g\u1eedi m\u1ed9t action_version kh\u00f4ng \u0111\u01b0\u1ee3c h\u1ed7 tr\u1ee3 v\u00e0 ph\u1ea3i nh\u1eadn v\u1ec1 l\u1ed7i INVALID_ARGUMENT + g\u1ee3i \u00fd phi\u00ean b\u1ea3n."
     }
   ],
   "source": "docs/agent-a2a-constitution-v5.md"

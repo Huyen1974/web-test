@@ -163,6 +163,9 @@ cython_debug/
 faiss_indices/
 qdrant_storage/
 vector_store_data/
+artifacts/
+Lark/
+.bin/
 
 # Google Cloud
 .gcloud/

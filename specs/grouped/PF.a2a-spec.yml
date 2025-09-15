@@ -1,92 +1,92 @@
 items:
-- id: ENV.1
-  title: Envelope field 'version' present and validated
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L37
-  acceptance:
-  - README.md
-- id: ENV.10
-  title: Envelope field 'ttl_sec' present and validated
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L55
-  acceptance:
-  - README.md
-- id: ENV.11
-  title: Envelope field 'idempotency_key' present and validated
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L57
-  acceptance:
-  - README.md
-- id: ENV.12
-  title: Envelope field 'seq' present and validated
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L59
-  acceptance:
-  - README.md
-- id: ENV.13
+- id: ENV.action
   title: Envelope field 'action' present and validated
   doc_cite: MD:docs/agent-a2a-constitution-v5.md#L61
   acceptance:
   - README.md
-- id: ENV.14
+- id: ENV.action_version
   title: Envelope field 'action_version' present and validated
   doc_cite: MD:docs/agent-a2a-constitution-v5.md#L63
   acceptance:
   - README.md
-- id: ENV.15
-  title: Envelope field 'context_id' present and validated
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L65
-  acceptance:
-  - README.md
-- id: ENV.16
-  title: Envelope field 'resource_links' present and validated
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L67
-  acceptance:
-  - README.md
-- id: ENV.17
-  title: Envelope field 'payload' present and validated
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L69
-  acceptance:
-  - README.md
-- id: ENV.18
-  title: Envelope field 'schema_version' present and validated
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L71
-  acceptance:
-  - README.md
-- id: ENV.2
-  title: Envelope field 'request_id' present and validated
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L39
-  acceptance:
-  - README.md
-- id: ENV.3
-  title: Envelope field 'correlation_id' present and validated
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L41
-  acceptance:
-  - README.md
-- id: ENV.4
+- id: ENV.causation_id
   title: Envelope field 'causation_id' present and validated
   doc_cite: MD:docs/agent-a2a-constitution-v5.md#L43
   acceptance:
   - README.md
-- id: ENV.5
-  title: Envelope field 'trace_id' present and validated
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L45
+- id: ENV.context_id
+  title: Envelope field 'context_id' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L65
   acceptance:
   - README.md
-- id: ENV.6
-  title: Envelope field 'tenant_id' present and validated
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L47
+- id: ENV.correlation_id
+  title: Envelope field 'correlation_id' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L41
   acceptance:
   - README.md
-- id: ENV.7
+- id: ENV.data_locality
   title: Envelope field 'data_locality' present and validated
   doc_cite: MD:docs/agent-a2a-constitution-v5.md#L49
   acceptance:
   - README.md
-- id: ENV.8
+- id: ENV.idempotency_key
+  title: Envelope field 'idempotency_key' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L57
+  acceptance:
+  - README.md
+- id: ENV.payload
+  title: Envelope field 'payload' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L69
+  acceptance:
+  - README.md
+- id: ENV.principal
   title: Envelope field 'principal' present and validated
   doc_cite: MD:docs/agent-a2a-constitution-v5.md#L51
   acceptance:
   - README.md
-- id: ENV.9
+- id: ENV.request_id
+  title: Envelope field 'request_id' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L39
+  acceptance:
+  - README.md
+- id: ENV.resource_links
+  title: Envelope field 'resource_links' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L67
+  acceptance:
+  - README.md
+- id: ENV.schema_version
+  title: Envelope field 'schema_version' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L71
+  acceptance:
+  - README.md
+- id: ENV.seq
+  title: Envelope field 'seq' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L59
+  acceptance:
+  - README.md
+- id: ENV.tenant_id
+  title: Envelope field 'tenant_id' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L47
+  acceptance:
+  - README.md
+- id: ENV.timestamp
   title: Envelope field 'timestamp' present and validated
   doc_cite: MD:docs/agent-a2a-constitution-v5.md#L53
+  acceptance:
+  - README.md
+- id: ENV.trace_id
+  title: Envelope field 'trace_id' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L45
+  acceptance:
+  - README.md
+- id: ENV.ttl_sec
+  title: Envelope field 'ttl_sec' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L55
+  acceptance:
+  - README.md
+- id: ENV.version
+  title: Envelope field 'version' present and validated
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L37
   acceptance:
   - README.md
 - id: REG.1
@@ -163,26 +163,33 @@ items:
   acceptance:
   - README.md
 - id: TRN.10
+  title: 'Tài liệu về MCP (Anthropic) - Changelog Jun 18 2025: security (OAuth Resource
+    Servers, RFC 8707), structured output (tool results/resource links), elicitation
+    (request info).'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L196
+  acceptance:
+  - README.md
+- id: TRN.11
   title: Tài liệu về A2A/ACP (LF AI) - Merger Aug 29 2025 (IBM contribute BeeAI open-source).
   doc_cite: MD:docs/agent-a2a-constitution-v5.md#L198
   acceptance:
   - README.md
-- id: TRN.11
+- id: TRN.12
   title: Tài liệu về OpenAI Function Calling.
   doc_cite: MD:docs/agent-a2a-constitution-v5.md#L200
   acceptance:
   - README.md
-- id: TRN.12
+- id: TRN.13
   title: Tài liệu về OAS/HuggingFace (MMORPG AI NPC, SmolAgents code-based 2025).
   doc_cite: MD:docs/agent-a2a-constitution-v5.md#L202
   acceptance:
   - README.md
-- id: TRN.13
+- id: TRN.14
   title: '**Ví dụ Mã nguồn:**'
   doc_cite: MD:docs/agent-a2a-constitution-v5.md#L204
   acceptance:
   - README.md
-- id: TRN.14
+- id: TRN.15
   title: Mã nguồn mẫu cho Langroid ToolMessage triển khai Message Envelope v2.2 (hybrid
     MCP/A2A, adapter Apr 2025).
   doc_cite: MD:docs/agent-a2a-constitution-v5.md#L206
@@ -224,19 +231,20 @@ items:
   acceptance:
   - README.md
 - id: TRN.7
+  title: 'Fairness & Backpressure: Các subscriber trên Pub/Sub phải thiết lập max_outstanding_bytes/messages
+    và giới hạn xử lý đồng thời cho mỗi tenant (per-tenant concurrency cap) để đảm
+    bảo sự công bằng. Khi nhận được lỗi RATE_LIMIT_EXCEEDED, client phải thực hiện
+    backoff theo header Retry-After.'
+  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L103
+  acceptance:
+  - README.md
+- id: TRN.8
   title: '(Giữ nguyên từ v3.0) Hỗ trợ 2 kênh: HTTP và Pub/Sub.'
   doc_cite: MD:docs/agent-a2a-constitution-v5.md#L105
   acceptance:
   - README.md
-- id: TRN.8
+- id: TRN.9
   title: '**Liên kết đến các Tiêu chuẩn:**'
   doc_cite: MD:docs/agent-a2a-constitution-v5.md#L194
-  acceptance:
-  - README.md
-- id: TRN.9
-  title: 'Tài liệu về MCP (Anthropic) - Changelog Jun 18 2025: security (OAuth Resource
-    Servers, RFC 8707), structured output (tool results/resource links), elicitation
-    (request info).'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L196
   acceptance:
   - README.md
