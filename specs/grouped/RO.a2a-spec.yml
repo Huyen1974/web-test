@@ -1,70 +1,100 @@
-items:
-- id: ASY.1
-  title: '**Nguyên tắc Mở rộng và Bền bỉ (Scalability & Resilience):** (Tinh chỉnh
-    từ v3.0) Hệ thống phải được thiết kế để xử lý hàng trăm Agent và quy trình đồng
-    thời, với cơ chế tự phục hồi (retry, DLQ) và phân tải, đồng thời tận dụng mã nguồn
-    hiện có từ các framework như LangChain CrewAI (multi-agent teams, MCP streamable
-    May 8 2025) hoặc Langroid MAP (delegation Sep 2025) để giảm thiểu viết mã mới.'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L19
-  acceptance:
-  - README.md
-- id: ASY.10
-  title: (Bổ sung các thuật ngữ mới như A2A, ACP, OAS, MCP, Saga, DLQ, SLOs...)
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L268
-  acceptance:
-  - README.md
-- id: ASY.2
-  title: '**Tiêu chuẩn Áp dụng:** (Tinh chỉnh từ v3.0) Nền tảng là **OpenAI Function
-    Calling**, được thực thi thông qua một **Message Envelope** chuẩn hóa, hybrid
-    với MCP structured output (Jun 18 2025) để hỗ trợ tool results/resource links.'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L25
-  acceptance:
-  - README.md
-- id: ASY.3
-  title: payload.schema_version MUST map tới một JSON Schema trong repo schemas/…;
-    CI BLOCK nếu payload không validate. SDK TS/Python MUST be generated từ OpenAPI/JSON-Schema;
-    không merge nếu SDK không đồng bộ.
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L29
-  acceptance:
-  - README.md
-- id: ASY.4
-  title: '**Hàng đợi & DLQ:** (Giữ nguyên từ v3.0) Bắt buộc có DLQ, retry 6 lần với
-    exponential backoff + jitter; DLQ redrive thủ công với audit (dùng tool TD-APP-02).'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L147
-  acceptance:
-  - README.md
-- id: ASY.5
-  title: '**Giám sát & Truy vết (Trace & Observability):** (Bổ sung metric retry.)'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L149
-  acceptance:
-  - README.md
-- id: ASY.6
-  title: (Giữ nguyên từ v3.0) trace_id phải được truyền suốt.
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L151
-  acceptance:
-  - README.md
-- id: ASY.7
-  title: '**(Bổ sung)** Metrics bắt buộc: a2a_requests_total, a2a_latency_ms, a2a_dlq_total,
-    a2a_retries_total (với nhãn: action, tenant, principal, status, error.code); monitor
-    quota points MCP advanced (Jun 18 2025).'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L153
-  acceptance:
-  - README.md
-- id: ASY.8
-  title: 'SLOs tối thiểu: ACK P95 ≤ 1s, Job-done P95 ≤ ETA + 60s, DLQ/ngày ≤ 0.1%.'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L155
-  acceptance:
-  - README.md
-- id: ASY.9
-  title: '**Bảng thuật ngữ:**'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L266
-  acceptance:
-  - README.md
-- id: TTL.ERQ.1
-  title: '**Giới hạn Tần suất (Rate Limiting):** (Tinh chỉnh) Ngoài các header X-RateLimit-*,
-    các Agent xử lý qua Pub/Sub cũng phải có cơ chế enforce quota dựa trên principal
-    và tenant_id; đồng bộ trả X-RateLimit-Limit / X-RateLimit-Remaining / Retry-After;
-    bất đồng bộ trả event lỗi nếu vượt.'
-  doc_cite: MD:docs/agent-a2a-constitution-v5.md#L145
-  acceptance:
-  - README.md
+spec_text: |
+  # File 2: ro_state_machine.yml (Phần II.3-14 – 41 ID, Cover Resilient Operations State/Error/Transport)
+  - id: RO-STM-001
+    title: Máy trạng thái & Quy tắc Phản hồi - Tinh chỉnh bổ sung trạng thái và quy tắc hủy tác vụ đầy đủ
+    spec_ref: Phần II §3
+    doc_cite: MD:L75
+    acceptance:
+      tests: ["tests/ro/test_state_machine.py::test_overall_refinement"]
+      code_markers: ["@req:RO-STM-001"]
+      runtime_assertions: []
+  - id: RO-STM-002
+    title: Máy trạng thái - Một tác vụ sẽ đi qua các trạng thái: ACKED → RUNNING → (SUCCEEDED | FAILED) → (COMPENSATED? | CANCELLED?)
+    spec_ref: Phần II §4
+    doc_cite: MD:L77
+    acceptance:
+      tests: ["tests/ro/test_state_machine.py::test_transitions"]
+      code_markers: ["@req:RO-STM-002"]
+      runtime_assertions: []
+  - id: RO-RESP-001
+    title: Phản hồi - Đồng bộ (<2s): Trả về SUCCEEDED hoặc FAILED
+    spec_ref: Phần II §5
+    doc_cite: MD:L89-L91
+    acceptance:
+      tests: ["tests/ro/test_response.py::test_sync_under_2s"]
+      code_markers: ["@req:RO-RESP-001"]
+      runtime_assertions: []
+  - id: RO-RESP-002
+    title: Phản hồi - Bất đồng bộ: Trả về ACKED, sau đó phát các sự kiện *.running, *.done
+    spec_ref: Phần II §6
+    doc_cite: MD:L89-L91
+    acceptance:
+      tests: ["tests/ro/test_response.py::test_async_ack_events"]
+      code_markers: ["@req:RO-RESP-002"]
+      runtime_assertions: []
+  - id: RO-RESP-003
+    title: Async-first enforcement - Nếu dự kiến >2s, MUST dùng async (ACK + events); linter FAIL nếu action registry không khai ETA hợp lý
+    spec_ref: Phần II §6 (Bổ sung enforcement từ Phần I.4)
+    doc_cite: MD:L13-L14 + L89-L91
+    acceptance:
+      tests: ["tests/ro/test_async_first.py::test_enforce_over_2s_linter"]
+      code_markers: ["@req:RO-RESP-003"]
+      runtime_assertions: []
+  - id: RO-RESP-004
+    title: HTTP 202 cho ACK async - SHOULD dùng 202 Accepted nếu profile HTTP-sync
+    spec_ref: Phần II §6
+    doc_cite: MD:L89-L91
+    acceptance:
+      tests: ["tests/ro/test_response.py::test_ack_http_202_recommended"]
+      code_markers: ["@req:RO-RESP-004"]
+      runtime_assertions: []
+  - id: RO-CANCEL-001
+    title: Hủy tác vụ - Một Agent có thể gửi *.cancel. Nếu RUNNING, chuyển CANCELLED và kích hoạt compensation nếu cần (side-effects observed → .compensated; else .cancelled)
+    spec_ref: Phần II §7
+    doc_cite: MD:L93-L95
+    acceptance:
+      tests: ["tests/ro/test_cancel.py::test_cancel_running_compensate_trigger"]
+      code_markers: ["@req:RO-CANCEL-001"]
+      runtime_assertions: []
+  - id: RO-CANCEL-002
+    title: Cancel idempotency - Gửi .cancel nhiều lần chỉ phát 1 lần hiệu lực; lần sau no-op (dedupe theo idempotency_key + subject)
+    spec_ref: Phần II §7
+    doc_cite: MD:L93-L95
+    acceptance:
+      tests: ["tests/ro/test_cancel.py::test_idempotency_multiple_noop"]
+      code_markers: ["@req:RO-CANCEL-002"]
+      runtime_assertions: ["dedupe cancel"]
+  - id: RO-CANCEL-003
+    title: Cancel sau khi DONE - SHOULD no-op idempotent (không phát event thêm, không đảo trạng thái; SHOULD 200 cho idempotent; no .compensated nếu FAILED)
+    spec_ref: Phần II §7
+    doc_cite: MD:L93-L95
+    acceptance:
+      tests: ["tests/ro/test_cancel.py::test_after_done_noop_200_failed"]
+      code_markers: ["@req:RO-CANCEL-003"]
+      runtime_assertions: []
+  - id: RO-SEM-001
+    title: Semantics at-least-once, đích MUST dedupe theo idempotency_key và bỏ qua out-of-order nếu seq < last_seq_seen; SHOULD order events theo seq tăng per-subject; SHOULD recovery replay .done nếu dedupe processed message
+    spec_ref: Phần II §7
+    doc_cite: MD:L93-L95
+    acceptance:
+      tests: ["tests/ro/test_semantics.py::test_at_least_once_dedupe_out_of_order_shold_seq_recovery"]
+      code_markers: ["@req:RO-SEM-001"]
+      runtime_assertions: []
+  - id: RO-SEQ-001
+    title: Seq reset on MAJOR - Nếu action_version tăng MAJOR, seq có thể reset (không coi out-of-order); else đơn điệu tăng per-subject
+    spec_ref: Phần II §7
+    doc_cite: MD:L79-L83
+    acceptance:
+      tests: ["tests/ro/test_seq.py::test_accept_reset_on_major_bump"]
+      code_markers: ["@req:RO-SEQ-001"]
+      runtime_assertions: []
+  - id: RO-NAME-001
+    title: Mapping state-event - ACKED → .accepted, RUNNING → .running, SUCCEEDED/FAILED → .done (status=SUCCEEDED|FAILED), CANCELLED → .cancelled, COMPENSATED → .compensated
+    spec_ref: Phần II §7 (Bổ sung mapping từ Phần VI Naming)
+    doc_cite: MD:L85-L91 + L264
+    acceptance:
+      tests: ["tests/ro/test_state_event_mapping.py::test_acked_accepted_done_status"]
+      code_markers: ["@req:RO-NAME-001"]
+      runtime_assertions: []
+  - id: RO-EVENT-001
+    title: Event payload cho .done - MUST có status ∈ {SUCCEEDED, FAILED}; nếu FAILED thì MUST có error.code
