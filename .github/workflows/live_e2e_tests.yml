@@ -18,12 +18,6 @@ jobs:
       GCP_REGION: asia-southeast1
       GCP_RUN_SERVICE: agent-data-test
 
-      # External service credentials
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      QDRANT_API_KEY: ${{ secrets.QDRANT_CLUSTER1_KEY }}
-      # If available, provide the Qdrant endpoint; cleanup is best-effort
-      QDRANT_URL: ${{ secrets.QDRANT_CLUSTER1_ENDPOINT }}
-
       # Enable live e2e tests (tests are skipped unless this is set)
       E2E_LIVE_ENABLE: "1"
       # Temporarily disable Firestore metadata assertion if IAM is not provisioned
@@ -38,6 +32,15 @@ jobs:
         with:
           workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+
+      - name: Fetch live E2E secrets
+        id: fetch-secrets
+        uses: google-github-actions/get-secret-manager-secrets@v1
+        with:
+          secrets: |
+            qdrant_api_key:projects/${{ env.GCP_PROJECT_ID }}/secrets/QDRANT_API_KEY
+            qdrant_url:projects/${{ env.GCP_PROJECT_ID }}/secrets/QDRANT_URL
+            openai_api_key:projects/${{ env.GCP_PROJECT_ID }}/secrets/OPENAI_API_KEY
 
       - name: Setup gcloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -58,3 +61,7 @@ jobs:
         run: |
           # Override repo addopts (unit-only + coverage threshold) for live E2E run
           pytest -m e2e -q -o addopts=""
+        env:
+          OPENAI_API_KEY: ${{ steps.fetch-secrets.outputs.openai_api_key }}
+          QDRANT_API_KEY: ${{ steps.fetch-secrets.outputs.qdrant_api_key }}
+          QDRANT_URL: ${{ steps.fetch-secrets.outputs.qdrant_url }}
