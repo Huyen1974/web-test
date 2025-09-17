@@ -165,6 +165,22 @@ Nguyên tắc: Mọi thay đổi về số lượng file trong thư mục tests/
 ⛔ Cursor không được chỉnh sửa test mà không cập nhật manifest. Không được tự thêm test nếu chưa pass đủ CI + update manifest.
 📌 Đây là cơ chế bắt buộc để giữ số lượng test ổn định, tránh báo cáo ảo hoặc CI rác.
 
+### Cursor Client Integration (Reports)
+- Script chính để ghi báo cáo: `scripts/client/save_report.sh`.
+- Biến môi trường bắt buộc: `AGENT_DATA_API_KEY` (lấy từ Secret an toàn).
+- Tuỳ chọn:
+  - `AGENT_DATA_BASE_URL` (mặc định `http://localhost:8000`).
+  - `AGENT_DATA_PARENT_ID` (mặc định `root`).
+  - `AGENT_DATA_REPORT_TAGS` (danh sách tag, mặc định `report`).
+  - `REPORT_DOCUMENT_ID` nếu cần ép document_id.
+- Cú pháp khuyến nghị:
+  ```bash
+  AGENT_DATA_API_KEY=$KEY \
+  AGENT_DATA_BASE_URL=https://agent-data-test.example.com \
+  ./scripts/client/save_report.sh "Weekly Report" ./reports/week42.md
+  ```
+- Script sẽ tạo payload `create_document` theo MCP v2 và trả về phản hồi API (HTTP 2xx là thành công).
+
 ---
 
 ## 9. Báo cáo & tự sửa lỗi (strict)
