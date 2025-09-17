@@ -19,9 +19,15 @@ if [[ -z "${AGENT_DATA_API_KEY:-}" ]]; then
     fi
 fi
 
+VISIBLE=false
+if [[ ${1:-} == "--visible" ]]; then
+    VISIBLE=true
+    shift
+fi
+
 if [[ ${1:-} == "" || ${2:-} == "" ]]; then
     cat <<'USAGE' >&2
-Usage: save_report.sh <title> <report_file> [parent_id]
+Usage: save_report.sh [--visible] <title> <report_file> [parent_id]
 
 Environment variables:
   AGENT_DATA_API_KEY   (required) API key for Agent Data service
@@ -59,17 +65,19 @@ PY
 
 DOC_ID=${DOC_ID//[$'\r\n']/}
 
-payload=$(python3 - "$TITLE" "$PARENT_ID" "$DOC_ID" "$REPORT_FILE" <<'PY'
+payload=$(python3 - "$TITLE" "$PARENT_ID" "$DOC_ID" "$REPORT_FILE" "$VISIBLE" <<'PY'
 import json
 import os
 import sys
 from pathlib import Path
 
-title, parent_id, doc_id, report_path = sys.argv[1:5]
+title, parent_id, doc_id, report_path, visible_str = sys.argv[1:6]
 
 body = Path(report_path).read_text(encoding="utf-8")
 tags_env = os.environ.get("AGENT_DATA_REPORT_TAGS", "report")
 tags = [t.strip() for t in tags_env.split(",") if t.strip()]
+
+is_human_readable = visible_str.lower() == "true"
 
 payload = {
     "document_id": doc_id,
@@ -82,7 +90,7 @@ payload = {
         "title": title,
         "tags": tags,
     },
-    "is_human_readable": True,
+    "is_human_readable": is_human_readable,
 }
 
 print(json.dumps(payload))
