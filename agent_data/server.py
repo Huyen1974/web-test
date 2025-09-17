@@ -138,9 +138,21 @@ class DocumentCreate(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class DocumentUpdatePatch(BaseModel):
+    content: DocumentContent | None = None
+    metadata: DocumentMetadata | None = None
+    is_human_readable: bool | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
 class DocumentUpdate(BaseModel):
-    content: str
-    metadata: dict | None = None
+    document_id: str
+    patch: DocumentUpdatePatch
+    update_mask: list[str]
+    last_known_revision: int | None = None
+
+    model_config = ConfigDict(extra="allow")
 
 
 class DocumentResponse(BaseModel):
@@ -455,19 +467,77 @@ async def update_document(
 ):
     try:
         db = _firestore()
-        now = __import__("datetime").datetime.now(UTC).isoformat()
-        updates: dict = {"updated_at": now, "vector_status": "replaced"}
-        if payload and payload.content is not None:
-            updates["content"] = payload.content
-        if payload and payload.metadata is not None:
-            updates["metadata"] = payload.metadata
-        db.collection(KB_COLLECTION).document(doc_id).update(updates)
-        return DocumentResponse(id=doc_id, status="updated")
+        doc_ref = db.collection(KB_COLLECTION).document(doc_id)
+        snapshot = doc_ref.get()
+        if not getattr(snapshot, "exists", False):
+            raise _error(404, "NOT_FOUND", "Document not found", document_id=doc_id)
+
+        current = snapshot.to_dict() or {}
+        current_revision = current.get("revision", 0)
+        if (
+            payload.last_known_revision is not None
+            and payload.last_known_revision != current_revision
+        ):
+            raise _error(
+                409,
+                "CONFLICT",
+                "Revision mismatch",
+                expected_revision=payload.last_known_revision,
+                actual_revision=current_revision,
+            )
+
+        now_iso = datetime.now(UTC).isoformat()
+        updates: dict = {"updated_at": now_iso, "revision": current_revision + 1}
+        fields_updated: set[str] = set()
+
+        if payload.update_mask:
+            for field in payload.update_mask:
+                if field == "content" and payload.patch.content is not None:
+                    updates["content"] = payload.patch.content.model_dump()
+                    fields_updated.add("content")
+                elif field == "metadata" and payload.patch.metadata is not None:
+                    updates["metadata"] = payload.patch.metadata.model_dump(
+                        exclude_none=True
+                    )
+                    fields_updated.add("metadata")
+                elif (
+                    field == "is_human_readable"
+                    and payload.patch.is_human_readable is not None
+                ):
+                    updates["is_human_readable"] = payload.patch.is_human_readable
+                    fields_updated.add("is_human_readable")
+        else:
+            if payload.patch.content is not None:
+                updates["content"] = payload.patch.content.model_dump()
+                fields_updated.add("content")
+            if payload.patch.metadata is not None:
+                updates["metadata"] = payload.patch.metadata.model_dump(
+                    exclude_none=True
+                )
+                fields_updated.add("metadata")
+            if payload.patch.is_human_readable is not None:
+                updates["is_human_readable"] = payload.patch.is_human_readable
+                fields_updated.add("is_human_readable")
+
+        if not fields_updated:
+            raise _error(400, "INVALID_ARGUMENT", "update_mask empty or patch missing")
+
+        doc_ref.update(updates)
+        return DocumentResponse(
+            id=doc_id, status="updated", revision=updates["revision"]
+        )
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Update document failed: {e}")
-        raise HTTPException(status_code=500, detail="Update document failed") from e
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "INTERNAL",
+                "message": "Update document failed",
+                "details": {"error": str(e)},
+            },
+        ) from e
 
 
 @app.delete("/documents/{doc_id}", response_model=DocumentResponse)
@@ -476,16 +546,35 @@ async def delete_document(
 ):
     try:
         db = _firestore()
-        now = __import__("datetime").datetime.now(UTC).isoformat()
-        db.collection(KB_COLLECTION).document(doc_id).update(
-            {"deleted_at": now, "vector_status": "deleted"}
+        doc_ref = db.collection(KB_COLLECTION).document(doc_id)
+        snapshot = doc_ref.get()
+        if not getattr(snapshot, "exists", False):
+            raise _error(404, "NOT_FOUND", "Document not found", document_id=doc_id)
+
+        now_iso = datetime.now(UTC).isoformat()
+        current = snapshot.to_dict() or {}
+        next_revision = current.get("revision", 0) + 1
+        doc_ref.update(
+            {
+                "deleted_at": now_iso,
+                "updated_at": now_iso,
+                "vector_status": "deleted",
+                "revision": next_revision,
+            }
         )
-        return DocumentResponse(id=doc_id, status="deleted")
+        return DocumentResponse(id=doc_id, status="deleted", revision=next_revision)
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Delete document failed: {e}")
-        raise HTTPException(status_code=500, detail="Delete document failed") from e
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "INTERNAL",
+                "message": "Delete document failed",
+                "details": {"error": str(e)},
+            },
+        ) from e
 
 
 if __name__ == "__main__":
