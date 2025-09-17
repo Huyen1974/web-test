@@ -7,12 +7,13 @@ import agent_data.server as server
 
 
 class _Snap:
-    def __init__(self, data):
-        self._data = dict(data)
+    def __init__(self, data=None, exists=True):
+        self._data = dict(data or {})
+        self._exists = exists
 
     @property
     def exists(self):
-        return True
+        return self._exists
 
     def to_dict(self):
         return dict(self._data)
@@ -30,6 +31,8 @@ class _Doc:
         self._store[self._id].update(dict(updates))
 
     def get(self):
+        if self._id not in self._store:
+            return _Snap(exists=False)
         return _Snap(self._store[self._id])
 
 
@@ -67,9 +70,16 @@ def test_kb_crud_endpoints_unit(monkeypatch):
     monkeypatch.setenv("API_KEY", "test-key")
 
     # Create
+    create_payload = {
+        "document_id": "doc-crud-1",
+        "parent_id": "root",
+        "content": {"mime_type": "text/plain", "body": "Hello KB"},
+        "metadata": {"title": "Hello KB", "source": "unit"},
+        "is_human_readable": True,
+    }
     r = client.post(
         "/documents",
-        json={"content": "Hello KB", "metadata": {"source": "unit"}},
+        json=create_payload,
         headers={"x-api-key": "test-key"},
     )
     assert r.status_code == 200

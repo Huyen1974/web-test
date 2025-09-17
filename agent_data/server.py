@@ -5,13 +5,13 @@ Agent Data Langroid Server - FastAPI server for agent data operations
 import json
 import logging
 import os
-from datetime import UTC
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Path
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import Counter, Histogram
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from starlette_prometheus import PrometheusMiddleware, metrics
 
 from agent_data.main import AgentData, AgentDataConfig
@@ -104,9 +104,38 @@ class MessageResponse(BaseModel):
     session_id: str | None = None
 
 
+class DocumentContent(BaseModel):
+    """Content payload for knowledge documents."""
+
+    mime_type: str = Field(
+        ..., pattern=r"^(text/markdown|text/plain|application/json)$"
+    )
+    body: str
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class DocumentMetadata(BaseModel):
+    """Metadata describing a knowledge document."""
+
+    title: str
+    tags: list[str] | None = None
+    source: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
 class DocumentCreate(BaseModel):
-    content: str
-    metadata: dict | None = None
+    """Request model for create_document MCP action."""
+
+    document_id: str
+    parent_id: str
+    content: DocumentContent
+    metadata: DocumentMetadata
+    is_human_readable: bool = False
+    created_at: datetime | None = None
+
+    model_config = ConfigDict(extra="allow")
 
 
 class DocumentUpdate(BaseModel):
@@ -117,6 +146,7 @@ class DocumentUpdate(BaseModel):
 class DocumentResponse(BaseModel):
     id: str
     status: str
+    revision: int | None = None
 
 
 # Initialize a single AgentData instance (reuse across requests)
@@ -362,27 +392,59 @@ def _firestore():
     return db
 
 
+def _error(status: int, code: str, message: str, **details) -> HTTPException:
+    """Helper to generate MCP-style error envelopes."""
+
+    return HTTPException(
+        status_code=status,
+        detail={"code": code, "message": message, "details": details or {}},
+    )
+
+
 @app.post("/documents", response_model=DocumentResponse)
 async def create_document(payload: DocumentCreate, _=Depends(require_api_key)):
     try:
         db = _firestore()
-        doc_id = str(uuid4())
-        now = __import__("datetime").datetime.now(UTC).isoformat()
-        data = {
-            "content": payload.content,
-            "metadata": payload.metadata or {},
-            "created_at": now,
-            "updated_at": now,
+        doc_id = payload.document_id
+        doc_ref = db.collection(KB_COLLECTION).document(doc_id)
+        snapshot = doc_ref.get()
+        if getattr(snapshot, "exists", False):
+            raise _error(
+                status=409,
+                code="CONFLICT",
+                message="Document already exists",
+                document_id=doc_id,
+            )
+
+        created_at = payload.created_at or datetime.now(UTC)
+        now_iso = created_at.isoformat()
+        document_data = {
+            "document_id": doc_id,
+            "parent_id": payload.parent_id,
+            "content": payload.content.model_dump(),
+            "metadata": payload.metadata.model_dump(exclude_none=True),
+            "is_human_readable": payload.is_human_readable,
+            "created_at": now_iso,
+            "updated_at": now_iso,
             "deleted_at": None,
-            "vector_status": "skipped",  # placeholder unless vec store configured
+            "revision": 1,
+            "vector_status": "pending",
         }
-        db.collection(KB_COLLECTION).document(doc_id).set(data)
-        return DocumentResponse(id=doc_id, status="created")
+
+        doc_ref.set(document_data)
+        return DocumentResponse(id=doc_id, status="created", revision=1)
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Create document failed: {e}")
-        raise HTTPException(status_code=500, detail="Create document failed") from e
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "INTERNAL",
+                "message": "Create document failed",
+                "details": {"error": str(e)},
+            },
+        ) from e
 
 
 @app.put("/documents/{doc_id}", response_model=DocumentResponse)

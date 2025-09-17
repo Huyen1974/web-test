@@ -64,3 +64,67 @@ def test_health_endpoint_ok():
     assert resp.status_code == 200
     body = resp.json()
     assert {"status", "version", "langroid_available"}.issubset(body.keys())
+
+
+@pytest.mark.unit
+@patch("agent_data.server._firestore")
+def test_create_document_persists_payload(
+    mock_fs: MagicMock, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setenv("API_KEY", "secret")
+    client = TestClient(server.app)
+
+    doc_snapshot = MagicMock()
+    doc_snapshot.exists = False
+    doc_ref = MagicMock()
+    doc_ref.get.return_value = doc_snapshot
+    mock_fs.return_value.collection.return_value.document.return_value = doc_ref
+
+    payload = {
+        "document_id": "doc-123",
+        "parent_id": "root",
+        "content": {"mime_type": "text/markdown", "body": "# Intro"},
+        "metadata": {"title": "Intro Doc", "tags": ["intro"]},
+    }
+
+    resp = client.post("/documents", json=payload, headers={"x-api-key": "secret"})
+
+    assert resp.status_code == 200
+    doc_ref.set.assert_called_once()
+    stored = doc_ref.set.call_args[0][0]
+    assert stored["document_id"] == payload["document_id"]
+    assert stored["parent_id"] == payload["parent_id"]
+    assert stored["content"] == payload["content"]
+    assert stored["metadata"]["title"] == "Intro Doc"
+    assert stored["is_human_readable"] is False
+    assert stored["revision"] == 1
+    assert resp.json()["revision"] == 1
+
+
+@pytest.mark.unit
+@patch("agent_data.server._firestore")
+def test_create_document_conflict_returns_error(
+    mock_fs: MagicMock, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setenv("API_KEY", "secret")
+    client = TestClient(server.app)
+
+    doc_snapshot = MagicMock()
+    doc_snapshot.exists = True
+    doc_ref = MagicMock()
+    doc_ref.get.return_value = doc_snapshot
+    mock_fs.return_value.collection.return_value.document.return_value = doc_ref
+
+    payload = {
+        "document_id": "doc-123",
+        "parent_id": "root",
+        "content": {"mime_type": "text/plain", "body": "Hello"},
+        "metadata": {"title": "Hello"},
+    }
+
+    resp = client.post("/documents", json=payload, headers={"x-api-key": "secret"})
+
+    assert resp.status_code == 409
+    detail = resp.json().get("detail", {})
+    assert detail.get("code") == "CONFLICT"
+    assert detail.get("details", {}).get("document_id") == "doc-123"
