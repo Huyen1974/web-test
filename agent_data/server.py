@@ -6,12 +6,13 @@ import json
 import logging
 import os
 from datetime import UTC, datetime
+from typing import Any, Literal
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Path
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import Counter, Histogram
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from starlette_prometheus import PrometheusMiddleware, metrics
 
 from agent_data.main import AgentData, AgentDataConfig
@@ -81,16 +82,34 @@ class ChatMessage(BaseModel):
     session_id: str | None = None
 
 
-class ChatResponse(BaseModel):
-    """Unified response model exposing both keys used across tests.
+class QueryUsage(BaseModel):
+    """Usage metadata aligned with MCP v2 contract."""
 
-    Provides `response` and `content` with identical values, plus optional
-    `session_id` for request/response correlation.
+    latency_ms: int = 0
+    qdrant_hits: int = 0
+
+
+class QueryContextEntry(BaseModel):
+    """Context citation returned from knowledge queries."""
+
+    document_id: str
+    snippet: str | None = None
+    score: float | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class ChatResponse(BaseModel):
+    """Unified response model for ingest/query actions.
+
+    Maintains backward-compatible `response`/`content` fields while extending
+    with MCP-aligned context and usage metadata.
     """
 
     response: str
     content: str
     session_id: str | None = None
+    context: list[QueryContextEntry] = Field(default_factory=list)
+    usage: QueryUsage | None = None
 
 
 # Backward-compatible aliases expected by legacy unit tests
@@ -159,6 +178,70 @@ class DocumentResponse(BaseModel):
     id: str
     status: str
     revision: int | None = None
+
+
+class QueryFilters(BaseModel):
+    tags: list[str] | None = None
+    tenant_id: str | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class QueryContextHints(BaseModel):
+    preferred_format: Literal["markdown", "plain"] | None = None
+    language: str | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class QueryRouting(BaseModel):
+    allow_external_search: bool = False
+    max_latency_ms: int = Field(default=4000, ge=1000, le=10000)
+    noop_qdrant: bool = False
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class QueryKnowledgeRequest(BaseModel):
+    query: str | None = None
+    text: str | None = None
+    message: str | None = None
+    filters: QueryFilters | None = None
+    top_k: int = Field(default=5, ge=1, le=20)
+    context_hints: QueryContextHints | None = None
+    routing: QueryRouting | None = None
+    session_id: str | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def _normalize_query(
+        cls, values: "QueryKnowledgeRequest"
+    ) -> "QueryKnowledgeRequest":
+        # Ensure `query` is populated for downstream logic by falling back to legacy keys.
+        if not values.query:
+            candidate = values.text or values.message
+            if candidate:
+                values.query = candidate
+        return values
+
+    def normalized_query(self) -> str:
+        return (self.query or self.text or self.message or "").strip()
+
+
+class DocumentMovePosition(BaseModel):
+    ordering: int | None = None
+    before: str | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class DocumentMoveRequest(BaseModel):
+    document_id: str
+    new_parent_id: str
+    position: DocumentMovePosition | None = None
+
+    model_config = ConfigDict(extra="forbid")
 
 
 # Initialize a single AgentData instance (reuse across requests)
@@ -297,25 +380,38 @@ async def ingest(message: ChatMessage):
 
 
 @app.post("/chat", response_model=ChatResponse)
-async def chat(message: ChatMessage):
-    """Chat endpoint for agent interactions (no ingestion)."""
-    try:
-        user_text = (message.text or message.message or "").strip()
-        session_id = message.session_id or str(uuid4())
+async def query_knowledge(payload: QueryKnowledgeRequest):
+    """Query knowledge base using RAG flow per MCP contract."""
 
-        # Bind session memory (if Firestore available)
+    import time
+
+    try:
+        query_text = payload.normalized_query()
+        if not query_text:
+            raise _error(400, "INVALID_ARGUMENT", "Query text must not be empty")
+
+        session_id = payload.session_id or str(uuid4())
+
+        # Bind session memory when Firestore-backed history is available
         try:
             agent.set_session(session_id)
             if getattr(agent, "history", None) is not None:
-                agent.history.add_messages({"role": "user", "content": user_text})  # type: ignore[attr-defined]
+                agent.history.add_messages(  # type: ignore[attr-defined]
+                    {"role": "user", "content": query_text}
+                )
         except Exception:
             pass
 
-        # Handle simple natural-language ingestion command for local fixture
+        routing = payload.routing or QueryRouting()
+        preferred_format = (
+            payload.context_hints.preferred_format if payload.context_hints else None
+        )
+
+        # Retain legacy natural-language ingestion shortcut to aid local E2E flows
         prefix = "please ingest from "
-        lower_text = user_text.lower()
+        lower_text = query_text.lower()
         if lower_text.startswith(prefix):
-            candidate = user_text[len(prefix) :].strip()
+            candidate = query_text[len(prefix) :].strip()
             if (
                 "huyen1974-agent-data-knowledge-test" in candidate
                 and candidate.endswith("/e2e_doc.txt")
@@ -332,39 +428,69 @@ async def chat(message: ChatMessage):
                         )
                         msg = "Simulated local ingestion of E2E document fixture."
                         return ChatResponse(
-                            response=msg, content=msg, session_id=session_id
+                            response=msg,
+                            content=msg,
+                            session_id=session_id,
+                            usage=QueryUsage(latency_ms=0, qdrant_hits=0),
                         )
                 except Exception:
-                    # Fall through to normal reply if fixture not available
                     pass
 
-        # Normal agent reply path with deterministic fallback used in tests
-        import time
-
+        noop_qdrant = (
+            routing.noop_qdrant or getattr(agent.config, "vecdb", None) is None
+        )
         _t0 = time.perf_counter()
-        agent_reply = agent.llm_response(user_text)
-        _dt = max(0.0, time.perf_counter() - _t0)
-        try:
-            RAG_LATENCY.observe(_dt)
-        except Exception:
-            pass
+        contexts: list[QueryContextEntry] = []
+        if not noop_qdrant:
+            contexts = _retrieve_query_context(
+                query=query_text,
+                filters=payload.filters,
+                top_k=payload.top_k,
+            )
+
+        qdrant_hits = len(contexts) if not noop_qdrant else 0
+
+        if contexts:
+            context_text = "\n\n".join(
+                f"Source: {ctx.document_id}\n{ctx.snippet or ''}" for ctx in contexts
+            )
+            llm_input = (
+                "You are a knowledge base assistant. Use the provided context to "
+                "answer the user's question accurately.\n\n"
+                f"Context:\n{context_text}\n\nQuestion: {query_text}"
+            )
+        else:
+            llm_input = query_text
+
+        agent_reply = agent.llm_response(llm_input)
         reply_text = (getattr(agent_reply, "content", None) or "").strip()
 
-        # If agent gives an unhelpful/unknown answer, craft a stable fallback
         if not reply_text or reply_text.upper() in {"DO-NOT-KNOW", "UNKNOWN"}:
             if getattr(agent, "last_ingested_text", None) and (
-                "langroid" in user_text.lower() or "document" in user_text.lower()
+                "langroid" in query_text.lower() or "document" in query_text.lower()
             ):
                 reply_text = (
                     "Based on the ingested document, Langroid is a framework for "
                     "building multi-agent systems."
                 )
             else:
-                reply_text = f"Echo: {user_text}"
+                reply_text = f"Echo: {query_text}"
+
+        if preferred_format == "plain":
+            reply_text = " ".join(reply_text.split())
+
+        latency_ms = int((time.perf_counter() - _t0) * 1000)
+        usage = QueryUsage(latency_ms=latency_ms, qdrant_hits=qdrant_hits)
+
+        if not reply_text and not contexts:
+            # Align with spec guidance for empty retrieval results
+            reply_text = ""
 
         try:
             if getattr(agent, "history", None) is not None:
-                agent.history.add_messages({"role": "assistant", "content": reply_text})  # type: ignore[attr-defined]
+                agent.history.add_messages(  # type: ignore[attr-defined]
+                    {"role": "assistant", "content": reply_text}
+                )
         except Exception:
             pass
 
@@ -373,11 +499,22 @@ async def chat(message: ChatMessage):
         except Exception:
             pass
 
+        try:
+            RAG_LATENCY.observe(latency_ms / 1000.0)
+        except Exception:
+            pass
+
         return ChatResponse(
-            response=reply_text, content=reply_text, session_id=session_id
+            response=reply_text,
+            content=reply_text,
+            session_id=session_id,
+            context=contexts,
+            usage=usage,
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Chat endpoint failed: {e}")
+        logger.error(f"Query knowledge failed: {e}")
         raise HTTPException(status_code=500, detail="Chat processing failed") from e
 
 
@@ -411,6 +548,132 @@ def _error(status: int, code: str, message: str, **details) -> HTTPException:
         status_code=status,
         detail={"code": code, "message": message, "details": details or {}},
     )
+
+
+def _retrieve_query_context(
+    *, query: str, filters: QueryFilters | None, top_k: int
+) -> list[QueryContextEntry]:
+    """Fetch candidate documents to ground the knowledge query.
+
+    Aims for graceful degradation when Firestore/Qdrant are unavailable by
+    returning an empty context instead of bubbling internal errors.
+    """
+
+    try:
+        db = _firestore()
+    except HTTPException:
+        return []
+
+    try:
+        collection = db.collection(KB_COLLECTION)
+    except Exception as exc:
+        logger.warning("Failed to access collection for query context: %s", exc)
+        return []
+
+    # Prefer Firestore cursor `.stream()`; fall back to empty if unsupported.
+    try:
+        stream_fn = getattr(collection, "stream", None)
+        snapshots = list(stream_fn()) if callable(stream_fn) else []
+    except Exception as exc:
+        logger.warning("Failed to stream documents for query context: %s", exc)
+        return []
+
+    contexts: list[QueryContextEntry] = []
+    query_lc = query.lower()
+    for snap in snapshots:
+        try:
+            data = snap.to_dict() if hasattr(snap, "to_dict") else {}
+        except Exception:
+            data = {}
+
+        if not data or data.get("deleted_at") is not None:
+            continue
+
+        metadata = data.get("metadata") or {}
+        tags = metadata.get("tags") if isinstance(metadata, dict) else None
+        if filters and filters.tags:
+            if not isinstance(tags, list) or not set(filters.tags).intersection(tags):
+                continue
+        if filters and filters.tenant_id:
+            tenant_id = (
+                metadata.get("tenant_id") if isinstance(metadata, dict) else None
+            )
+            if tenant_id != filters.tenant_id:
+                continue
+
+        content = data.get("content") or {}
+        body = content.get("body") if isinstance(content, dict) else None
+        if isinstance(body, str):
+            snippet = body[:200]
+        else:
+            snippet = None
+
+        # Simple heuristic: ensure snippet loosely matches query keywords.
+        if snippet and query_lc not in snippet.lower():
+            # Allow fallback if no better context collected yet.
+            if contexts:
+                continue
+
+        contexts.append(
+            QueryContextEntry(
+                document_id=data.get("document_id") or getattr(snap, "id", "unknown"),
+                snippet=snippet,
+                score=data.get("score") or 0.0,
+                metadata=metadata if isinstance(metadata, dict) else None,
+            )
+        )
+        if len(contexts) >= top_k:
+            break
+
+    return contexts
+
+
+def _assert_move_target_valid(*, db, document_id: str, new_parent_id: str) -> None:
+    """Validate that move target exists and will not create cycles."""
+
+    root_sentinels = {None, "", "root"}
+    if new_parent_id in root_sentinels:
+        return
+
+    parent_ref = db.collection(KB_COLLECTION).document(new_parent_id)
+    parent_snapshot = parent_ref.get()
+    if not getattr(parent_snapshot, "exists", False):
+        raise _error(
+            404,
+            "NOT_FOUND",
+            "Parent document not found",
+            parent_id=new_parent_id,
+        )
+
+    lineage_seen: set[str] = set()
+    current_id: str | None = new_parent_id
+    safety_counter = 0
+    while current_id and current_id not in root_sentinels and safety_counter < 100:
+        if current_id == document_id:
+            raise _error(
+                400,
+                "INVALID_ARGUMENT",
+                "Move would create a cycle",
+                document_id=document_id,
+                parent_id=new_parent_id,
+            )
+        if current_id in lineage_seen:
+            # Detected existing cycle in stored data; abort move.
+            raise _error(
+                409,
+                "CONFLICT",
+                "Detected existing cycle in document ancestry",
+                parent_id=current_id,
+            )
+        lineage_seen.add(current_id)
+
+        ancestor_ref = db.collection(KB_COLLECTION).document(current_id)
+        ancestor_snapshot = ancestor_ref.get()
+        if not getattr(ancestor_snapshot, "exists", False):
+            break
+        ancestor_data = ancestor_snapshot.to_dict() or {}
+        current_id = ancestor_data.get("parent_id")
+        safety_counter += 1
 
 
 @app.post("/documents", response_model=DocumentResponse)
@@ -535,6 +798,86 @@ async def update_document(
             detail={
                 "code": "INTERNAL",
                 "message": "Update document failed",
+                "details": {"error": str(e)},
+            },
+        ) from e
+
+
+@app.post("/documents/{doc_id}/move", response_model=DocumentResponse)
+async def move_document(
+    doc_id: str = Path(..., min_length=1),
+    payload: DocumentMoveRequest | None = None,
+    _=Depends(require_api_key),
+):
+    try:
+        if payload is None:
+            raise _error(400, "INVALID_ARGUMENT", "Move payload is required")
+        if payload.document_id and payload.document_id != doc_id:
+            raise _error(
+                400,
+                "INVALID_ARGUMENT",
+                "Path document_id and payload.document_id mismatch",
+                document_id=payload.document_id,
+            )
+
+        db = _firestore()
+        doc_ref = db.collection(KB_COLLECTION).document(doc_id)
+        snapshot = doc_ref.get()
+        if not getattr(snapshot, "exists", False):
+            raise _error(
+                404,
+                "NOT_FOUND",
+                "Document not found",
+                document_id=doc_id,
+            )
+
+        current = snapshot.to_dict() or {}
+        if current.get("deleted_at") is not None:
+            raise _error(
+                409,
+                "CONFLICT",
+                "Cannot move a deleted document",
+                document_id=doc_id,
+            )
+
+        new_parent_id = payload.new_parent_id
+        if new_parent_id == doc_id:
+            raise _error(
+                400,
+                "INVALID_ARGUMENT",
+                "Document cannot be moved under itself",
+                document_id=doc_id,
+            )
+
+        _assert_move_target_valid(
+            db=db, document_id=doc_id, new_parent_id=new_parent_id
+        )
+
+        now_iso = datetime.now(UTC).isoformat()
+        next_revision = (current.get("revision") or 0) + 1
+        updates: dict[str, Any] = {
+            "parent_id": new_parent_id,
+            "updated_at": now_iso,
+            "revision": next_revision,
+        }
+
+        if payload.position:
+            if payload.position.ordering is not None:
+                updates["ordering"] = payload.position.ordering
+            if payload.position.before is not None:
+                updates["ordering_before"] = payload.position.before
+
+        doc_ref.update(updates)
+        return DocumentResponse(id=doc_id, status="moved", revision=next_revision)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Move document failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "INTERNAL",
+                "message": "Move document failed",
                 "details": {"error": str(e)},
             },
         ) from e

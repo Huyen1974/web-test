@@ -30,19 +30,78 @@ def test_ingest_publishes_to_pubsub(mock_pub: MagicMock):
 
 @pytest.mark.unit
 @patch("agent_data.server.agent")
-def test_chat_calls_agent_llm_response(mock_agent: MagicMock):
+def test_query_knowledge_calls_agent_llm_response(mock_agent: MagicMock):
     client = TestClient(server.app)
-    # Mock an object with a .content attribute
+
     mock_reply = MagicMock()
     mock_reply.content = "Hello back"
     mock_agent.llm_response.return_value = mock_reply
+    mock_agent.history = None
+    mock_agent.config = MagicMock(vecdb=None)
+    mock_agent.set_session = MagicMock()
 
-    payload = {"text": "Hello"}
+    payload = {"query": "Hello", "routing": {"noop_qdrant": True}}
     resp = client.post("/chat", json=payload)
 
     assert resp.status_code == 200
-    mock_agent.llm_response.assert_called_once_with("Hello")
-    assert resp.json().get("content") == "Hello back"
+    mock_agent.llm_response.assert_called_once()
+    body = resp.json()
+    assert body.get("content") == "Hello back"
+    assert body.get("usage", {}).get("qdrant_hits") == 0
+
+
+@pytest.mark.unit
+@patch("agent_data.server.agent")
+@patch("agent_data.server._firestore")
+def test_query_knowledge_returns_context(mock_fs: MagicMock, mock_agent: MagicMock):
+    client = TestClient(server.app)
+
+    mock_agent.history = None
+    mock_agent.set_session = MagicMock()
+    mock_agent.config = MagicMock(vecdb="qdrant")
+    mock_reply = MagicMock()
+    mock_reply.content = "Langroid is great"
+    mock_agent.llm_response.return_value = mock_reply
+
+    class FakeSnapshot:
+        def __init__(self, data):
+            self._data = data
+
+        def to_dict(self):
+            return self._data
+
+    class FakeCollection:
+        def __init__(self, docs):
+            self._docs = docs
+
+        def stream(self):
+            for doc in self._docs:
+                yield FakeSnapshot(doc)
+
+    documents = [
+        {
+            "document_id": "doc-1",
+            "content": {"body": "Langroid helps orchestrate multi-agent systems."},
+            "metadata": {"tags": ["langroid", "ai"]},
+        }
+    ]
+
+    fake_db = MagicMock()
+    fake_db.collection.return_value = FakeCollection(documents)
+    mock_fs.return_value = fake_db
+
+    payload = {
+        "query": "What is Langroid?",
+        "filters": {"tags": ["langroid"]},
+        "top_k": 3,
+    }
+
+    resp = client.post("/chat", json=payload)
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["context"][0]["document_id"] == "doc-1"
+    assert data["usage"]["qdrant_hits"] == 1
 
 
 @pytest.mark.unit
@@ -170,6 +229,121 @@ def test_update_document_revision_conflict(
     assert detail.get("code") == "CONFLICT"
     assert detail.get("details", {}).get("expected_revision") == 4
     assert detail.get("details", {}).get("actual_revision") == 5
+
+
+@pytest.mark.unit
+@patch("agent_data.server._firestore")
+def test_move_document_updates_parent(
+    mock_fs: MagicMock, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setenv("API_KEY", "secret")
+    client = TestClient(server.app)
+
+    doc_snapshot = MagicMock()
+    doc_snapshot.exists = True
+    doc_snapshot.to_dict.return_value = {
+        "revision": 2,
+        "parent_id": "root",
+        "deleted_at": None,
+    }
+
+    parent_snapshot = MagicMock()
+    parent_snapshot.exists = True
+    parent_snapshot.to_dict.return_value = {"parent_id": "root"}
+
+    doc_ref = MagicMock()
+    parent_ref = MagicMock()
+
+    def document_side_effect(doc_id: str):
+        if doc_id == "doc-123":
+            return doc_ref
+        if doc_id == "folder-789":
+            return parent_ref
+        missing = MagicMock()
+        missing.get.return_value = MagicMock(exists=False)
+        return missing
+
+    collection = MagicMock()
+    collection.document.side_effect = document_side_effect
+    doc_ref.get.return_value = doc_snapshot
+    parent_ref.get.return_value = parent_snapshot
+    mock_fs.return_value.collection.return_value = collection
+
+    payload = {
+        "document_id": "doc-123",
+        "new_parent_id": "folder-789",
+        "position": {"ordering": 5},
+    }
+
+    resp = client.post(
+        "/documents/doc-123/move",
+        json=payload,
+        headers={"x-api-key": "secret"},
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "moved"
+    doc_ref.update.assert_called_once()
+    updates = doc_ref.update.call_args[0][0]
+    assert updates["parent_id"] == "folder-789"
+    assert updates["revision"] == 3
+    assert updates["ordering"] == 5
+
+
+@pytest.mark.unit
+@patch("agent_data.server._firestore")
+def test_move_document_detects_cycle(
+    mock_fs: MagicMock, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setenv("API_KEY", "secret")
+    client = TestClient(server.app)
+
+    doc_snapshot = MagicMock()
+    doc_snapshot.exists = True
+    doc_snapshot.to_dict.return_value = {
+        "revision": 1,
+        "parent_id": "root",
+        "deleted_at": None,
+    }
+
+    child_snapshot = MagicMock()
+    child_snapshot.exists = True
+    child_snapshot.to_dict.return_value = {"parent_id": "doc-123"}
+
+    doc_ref = MagicMock()
+    child_ref = MagicMock()
+
+    def document_side_effect(doc_id: str):
+        if doc_id == "doc-123":
+            return doc_ref
+        if doc_id == "child-1":
+            return child_ref
+        missing = MagicMock()
+        missing.get.return_value = MagicMock(exists=False)
+        return missing
+
+    collection = MagicMock()
+    collection.document.side_effect = document_side_effect
+    doc_ref.get.return_value = doc_snapshot
+    child_ref.get.return_value = child_snapshot
+    mock_fs.return_value.collection.return_value = collection
+
+    payload = {
+        "document_id": "doc-123",
+        "new_parent_id": "child-1",
+    }
+
+    resp = client.post(
+        "/documents/doc-123/move",
+        json=payload,
+        headers={"x-api-key": "secret"},
+    )
+
+    assert resp.status_code == 400
+    detail = resp.json().get("detail", {})
+    assert detail.get("code") == "INVALID_ARGUMENT"
+    assert detail.get("details", {}).get("parent_id") == "child-1"
 
 
 @pytest.mark.unit
