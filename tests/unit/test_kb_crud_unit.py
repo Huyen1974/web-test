@@ -90,11 +90,23 @@ def test_kb_crud_endpoints_unit(monkeypatch):
     # Update
     r2 = client.put(
         f"/documents/{doc_id}",
-        json={"content": "Hello KB v2", "metadata": {"v": 2}},
+        json={
+            "document_id": doc_id,
+            "patch": {
+                "content": {
+                    "mime_type": "text/plain",
+                    "body": "Hello KB v2",
+                },
+                "metadata": {"title": "Hello KB", "v": 2},
+            },
+            "update_mask": ["content", "metadata"],
+            "last_known_revision": 1,
+        },
         headers={"x-api-key": "test-key"},
     )
     assert r2.status_code == 200
     assert r2.json()["status"] == "updated"
+    assert r2.json()["revision"] == 2
 
     # Soft delete
     r3 = client.delete(f"/documents/{doc_id}", headers={"x-api-key": "test-key"})

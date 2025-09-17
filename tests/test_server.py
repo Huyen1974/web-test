@@ -128,3 +128,72 @@ def test_create_document_conflict_returns_error(
     detail = resp.json().get("detail", {})
     assert detail.get("code") == "CONFLICT"
     assert detail.get("details", {}).get("document_id") == "doc-123"
+
+
+@pytest.mark.unit
+@patch("agent_data.server._firestore")
+def test_update_document_revision_conflict(
+    mock_fs: MagicMock, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setenv("API_KEY", "secret")
+    client = TestClient(server.app)
+
+    doc_snapshot = MagicMock()
+    doc_snapshot.exists = True
+    doc_snapshot.to_dict.return_value = {
+        "revision": 5,
+        "content": {"mime_type": "text/plain", "body": "Hello"},
+        "metadata": {"title": "Hello"},
+        "is_human_readable": False,
+    }
+    doc_ref = MagicMock()
+    doc_ref.get.return_value = doc_snapshot
+    mock_fs.return_value.collection.return_value.document.return_value = doc_ref
+
+    payload = {
+        "document_id": "doc-123",
+        "patch": {
+            "metadata": {"title": "Hello v2"},
+        },
+        "update_mask": ["metadata"],
+        "last_known_revision": 4,
+    }
+
+    resp = client.put(
+        "/documents/doc-123",
+        json=payload,
+        headers={"x-api-key": "secret"},
+    )
+
+    assert resp.status_code == 409
+    detail = resp.json().get("detail", {})
+    assert detail.get("code") == "CONFLICT"
+    assert detail.get("details", {}).get("expected_revision") == 4
+    assert detail.get("details", {}).get("actual_revision") == 5
+
+
+@pytest.mark.unit
+@patch("agent_data.server._firestore")
+def test_delete_document_marks_deleted(
+    mock_fs: MagicMock, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setenv("API_KEY", "secret")
+    client = TestClient(server.app)
+
+    doc_snapshot = MagicMock()
+    doc_snapshot.exists = True
+    doc_snapshot.to_dict.return_value = {"revision": 3}
+    doc_ref = MagicMock()
+    doc_ref.get.return_value = doc_snapshot
+    mock_fs.return_value.collection.return_value.document.return_value = doc_ref
+
+    resp = client.delete("/documents/doc-123", headers={"x-api-key": "secret"})
+
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "deleted"
+    assert resp.json()["revision"] == 4
+    doc_ref.update.assert_called_once()
+    updates = doc_ref.update.call_args[0][0]
+    assert updates["vector_status"] == "deleted"
+    assert updates["revision"] == 4
+    assert "deleted_at" in updates
