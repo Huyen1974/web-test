@@ -2,6 +2,23 @@
 
 set -euo pipefail
 
+if [[ -z "${AGENT_DATA_API_KEY:-}" ]]; then
+    if command -v gcloud >/dev/null 2>&1; then
+        echo "ℹ️  Fetching AGENT_DATA_API_KEY from Secret Manager" >&2
+        if ! AGENT_DATA_API_KEY=$(gcloud secrets versions access latest --secret="AGENT_DATA_API_KEY" 2>/tmp/save_report_gcloud_err); then
+            echo "❌ Failed to load AGENT_DATA_API_KEY via gcloud" >&2
+            cat /tmp/save_report_gcloud_err >&2 || true
+            rm -f /tmp/save_report_gcloud_err
+            exit 1
+        fi
+        rm -f /tmp/save_report_gcloud_err
+        export AGENT_DATA_API_KEY
+    else
+        echo "❌ AGENT_DATA_API_KEY is not set and gcloud is unavailable" >&2
+        exit 1
+    fi
+fi
+
 if [[ ${1:-} == "" || ${2:-} == "" ]]; then
     cat <<'USAGE' >&2
 Usage: save_report.sh <title> <report_file> [parent_id]
