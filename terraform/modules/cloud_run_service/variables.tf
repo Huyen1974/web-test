@@ -17,3 +17,15 @@ variable "image_path" {
   description = "Container image path in Artifact Registry"
   type        = string
 }
+
+variable "api_key_secret" {
+  description = "Optional Secret Manager secret name for the API key"
+  type        = string
+  default     = null
+}
+
+variable "api_key_secret_version" {
+  description = "Secret Manager version for the API key"
+  type        = string
+  default     = "latest"
+}

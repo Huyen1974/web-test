@@ -14,6 +14,19 @@ resource "google_cloud_run_v2_service" "default" {
   template {
     containers {
       image = var.image_path
+
+      dynamic "env" {
+        for_each = var.api_key_secret == null ? [] : [var.api_key_secret]
+        content {
+          name = "API_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = var.api_key_secret
+              version = var.api_key_secret_version
+            }
+          }
+        }
+      }
     }
   }
 }
