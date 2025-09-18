@@ -5,7 +5,7 @@
       "**/.*",
       "**/node_modules/**"
     ],
-    "public": "public",
+    "public": "dist",
     "rewrites": [
       {
         "destination": "/index.html",
