@@ -4,6 +4,18 @@ import pytest
 from fastapi.testclient import TestClient
 
 import agent_data.server as server
+from agent_data.vector_store import VectorSyncResult
+
+
+@pytest.fixture(autouse=True)
+def stub_vector_store(monkeypatch: pytest.MonkeyPatch):
+    store = MagicMock()
+    store.upsert_document.return_value = VectorSyncResult(status="skipped")
+    store.delete_document.return_value = VectorSyncResult(status="deleted")
+
+    monkeypatch.setattr(server.vector_store, "get_vector_store", lambda: store)
+    monkeypatch.setenv("API_KEY", "secret")
+    return store
 
 
 @pytest.mark.unit
@@ -128,7 +140,9 @@ def test_health_endpoint_ok():
 @pytest.mark.unit
 @patch("agent_data.server._firestore")
 def test_create_document_persists_payload(
-    mock_fs: MagicMock, monkeypatch: pytest.MonkeyPatch
+    mock_fs: MagicMock,
+    stub_vector_store: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
 ):
     monkeypatch.setenv("API_KEY", "secret")
     client = TestClient(server.app)
@@ -158,12 +172,16 @@ def test_create_document_persists_payload(
     assert stored["is_human_readable"] is False
     assert stored["revision"] == 1
     assert resp.json()["revision"] == 1
+    doc_ref.update.assert_called()
+    stub_vector_store.upsert_document.assert_called_once()
 
 
 @pytest.mark.unit
 @patch("agent_data.server._firestore")
 def test_create_document_conflict_returns_error(
-    mock_fs: MagicMock, monkeypatch: pytest.MonkeyPatch
+    mock_fs: MagicMock,
+    stub_vector_store: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
 ):
     monkeypatch.setenv("API_KEY", "secret")
     client = TestClient(server.app)
@@ -187,6 +205,41 @@ def test_create_document_conflict_returns_error(
     detail = resp.json().get("detail", {})
     assert detail.get("code") == "CONFLICT"
     assert detail.get("details", {}).get("document_id") == "doc-123"
+    stub_vector_store.upsert_document.assert_not_called()
+
+
+@patch("agent_data.server._firestore")
+def test_create_document_sets_vector_status_ready(
+    mock_fs: MagicMock,
+    stub_vector_store: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("API_KEY", "secret")
+    client = TestClient(server.app)
+
+    stub_vector_store.upsert_document.return_value = VectorSyncResult(status="ready")
+
+    doc_snapshot = MagicMock()
+    doc_snapshot.exists = False
+    doc_ref = MagicMock()
+    doc_ref.get.return_value = doc_snapshot
+    mock_fs.return_value.collection.return_value.document.return_value = doc_ref
+
+    payload = {
+        "document_id": "doc-456",
+        "parent_id": "root",
+        "content": {"mime_type": "text/plain", "body": "Content"},
+        "metadata": {"title": "Doc"},
+        "is_human_readable": True,
+    }
+
+    resp = client.post("/documents", json=payload, headers={"x-api-key": "secret"})
+
+    assert resp.status_code == 200
+    doc_ref.update.assert_called()
+    update_payload = doc_ref.update.call_args[0][0]
+    assert update_payload["vector_status"] == "ready"
+    assert update_payload.get("vector_error") is None
 
 
 @pytest.mark.unit
@@ -233,11 +286,65 @@ def test_update_document_revision_conflict(
 
 @pytest.mark.unit
 @patch("agent_data.server._firestore")
-def test_move_document_updates_parent(
-    mock_fs: MagicMock, monkeypatch: pytest.MonkeyPatch
+def test_update_document_syncs_vector(
+    mock_fs: MagicMock,
+    stub_vector_store: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
 ):
     monkeypatch.setenv("API_KEY", "secret")
     client = TestClient(server.app)
+
+    stub_vector_store.upsert_document.return_value = VectorSyncResult(status="ready")
+
+    doc_snapshot = MagicMock()
+    doc_snapshot.exists = True
+    doc_snapshot.to_dict.return_value = {
+        "revision": 1,
+        "content": {"mime_type": "text/plain", "body": "Old"},
+        "metadata": {"title": "Old"},
+        "is_human_readable": False,
+        "parent_id": "root",
+    }
+    doc_ref = MagicMock()
+    doc_ref.get.return_value = doc_snapshot
+    mock_fs.return_value.collection.return_value.document.return_value = doc_ref
+
+    payload = {
+        "document_id": "doc-123",
+        "patch": {
+            "content": {"mime_type": "text/plain", "body": "New body"},
+            "metadata": {"title": "New"},
+        },
+        "update_mask": ["content", "metadata"],
+        "last_known_revision": 1,
+    }
+
+    resp = client.put(
+        "/documents/doc-123",
+        json=payload,
+        headers={"x-api-key": "secret"},
+    )
+
+    assert resp.status_code == 200
+    stub_vector_store.upsert_document.assert_called_once()
+    vector_args = stub_vector_store.upsert_document.call_args.kwargs
+    assert vector_args["content"] == "New body"
+    assert vector_args["metadata"]["title"] == "New"
+    updates = doc_ref.update.call_args_list[-1][0][0]
+    assert updates["vector_status"] == "ready"
+
+
+@pytest.mark.unit
+@patch("agent_data.server._firestore")
+def test_move_document_updates_parent(
+    mock_fs: MagicMock,
+    stub_vector_store: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("API_KEY", "secret")
+    client = TestClient(server.app)
+
+    stub_vector_store.upsert_document.return_value = VectorSyncResult(status="ready")
 
     doc_snapshot = MagicMock()
     doc_snapshot.exists = True
@@ -245,6 +352,9 @@ def test_move_document_updates_parent(
         "revision": 2,
         "parent_id": "root",
         "deleted_at": None,
+        "content": {"body": "Original body"},
+        "metadata": {"title": "Original"},
+        "is_human_readable": False,
     }
 
     parent_snapshot = MagicMock()
@@ -284,11 +394,12 @@ def test_move_document_updates_parent(
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "moved"
-    doc_ref.update.assert_called_once()
-    updates = doc_ref.update.call_args[0][0]
+    assert doc_ref.update.call_count >= 1
+    updates = doc_ref.update.call_args_list[0][0][0]
     assert updates["parent_id"] == "folder-789"
     assert updates["revision"] == 3
     assert updates["ordering"] == 5
+    stub_vector_store.upsert_document.assert_called_once()
 
 
 @pytest.mark.unit
@@ -349,7 +460,9 @@ def test_move_document_detects_cycle(
 @pytest.mark.unit
 @patch("agent_data.server._firestore")
 def test_delete_document_marks_deleted(
-    mock_fs: MagicMock, monkeypatch: pytest.MonkeyPatch
+    mock_fs: MagicMock,
+    stub_vector_store: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
 ):
     monkeypatch.setenv("API_KEY", "secret")
     client = TestClient(server.app)
@@ -365,6 +478,7 @@ def test_delete_document_marks_deleted(
 
     assert resp.status_code == 200
     assert resp.json()["status"] == "deleted"
+    stub_vector_store.delete_document.assert_called_once_with("doc-123")
     assert resp.json()["revision"] == 4
     doc_ref.update.assert_called_once()
     updates = doc_ref.update.call_args[0][0]
