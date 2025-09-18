@@ -15,6 +15,7 @@ from prometheus_client import Counter, Histogram
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from starlette_prometheus import PrometheusMiddleware, metrics
 
+from agent_data import vector_store
 from agent_data.main import AgentData, AgentDataConfig
 
 try:
@@ -249,6 +250,50 @@ agent_config = AgentDataConfig()
 # Avoid external vector store dependencies in default server runtime
 agent_config.vecdb = None
 agent = AgentData(agent_config)
+
+
+def _sync_vector_entry(
+    *,
+    doc_ref,
+    document_id: str,
+    content: str | None,
+    metadata: dict[str, Any] | None,
+    parent_id: str | None,
+    is_human_readable: bool,
+) -> None:
+    """Best-effort synchronization of document vectors in Qdrant."""
+
+    if not isinstance(content, str) or not content.strip():
+        return
+
+    store = vector_store.get_vector_store()
+    result = store.upsert_document(
+        document_id=document_id,
+        content=content,
+        metadata=metadata,
+        parent_id=parent_id,
+        is_human_readable=is_human_readable,
+    )
+
+    if result.status == "skipped":
+        doc_ref.update({"vector_status": "skipped"})
+        return
+
+    update_payload: dict[str, Any] = {
+        "vector_status": result.status,
+        "updated_at": datetime.now(UTC).isoformat(),
+    }
+    if result.status == "error" and result.error:
+        update_payload["vector_error"] = result.error
+    else:
+        update_payload["vector_error"] = None
+    doc_ref.update(update_payload)
+
+
+def _delete_vector_entry(document_id: str) -> None:
+    result = vector_store.delete_document(document_id)
+    if result.status == "error":
+        logger.error("Failed to delete vector for %s: %s", document_id, result.error)
 
 
 # ---- Simple API-key auth dependency ----
@@ -707,6 +752,19 @@ async def create_document(payload: DocumentCreate, _=Depends(require_api_key)):
         }
 
         doc_ref.set(document_data)
+
+        try:
+            _sync_vector_entry(
+                doc_ref=doc_ref,
+                document_id=doc_id,
+                content=document_data.get("content", {}).get("body"),
+                metadata=document_data.get("metadata"),
+                parent_id=document_data.get("parent_id"),
+                is_human_readable=document_data.get("is_human_readable", False),
+            )
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.error("Vector synchronization failed for %s: %s", doc_id, exc)
+
         return DocumentResponse(id=doc_id, status="created", revision=1)
     except HTTPException:
         raise
@@ -786,6 +844,29 @@ async def update_document(
             raise _error(400, "INVALID_ARGUMENT", "update_mask empty or patch missing")
 
         doc_ref.update(updates)
+        merged_content = updates.get("content") or current.get("content") or {}
+        merged_metadata = updates.get("metadata") or current.get("metadata") or {}
+        merged_parent = updates.get("parent_id", current.get("parent_id"))
+        merged_hr = updates.get(
+            "is_human_readable", current.get("is_human_readable", False)
+        )
+
+        try:
+            _sync_vector_entry(
+                doc_ref=doc_ref,
+                document_id=doc_id,
+                content=(
+                    merged_content.get("body")
+                    if isinstance(merged_content, dict)
+                    else None
+                ),
+                metadata=merged_metadata if isinstance(merged_metadata, dict) else None,
+                parent_id=merged_parent,
+                is_human_readable=bool(merged_hr),
+            )
+        except Exception as exc:  # pragma: no cover
+            logger.error("Vector synchronization failed for %s: %s", doc_id, exc)
+
         return DocumentResponse(
             id=doc_id, status="updated", revision=updates["revision"]
         )
@@ -868,6 +949,28 @@ async def move_document(
                 updates["ordering_before"] = payload.position.before
 
         doc_ref.update(updates)
+        current["parent_id"] = new_parent_id
+        try:
+            _sync_vector_entry(
+                doc_ref=doc_ref,
+                document_id=doc_id,
+                content=(
+                    (current.get("content") or {}).get("body")
+                    if isinstance(current.get("content"), dict)
+                    else None
+                ),
+                metadata=(
+                    current.get("metadata")
+                    if isinstance(current.get("metadata"), dict)
+                    else None
+                ),
+                parent_id=new_parent_id,
+                is_human_readable=current.get("is_human_readable", False),
+            )
+        except Exception as exc:  # pragma: no cover
+            logger.error(
+                "Vector synchronization failed while moving %s: %s", doc_id, exc
+            )
         return DocumentResponse(id=doc_id, status="moved", revision=next_revision)
     except HTTPException:
         raise
@@ -905,6 +1008,10 @@ async def delete_document(
                 "revision": next_revision,
             }
         )
+        try:
+            _delete_vector_entry(doc_id)
+        except Exception as exc:  # pragma: no cover
+            logger.error("Vector deletion failed for %s: %s", doc_id, exc)
         return DocumentResponse(id=doc_id, status="deleted", revision=next_revision)
     except HTTPException:
         raise
