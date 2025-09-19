@@ -16,6 +16,7 @@ __pycache__/.*
 governance/logs/.*
 htmlcov/.*
 terraform/.*\.tfplan\.binary
+.*\.terraform.lock.hcl
 vendor/Langroid/.*
 venv/.*
 .*node_modules/.*
