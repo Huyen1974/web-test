@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Firebase Auth Test Harness</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      margin: 2rem;
+      background-color: #f5f5f5;
+      color: #222;
+    }
+    h1 {
+      margin-bottom: 1rem;
+    }
+    #log {
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 1rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 200px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Firebase Auth Test Harness</h1>
+  <p>Tự động kiểm thử đăng nhập Google và đăng xuất bằng Firebase.</p>
+  <pre id="log"></pre>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js';
+    import {
+      getAuth,
+      GoogleAuthProvider,
+      signInWithPopup,
+      signOut
+    } from 'https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js';
+
+    const firebaseConfig = {
+      apiKey: 'AIzaSyA3nEhCqAl7XsOljcDY_z9_7g02NG8SAwY',
+      authDomain: 'github-chatgpt-ggcloud.firebaseapp.com',
+      projectId: 'github-chatgpt-ggcloud',
+      storageBucket: 'github-chatgpt-ggcloud.appspot.com',
+      messagingSenderId: '812872501910',
+      appId: '1:812872501910:web:71a92d4200a187c55250b7',
+      measurementId: 'G-MVYG2LN378'
+    };
+
+    const logElement = document.getElementById('log');
+    const log = (message) => {
+      const timestamp = new Date().toISOString();
+      logElement.textContent += `[${timestamp}] ${message}\n`;
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
+
+    async function runAuthTest() {
+      try {
+        log('Bắt đầu kiểm thử đăng nhập...');
+        const result = await signInWithPopup(auth, provider);
+        const { displayName, email } = result.user;
+        log(`Đăng nhập thành công: ${displayName || 'Không tên hiển thị'} <${email || 'Không email'}>`);
+
+        await signOut(auth);
+        log('Đăng xuất thành công.');
+      } catch (error) {
+        log(`Lỗi: ${error.message}`);
+        console.error(error);
+      }
+    }
+
+    window.runAuthTest = runAuthTest;
+    window.addEventListener('load', runAuthTest);
+  </script>
+</body>
+</html>
