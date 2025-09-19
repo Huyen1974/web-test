@@ -42,7 +42,7 @@ class _CaptureHandler(BaseHTTPRequestHandler):
 @pytest.mark.unit
 def test_save_report_script_posts_valid_payload(tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parents[1]
-    script_path = repo_root / "scripts" / "client" / "save_report.sh"
+    script_path = repo_root / "tools" / "save_report.sh"
     assert script_path.is_file()
 
     class _Server(TCPServer):
@@ -97,7 +97,7 @@ def test_save_report_script_posts_valid_payload(tmp_path: Path) -> None:
 @pytest.mark.unit
 def test_save_report_script_fetches_api_key_when_missing(tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parents[1]
-    script_path = repo_root / "scripts" / "client" / "save_report.sh"
+    script_path = repo_root / "tools" / "save_report.sh"
 
     class _Server(TCPServer):
         allow_reuse_address = True
@@ -149,7 +149,7 @@ def test_save_report_script_fetches_api_key_when_missing(tmp_path: Path) -> None
 @pytest.mark.unit
 def test_save_report_script_sets_visible_flag(tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parents[1]
-    script_path = repo_root / "scripts" / "client" / "save_report.sh"
+    script_path = repo_root / "tools" / "save_report.sh"
 
     class _Server(TCPServer):
         allow_reuse_address = True
