@@ -284,7 +284,7 @@ async function handleEmailSignup() {
   }
 }
 
-async function signOutUser() {
+async function handleLogout() {
   try {
     await signOut(auth);
     showSnackbar('Đã đăng xuất khỏi hệ thống.', 'info');
@@ -438,7 +438,7 @@ onMounted(() => {
           variant="text"
           color="primary"
           prepend-icon="mdi-logout"
-          @click="signOutUser"
+          @click="handleLogout"
         >
           Đăng xuất
         </v-btn>
