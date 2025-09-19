@@ -1,12 +1,9 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from settings import settings
 from google.cloud import firestore
+from settings import settings
 
-app = FastAPI(
-    title=settings.APP_NAME,
-    version="1.0.0"
-)
+app = FastAPI(title=settings.APP_NAME, version="1.0.0")
 
 # Add CORS middleware
 app.add_middleware(
@@ -20,24 +17,26 @@ app.add_middleware(
 # Khởi tạo kết nối tới Firestore
 db = firestore.Client()
 
+
 def format_tree(docs):
     """Helper function to format Firestore docs into a tree structure for Vuetify."""
-    nodes = {doc.id: {**doc.to_dict(), 'id': doc.id, 'children': []} for doc in docs}
+    nodes = {doc.id: {**doc.to_dict(), "id": doc.id, "children": []} for doc in docs}
     tree = []
-    for doc_id, node_data in nodes.items():
-        parent_id = node_data.get('parent')
+    for _doc_id, node_data in nodes.items():
+        parent_id = node_data.get("parent")
         if parent_id in nodes:
-            nodes[parent_id]['children'].append(node_data)
+            nodes[parent_id]["children"].append(node_data)
         else:
             tree.append(node_data)
     return tree
+
 
 @app.get("/api/v1/knowledge-tree", tags=["Knowledge Tree"])
 def get_knowledge_tree():
     """
     Retrieves the entire knowledge tree structure from Firestore.
     """
-    docs_ref = db.collection(u'knowledge_documents').stream()
+    docs_ref = db.collection("knowledge_documents").stream()
     tree_data = format_tree(docs_ref)
     return {"tree": tree_data}
 
@@ -47,7 +46,7 @@ def get_document(document_id: str):
     """Fetch a knowledge document from the canonical kb_documents collection."""
 
     try:
-        doc_ref = db.collection(u'kb_documents').document(document_id)
+        doc_ref = db.collection("kb_documents").document(document_id)
         snapshot = doc_ref.get()
     except Exception as exc:  # pragma: no cover - network/credential errors
         raise HTTPException(status_code=500, detail=f"Firestore error: {exc}") from exc
@@ -66,10 +65,12 @@ def get_document(document_id: str):
         "vector_status": data.get("vector_status"),
     }
 
+
 @app.get("/healthz", tags=["Health"])
 def health_check():
     """Confirms the API is running."""
     return {"status": "ok", "app_name": settings.APP_NAME}
+
 
 @app.get("/readyz", tags=["Health"])
 def readiness_check():
