@@ -25,7 +25,7 @@ log() { printf "%s %s\n" "[$CLI_ID]" "$*"; }
 
 # --- (A) 3.1 GitHub CLI Auth Bootstrap (Cursor & Operators) -------------------
 # Rules recap (verify/apply):
-# PROJECT="github-chatgpt-ggcloud" SECRET_NAME="gh_pat_sync_secrets" scripts/bootstrap_gh.sh verify|apply
+# PROJECT="github-chatgpt-ggcloud" SECRET_NAME="gh_pat_sync_secrets" tools/bootstrap_gh.sh verify|apply
 
 GH_PROJECT="github-chatgpt-ggcloud"
 GH_SECRET="gh_pat_sync_secrets"

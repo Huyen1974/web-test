@@ -5,7 +5,7 @@
 # - Root (Mac): /Users/nmhuyen/Documents/Manual Deploy/agent-data-langroid
 # - Repo: Huyen1974/agent-data-test
 # - Purpose: Close M5 by merging monitoring workflows after CI green, then re-audit on main.
-# - Bootstrap policy: scripts/bootstrap_gh.sh MUST exist & match .ci/bootstrap_gh.sha256. Do NOT create/modify.
+# - Bootstrap policy: tools/bootstrap_gh.sh MUST exist & match .ci/bootstrap_gh.sha256. Do NOT create/modify.
 # - Safety: No secret writes. Remote operations via gh. Idempotent. Exit 1 on any FAIL.
 
 set -euo pipefail
@@ -19,7 +19,7 @@ log(){ printf "[%s] %s\n" "$CLI_ID" "$*"; }
 
 # ——— Guard: Bootstrap must exist & match checksum; never (re)create ————————
 
-BOOTSTRAP="scripts/bootstrap_gh.sh"
+BOOTSTRAP="tools/bootstrap_gh.sh"
 CS_FILE=".ci/bootstrap_gh.sha256"
 [ -f "$BOOTSTRAP" ] || { log "FAIL: $BOOTSTRAP missing. Abort."; exit 1; }
 [ -f "$CS_FILE"   ] || { log "FAIL: $CS_FILE missing. Abort."; exit 1; }
