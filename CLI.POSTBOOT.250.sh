@@ -4,12 +4,12 @@ set -Eeuo pipefail
 export PROJECT="${PROJECT:-github-chatgpt-ggcloud}"
 export SECRET_NAME="${SECRET_NAME:-gh_pat_sync_secrets}"
 set +e
-bash scripts/bootstrap_gh.sh verify
+bash tools/bootstrap_gh.sh verify
 RC=$?
 set -e
 if [ $RC -ne 0 ]; then
-  bash scripts/bootstrap_gh.sh apply
-  bash scripts/bootstrap_gh.sh verify
+  bash tools/bootstrap_gh.sh apply
+  bash tools/bootstrap_gh.sh verify
 fi
 bash scripts/sop_bootstrap_check.sh
 MARKER=".ci/.bootstrap_done"; PASS="false"

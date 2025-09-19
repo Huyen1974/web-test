@@ -14,7 +14,7 @@ log(){ printf "[%s] %s\n" "$CLI_ID" "$*"; }
 # Guard: bootstrap must exist & must NOT be recreated/modified
 # —————————————————————————————————————————————————————————————————————————————
 
-BOOTSTRAP="scripts/bootstrap_gh.sh"
+BOOTSTRAP="tools/bootstrap_gh.sh"
 [ -f "$BOOTSTRAP" ] || { log "FAIL: $BOOTSTRAP must already exist (do NOT create it)."; exit 1; }
 chmod +x "$BOOTSTRAP" || true
 

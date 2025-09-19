@@ -21,7 +21,7 @@ log(){ printf "[%s] %s\n" "$CLI_ID" "$*"; }
 
 if ! gh auth status -h github.com >/dev/null 2>&1; then
   log "FAIL: gh not authenticated. Run existing bootstrap manually, e.g.:"
-  log 'PROJECT="github-chatgpt-ggcloud" SECRET_NAME="gh_pat_sync_secrets" scripts/bootstrap_gh.sh apply'
+  log 'PROJECT="github-chatgpt-ggcloud" SECRET_NAME="gh_pat_sync_secrets" tools/bootstrap_gh.sh apply'
   exit 1
 fi
 

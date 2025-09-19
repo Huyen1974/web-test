@@ -5,7 +5,7 @@
 # - Root (Mac): /Users/nmhuyen/Documents/Manual Deploy/agent-data-langroid
 # - Repo: Huyen1974/agent-data-test
 # - Goal: Resolve PR mergeState=DIRTY by syncing feature branch with main (safe rules), then merge and audit on main to close M5.
-# - Policy: DO NOT create/modify scripts/bootstrap_gh.sh. Verify checksum before use. Idempotent. Exit 1 on any FAIL.
+# - Policy: DO NOT create/modify tools/bootstrap_gh.sh. Verify checksum before use. Idempotent. Exit 1 on any FAIL.
 # - Scope: Only touches the monitoring workflows PR (feat/m5-monitoring-workflows-*). No secret writes. Qdrant untouched.
 #
 # What this CLI does:
@@ -39,7 +39,7 @@ git rev-parse --git-dir >/dev/null 2>&1 || { log "FAIL: not inside a Git repo"; 
 
 # ——— Guard: Bootstrap must exist & match checksum (never re-create) ————————
 
-BOOTSTRAP="scripts/bootstrap_gh.sh"
+BOOTSTRAP="tools/bootstrap_gh.sh"
 CS_FILE=".ci/bootstrap_gh.sha256"
 [ -f "$BOOTSTRAP" ] || { log "FAIL: $BOOTSTRAP missing. Abort."; exit 1; }
 [ -f "$CS_FILE" ] || { log "FAIL: $CS_FILE missing. Abort."; exit 1; }
@@ -122,7 +122,7 @@ if [ "$goto_post_merge" = false ]; then
     if [ $MERGE_RC -ne 0 ]; then
       # Resolve allowed files
       CONFLICTS="$(git ls-files -u | awk '{print $4}' | sort -u || true)"
-      SAFE_FILES=".github/workflows/artifact-audit.yml .github/workflows/secrets-audit.yml scripts/bootstrap_gh.sh .ci/bootstrap_gh.sha256"
+      SAFE_FILES=".github/workflows/artifact-audit.yml .github/workflows/secrets-audit.yml tools/bootstrap_gh.sh .ci/bootstrap_gh.sha256"
       for f in $CONFLICTS; do
         case " $SAFE_FILES " in
           *" $f "*) git checkout --ours "$f" && git add "$f" && log "Resolved (ours): $f" ;;
