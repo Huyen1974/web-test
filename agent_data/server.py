@@ -230,17 +230,10 @@ class QueryKnowledgeRequest(BaseModel):
         return (self.query or self.text or self.message or "").strip()
 
 
-class DocumentMovePosition(BaseModel):
-    ordering: int | None = None
-    before: str | None = None
-
-    model_config = ConfigDict(extra="forbid")
-
-
 class DocumentMoveRequest(BaseModel):
-    document_id: str
+    """Payload for moving a document under a different parent."""
+
     new_parent_id: str
-    position: DocumentMovePosition | None = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -902,13 +895,6 @@ async def move_document(
     try:
         if payload is None:
             raise _error(400, "INVALID_ARGUMENT", "Move payload is required")
-        if payload.document_id and payload.document_id != doc_id:
-            raise _error(
-                400,
-                "INVALID_ARGUMENT",
-                "Path document_id and payload.document_id mismatch",
-                document_id=payload.document_id,
-            )
 
         db = _firestore()
         doc_ref = db.collection(KB_COLLECTION).document(doc_id)
@@ -950,12 +936,6 @@ async def move_document(
             "updated_at": now_iso,
             "revision": next_revision,
         }
-
-        if payload.position:
-            if payload.position.ordering is not None:
-                updates["ordering"] = payload.position.ordering
-            if payload.position.before is not None:
-                updates["ordering_before"] = payload.position.before
 
         doc_ref.update(updates)
         current["parent_id"] = new_parent_id

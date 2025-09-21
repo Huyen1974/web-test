@@ -430,11 +430,7 @@ def test_move_document_updates_parent(
     parent_ref.get.return_value = parent_snapshot
     mock_fs.return_value.collection.return_value = collection
 
-    payload = {
-        "document_id": "doc-123",
-        "new_parent_id": "folder-789",
-        "position": {"ordering": 5},
-    }
+    payload = {"new_parent_id": "folder-789"}
 
     resp = client.post(
         "/documents/doc-123/move",
@@ -449,7 +445,67 @@ def test_move_document_updates_parent(
     updates = doc_ref.update.call_args_list[0][0][0]
     assert updates["parent_id"] == "folder-789"
     assert updates["revision"] == 3
-    assert updates["ordering"] == 5
+    stub_vector_store.upsert_document.assert_called_once()
+
+
+@pytest.mark.unit
+@patch("agent_data.server._firestore")
+def test_move_document_minimal_payload_updates_parent(
+    mock_fs: MagicMock,
+    stub_vector_store: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Ensure the move API only requires new_parent_id and updates Firestore."""
+
+    monkeypatch.setenv("API_KEY", "secret")
+    client = TestClient(server.app)
+
+    stub_vector_store.upsert_document.return_value = VectorSyncResult(status="ready")
+
+    doc_snapshot = MagicMock()
+    doc_snapshot.exists = True
+    doc_snapshot.to_dict.return_value = {
+        "revision": 7,
+        "parent_id": "folder-old",
+        "deleted_at": None,
+        "content": {"body": "Body"},
+        "metadata": {"title": "Title"},
+        "is_human_readable": True,
+    }
+
+    parent_snapshot = MagicMock()
+    parent_snapshot.exists = True
+
+    doc_ref = MagicMock()
+    parent_ref = MagicMock()
+
+    def document_side_effect(doc_id: str):
+        if doc_id == "doc-xyz":
+            return doc_ref
+        if doc_id == "folder-new":
+            return parent_ref
+        missing = MagicMock()
+        missing.get.return_value = MagicMock(exists=False)
+        return missing
+
+    collection = MagicMock()
+    collection.document.side_effect = document_side_effect
+    doc_ref.get.return_value = doc_snapshot
+    parent_ref.get.return_value = parent_snapshot
+    mock_fs.return_value.collection.return_value = collection
+
+    resp = client.post(
+        "/documents/doc-xyz/move",
+        json={"new_parent_id": "folder-new"},
+        headers={"x-api-key": "secret"},
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "moved"
+    updates = doc_ref.update.call_args_list[0][0][0]
+    assert updates["parent_id"] == "folder-new"
+    assert updates["revision"] == 8
     stub_vector_store.upsert_document.assert_called_once()
 
 
@@ -491,10 +547,7 @@ def test_move_document_detects_cycle(
     child_ref.get.return_value = child_snapshot
     mock_fs.return_value.collection.return_value = collection
 
-    payload = {
-        "document_id": "doc-123",
-        "new_parent_id": "child-1",
-    }
+    payload = {"new_parent_id": "child-1"}
 
     resp = client.post(
         "/documents/doc-123/move",
