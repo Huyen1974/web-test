@@ -222,6 +222,20 @@ Mọi request/response **MUST** gói trong Envelope sau. `payload.args` theo JSO
 
 **Semantics.** Cấm tạo chu kỳ; nếu có `before` thì reorder siblings, ngược lại append.
 
+**HTTP Endpoint.**
+
+`POST /documents/{doc_id}/move`
+
+**Request Body**
+
+```json
+{
+  "new_parent_id": "<string>"
+}
+```
+
+Response tuân theo §4 (`ok` envelope) với `data` chứa `{ "id", "status", "revision" }` sau khi cập nhật.
+
 ### 8.5 `knowledge.query_knowledge` (v1.0.0)
 
 **Args**
