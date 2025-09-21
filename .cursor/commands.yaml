@@ -1,0 +1,15 @@
+commands:
+  - name: "@save_report"
+    description: "Upload a local report file to Agent Data via tools/save_report.sh"
+    usage: "@save_report <file_path> [--title <title>] [--parent <parent_id>] [--visible]"
+    runner: ".cursor/commands/save_report.sh"
+    requirements:
+      - "AGENT_DATA_API_KEY must be available or retrievable via gcloud"
+      - "Optional: AGENT_DATA_BASE_URL, AGENT_DATA_PARENT_ID, AGENT_DATA_REPORT_TAGS"
+  - name: "@move_document"
+    description: "Move an existing document to a new parent node"
+    usage: "@move_document <doc_id> --to <new_parent_id> [--base-url <url>] [--dry-run]"
+    runner: ".cursor/commands/move_document.sh"
+    requirements:
+      - "AGENT_DATA_API_KEY or --api-key override"
+      - "Optional: AGENT_DATA_BASE_URL"

@@ -181,6 +181,18 @@ Nguyên tắc: Mọi thay đổi về số lượng file trong thư mục tests/
   ```
 - Script sẽ tạo payload `create_document` theo MCP v2 và trả về phản hồi API (HTTP 2xx là thành công).
 
+### Cursor Custom Commands (CLI helpers)
+- `@save_report <file_path> [--title <title>] [--parent <id>] [--visible]`
+  - Wrapper: `.cursor/commands/save_report.sh`
+  - Hành động: Nội suy tham số, sau đó gọi `tools/save_report.sh`.
+  - Ghi chú: cần `AGENT_DATA_API_KEY` (hoặc gcloud đã cấu hình) và tôn trọng `AGENT_DATA_BASE_URL`.
+- `@move_document <doc_id> --to <new_parent_id> [--base-url <url>] [--dry-run]`
+  - Wrapper: `.cursor/commands/move_document.sh`
+  - Hành động: Gọi API `POST /documents/{doc_id}/move` (cập nhật `parent_id`).
+  - Ghi chú: sử dụng `tools/move_document.sh`; nếu `--dry-run` sẽ chỉ in câu lệnh `curl`.
+
+> Khi chạy `@` commands trong Cursor shell, có thể gọi trực tiếp các wrapper `.cursor/commands/*.sh` hoặc tạo alias tương ứng trong session.
+
 ---
 
 ## 9. Báo cáo & tự sửa lỗi (strict)
