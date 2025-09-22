@@ -5,12 +5,13 @@ import agent_data.server as server
 
 
 class _Snap:
-    def __init__(self, data):
+    def __init__(self, data, exists):
         self._data = dict(data)
+        self._exists = exists
 
     @property
     def exists(self):
-        return True
+        return self._exists
 
     def to_dict(self):
         return dict(self._data)
@@ -28,7 +29,9 @@ class _Doc:
         self._store[self._id].update(dict(updates))
 
     def get(self):
-        return _Snap(self._store[self._id])
+        if self._id in self._store:
+            return _Snap(self._store[self._id], True)
+        return _Snap({}, False)
 
 
 class _Col:
@@ -67,7 +70,19 @@ def test_kb_crud_endpoints(monkeypatch):
     # Create
     r = client.post(
         "/documents",
-        json={"content": "Hello KB", "metadata": {"source": "unit"}},
+        json={
+            "document_id": "kb-doc-001",
+            "parent_id": "root",
+            "content": {
+                "mime_type": "text/markdown",
+                "body": "Hello KB",
+            },
+            "metadata": {
+                "title": "Hello KB",
+                "source": "unit",
+            },
+            "is_human_readable": True,
+        },
         headers={"x-api-key": "test-key"},
     )
     assert r.status_code == 200
@@ -78,7 +93,21 @@ def test_kb_crud_endpoints(monkeypatch):
     # Update
     r2 = client.put(
         f"/documents/{doc_id}",
-        json={"content": "Hello KB v2", "metadata": {"v": 2}},
+        json={
+            "document_id": doc_id,
+            "patch": {
+                "content": {
+                    "mime_type": "text/markdown",
+                    "body": "Hello KB v2",
+                },
+                "metadata": {
+                    "title": "Hello KB v2",
+                    "version": 2,
+                },
+            },
+            "update_mask": ["content", "metadata"],
+            "last_known_revision": 1,
+        },
         headers={"x-api-key": "test-key"},
     )
     assert r2.status_code == 200
