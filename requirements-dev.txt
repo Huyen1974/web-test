@@ -104,7 +104,9 @@ cyclopts==3.22.2
 dateparser==1.2.2
     # via htmldate
 deprecated==1.2.18
-    # via pygithub
+    # via
+    #   limits
+    #   pygithub
 distlib==0.3.9
     # via virtualenv
 distro==1.9.0
@@ -159,6 +161,7 @@ google-api-core[grpc]==2.25.1
     #   google-api-python-client
     #   google-cloud-core
     #   google-cloud-firestore
+    #   google-cloud-pubsub
     #   google-cloud-storage
 google-api-python-client==2.176.0
     # via
@@ -172,6 +175,7 @@ google-auth==2.40.3
     #   google-auth-httplib2
     #   google-cloud-core
     #   google-cloud-firestore
+    #   google-cloud-pubsub
     #   google-cloud-storage
     #   google-genai
 google-auth-httplib2==0.2.0
@@ -181,6 +185,8 @@ google-cloud-core==2.4.3
     #   google-cloud-firestore
     #   google-cloud-storage
 google-cloud-firestore==2.21.0
+    # via agent-data-langroid (pyproject.toml)
+google-cloud-pubsub==2.31.1
     # via agent-data-langroid (pyproject.toml)
 google-cloud-storage==3.2.0
     # via agent-data-langroid (pyproject.toml)
@@ -192,20 +198,28 @@ google-genai==1.26.0
     # via langroid
 google-resumable-media==2.7.2
     # via google-cloud-storage
-googleapis-common-protos==1.70.0
+googleapis-common-protos[grpc]==1.70.0
     # via
     #   google-api-core
+    #   grpc-google-iam-v1
     #   grpcio-status
 groq==0.30.0
     # via langroid
+grpc-google-iam-v1==0.14.2
+    # via google-cloud-pubsub
 grpcio==1.73.1
     # via
     #   google-api-core
+    #   google-cloud-pubsub
+    #   googleapis-common-protos
+    #   grpc-google-iam-v1
     #   grpcio-status
     #   langroid
     #   qdrant-client
 grpcio-status==1.73.1
-    # via google-api-core
+    # via
+    #   google-api-core
+    #   google-cloud-pubsub
 h11==0.16.0
     # via
     #   httpcore
@@ -251,6 +265,8 @@ idna==3.10
     #   httpx
     #   requests
     #   yarl
+importlib-metadata==8.7.0
+    # via opentelemetry-api
 iniconfig==2.1.0
     # via pytest
 isort==6.0.1
@@ -274,8 +290,10 @@ jsonschema-specifications==2025.4.1
     # via jsonschema
 justext==3.0.2
     # via trafilatura
-langroid==0.58.3
+langroid==0.58.0
     # via agent-data-langroid (pyproject.toml)
+limits==5.5.0
+    # via slowapi
 log-symbols==0.0.14
     # via halo
 lxml[html-clean]==5.4.0
@@ -358,10 +376,20 @@ openai==1.97.0
     #   langroid
 openapi-pydantic==0.5.1
     # via fastmcp
+opentelemetry-api==1.37.0
+    # via
+    #   google-cloud-pubsub
+    #   opentelemetry-sdk
+    #   opentelemetry-semantic-conventions
+opentelemetry-sdk==1.37.0
+    # via google-cloud-pubsub
+opentelemetry-semantic-conventions==0.58b0
+    # via opentelemetry-sdk
 packaging==25.0
     # via
     #   black
     #   build
+    #   limits
     #   mkdocs
     #   onnxruntime
     #   pytest
@@ -397,6 +425,12 @@ prettytable==3.16.0
     # via langroid
 primp==0.15.0
     # via duckduckgo-search
+prometheus-client==0.23.1
+    # via
+    #   prometheus-fastapi-instrumentator
+    #   starlette-prometheus
+prometheus-fastapi-instrumentator==7.1.0
+    # via agent-data-langroid (pyproject.toml)
 propcache==0.3.2
     # via
     #   aiohttp
@@ -405,11 +439,14 @@ proto-plus==1.26.1
     # via
     #   google-api-core
     #   google-cloud-firestore
+    #   google-cloud-pubsub
 protobuf==6.31.1
     # via
     #   google-api-core
     #   google-cloud-firestore
+    #   google-cloud-pubsub
     #   googleapis-common-protos
+    #   grpc-google-iam-v1
     #   grpcio-status
     #   onnxruntime
     #   proto-plus
@@ -533,6 +570,7 @@ rapidfuzz==3.13.0
     # via thefuzz
 redis==5.3.0
     # via
+    #   agent-data-langroid (pyproject.toml)
     #   fakeredis
     #   langroid
 referencing==0.36.2
@@ -587,6 +625,8 @@ six==1.17.0
     #   halo
     #   markdownify
     #   python-dateutil
+slowapi==0.1.9
+    # via agent-data-langroid (pyproject.toml)
 smmap==5.0.2
     # via gitdb
 sniffio==1.3.1
@@ -607,6 +647,10 @@ starlette==0.47.1
     # via
     #   fastapi
     #   mcp
+    #   prometheus-fastapi-instrumentator
+    #   starlette-prometheus
+starlette-prometheus==0.10.0
+    # via agent-data-langroid (pyproject.toml)
 sympy==1.14.0
     # via onnxruntime
 tenacity==8.5.0
@@ -644,8 +688,12 @@ typing-extensions==4.14.1
     #   fastapi
     #   google-genai
     #   groq
+    #   limits
     #   mypy
     #   openai
+    #   opentelemetry-api
+    #   opentelemetry-sdk
+    #   opentelemetry-semantic-conventions
     #   pydantic
     #   pydantic-core
     #   referencing
@@ -695,6 +743,8 @@ wrapt==1.17.2
     # via deprecated
 yarl==1.20.1
     # via aiohttp
+zipp==3.23.0
+    # via importlib-metadata
 
 # The following packages are considered to be unsafe in a requirements file:
 # pip
