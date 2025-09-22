@@ -12,6 +12,11 @@ jobs:
     permissions:
       contents: read
       id-token: write # required for Workload Identity Federation
+    env:
+      PROJECT_ID: github-chatgpt-ggcloud
+      TFSTATE_BUCKET: huyen1974-agent-data-tfstate-test
+      BACKUP_BUCKET: huyen1974-agent-data-backup-test
+      BACKUP_REGION: asia-southeast1
 
     steps:
       - name: Checkout
@@ -26,15 +31,28 @@ jobs:
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
-          project_id: github-chatgpt-ggcloud
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Ensure backup bucket exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUCKET="gs://${BACKUP_BUCKET}"
+          if gsutil ls -b "$BUCKET" >/dev/null 2>&1; then
+            echo "::notice::Backup bucket $BUCKET already exists"
+          else
+            echo "::notice::Creating backup bucket $BUCKET in ${BACKUP_REGION}"
+            gsutil mb -p "${PROJECT_ID}" -l "${BACKUP_REGION}" -c STANDARD -b on "$BUCKET"
+          fi
+          gsutil label ch -l environment:test -l project:agent-data-langroid "$BUCKET" >/dev/null 2>&1 || true
 
       - name: Backup tfstate with gsutil
         shell: bash
         run: |
           set -euo pipefail
           TS=$(date -u +'%Y-%m-%d-%H%M%S')
-          SRC_DIR="gs://huyen1974-agent-data-tfstate-test/terraform/state"
-          DEST_BUCKET="gs://huyen1974-agent-data-backup-test"
+          SRC_DIR="gs://${TFSTATE_BUCKET}/terraform/state"
+          DEST_BUCKET="gs://${BACKUP_BUCKET}"
 
           # Prefer default.tfstate; otherwise back up all *.tfstate files with timestamped names
           if gsutil -q stat "${SRC_DIR}/default.tfstate"; then
