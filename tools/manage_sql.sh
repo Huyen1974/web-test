@@ -5,6 +5,9 @@ SCRIPT_NAME=$(basename "$0")
 ACTION=${1:-}
 INSTANCE=${SQL_INSTANCE:-${CLOUD_SQL_INSTANCE:-agent-data-managed-sql}}
 PROJECT=${SQL_PROJECT:-${CLOUD_SQL_PROJECT:-$(gcloud config get-value project 2>/dev/null || true)}}
+if [[ "$PROJECT" == "(unset)" ]]; then
+  PROJECT=""
+fi
 
 usage() {
   cat <<USAGE
@@ -21,18 +24,16 @@ if [[ -z "$ACTION" ]]; then
   exit 1
 fi
 
-shift_count=0
+shift
 while [[ $# -gt 0 ]]; do
   case $1 in
     --instance)
       INSTANCE=${2:-}
       shift 2
-      ((shift_count+=2))
       ;;
     --project)
       PROJECT=${2:-}
       shift 2
-      ((shift_count+=2))
       ;;
     *)
       echo "Unknown argument: $1" >&2
