@@ -244,3 +244,7 @@ docker-compose.override.yml
 __pycache__/
 *.py[cod]
 backup/
+# Allow tracked terraform state for lark infra tools
+!lark-infra-tools/terraform/terraform.tfstate
+!lark-infra-tools/terraform/terraform.tfstate.backup
+!lark-infra-tools/terraform/.terraform.lock.hcl
