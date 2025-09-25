@@ -107,8 +107,7 @@ def debug_cleanup_issue():
             print(f"   - {v['name']} (created: {v['create_time']})")
 
         # Check if cleanup was supposed to run
-        print("
-🔍 Analysis:")
+        print("\n🔍 Analysis:")
         if len(enabled_versions) > 1:
             print("   ❌ Multiple enabled versions found - cleanup failed")
             # Sort by creation time
