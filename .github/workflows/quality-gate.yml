@@ -32,6 +32,8 @@ jobs:
       - name: Generate test matrix
         id: generate-matrix
         run: |
+          echo "🔍 Starting orchestrator..."
+
           # Read test config from repo
           CONFIG_PATH="./test-suite-config.yaml"
 
@@ -42,29 +44,40 @@ jobs:
             exit 1
           fi
 
-          # Parse checks and generate matrix
-          MATRIX_JSON=$(yq -o=json '.' "$CONFIG_PATH" | jq '
-            .checks[]?.items[]? | select(.blocking == true) |
-            {
-              test_id: .id,
-              description: .description,
-              tool: (.tool | split("/") | .[0] | ascii_downcase),
-              owner: (.owner | ascii_downcase),
-              group: (.group // 1),
-              evidence: .evidence
-            }
-          ' | jq -s '{include: .}')
+          echo "✅ Config file found"
 
-          # Generate blocking tests list for final check
-          BLOCKING_TESTS=$(yq -o=json '.' "$CONFIG_PATH" | jq '
-            .checks[]?.items[]? | select(.blocking == true) | .id
-          ' | jq -s '.')
+          # Use Python for reliable YAML parsing
+          python3 -c "
+          import yaml, json, sys
+          with open('$CONFIG_PATH', 'r') as f:
+              data = yaml.safe_load(f)
 
-          echo "Generated matrix: $MATRIX_JSON"
-          echo "Blocking tests: $BLOCKING_TESTS"
+          # Extract blocking tests
+          blocking_tests = []
+          matrix_items = []
 
-          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
-          echo "blocking-tests=$BLOCKING_TESTS" >> $GITHUB_OUTPUT
+          for group in data.get('checks', []):
+              for item in group.get('items', []):
+                  if item.get('blocking', False):
+                      matrix_items.append({
+                          'test_id': item['id'],
+                          'description': item['description'],
+                          'tool': item['tool'].split('/')[0].lower(),
+                          'owner': item['owner'].lower(),
+                          'group': group['group'],
+                          'evidence': item['evidence']
+                      })
+                      blocking_tests.append(item['id'])
+
+          matrix = {'include': matrix_items}
+          print(f'Generated matrix: {json.dumps(matrix)}')
+          print(f'Blocking tests: {json.dumps(blocking_tests)}')
+
+          # Write to GitHub outputs
+          with open(sys.stdout, 'w') as f:
+              f.write(f'matrix={json.dumps(matrix)}\n')
+              f.write(f'blocking-tests={json.dumps(blocking_tests)}\n')
+          " >> $GITHUB_OUTPUT
 
   # ============================================================================
   # TEST MATRIX: Run tests in parallel based on generated matrix
