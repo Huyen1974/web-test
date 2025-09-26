@@ -4,7 +4,16 @@ import { useDisplay } from 'vuetify';
 import { useAuth } from '../composables/useAuth';
 
 // Use authentication composable
-const { user, loading: authLoading, error: authError, isAuthenticated, userDisplayName, signInWithGoogle, signOutUser } = useAuth();
+const {
+  user,
+  loading: authLoading,
+  error: authError,
+  isAuthActionInProgress,
+  isAuthenticated,
+  userDisplayName,
+  signInWithGoogle,
+  signOutUser
+} = useAuth();
 
 const props = defineProps({
   title: {
@@ -98,7 +107,7 @@ function toggleDrawer() {
         </slot>
         <div class="auth-controls ms-4 d-flex align-center">
           <v-progress-circular
-            v-if="authLoading"
+            v-if="authLoading || isAuthActionInProgress"
             size="20"
             width="2"
             indeterminate
@@ -111,6 +120,8 @@ function toggleDrawer() {
               prepend-icon="mdi-google"
               variant="outlined"
               density="compact"
+              :loading="isAuthActionInProgress"
+              :disabled="isAuthActionInProgress"
               @click="signInWithGoogle"
             >
               Đăng nhập bằng Google
@@ -128,6 +139,8 @@ function toggleDrawer() {
                 variant="text"
                 density="compact"
                 color="primary"
+                :loading="isAuthActionInProgress"
+                :disabled="isAuthActionInProgress"
                 @click="signOutUser"
               >
                 Đăng xuất
