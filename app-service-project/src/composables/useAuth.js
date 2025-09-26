@@ -1,7 +1,6 @@
-import { ref, computed, readonly, onUnmounted } from 'vue';
+import { ref, computed, readonly } from 'vue';
 import {
   GoogleAuthProvider,
-  onAuthStateChanged,
   signInWithPopup,
   signOut,
 } from 'firebase/auth';
@@ -13,9 +12,6 @@ const user = ref(null);
 const loading = ref(true);
 const error = ref('');
 
-// Auth state change listener
-let unsubscribe = null;
-
 const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
@@ -25,31 +21,17 @@ const userDisplayName = computed(
   () => user.value?.displayName || user.value?.email || 'Tài khoản'
 );
 
-// Initialize auth listener
-function initializeAuth() {
-  if (unsubscribe) return; // Already initialized
-
-  unsubscribe = onAuthStateChanged(
-    auth,
-    (currentUser) => {
-      user.value = currentUser;
-      error.value = '';
-      loading.value = false;
-    },
-    (authError) => {
-      user.value = null;
-      error.value = authError?.message ?? 'Không thể xác thực người dùng.';
-      loading.value = false;
-    }
-  );
+// State update functions (to be called from App.vue)
+function updateAuthState(currentUser) {
+  user.value = currentUser;
+  error.value = '';
+  loading.value = false;
 }
 
-// Cleanup function
-function cleanupAuth() {
-  if (unsubscribe) {
-    unsubscribe();
-    unsubscribe = null;
-  }
+function updateAuthError(authError) {
+  user.value = null;
+  error.value = authError?.message ?? 'Không thể xác thực người dùng.';
+  loading.value = false;
 }
 
 // Auth methods
@@ -81,12 +63,6 @@ async function signOutUser() {
   }
 }
 
-// Initialize auth when composable is first used
-initializeAuth();
-
-// Cleanup when component unmounts (Vue will call this automatically in composables)
-onUnmounted(cleanupAuth);
-
 // Export reactive state and methods
 export function useAuth() {
   return {
@@ -103,7 +79,8 @@ export function useAuth() {
     signInWithGoogle,
     signOutUser,
 
-    // Cleanup (for manual cleanup if needed)
-    cleanupAuth,
+    // State update functions (for App.vue to call)
+    updateAuthState,
+    updateAuthError,
   };
 }
