@@ -6,205 +6,268 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
-  # ============================================================================
-  # ORCHESTRATOR: Parse test config and generate matrix
-  # ============================================================================
   orchestrator:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.generate-matrix.outputs.matrix }}
       blocking-tests: ${{ steps.generate-matrix.outputs.blocking-tests }}
+      non-blocking-tests: ${{ steps.generate-matrix.outputs.non-blocking-tests }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js for YAML parsing
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Install yq for YAML processing
-        run: |
-          wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          chmod +x /usr/local/bin/yq
-
       - name: Generate test matrix
         id: generate-matrix
         run: |
-          echo "🔍 Starting orchestrator..."
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+import json
+import sys
+from pathlib import Path
 
-          # Read test config from repo
-          CONFIG_PATH="./test-suite-config.yaml"
+import yaml
 
-          # Check if config file exists
-          if [ ! -f "$CONFIG_PATH" ]; then
-            echo "❌ Config file not found: $CONFIG_PATH"
-            echo "Please ensure test-suite-config.yaml is present in the repository"
-            exit 1
-          fi
+config_path = Path("test-suite-config.yaml")
+if not config_path.exists():
+    print(f"::error::Config file not found at {config_path}")
+    sys.exit(1)
 
-          echo "✅ Config file found"
+with config_path.open("r", encoding="utf-8") as handle:
+    config = yaml.safe_load(handle) or {}
 
-          # Use Python for reliable YAML parsing
-          python3 - << 'EOF' >> $GITHUB_OUTPUT
-          import yaml, json, os
-          config_path = './test-suite-config.yaml'
-          with open(config_path, 'r') as f:
-              data = yaml.safe_load(f)
+matrix_items = []
+blocking_ids = []
+non_blocking_ids = []
 
-          # Extract blocking tests
-          blocking_tests = []
-          matrix_items = []
+checks = config.get("checks", [])
+if not checks:
+    print("::error::No checks defined in test-suite-config.yaml")
+    sys.exit(1)
 
-          for group in data.get('checks', []):
-              for item in group.get('items', []):
-                  if item.get('blocking', False):
-                      matrix_items.append({
-                          'test_id': item['id'],
-                          'description': item['description'],
-                          'tool': item['tool'].split('/')[0].lower(),
-                          'owner': item['owner'].lower(),
-                          'group': group['group'],
-                          'evidence': item['evidence']
-                      })
-                      blocking_tests.append(item['id'])
+for group in checks:
+    group_name = group.get("group", "unknown")
+    for item in group.get("items", []):
+        test_id = item.get("id")
+        if not test_id:
+            print(f"::error::Missing 'id' for an item in group '{group_name}'")
+            sys.exit(1)
+        command = item.get("command")
+        if not command:
+            print(f"::error::Test '{test_id}' must define a 'command' to execute")
+            sys.exit(1)
 
-          matrix = {'include': matrix_items}
-          print(f'matrix={json.dumps(matrix)}')
-          print(f'blocking-tests={json.dumps(blocking_tests)}')
-          EOF
+        blocking_flag = bool(item.get("blocking", False))
+        entry = {
+            "test_id": test_id,
+            "description": item.get("description", ""),
+            "blocking": blocking_flag,
+            "owner": item.get("owner", ""),
+            "tool": item.get("tool", ""),
+            "command": command,
+            "group": group_name,
+            "evidence": item.get("evidence", "")
+        }
+        matrix_items.append(entry)
+        (blocking_ids if blocking_flag else non_blocking_ids).append(test_id)
 
-  # ============================================================================
-  # TEST MATRIX: Run tests in parallel based on generated matrix
-  # ============================================================================
+if not matrix_items:
+    print("::error::No test items discovered in configuration")
+    sys.exit(1)
+
+outputs = {
+    "matrix": json.dumps({"include": matrix_items}),
+    "blocking-tests": json.dumps(blocking_ids),
+    "non-blocking-tests": json.dumps(non_blocking_ids),
+}
+
+for key, value in outputs.items():
+    print(f"{key}={value}")
+PY
+
   test-runner:
     needs: orchestrator
     runs-on: ubuntu-latest
     strategy:
       matrix: ${{ fromJson(needs.orchestrator.outputs.matrix) }}
-      fail-fast: false  # Continue running other tests even if one fails
+      fail-fast: false
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run test based on tool
+      - name: Execute test command
+        id: run-test
+        env:
+          COMMAND: ${{ matrix.command }}
+          TEST_ID: ${{ matrix.test_id }}
+          BLOCKING: ${{ matrix.blocking }}
+          TOOL: ${{ matrix.tool }}
+          DESCRIPTION: ${{ matrix.description }}
+          OWNER: ${{ matrix.owner }}
+          GROUP_NAME: ${{ matrix.group }}
+          EVIDENCE: ${{ matrix.evidence }}
+        shell: bash
         run: |
-          echo "Running test: ${{ matrix.test_id }}"
-          echo "Tool: ${{ matrix.tool }}"
-          echo "Description: ${{ matrix.description }}"
+          set +e
+          echo "::notice::Running quality gate test '${TEST_ID}' (blocking=${BLOCKING}, tool=${TOOL})"
+          bash -lc "${COMMAND}"
+          exit_code=$?
+          set -e
 
-          case "${{ matrix.tool }}" in
-            "jest")
-              # Run Jest tests
-              npm run test:unit || echo "Jest test failed for ${{ matrix.test_id }}"
-              ;;
-            "cypress")
-              # Run Cypress E2E tests
-              npm run test:e2e || echo "Cypress test failed for ${{ matrix.test_id }}"
-              ;;
-            "playwright")
-              # Run Playwright tests
-              npx playwright test || echo "Playwright test failed for ${{ matrix.test_id }}"
-              ;;
-            "lighthouse")
-              # Run Lighthouse CI
-              npm run lighthouse || echo "Lighthouse test failed for ${{ matrix.test_id }}"
-              ;;
-            "axe-core")
-              # Run axe-core accessibility tests
-              npm run test:a11y || echo "axe-core test failed for ${{ matrix.test_id }}"
-              ;;
-            *)
-              echo "Unknown tool: ${{ matrix.tool }} - marking as passed for demo"
-              ;;
-          esac
+          status="passed"
+          if [ "$exit_code" -ne 0 ]; then
+            status="failed"
+          fi
 
-      - name: Upload test artifacts
+          export STATUS="$status"
+          export EXIT_CODE="$exit_code"
+
+          mkdir -p quality-results
+          python3 - <<'PY'
+import json
+import os
+import pathlib
+
+record = {
+    "id": os.environ["TEST_ID"],
+    "description": os.environ.get("DESCRIPTION", ""),
+    "blocking": os.environ.get("BLOCKING", "true").lower() == "true",
+    "status": os.environ.get("STATUS", "unknown"),
+    "tool": os.environ.get("TOOL", ""),
+    "owner": os.environ.get("OWNER", ""),
+    "group": os.environ.get("GROUP_NAME", ""),
+    "evidence": os.environ.get("EVIDENCE", ""),
+    "exit_code": int(os.environ.get("EXIT_CODE", "0"))
+}
+path = pathlib.Path("quality-results") / f"{record['id']}.json"
+path.parent.mkdir(parents=True, exist_ok=True)
+with path.open("w", encoding="utf-8") as handle:
+    json.dump(record, handle, ensure_ascii=False, indent=2)
+PY
+
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "exit-code=$exit_code" >> "$GITHUB_OUTPUT"
+
+          printf "| %s | %s | %s | %s | %s |\n" "${TEST_ID}" "${BLOCKING}" "${status}" "${TOOL}" "${OWNER}" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$exit_code" -ne 0 ] && [ "${BLOCKING}" = "true" ]; then
+            echo "::error::Blocking test '${TEST_ID}' failed."
+            exit "$exit_code"
+          fi
+
+      - name: Upload quality results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-${{ matrix.test_id }}
-          path: |
-            test-results/
-            coverage/
-            lighthouseci/
+          name: quality-results
+          path: quality-results/${{ matrix.test_id }}.json
           retention-days: 7
 
-  # ============================================================================
-  # FINAL GATE: Apply blocking policy and report results
-  # ============================================================================
   quality-gate-final:
     needs: [orchestrator, test-runner]
     runs-on: ubuntu-latest
-    if: always()  # Always run even if dependencies failed
+    if: always()
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Analyze results and apply blocking policy
-        run: |
-          echo "=== QUALITY GATE FINAL ANALYSIS ==="
-          echo "Blocking tests required: ${{ needs.orchestrator.outputs.blocking-tests }}"
-
-          # Get job results
-          ORCHESTRATOR_STATUS="${{ needs.orchestrator.result }}"
-          TEST_RUNNER_STATUS="${{ needs.test-runner.result }}"
-
-          echo "Orchestrator status: $ORCHESTRATOR_STATUS"
-          echo "Test runner status: $TEST_RUNNER_STATUS"
-
-          # Apply blocking policy
-          if [ "$ORCHESTRATOR_STATUS" = "failure" ]; then
-            echo "❌ BLOCKING: Orchestrator failed - cannot parse test configuration"
-            exit 1
-          fi
-
-          if [ "$TEST_RUNNER_STATUS" = "failure" ]; then
-            echo "❌ BLOCKING: One or more blocking tests failed"
-            echo "🔍 Check test results in artifacts for details"
-            exit 1
-          fi
-
-          if [ "$TEST_RUNNER_STATUS" = "success" ]; then
-            echo "✅ PASSING: All blocking tests passed"
-            echo "🎉 Quality gate approved for merge"
-            exit 0
-          fi
-
-          echo "⚠️ WARNING: Unexpected status combination"
-          echo "Orchestrator: $ORCHESTRATOR_STATUS"
-          echo "Test Runner: $TEST_RUNNER_STATUS"
-          exit 1
-
-      - name: Generate quality report
-        if: always()
-        run: |
-          echo "# Quality Gate Report" > quality-report.md
-          echo "" >> quality-report.md
-          echo "## Test Results" >> quality-report.md
-          echo "- Orchestrator: ${{ needs.orchestrator.result }}" >> quality-report.md
-          echo "- Test Runner: ${{ needs.test-runner.result }}" >> quality-report.md
-          echo "" >> quality-report.md
-          echo "## Blocking Policy Applied" >> quality-report.md
-          echo "- All blocking tests must pass for merge approval" >> quality-report.md
-          echo "- Non-blocking tests are informational only" >> quality-report.md
-
-      - name: Upload quality report
-        if: always()
-        uses: actions/upload-artifact@v4
+      - name: Download quality results
+        id: download-results
+        uses: actions/download-artifact@v4
         with:
-          name: quality-gate-report
-          path: quality-report.md
-          retention-days: 30
+          name: quality-results
+          path: quality-results
+        continue-on-error: true
+
+      - name: Analyse test outcomes
+        id: analyze
+        env:
+          BLOCKING_TESTS: ${{ needs.orchestrator.outputs.blocking-tests }}
+          NON_BLOCKING_TESTS: ${{ needs.orchestrator.outputs['non-blocking-tests'] }}
+          TEST_RUNNER_STATUS: ${{ needs.test-runner.result }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+import json
+import os
+import pathlib
+import sys
+
+summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+blocking_expected = set(json.loads(os.environ.get("BLOCKING_TESTS") or "[]"))
+non_blocking_expected = set(json.loads(os.environ.get("NON_BLOCKING_TESTS") or "[]"))
+expected_ids = blocking_expected | non_blocking_expected
+
+results_dir = pathlib.Path("quality-results")
+records = []
+if results_dir.exists():
+    for file in sorted(results_dir.glob("*.json")):
+        with file.open("r", encoding="utf-8") as handle:
+            records.append(json.load(handle))
+
+recorded_ids = {item["id"] for item in records}
+missing_ids = sorted(expected_ids - recorded_ids)
+missing_results = bool(missing_ids)
+
+blocking_failed = []
+non_blocking_failed = []
+for item in records:
+    target = blocking_failed if item.get("blocking", False) else non_blocking_failed
+    if item.get("status") != "passed":
+        target.append(item["id"])
+
+status_table = ["| Test ID | Blocking | Status | Tool | Owner |", "| --- | --- | --- | --- | --- |"]
+for item in records:
+    status_table.append(
+        f"| {item.get('id')} | {item.get('blocking')} | {item.get('status')} | {item.get('tool')} | {item.get('owner')} |"
+    )
+
+if missing_ids:
+    status_table.append("| MISSING | - | - | - | - |")
+
+if summary_path:
+    with open(summary_path, "a", encoding="utf-8") as summary:
+        summary.write("## Quality Gate Results\n\n")
+        summary.write("\n".join(status_table))
+        summary.write("\n\n")
+        if missing_ids:
+            summary.write(f"::error::Missing results for tests: {', '.join(missing_ids)}\n")
+        if blocking_failed:
+            summary.write(f"::error::Blocking failures: {', '.join(blocking_failed)}\n")
+        if non_blocking_failed:
+            summary.write(f"::warning::Non-blocking failures: {', '.join(non_blocking_failed)}\n")
+
+outputs = {
+    "missing_results": str(missing_results).lower(),
+    "missing_ids": json.dumps(missing_ids),
+    "blocking_failed": str(bool(blocking_failed)).lower(),
+    "blocking_failed_ids": json.dumps(blocking_failed),
+    "non_blocking_failed": str(bool(non_blocking_failed)).lower(),
+    "non_blocking_failed_ids": json.dumps(non_blocking_failed),
+}
+for key, value in outputs.items():
+    print(f"{key}={value}")
+PY
+
+      - name: Apply blocking policy
+        run: |
+          if [ "${{ steps.analyze.outputs.missing_results }}" = "true" ]; then
+            echo "::error::Missing quality gate results for tests: ${{ steps.analyze.outputs.missing_ids }}"
+            exit 1
+          fi
+
+          if [ "${{ needs.test-runner.result }}" = "failure" ] && [ "${{ steps.analyze.outputs.blocking_failed }}" != "true" ]; then
+            echo "::error::Test runner reported failure but no blocking tests recorded as failed."
+            exit 1
+          fi
+
+          if [ "${{ steps.analyze.outputs.blocking_failed }}" = "true" ]; then
+            echo "::error::Blocking tests failed: ${{ steps.analyze.outputs.blocking_failed_ids }}"
+            exit 1
+          fi
+
+          if [ "${{ steps.analyze.outputs.non_blocking_failed }}" = "true" ]; then
+            echo "::warning::Non-blocking tests failed: ${{ steps.analyze.outputs.non_blocking_failed_ids }}"
+          fi
+
+          echo "✅ Quality gate passed: all blocking tests succeeded."
