@@ -1,0 +1,167 @@
+name: Quality Gate
+
+on:
+  pull_request:
+    branches: [ main ]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  orchestrator:
+    name: Parse Test Suite
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.extract.outputs.matrix }}
+      blocking-tests: ${{ steps.extract.outputs.blocking_tests }}
+      non-blocking-tests: ${{ steps.extract.outputs.non_blocking_tests }}
+      policy: ${{ steps.extract.outputs.policy }}
+      non-blocking-threshold: ${{ steps.extract.outputs.non_blocking_threshold }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: extract
+        name: Generate matrix from webapp.test-suite.yaml
+        run: |
+          python3 -m scripts.quality_gate.extract_matrix >> "$GITHUB_OUTPUT"
+  test-runner:
+    name: Execute Quality Tests
+    needs: orchestrator
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.orchestrator.outputs.matrix) }}
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare results directory
+        run: mkdir -p quality-results
+
+      - id: run-test
+        name: Run ${{ matrix.test_id }}
+        env:
+          TEST_ID: ${{ matrix.test_id }}
+          DESCRIPTION: ${{ matrix.description }}
+          TOOL: ${{ matrix.tool }}
+          BLOCKING: ${{ matrix.blocking }}
+          OWNER: ${{ matrix.owner }}
+          GROUP: ${{ matrix.group }}
+          EVIDENCE: ${{ matrix.evidence }}
+        shell: bash
+        run: |
+          set +e
+          scripts/quality-gate/run-test.sh "$TOOL" "$TEST_ID" "$DESCRIPTION"
+          exit_code=$?
+          set -e
+
+          if [ $exit_code -ne 0 ]; then
+            status="failed"
+          else
+            status="passed"
+          fi
+          if [ $exit_code -ne 0 ] && [ "${BLOCKING,,}" = "true" ]; then
+            echo "::error::Blocking test '$TEST_ID' failed"
+          fi
+
+          export EXIT_CODE="$exit_code"
+          export STATUS="$status"
+
+          RESULTS_DIR=quality-results \
+          python3 -m scripts.quality_gate.write_result
+
+          if [ $exit_code -ne 0 ]; then
+            echo "status=failed" >> "$GITHUB_OUTPUT"
+            echo "exit-code=$exit_code" >> "$GITHUB_OUTPUT"
+            if [ "${BLOCKING,,}" = "true" ]; then
+              exit $exit_code
+            fi
+          else
+            echo "status=passed" >> "$GITHUB_OUTPUT"
+            echo "exit-code=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload test result artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-result-${{ matrix.test_id }}
+          path: quality-results/${{ matrix.test_id }}.json
+          retention-days: 7
+
+
+  quality-gate-final:
+    name: Apply Quality Gate
+    needs: [orchestrator, test-runner]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download test results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: quality-result-*
+          path: quality-results
+          merge-multiple: true
+        continue-on-error: true
+
+      - id: evaluate
+        name: Evaluate results
+        env:
+          BLOCKING: ${{ needs.orchestrator.outputs.blocking-tests }}
+          NON_BLOCKING: ${{ needs.orchestrator.outputs.non-blocking-tests }}
+          POLICY: ${{ needs.orchestrator.outputs.policy }}
+          TEST_RUNNER_STATUS: ${{ needs.test-runner.result }}
+          QUALITY_GATE_NON_BLOCKING_THRESHOLD: ${{ needs.orchestrator.outputs.non-blocking-threshold }}
+          RESULTS_DIR: quality-results
+        run: |
+          python3 -m scripts.quality_gate.evaluate_results >> "$GITHUB_OUTPUT"
+      - name: Create summary
+        env:
+          POLICY: ${{ needs.orchestrator.outputs.policy }}
+          BLOCKING: ${{ needs.orchestrator.outputs.blocking-tests }}
+          NON_BLOCKING: ${{ needs.orchestrator.outputs.non-blocking-tests }}
+          NON_BLOCKING_RATIO: ${{ steps.evaluate.outputs.non_blocking_ratio }}
+          NON_BLOCKING_RATIO_MET: ${{ steps.evaluate.outputs.non_blocking_ratio_met }}
+          NON_BLOCKING_THRESHOLD: ${{ steps.evaluate.outputs.non_blocking_threshold }}
+          GATES_REPORT: ${{ steps.evaluate.outputs.gates_report }}
+        run: |
+          python3 -m scripts.quality_gate.create_summary
+      - name: Enforce policy
+        env:
+          GATES_REPORT: ${{ steps.evaluate.outputs.gates_report }}
+          NON_BLOCKING_RATIO: ${{ steps.evaluate.outputs.non_blocking_ratio }}
+          NON_BLOCKING_THRESHOLD: ${{ steps.evaluate.outputs.non_blocking_threshold }}
+          NON_BLOCKING_RATIO_MET: ${{ steps.evaluate.outputs.non_blocking_ratio_met }}
+          GATE_CONFIGURATION_ERRORS: ${{ steps.evaluate.outputs.gate_configuration_errors }}
+        run: |
+          if [ "${{ steps.evaluate.outputs.missing }}" = "true" ]; then
+            echo "::error::Missing quality gate results for tests: ${{ steps.evaluate.outputs.missing_ids }}"
+            exit 1
+          fi
+
+          if [ "${{ steps.evaluate.outputs.blocking_failed }}" = "true" ]; then
+            echo "::error::Blocking test failures detected: ${{ steps.evaluate.outputs.blocking_failed_ids }}"
+            exit 1
+          fi
+
+          if [ "$GATE_CONFIGURATION_ERRORS" != "[]" ]; then
+            echo "::error::Gate configuration errors detected: $GATE_CONFIGURATION_ERRORS"
+            exit 1
+          fi
+
+          if [ "${{ steps.evaluate.outputs.non_blocking_failed }}" = "true" ]; then
+            echo "::warning::Non-blocking test failures: ${{ steps.evaluate.outputs.non_blocking_failed_ids }}"
+          fi
+
+          if [ "$NON_BLOCKING_RATIO_MET" != "true" ]; then
+            echo "::warning::Non-blocking pass ratio $NON_BLOCKING_RATIO below threshold $NON_BLOCKING_THRESHOLD"
+          fi
+
+          python3 -m scripts.quality_gate.report_gate_warnings
+
+          if [ "${{ needs.test-runner.result }}" = "failure" ]; then
+            echo "::warning::Test runner reported failure but no blocking tests failed."
+          fi
+
+          echo "✅ Quality gate passed"
