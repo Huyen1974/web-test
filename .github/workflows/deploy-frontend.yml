@@ -29,12 +29,12 @@ jobs:
         id: firebase-creds
         run: |
           python - <<'PY' >> "$GITHUB_OUTPUT"
-import os
-path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-with open(path, "r", encoding="utf-8") as fh:
-    data = fh.read()
-print("json={}".format(data.replace("\n", "\\n")))
-PY
+          import os
+          path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+          with open(path, "r", encoding="utf-8") as fh:
+              data = fh.read()
+          print("json={}".format(data.replace("\n", "\\n")))
+          PY
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
