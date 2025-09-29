@@ -23,15 +23,18 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           create_credentials_file: true
+          export_environment_variables: true
 
       - name: Export Firebase credentials JSON
         id: firebase-creds
         run: |
-          {
-            echo 'json<<EOF'
-            cat "$GOOGLE_APPLICATION_CREDENTIALS"
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+import os
+path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+with open(path, "r", encoding="utf-8") as fh:
+    data = fh.read()
+print("json={}".format(data.replace("\n", "\\n")))
+PY
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
