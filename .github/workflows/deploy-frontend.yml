@@ -27,9 +27,11 @@ jobs:
       - name: Export Firebase credentials JSON
         id: firebase-creds
         run: |
-          echo "json<<EOF" >> "$GITHUB_OUTPUT"
-          cat "$GOOGLE_APPLICATION_CREDENTIALS" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          {
+            echo 'json<<EOF'
+            cat "$GOOGLE_APPLICATION_CREDENTIALS"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
