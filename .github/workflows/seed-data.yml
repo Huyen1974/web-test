@@ -60,9 +60,12 @@ jobs:
           import sys
           try:
             db = firestore.Client()
-            # Simple connectivity check
-            collections = list(db.collections(page_size=1))
-            print("✓ Firestore connectivity verified")
+            # Simple connectivity check by fetching the first collection (if any)
+            first_collection = next(db.collections(), None)
+            if first_collection:
+              print(f"✓ Firestore connectivity verified (found collection: {first_collection.id})")
+            else:
+              print("✓ Firestore connectivity verified (no collections found yet)")
             sys.exit(0)
           except Exception as e:
             print(f"ERROR: Failed to connect to Firestore: {e}", file=sys.stderr)
