@@ -7,11 +7,10 @@ const baseURL = process.env.WEB_APP_URL || LOCAL_BASE_URL;
 const webServer = process.env.WEB_APP_URL
   ? undefined
   : {
-      command:
-        "bash -lc 'VITE_FIREBASE_API_KEY=test VITE_FIREBASE_AUTH_DOMAIN=test VITE_FIREBASE_PROJECT_ID=test VITE_FIREBASE_STORAGE_BUCKET=test VITE_FIREBASE_MESSAGING_SENDER_ID=test VITE_FIREBASE_APP_ID=test VITE_KNOWLEDGE_TREE_MOCK=true VITE_ENABLE_TEST_API=true npm run build -- --mode development && npm run preview -- --host 127.0.0.1 --port 4173'",
+      command: 'bash ./scripts/start-vrt-server.sh',
       port: 4173,
       reuseExistingServer: true,
-      timeout: 120000,
+      timeout: 180000, // Increased to 3 minutes for build + server startup
     };
 
 export default defineConfig({
