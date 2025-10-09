@@ -1,14 +1,13 @@
 /**
- * Auth Service - STD Architecture (Standard) - Pure STD Implementation
+ * Auth Service - STD Architecture (Standard)
  *
  * Tuân thủ chiến lược "Cô lập Sự phức tạp":
  * - Kiến trúc STD (>90% chức năng): Request-response đơn giản
- * - KHÔNG sử dụng onAuthStateChanged (loại bỏ hoàn toàn)
- * - Sử dụng auth.authStateReady() promise (STD thuần túy)
- * - KHÔNG có real-time listeners
+ * - Sử dụng "one-shot" onAuthStateChanged CHỈ để khởi tạo
+ * - KHÔNG có real-time listeners liên tục
  *
  * Constitution compliance: HP-06 (Kiến trúc Hướng Dịch vụ)
- * Plan A+ implementation: Complete STD refactor
+ * Plan A+ implementation: Simplified VRT setup
  */
 
 import { ref } from 'vue';
@@ -16,6 +15,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   signOut as firebaseSignOut,
+  onAuthStateChanged,
 } from 'firebase/auth';
 import { auth } from './config.js';
 import router from '@/router';
@@ -27,10 +27,13 @@ const isReady = ref(false);
 const isSigningIn = ref(false);
 
 /**
- * STD Architecture: Pure STD auth state check using auth.authStateReady()
+ * STD Architecture: One-shot auth state check using promise-wrapped onAuthStateChanged
  *
- * This approach uses Firebase's built-in promise to wait for auth initialization
- * without any listeners. This is 100% STD compliant.
+ * This approach ensures Firebase has finished restoring any saved session
+ * before we report isReady = true. This is critical for page refreshes.
+ *
+ * NOTE: onAuthStateChanged is the ONLY reliable way to wait for auth initialization.
+ * We use it in one-shot mode (unsubscribe immediately) to maintain STD principles.
  *
  * @returns {Promise<import('firebase/auth').User | null>}
  */
@@ -40,20 +43,25 @@ async function checkAuthState() {
     return user.value;
   }
 
-  try {
-    // Wait for Firebase Auth to be ready (STD promise-based approach)
-    await auth.authStateReady();
-
-    // Get current user directly (no listener needed)
-    user.value = auth.currentUser;
-    isReady.value = true;
-    return user.value;
-  } catch (err) {
-    console.error('Auth state check error:', err);
-    authError.value = err.message;
-    isReady.value = true;
-    throw err;
-  }
+  return new Promise((resolve, reject) => {
+    // One-shot listener: unsubscribe immediately after first callback
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      (firebaseUser) => {
+        unsubscribe(); // Unsubscribe immediately - this is NOT a continuous listener
+        user.value = firebaseUser;
+        isReady.value = true;
+        resolve(firebaseUser);
+      },
+      (err) => {
+        unsubscribe();
+        console.error('Auth state check error:', err);
+        authError.value = err.message;
+        isReady.value = true;
+        reject(err);
+      }
+    );
+  });
 }
 
 // Expose test API IMMEDIATELY for E2E tests (before async checkAuthState)
