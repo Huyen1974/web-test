@@ -3,8 +3,8 @@
  *
  * Tuân thủ chiến lược "Cô lập Sự phức tạp":
  * - Kiến trúc STD (>90% chức năng): Request-response đơn giản
- * - KHÔNG sử dụng real-time listeners (onAuthStateChanged)
- * - Kiểm tra trạng thái xác thực một lần khi cần thiết
+ * - Sử dụng "one-shot" onAuthStateChanged CHỈ để khởi tạo
+ * - KHÔNG có real-time listeners liên tục
  *
  * Constitution compliance: HP-06 (Kiến trúc Hướng Dịch vụ)
  */
@@ -14,6 +14,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   signOut as firebaseSignOut,
+  onAuthStateChanged,
 } from 'firebase/auth';
 import { auth } from './config.js';
 import router from '@/router';
@@ -25,29 +26,38 @@ const isReady = ref(false);
 const isSigningIn = ref(false);
 
 /**
- * STD Architecture: Check auth state once using request-response
- * NO real-time listeners (onAuthStateChanged)
+ * STD Architecture: One-shot auth state check using promise-wrapped onAuthStateChanged
+ *
+ * This approach ensures Firebase has finished restoring any saved session
+ * before we report isReady = true. This is critical for page refreshes.
+ *
+ * @returns {Promise<import('firebase/auth').User | null>}
  */
 async function checkAuthState() {
-  try {
-    // Wait for Firebase Auth to initialize
-    await new Promise((resolve) => {
-      const currentUser = auth.currentUser;
-      if (currentUser !== undefined) {
-        resolve();
-      } else {
-        // Wait a bit for Firebase to initialize
-        setTimeout(resolve, 100);
-      }
-    });
-
-    user.value = auth.currentUser;
-    isReady.value = true;
-  } catch (err) {
-    console.error('Auth state check error:', err);
-    authError.value = err.message;
-    isReady.value = true;
+  if (isReady.value) {
+    // Already initialized, return current user
+    return user.value;
   }
+
+  return new Promise((resolve, reject) => {
+    // One-shot listener: unsubscribe immediately after first callback
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      (firebaseUser) => {
+        unsubscribe(); // Unsubscribe immediately - this is NOT a continuous listener
+        user.value = firebaseUser;
+        isReady.value = true;
+        resolve(firebaseUser);
+      },
+      (err) => {
+        unsubscribe();
+        console.error('Auth state check error:', err);
+        authError.value = err.message;
+        isReady.value = true;
+        reject(err);
+      }
+    );
+  });
 }
 
 /**
@@ -55,7 +65,7 @@ async function checkAuthState() {
  *
  * STD ARCHITECTURE (>90% features):
  * - Request-response pattern ONLY
- * - NO real-time listeners
+ * - One-shot initialization check (NOT continuous listener)
  * - Manual state checks via checkAuthState()
  *
  * @returns {{
@@ -65,13 +75,16 @@ async function checkAuthState() {
  *   isReady: import('vue').Ref<boolean>,
  *   isSigningIn: import('vue').Ref<boolean>,
  *   authError: import('vue').Ref<string | null>,
- *   checkAuthState: () => Promise<void>
+ *   checkAuthState: () => Promise<import('firebase/auth').User | null>
  * }}
  */
 export function useAuth() {
-  // STD Architecture: Check auth state once on initialization
+  // STD Architecture: Initialize auth state check once
+  // This runs ONCE per app lifecycle to wait for Firebase to restore session
   if (!isReady.value) {
-    checkAuthState();
+    checkAuthState().catch((err) => {
+      console.error('Failed to initialize auth state:', err);
+    });
   }
 
   const signInWithGoogle = async () => {

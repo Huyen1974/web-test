@@ -1,20 +1,32 @@
+/**
+ * Router - STD Architecture Compliance
+ *
+ * Tuân thủ chiến lược "Cô lập Sự phức tạp":
+ * - KHÔNG sử dụng onAuthStateChanged trực tiếp
+ * - Sử dụng useAuth() service để kiểm tra trạng thái
+ *
+ * Constitution compliance: HP-06 (Kiến trúc Hướng Dịch vụ)
+ */
+
 import { createRouter, createWebHistory } from 'vue-router';
-import { auth } from '@/firebase/config'; // Using alias for cleaner path
+import { useAuth } from '@/firebase/authService';
 
 import KnowledgeHubView from '../views/KnowledgeHubView.vue';
 import GoodbyeView from '../views/GoodbyeView.vue';
 
-// Helper to get current user state asynchronously
-const getCurrentUser = () => {
-  return new Promise((resolve, reject) => {
-    const unsubscribe = auth.onAuthStateChanged(
-      user => {
-        unsubscribe();
-        resolve(user);
-      },
-      reject
-    );
-  });
+// STD Architecture: Get current user from useAuth() service
+const { user, isReady, checkAuthState } = useAuth();
+
+/**
+ * STD Architecture: Check if user is authenticated
+ * Waits for auth to be ready before checking user state
+ */
+const getCurrentUser = async () => {
+  // Wait for auth to be ready
+  if (!isReady.value) {
+    await checkAuthState();
+  }
+  return user.value;
 };
 
 const routes = [
