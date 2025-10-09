@@ -62,7 +62,9 @@ async function checkAuthState() {
 
 // Expose test API IMMEDIATELY for E2E tests (before async checkAuthState)
 // This ensures tests can inject mock user even if auth is still initializing
-if (import.meta.env.MODE !== 'production' && typeof window !== 'undefined') {
+// NOTE: Use !PROD instead of MODE !== 'production' because MODE can be 'development'
+// even in production builds when running E2E tests
+if (!import.meta.env.PROD && typeof window !== 'undefined') {
   window.__AUTH_TEST_API__ = {
     setUser: (testUser) => {
       user.value = testUser;
