@@ -62,9 +62,10 @@ async function checkAuthState() {
 
 // Expose test API IMMEDIATELY for E2E tests (before async checkAuthState)
 // This ensures tests can inject mock user even if auth is still initializing
-// NOTE: Use !PROD instead of MODE !== 'production' because MODE can be 'development'
-// even in production builds when running E2E tests
-if (!import.meta.env.PROD && typeof window !== 'undefined') {
+// NOTE: Use explicit VITE_ENABLE_TEST_API flag instead of MODE or PROD checks
+// because Vite build always sets PROD=true even with --mode development
+// This flag is set in playwright.config.js for VRT tests
+if (import.meta.env.VITE_ENABLE_TEST_API === 'true' && typeof window !== 'undefined') {
   window.__AUTH_TEST_API__ = {
     setUser: (testUser) => {
       user.value = testUser;
