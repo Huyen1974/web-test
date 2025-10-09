@@ -60,6 +60,23 @@ async function checkAuthState() {
   });
 }
 
+// Expose test API IMMEDIATELY for E2E tests (before async checkAuthState)
+// This ensures tests can inject mock user even if auth is still initializing
+if (import.meta.env.MODE !== 'production' && typeof window !== 'undefined') {
+  window.__AUTH_TEST_API__ = {
+    setUser: (testUser) => {
+      user.value = testUser;
+      isReady.value = true; // Mark as ready when test sets user
+    },
+    setLoading: (loading) => {
+      isReady.value = !loading;
+    },
+    setError: (errorMsg) => {
+      authError.value = errorMsg;
+    },
+  };
+}
+
 /**
  * Composable function to manage Firebase authentication.
  *
@@ -121,21 +138,6 @@ export function useAuth() {
       console.error('Error during sign-out:', error);
     }
   };
-
-  // Expose a test API in non-production environments
-  if (import.meta.env.MODE !== 'production' && typeof window !== 'undefined') {
-    window.__AUTH_TEST_API__ = {
-      setUser: (testUser) => {
-        user.value = testUser;
-      },
-      setLoading: (loading) => {
-        isReady.value = !loading;
-      },
-      setError: (errorMsg) => {
-        authError.value = errorMsg;
-      },
-    };
-  }
 
   return {
     user,
