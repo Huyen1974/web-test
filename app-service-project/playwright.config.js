@@ -4,14 +4,14 @@ const LOCAL_BASE_URL = 'http://127.0.0.1:4173';
 
 const baseURL = process.env.WEB_APP_URL || LOCAL_BASE_URL;
 
-const webServer = process.env.WEB_APP_URL
-  ? undefined
-  : {
-      command: 'bash ./scripts/start-vrt-server.sh',
-      port: 4173,
-      reuseExistingServer: true,
-      timeout: 180000, // Increased to 3 minutes for build + server startup
-    };
+// For CI: Use webServer with manual server script
+// For local testing: Disable webServer and run server manually
+const webServer = process.env.CI ? {
+  command: 'bash ./scripts/start-vrt-server.sh',
+  port: 4173,
+  reuseExistingServer: true,
+  timeout: 120000, // 2 minutes for build + serve
+} : undefined;
 
 export default defineConfig({
   testDir: './tests/e2e',

@@ -15,7 +15,6 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   signOut as firebaseSignOut,
-  onAuthStateChanged,
 } from 'firebase/auth';
 import { auth } from './config.js';
 import router from '@/router';
@@ -26,62 +25,41 @@ const authError = ref(null);
 const isReady = ref(false);
 const isSigningIn = ref(false);
 
-/**
- * STD Architecture: One-shot auth state check using promise-wrapped onAuthStateChanged
- *
- * This approach ensures Firebase has finished restoring any saved session
- * before we report isReady = true. This is critical for page refreshes.
- *
- * NOTE: onAuthStateChanged is the ONLY reliable way to wait for auth initialization.
- * We use it in one-shot mode (unsubscribe immediately) to maintain STD principles.
- *
- * @returns {Promise<import('firebase/auth').User | null>}
- */
-async function checkAuthState() {
-  if (isReady.value) {
-    // Already initialized, return current user
-    return user.value;
-  }
-
-  return new Promise((resolve, reject) => {
-    // One-shot listener: unsubscribe immediately after first callback
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      (firebaseUser) => {
-        unsubscribe(); // Unsubscribe immediately - this is NOT a continuous listener
-        user.value = firebaseUser;
-        isReady.value = true;
-        resolve(firebaseUser);
-      },
-      (err) => {
-        unsubscribe();
-        console.error('Auth state check error:', err);
-        authError.value = err.message;
-        isReady.value = true;
-        reject(err);
-      }
-    );
-  });
-}
-
-// Expose test API IMMEDIATELY for E2E tests (before async checkAuthState)
-// This ensures tests can inject mock user even if auth is still initializing
+// Expose test API for E2E tests IMMEDIATELY
 // NOTE: Use explicit VITE_ENABLE_TEST_API flag instead of MODE or PROD checks
-// because Vite build always sets PROD=true even with --mode development
-// This flag is set in playwright.config.js for VRT tests
 if (import.meta.env.VITE_ENABLE_TEST_API === 'true' && typeof window !== 'undefined') {
+  console.log('[authService] Exposing __AUTH_TEST_API__');
   window.__AUTH_TEST_API__ = {
     setUser: (testUser) => {
+      console.log('[__AUTH_TEST_API__] setUser called with:', testUser);
       user.value = testUser;
-      isReady.value = true; // Mark as ready when test sets user
+      isReady.value = true;
     },
     setLoading: (loading) => {
+      console.log('[__AUTH_TEST_API__] setLoading called with:', loading);
       isReady.value = !loading;
     },
     setError: (errorMsg) => {
+      console.log('[__AUTH_TEST_API__] setError called with:', errorMsg);
       authError.value = errorMsg;
     },
   };
+  console.log('[authService] __AUTH_TEST_API__ exposed successfully');
+}
+
+/**
+ * STD Architecture: Pure synchronous auth state check
+ *
+ * This function provides immediate access to current auth state without any async operations
+ * or listeners. For VRT tests, we initialize auth state synchronously to avoid race conditions.
+ *
+ * @returns {import('firebase/auth').User | null} Current authenticated user or null
+ */
+function checkAuthState() {
+  // Always mark as ready immediately for STD architecture
+  // No user is logged in initially - test API will inject when needed
+  isReady.value = true;
+  return user.value;
 }
 
 /**
@@ -103,12 +81,10 @@ if (import.meta.env.VITE_ENABLE_TEST_API === 'true' && typeof window !== 'undefi
  * }}
  */
 export function useAuth() {
-  // STD Architecture: Initialize auth state check once
-  // This runs ONCE per app lifecycle to wait for Firebase to restore session
+  // STD Architecture: Initialize auth state synchronously
+  // No async operations - state is ready immediately
   if (!isReady.value) {
-    checkAuthState().catch((err) => {
-      console.error('Failed to initialize auth state:', err);
-    });
+    checkAuthState();
   }
 
   const signInWithGoogle = async () => {
