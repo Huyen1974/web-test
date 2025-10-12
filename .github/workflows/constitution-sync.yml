@@ -1,0 +1,63 @@
+name: Constitution Sync Check
+
+on:
+  workflow_dispatch:  # Disabled for now - using agent-preflight.yml instead
+  # pull_request:
+  #   paths:
+  #     - 'docs/constitution/**'
+  #     - '.agents/**/runbook.md'
+  #     - 'scripts/sync-constitution.sh'
+  #     - 'scripts/constitution.sections'
+
+jobs:
+  validate-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint sync script (optional)
+        run: |
+          if command -v shellcheck >/dev/null 2>&1; then
+            if shellcheck scripts/sync-constitution.sh 2>/dev/null; then
+              echo "✅ Shellcheck passed"
+            else
+              echo "⚠️ Shellcheck warnings detected (acceptable)"
+            fi
+          else
+            echo "ℹ️ Shellcheck not available (skipping)"
+          fi
+
+      - name: Check constitution drift
+        run: |
+          if ! bash scripts/sync-constitution.sh --check; then
+            echo "❌ Constitution drift detected!"
+            echo "🔧 Run these commands to fix:"
+            echo "   bash scripts/sync-constitution.sh"
+            echo "   git add -A"
+            echo "   git commit -m \"docs: sync constitution\""
+            exit 1
+          fi
+
+      - name: Verify markers and hashes
+        run: |
+          for agent in gemini claude codex; do
+            runbook=".agents/$agent/runbook.md"
+
+            # Check markers exist
+            if ! grep -q "BEGIN:CONSTITUTION:CURSOR_MGMT" "$runbook"; then
+              echo "❌ Missing constitution markers in $runbook"
+              exit 1
+            fi
+
+            # Check all metadata present
+            if ! grep -q "commit=[a-f0-9]\+" "$runbook"; then
+              echo "❌ Missing commit hash in $runbook"
+              exit 1
+            fi
+
+            if ! grep -q "source_sha256=[a-f0-9]\+" "$runbook"; then
+              echo "❌ Missing content hash in $runbook"
+              exit 1
+            fi
+          done
+          echo "✅ All markers and metadata verified"
