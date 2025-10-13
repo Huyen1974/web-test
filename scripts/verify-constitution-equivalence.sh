@@ -190,6 +190,10 @@ main() {
 
     log_info "Total checks: $total_checks"
     log_ok "Passed: $passed_checks"
+
+    # Debug: print failed_checks value
+    echo "DEBUG: failed_checks=$failed_checks"
+
     if [[ $failed_checks -gt 0 ]]; then
         log_fail "Failed: $failed_checks"
 
