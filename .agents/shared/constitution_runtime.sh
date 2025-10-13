@@ -67,12 +67,15 @@ const_build_snapshot() {
     local tmpfile
     tmpfile=$(mktemp)
 
-    # Correctly split the comma-separated string into a bash array.
-    # This is the fix for the buggy implementation.
-    IFS=',' read -r -a SECTION_ARRAY <<< "$sections"
-    for section in "${SECTION_ARRAY[@]}"; do
-        # Trim whitespace
-        section=$(echo "$section" | xargs)
+    # Portable section splitting (Bash 3.2+ compatible)
+    # Convert comma-separated string to newline-separated, then iterate
+    printf '%s\n' "$sections" | tr ',' '\n' | while IFS= read -r section; do
+        # Trim leading/trailing whitespace (portable: no xargs dependency)
+        section=$(printf '%s' "$section" | awk '{gsub(/^[[:space:]]+|[[:space:]]+$/,"")}1')
+
+        # Skip empty sections
+        [[ -z "$section" ]] && continue
+
         echo "# Extracting Section: $section" >> "$tmpfile"
         echo "" >> "$tmpfile"
         const_extract "$section" < "$const_path" >> "$tmpfile"
