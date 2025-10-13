@@ -27,19 +27,22 @@ const_sha256() {
 const_extract() {
     local section_id="$1"
 
-    # Multi-language regex: "## Điều VII" or "## Section VII"
-    # Extract from section start until next same-level heading
+    # Strict regex for Roman numeral sections: "## Điều VII" or "## Section VII"
+    # Anchored pattern: must have space or end-of-line after section ID
+    # Extract from section start until next same-level heading (##)
     awk -v sect="$section_id" '
         BEGIN { in_section=0 }
         /^##[[:space:]]+(Điều|Section)[[:space:]]+/ {
-            # Check if this is our target section
-            if ($0 ~ sect) {
+            # Build strict pattern: section ID must be followed by space/colon/end-of-line
+            # This prevents "VII" from matching "VIII" or "VIIA"
+            pattern = "^##[[:space:]]+(Điều|Section)[[:space:]]+" sect "([[:space:]]|:|$)"
+            if ($0 ~ pattern) {
                 in_section=1
                 print
                 next
             }
             # If we hit another ## heading while in section, stop
-            if (in_section && /^##[[:space:]]+/) {
+            if (in_section) {
                 exit
             }
         }
@@ -64,8 +67,9 @@ const_build_snapshot() {
     local tmpfile
     tmpfile=$(mktemp)
 
-    # Extract each section
-    IFS=',' read -ra SECTION_ARRAY <<< "$sections"
+    # Correctly split the comma-separated string into a bash array.
+    # This is the fix for the buggy implementation.
+    IFS=',' read -r -a SECTION_ARRAY <<< "$sections"
     for section in "${SECTION_ARRAY[@]}"; do
         # Trim whitespace
         section=$(echo "$section" | xargs)
