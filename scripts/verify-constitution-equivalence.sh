@@ -159,7 +159,13 @@ main() {
     IFS=',' read -ra SECTION_ARRAY <<< "$SECTIONS"
     for agent in "${agents[@]}"; do
         for section_spec in "${SECTION_ARRAY[@]}"; do
-            if verify_equivalence "$agent" "$section_spec"; then
+            # Temporarily disable errexit for this check
+            set +e
+            verify_equivalence "$agent" "$section_spec"
+            local check_result=$?
+            set -e
+
+            if [[ $check_result -eq 0 ]]; then
                 results+=("$agent|$section_spec|PASS")
             else
                 results+=("$agent|$section_spec|FAIL")
@@ -203,3 +209,4 @@ main() {
 
 # Run main
 main "$@"
+exit $?
