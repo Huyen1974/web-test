@@ -121,6 +121,8 @@ export function useAuth() {
       // Try popup first (better UX as user stays on same page)
       const result = await signInWithPopup(auth, provider);
       user.value = result.user;
+      // Sign-in succeeded, reset the signing-in state
+      isSigningIn.value = false;
     } catch (error) {
       console.error('[Sign-in Error]', error);
 
@@ -135,6 +137,7 @@ export function useAuth() {
           await signInWithRedirect(auth, provider);
           // The page will reload, so the code below won't execute
           // The result will be handled by getRedirectResult in checkAuthState
+          // IMPORTANT: Do NOT reset isSigningIn here because the page will reload
         } catch (redirectError) {
           console.error('[Redirect Error]', redirectError);
           authError.value = 'Không thể đăng nhập. Vui lòng kiểm tra cài đặt trình duyệt và thử lại.';

@@ -238,8 +238,8 @@ describe('authService', () => {
       await promise;
 
       expect(user.value).toEqual(mockUser);
-      // Note: isSigningIn is not reset to false in the current implementation
-      // when sign-in succeeds, as the state is managed by the auth state listener
+      // After successful sign-in, isSigningIn MUST be reset to false
+      expect(isSigningIn.value).toBe(false);
     });
 
     it('should set error on failed sign-in', async () => {
