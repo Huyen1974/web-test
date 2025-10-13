@@ -1,0 +1,45 @@
+name: Constitution Equivalence Check
+
+on:
+  pull_request:
+    paths:
+      - 'docs/constitution/**'
+      - '.agents/**/runbook.md'
+      - 'scripts/verify-constitution-equivalence.sh'
+      - 'scripts/constitution.sections'
+      - 'Makefile'
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/constitution/**'
+      - '.agents/**/runbook.md'
+
+jobs:
+  verify-constitution:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify constitution equivalence (read-only)
+        run: |
+          make agents-constitution-check
+
+      - name: Check markers exist
+        if: failure()
+        run: |
+          echo "❌ Constitution verification failed!"
+          echo ""
+          echo "This means the content between markers in agent runbooks does NOT match"
+          echo "the source constitution file exactly."
+          echo ""
+          echo "IMPORTANT: This is a CHECK-ONLY workflow. It will NOT auto-fix files."
+          echo ""
+          echo "If markers are missing:"
+          echo "  - Add them manually following the format in other runbooks"
+          echo "  - DO NOT use auto-edit scripts"
+          echo ""
+          echo "If content differs:"
+          echo "  - Manually sync the content from docs/constitution/CONSTITUTION.md"
+          echo "  - Ensure exact match (no extra spaces, line endings, etc.)"
+          exit 1
