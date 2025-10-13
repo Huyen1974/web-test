@@ -1,12 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useAuth } from '@/firebase/authService';
-import { signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged } from 'firebase/auth';
+import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut as firebaseSignOut, onAuthStateChanged } from 'firebase/auth';
 
 // Mock Firebase Auth
 vi.mock('firebase/auth', () => ({
   getAuth: vi.fn(() => ({ useDeviceLanguage: vi.fn(), currentUser: null })),
   GoogleAuthProvider: vi.fn(),
   signInWithPopup: vi.fn(),
+  signInWithRedirect: vi.fn(),
+  getRedirectResult: vi.fn(),
   signOut: vi.fn(),
   onAuthStateChanged: vi.fn(),
 }));
@@ -43,6 +45,9 @@ describe('authService', () => {
       onAuthStateChangedErrorCallback = errorCallback;
       return unsubscribeMock;
     });
+
+    // Setup default getRedirectResult mock (return null = no redirect in progress)
+    getRedirectResult.mockResolvedValue(null);
   });
 
   afterEach(() => {
