@@ -78,8 +78,8 @@ def handle(request):  # Cloud Functions v2 HTTP entrypoint
         "PROJECT_ID", os.getenv("GCP_PROJECT", "github-chatgpt-ggcloud")
     )
     location = os.getenv("REGION", "asia-southeast1")
-    repo = os.getenv("AR_REPO", "agent-data-test")
-    package = os.getenv("AR_PACKAGE", "agent-data-test")
+    repo = os.getenv("AR_REPO", "web-test")
+    package = os.getenv("AR_PACKAGE", "web-test")
     important_tags = {
         t.strip()
         for t in os.getenv("IMPORTANT_TAGS", "latest,stable").split(",")

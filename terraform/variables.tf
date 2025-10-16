@@ -46,7 +46,7 @@ variable "alert_email" {
 variable "run_service_name" {
   description = "Cloud Run service name to monitor"
   type        = string
-  default     = "agent-data-test"
+  default     = "web-test"
 }
 
 variable "sql_instance_name" {

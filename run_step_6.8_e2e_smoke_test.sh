@@ -14,7 +14,7 @@ echo "[LOG] Phase 2: Running E2E smoke test..."
 export E2E_LIVE_ENABLE=1
 export GCP_PROJECT_ID=${GCP_PROJECT_ID:-github-chatgpt-ggcloud}
 export GCP_REGION=${GCP_REGION:-asia-southeast1}
-export GCP_RUN_SERVICE=${GCP_RUN_SERVICE:-agent-data-test}
+export GCP_RUN_SERVICE=${GCP_RUN_SERVICE:-web-test}
 export E2E_LIVE_REQUIRE_FIRESTORE=${E2E_LIVE_REQUIRE_FIRESTORE:-0}
 
 # Best-effort: provide Qdrant envs for cleanup helper in tests

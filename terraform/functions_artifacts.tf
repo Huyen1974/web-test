@@ -44,8 +44,8 @@ resource "google_cloudfunctions2_function" "mark_stale" {
     environment_variables = {
       PROJECT_ID     = var.project_id
       REGION         = var.region
-      AR_REPO        = "agent-data-test"
-      AR_PACKAGE     = "agent-data-test"
+      AR_REPO        = "web-test"
+      AR_PACKAGE     = "web-test"
       TTL_DAYS       = "14"
       IMPORTANT_TAGS = "latest,stable"
     }
@@ -88,8 +88,8 @@ resource "google_cloudfunctions2_function" "report_stale" {
     environment_variables = {
       PROJECT_ID        = var.project_id
       REGION            = var.region
-      AR_REPO           = "agent-data-test"
-      AR_PACKAGE        = "agent-data-test"
+      AR_REPO           = "web-test"
+      AR_PACKAGE        = "web-test"
       SLACK_SECRET_NAME = "SLACK_WEBHOOK_URL"
     }
   }

@@ -9,7 +9,7 @@ variable "enable_github_branch_protection" {
 variable "github_repository" {
   description = "GitHub repository name (without owner)"
   type        = string
-  default     = "agent-data-test"
+  default     = "web-test"
 }
 
 variable "branch_name" {
