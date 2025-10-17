@@ -1,6 +1,0 @@
-huyen1974-agent-data-artifacts-test
-huyen1974-agent-data-knowledge-test
-huyen1974-agent-data-logs-test
-huyen1974-agent-data-qdrant-snapshots-test
-huyen1974-agent-data-source-test
-huyen1974-agent-data-tfstate-test

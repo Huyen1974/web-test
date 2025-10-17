@@ -1,5 +1,0 @@
-id: TRN.7
-title: "(Giữ nguyên từ v3.0) Hỗ trợ 2 kênh: HTTP và Pub/Sub."
-doc_cite: MD:docs/agent-a2a-constitution-v5.md#L105
-acceptance:
-  - README.md

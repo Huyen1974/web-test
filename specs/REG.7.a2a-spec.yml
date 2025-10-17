@@ -1,5 +1,0 @@
-id: REG.7
-title: "Envelope Validation, Idempotency Test, Error Handling Test, Security Test, Large-payload Test, Out-of-order Test, TTL Test, Evidence Test."
-doc_cite: MD:docs/agent-a2a-constitution-v5.md#L178
-acceptance:
-  - README.md

@@ -1,5 +1,0 @@
-id: ART.12
-title: "**(Tinh chỉnh)** Nếu payload quá lớn, artifact_uri bắt buộc phải là một GCS Signed URL **chỉ cho phép đọc (GET-only)**, có **TTL ≤ 15 phút**, đi kèm với artifact_hash (SHA-256), MIME whitelist, fixed bucket, no-list."
-doc_cite: MD:docs/agent-a2a-constitution-v5.md#L111
-acceptance:
-  - README.md

@@ -1,5 +1,0 @@
-id: ART.18
-title: "Mã nguồn mẫu cho một Saga đơn giản trên Google Cloud Workflows (tích hợp LangChain CrewAI)."
-doc_cite: MD:docs/agent-a2a-constitution-v5.md#L260
-acceptance:
-  - README.md

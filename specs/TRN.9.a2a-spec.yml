@@ -1,5 +1,0 @@
-id: TRN.9
-title: "Tài liệu về MCP (Anthropic) - Changelog Jun 18 2025: security (OAuth Resource Servers, RFC 8707), structured output (tool results/resource links), elicitation (request info)."
-doc_cite: MD:docs/agent-a2a-constitution-v5.md#L196
-acceptance:
-  - README.md

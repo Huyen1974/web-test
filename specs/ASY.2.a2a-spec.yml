@@ -1,5 +1,0 @@
-id: ASY.2
-title: "**Tiêu chuẩn Áp dụng:** (Tinh chỉnh từ v3.0) Nền tảng là **OpenAI Function Calling**, được thực thi thông qua một **Message Envelope** chuẩn hóa, hybrid với MCP structured output (Jun 18 2025) để hỗ trợ tool results/resource links."
-doc_cite: MD:docs/agent-a2a-constitution-v5.md#L25
-acceptance:
-  - README.md

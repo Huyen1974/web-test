@@ -1,9 +1,0 @@
-{
-  "cli_id": "M6_2-CLI-FIX-TEST-COUNT-STRICT-GUARD-02",
-  "collected_at": "20250826T083259Z",
-  "conclusion": "success",
-  "err_snippet": "",
-  "kind": "deploy_evidence",
-  "run_id": "17198918720",
-  "url": "https://github.com/Huyen1974/agent-data-test/actions/runs/17198918720"
-}

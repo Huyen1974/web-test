@@ -1,5 +1,0 @@
-id: ART.10
-title: "**(Bổ sung)** Nếu một tin nhắn bị xử lý sau khi ttl_sec đã hết hạn, Agent phải từ chối và trả về lỗi EXPIRED. Nếu vượt quota, trả lỗi RATE_LIMIT_EXCEEDED."
-doc_cite: MD:docs/agent-a2a-constitution-v5.md#L99
-acceptance:
-  - README.md

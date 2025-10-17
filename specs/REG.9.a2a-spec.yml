@@ -1,5 +1,0 @@
-id: REG.9
-title: "Cancel/Compensation Test: Gửi yêu cầu hủy khi tác vụ đang chạy và xác nhận nhận được sự kiện *.cancelled hoặc *.compensated."
-doc_cite: MD:docs/agent-a2a-constitution-v5.md#L182
-acceptance:
-  - README.md

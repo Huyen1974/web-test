@@ -1,5 +1,0 @@
-id: TRN.3
-title: "**Nguyên tắc Chuyên môn hóa (Specialization):** (Giữ nguyên từ v3.0) Mỗi Agent được thiết kế để giải quyết một nhóm vấn đề cụ thể và chỉ làm tốt nhất việc đó."
-doc_cite: MD:docs/agent-a2a-constitution-v5.md#L11
-acceptance:
-  - README.md

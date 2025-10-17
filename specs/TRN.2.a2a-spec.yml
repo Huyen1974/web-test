@@ -1,5 +1,0 @@
-id: TRN.2
-title: "**Nguyên tắc Chuẩn hóa Giao thức (Standardized Protocol):** (Giữ nguyên từ v3.0) Mọi giao tiếp trực tiếp giữa các Agent phải tuân thủ một giao thức chung, có cấu trúc."
-doc_cite: MD:docs/agent-a2a-constitution-v5.md#L9
-acceptance:
-  - README.md

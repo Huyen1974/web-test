@@ -1,5 +1,0 @@
-id: ART.1
-title: "**Cấu trúc Phong bì Tin nhắn (Message Envelope v2.2 - BẮT BUỘC):** (Bổ sung resource_links, context_id, và quy định encryption cho payload sensitive.)"
-doc_cite: MD:docs/agent-a2a-constitution-v5.md#L31
-acceptance:
-  - README.md

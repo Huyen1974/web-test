@@ -1,5 +1,0 @@
-id: REG.10
-title: "Multi-agent E2E Test: Mô phỏng một quy trình hoàn chỉnh (ví dụ: Codex → Process Agent → Data Agent → Verifier Agent) và đo lường SLOs (P95 ≤1s ACK)."
-doc_cite: MD:docs/agent-a2a-constitution-v5.md#L184
-acceptance:
-  - README.md

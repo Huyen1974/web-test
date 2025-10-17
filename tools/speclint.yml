@@ -1,5 +1,0 @@
-width_lines: 12
-normative_threshold: 0.95
-exclude_groups: [INF]
-constitution_path: docs/agent-a2a-constitution-v5.md
-overlap_whitelist: []

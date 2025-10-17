@@ -1,5 +1,0 @@
-id: ART.16
-title: "**Xác thực Agent-to-Agent (A2A):** (Tinh chỉnh) principal trong Message Envelope phải được xác thực qua Google Cloud IAM hoặc JWT. Các client bên ngoài phải tuân thủ các tiêu chuẩn bảo mật nâng cao như **OAuth 2.0 Resource Indicators (RFC 8707)** (MCP Jun 18 2025 chống malicious)."
-doc_cite: MD:docs/agent-a2a-constitution-v5.md#L135
-acceptance:
-  - README.md

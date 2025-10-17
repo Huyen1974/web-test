@@ -1,5 +1,0 @@
-id: ART.8
-title: "**Phân loại Lỗi & TTL (Error Taxonomy & TTL):** (Bổ sung mã lỗi EXPIRED và RATE_LIMIT_EXCEEDED.)"
-doc_cite: MD:docs/agent-a2a-constitution-v5.md#L95
-acceptance:
-  - README.md

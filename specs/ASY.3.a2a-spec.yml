@@ -1,5 +1,0 @@
-id: ASY.3
-title: "payload.schema_version MUST map tới một JSON Schema trong repo schemas/…; CI BLOCK nếu payload không validate. SDK TS/Python MUST be generated từ OpenAPI/JSON-Schema; không merge nếu SDK không đồng bộ."
-doc_cite: MD:docs/agent-a2a-constitution-v5.md#L29
-acceptance:
-  - README.md

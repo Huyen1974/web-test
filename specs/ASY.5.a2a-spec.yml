@@ -1,5 +1,0 @@
-id: ASY.5
-title: "**Giám sát & Truy vết (Trace & Observability):** (Bổ sung metric retry.)"
-doc_cite: MD:docs/agent-a2a-constitution-v5.md#L149
-acceptance:
-  - README.md

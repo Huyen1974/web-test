@@ -1,5 +1,0 @@
-id: ERQ.1
-title: "**Giới hạn Tần suất (Rate Limiting):** (Tinh chỉnh) Ngoài các header X-RateLimit-*, các Agent xử lý qua Pub/Sub cũng phải có cơ chế enforce quota dựa trên principal và tenant_id; đồng bộ trả X-RateLimit-Limit / X-RateLimit-Remaining / Retry-After; bất đồng bộ trả event lỗi nếu vượt."
-doc_cite: MD:docs/agent-a2a-constitution-v5.md#L145
-acceptance:
-  - README.md

@@ -1,5 +1,0 @@
-id: REG.4
-title: "**(Tinh chỉnh)** /mcp/capabilities: Công bố envelope_versions, danh sách actions (kèm action_version và max_payload_bytes), và transports; thêm /acp/capabilities cho merger ACP-A2A."
-doc_cite: MD:docs/agent-a2a-constitution-v5.md#L166
-acceptance:
-  - README.md

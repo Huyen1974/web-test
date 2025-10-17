@@ -1,5 +1,0 @@
-id: ART.3
-title: "**Máy trạng thái:** Một tác vụ sẽ đi qua các trạng thái: ACKED → RUNNING → (SUCCEEDED | FAILED) → (COMPENSATED? | CANCELLED?)."
-doc_cite: MD:docs/agent-a2a-constitution-v5.md#L85
-acceptance:
-  - README.md

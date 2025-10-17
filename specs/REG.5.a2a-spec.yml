@@ -1,5 +1,0 @@
-id: REG.5
-title: "Agent Data duy trì registry liệt kê actions, action_version, transports, max_payload_bytes của từng agent; /mcp/capabilities MUST khớp registry (CI so khớp)."
-doc_cite: MD:docs/agent-a2a-constitution-v5.md#L170
-acceptance:
-  - README.md

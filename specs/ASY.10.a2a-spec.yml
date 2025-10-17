@@ -1,5 +1,0 @@
-id: ASY.10
-title: "(Bổ sung các thuật ngữ mới như A2A, ACP, OAS, MCP, Saga, DLQ, SLOs...)"
-doc_cite: MD:docs/agent-a2a-constitution-v5.md#L268
-acceptance:
-  - README.md
