@@ -1,4 +1,0 @@
-google-auth
-google-auth-httplib2
-google-cloud-secret-manager
-requests
