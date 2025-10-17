@@ -11,6 +11,7 @@ export default defineNuxtConfig({
       firebaseStorageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || '',
       firebaseMessagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
       firebaseAppId: process.env.VITE_FIREBASE_APP_ID || '',
+      directusUrl: process.env.VITE_DIRECTUS_URL || '',
     }
   }
 })

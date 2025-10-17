@@ -11,6 +11,7 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
+    "@directus/sdk": "^20.1.0",
     "firebase": "^12.4.0",
     "nuxt": "^3.13.0",
     "vue": "latest"
