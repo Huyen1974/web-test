@@ -29,28 +29,31 @@ resource "google_project_iam_member" "sql_scheduler_admin" {
   member  = "serviceAccount:${google_service_account.sql_scheduler.email}"
 }
 
-resource "google_sql_database_instance" "managed" {
-  name                = local.managed_sql_instance_name
-  database_version    = var.sql_database_version
-  region              = var.sql_region
-  project             = var.project_id
-  deletion_protection = var.sql_deletion_protection
+# Use minimum_cost_sql module from platform-infra
+module "managed_sql" {
+  source = "github.com/Huyen1974/platform-infra//terraform/modules/minimum_cost_sql?ref=v1.0.0"
 
-  settings {
-    tier              = var.sql_tier
-    availability_type = "ZONAL"
-    activation_policy = "ALWAYS"
+  project_id       = var.project_id
+  region           = var.sql_region
+  instance_name    = local.managed_sql_instance_name
+  database_version = var.sql_database_version
+  database_name    = "agent_data"
 
-    backup_configuration {
-      enabled                        = true
-      start_time                     = var.sql_backup_start_time
-      point_in_time_recovery_enabled = false
-    }
-
-    ip_configuration {
-      ipv4_enabled = true
-    }
-  }
+  # Override defaults to match current configuration
+  disk_type                        = "PD_SSD"
+  disk_size                        = 10
+  disk_autoresize                  = true
+  disk_autoresize_limit            = 50
+  backup_start_time                = var.sql_backup_start_time
+  backup_retained_backups          = 7
+  transaction_log_retention_days   = 7
+  ipv4_enabled                     = true
+  authorized_networks              = []
+  max_connections                  = "100"
+  maintenance_window_day           = 7
+  maintenance_window_hour          = 3
+  maintenance_window_update_track  = "stable"
+  create_user                      = false
 }
 
 resource "google_cloud_scheduler_job" "sql_start" {
@@ -78,7 +81,7 @@ resource "google_cloud_scheduler_job" "sql_start" {
     google_project_service.cloudscheduler,
     google_service_account_iam_member.scheduler_token_creator,
     google_project_iam_member.sql_scheduler_admin,
-    google_sql_database_instance.managed
+    module.managed_sql
   ]
 }
 

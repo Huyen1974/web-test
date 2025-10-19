@@ -1,5 +1,5 @@
 # GCS Buckets for agent-data-langroid
-# Each bucket is individually defined for easier import and management
+# Using secure_gcs_bucket module from platform-infra
 
 locals {
   bucket_types = {
@@ -12,23 +12,17 @@ locals {
   }
 }
 
-resource "google_storage_bucket" "huyen1974_agent_data_artifacts_test" {
-  project       = var.project_id
-  name          = "huyen1974-agent-data-artifacts-${var.env}"
+module "bucket_artifacts" {
+  source = "github.com/Huyen1974/platform-infra//terraform/modules/secure_gcs_bucket?ref=v1.0.0"
+
+  project_id    = var.project_id
+  bucket_name   = "huyen1974-agent-data-artifacts-${var.env}"
   location      = "asia-southeast1"
   storage_class = "STANDARD"
   force_destroy = false
 
-  uniform_bucket_level_access = true
-  public_access_prevention    = "inherited"
-
-  versioning {
-    enabled = true
-  }
-
-  lifecycle {
-    prevent_destroy = true
-  }
+  versioning_enabled       = true
+  public_access_prevention = "enforced"
 
   labels = {
     environment = var.env
@@ -36,25 +30,21 @@ resource "google_storage_bucket" "huyen1974_agent_data_artifacts_test" {
     managed_by  = "terraform"
     bucket_type = local.bucket_types.artifacts
   }
+
+  lifecycle_prevent_destroy = true
 }
 
-resource "google_storage_bucket" "huyen1974_agent_data_knowledge_test" {
-  project       = var.project_id
-  name          = "huyen1974-agent-data-knowledge-${var.env}"
+module "bucket_knowledge" {
+  source = "github.com/Huyen1974/platform-infra//terraform/modules/secure_gcs_bucket?ref=v1.0.0"
+
+  project_id    = var.project_id
+  bucket_name   = "huyen1974-agent-data-knowledge-${var.env}"
   location      = "asia-southeast1"
   storage_class = "STANDARD"
   force_destroy = false
 
-  uniform_bucket_level_access = true
-  public_access_prevention    = "inherited"
-
-  versioning {
-    enabled = true
-  }
-
-  lifecycle {
-    prevent_destroy = true
-  }
+  versioning_enabled       = true
+  public_access_prevention = "enforced"
 
   labels = {
     environment = var.env
@@ -62,25 +52,21 @@ resource "google_storage_bucket" "huyen1974_agent_data_knowledge_test" {
     managed_by  = "terraform"
     bucket_type = local.bucket_types.knowledge
   }
+
+  lifecycle_prevent_destroy = true
 }
 
-resource "google_storage_bucket" "huyen1974_agent_data_logs_test" {
-  project       = var.project_id
-  name          = "huyen1974-agent-data-logs-${var.env}"
+module "bucket_logs" {
+  source = "github.com/Huyen1974/platform-infra//terraform/modules/secure_gcs_bucket?ref=v1.0.0"
+
+  project_id    = var.project_id
+  bucket_name   = "huyen1974-agent-data-logs-${var.env}"
   location      = "asia-southeast1"
   storage_class = "STANDARD"
   force_destroy = false
 
-  uniform_bucket_level_access = true
-  public_access_prevention    = "inherited"
-
-  versioning {
-    enabled = true
-  }
-
-  lifecycle {
-    prevent_destroy = true
-  }
+  versioning_enabled       = true
+  public_access_prevention = "enforced"
 
   labels = {
     environment = var.env
@@ -88,25 +74,21 @@ resource "google_storage_bucket" "huyen1974_agent_data_logs_test" {
     managed_by  = "terraform"
     bucket_type = local.bucket_types.logs
   }
+
+  lifecycle_prevent_destroy = true
 }
 
-resource "google_storage_bucket" "huyen1974_agent_data_qdrant_snapshots_test" {
-  project       = var.project_id
-  name          = "huyen1974-agent-data-qdrant-snapshots-${var.env}"
+module "bucket_qdrant_snapshots" {
+  source = "github.com/Huyen1974/platform-infra//terraform/modules/secure_gcs_bucket?ref=v1.0.0"
+
+  project_id    = var.project_id
+  bucket_name   = "huyen1974-agent-data-qdrant-snapshots-${var.env}"
   location      = "asia-southeast1"
   storage_class = "STANDARD"
   force_destroy = false
 
-  uniform_bucket_level_access = true
-  public_access_prevention    = "inherited"
-
-  versioning {
-    enabled = true
-  }
-
-  lifecycle {
-    prevent_destroy = true
-  }
+  versioning_enabled       = true
+  public_access_prevention = "enforced"
 
   labels = {
     environment = var.env
@@ -114,25 +96,21 @@ resource "google_storage_bucket" "huyen1974_agent_data_qdrant_snapshots_test" {
     managed_by  = "terraform"
     bucket_type = local.bucket_types.qdrant_snapshots
   }
+
+  lifecycle_prevent_destroy = true
 }
 
-resource "google_storage_bucket" "huyen1974_agent_data_source_test" {
-  project       = var.project_id
-  name          = "huyen1974-agent-data-source-${var.env}"
+module "bucket_source" {
+  source = "github.com/Huyen1974/platform-infra//terraform/modules/secure_gcs_bucket?ref=v1.0.0"
+
+  project_id    = var.project_id
+  bucket_name   = "huyen1974-agent-data-source-${var.env}"
   location      = "asia-southeast1"
   storage_class = "STANDARD"
   force_destroy = false
 
-  uniform_bucket_level_access = true
-  public_access_prevention    = "inherited"
-
-  versioning {
-    enabled = true
-  }
-
-  lifecycle {
-    prevent_destroy = true
-  }
+  versioning_enabled       = true
+  public_access_prevention = "enforced"
 
   labels = {
     environment = var.env
@@ -140,25 +118,21 @@ resource "google_storage_bucket" "huyen1974_agent_data_source_test" {
     managed_by  = "terraform"
     bucket_type = local.bucket_types.source
   }
+
+  lifecycle_prevent_destroy = true
 }
 
-resource "google_storage_bucket" "huyen1974_agent_data_tfstate_test" {
-  project       = var.project_id
-  name          = "huyen1974-agent-data-tfstate-${var.env}"
+module "bucket_tfstate" {
+  source = "github.com/Huyen1974/platform-infra//terraform/modules/secure_gcs_bucket?ref=v1.0.0"
+
+  project_id    = var.project_id
+  bucket_name   = "huyen1974-agent-data-tfstate-${var.env}"
   location      = "asia-southeast1"
   storage_class = "STANDARD"
   force_destroy = false
 
-  uniform_bucket_level_access = true
-  public_access_prevention    = "inherited"
-
-  versioning {
-    enabled = true
-  }
-
-  lifecycle {
-    prevent_destroy = true
-  }
+  versioning_enabled       = true
+  public_access_prevention = "enforced"
 
   labels = {
     environment = var.env
@@ -166,4 +140,6 @@ resource "google_storage_bucket" "huyen1974_agent_data_tfstate_test" {
     managed_by  = "terraform"
     bucket_type = local.bucket_types.tfstate
   }
+
+  lifecycle_prevent_destroy = true
 }
