@@ -37,7 +37,7 @@ module "managed_sql" {
   region           = var.sql_region
   instance_name    = local.managed_sql_instance_name
   database_version = var.sql_database_version
-  database_name    = "agent_data"
+  database_name    = "directus"
 
   # Override defaults to match current configuration
   disk_type                        = "PD_SSD"
