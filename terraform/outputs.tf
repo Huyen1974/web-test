@@ -16,12 +16,12 @@ output "environment" {
 output "gcs_buckets" {
   description = "Map of GCS bucket purposes to their names"
   value = {
-    artifacts        = google_storage_bucket.huyen1974_agent_data_artifacts_test.name
-    knowledge        = google_storage_bucket.huyen1974_agent_data_knowledge_test.name
-    logs             = google_storage_bucket.huyen1974_agent_data_logs_test.name
-    qdrant_snapshots = google_storage_bucket.huyen1974_agent_data_qdrant_snapshots_test.name
-    source           = google_storage_bucket.huyen1974_agent_data_source_test.name
-    tfstate          = google_storage_bucket.huyen1974_agent_data_tfstate_test.name
+    artifacts        = module.bucket_artifacts.bucket_name
+    knowledge        = module.bucket_knowledge.bucket_name
+    logs             = module.bucket_logs.bucket_name
+    qdrant_snapshots = module.bucket_qdrant_snapshots.bucket_name
+    source           = module.bucket_source.bucket_name
+    tfstate          = module.bucket_tfstate.bucket_name
   }
 }
 

@@ -21,8 +21,7 @@ module "bucket_artifacts" {
   storage_class = "STANDARD"
   force_destroy = false
 
-  versioning_enabled       = true
-  public_access_prevention = "enforced"
+  versioning_enabled = true
 
   labels = {
     environment = var.env
@@ -30,8 +29,6 @@ module "bucket_artifacts" {
     managed_by  = "terraform"
     bucket_type = local.bucket_types.artifacts
   }
-
-  lifecycle_prevent_destroy = true
 }
 
 module "bucket_knowledge" {
@@ -43,8 +40,7 @@ module "bucket_knowledge" {
   storage_class = "STANDARD"
   force_destroy = false
 
-  versioning_enabled       = true
-  public_access_prevention = "enforced"
+  versioning_enabled = true
 
   labels = {
     environment = var.env
@@ -52,8 +48,6 @@ module "bucket_knowledge" {
     managed_by  = "terraform"
     bucket_type = local.bucket_types.knowledge
   }
-
-  lifecycle_prevent_destroy = true
 }
 
 module "bucket_logs" {
@@ -65,8 +59,7 @@ module "bucket_logs" {
   storage_class = "STANDARD"
   force_destroy = false
 
-  versioning_enabled       = true
-  public_access_prevention = "enforced"
+  versioning_enabled = true
 
   labels = {
     environment = var.env
@@ -74,8 +67,6 @@ module "bucket_logs" {
     managed_by  = "terraform"
     bucket_type = local.bucket_types.logs
   }
-
-  lifecycle_prevent_destroy = true
 }
 
 module "bucket_qdrant_snapshots" {
@@ -87,8 +78,7 @@ module "bucket_qdrant_snapshots" {
   storage_class = "STANDARD"
   force_destroy = false
 
-  versioning_enabled       = true
-  public_access_prevention = "enforced"
+  versioning_enabled = true
 
   labels = {
     environment = var.env
@@ -96,8 +86,6 @@ module "bucket_qdrant_snapshots" {
     managed_by  = "terraform"
     bucket_type = local.bucket_types.qdrant_snapshots
   }
-
-  lifecycle_prevent_destroy = true
 }
 
 module "bucket_source" {
@@ -109,8 +97,7 @@ module "bucket_source" {
   storage_class = "STANDARD"
   force_destroy = false
 
-  versioning_enabled       = true
-  public_access_prevention = "enforced"
+  versioning_enabled = true
 
   labels = {
     environment = var.env
@@ -118,8 +105,6 @@ module "bucket_source" {
     managed_by  = "terraform"
     bucket_type = local.bucket_types.source
   }
-
-  lifecycle_prevent_destroy = true
 }
 
 module "bucket_tfstate" {
@@ -131,8 +116,7 @@ module "bucket_tfstate" {
   storage_class = "STANDARD"
   force_destroy = false
 
-  versioning_enabled       = true
-  public_access_prevention = "enforced"
+  versioning_enabled = true
 
   labels = {
     environment = var.env
@@ -140,6 +124,4 @@ module "bucket_tfstate" {
     managed_by  = "terraform"
     bucket_type = local.bucket_types.tfstate
   }
-
-  lifecycle_prevent_destroy = true
 }
