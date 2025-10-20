@@ -52,7 +52,7 @@ variable "run_service_name" {
 variable "sql_instance_name" {
   description = "Name for the managed Cloud SQL instance"
   type        = string
-  default     = ""
+  default     = "mysql-directus-web-test"
 }
 
 variable "sql_region" {
@@ -64,13 +64,13 @@ variable "sql_region" {
 variable "sql_tier" {
   description = "Machine type tier for Cloud SQL"
   type        = string
-  default     = "db-g1-small"
+  default     = "db-f1-micro"
 }
 
 variable "sql_database_version" {
-  description = "Cloud SQL PostgreSQL version"
+  description = "Cloud SQL database version (MySQL)"
   type        = string
-  default     = "POSTGRES_15"
+  default     = "MYSQL_8_0"
 }
 
 variable "sql_backup_start_time" {
