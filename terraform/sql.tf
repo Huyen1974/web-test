@@ -1,7 +1,4 @@
 locals {
-  # PostgreSQL instance for agent-data (existing)
-  agent_data_sql_instance_name = "agent-data-managed-sql"
-
   # MySQL instance for Directus (web-test requirement)
   mysql_directus_instance_name = "mysql-directus-web-test"
 }
@@ -33,33 +30,6 @@ resource "google_project_iam_member" "sql_scheduler_admin" {
   member  = "serviceAccount:${google_service_account.sql_scheduler.email}"
 }
 
-# PostgreSQL instance for agent-data (existing, managed by module)
-module "managed_sql" {
-  source = "github.com/Huyen1974/platform-infra//terraform/modules/minimum_cost_sql?ref=v1.0.0"
-
-  project_id       = var.project_id
-  region           = var.sql_region
-  instance_name    = local.agent_data_sql_instance_name
-  database_version = "POSTGRES_15"
-  database_name    = "agent_data"
-
-  # Match existing PostgreSQL configuration
-  disk_type                        = "PD_SSD"
-  disk_size                        = 10
-  disk_autoresize                  = true
-  disk_autoresize_limit            = 50
-  backup_start_time                = "03:00"
-  backup_retained_backups          = 7
-  transaction_log_retention_days   = 7
-  ipv4_enabled                     = true
-  authorized_networks              = []
-  max_connections                  = "100"
-  maintenance_window_day           = 7
-  maintenance_window_hour          = 3
-  maintenance_window_update_track  = "stable"
-  create_user                      = false
-}
-
 # MySQL instance for Directus (web-test requirement)
 module "mysql_directus" {
   source = "github.com/Huyen1974/platform-infra//terraform/modules/minimum_cost_sql?ref=v1.0.0"
@@ -71,20 +41,20 @@ module "mysql_directus" {
   database_name    = "directus"
 
   # Cost-optimized configuration for Directus
-  disk_type                        = "PD_HDD"
-  disk_size                        = 10
-  disk_autoresize                  = true
-  disk_autoresize_limit            = 50
-  backup_start_time                = var.sql_backup_start_time
-  backup_retained_backups          = 7
-  transaction_log_retention_days   = 7
-  ipv4_enabled                     = true
-  authorized_networks              = []
-  max_connections                  = "100"
-  maintenance_window_day           = 7
-  maintenance_window_hour          = 3
-  maintenance_window_update_track  = "stable"
-  create_user                      = false
+  disk_type                       = "PD_HDD"
+  disk_size                       = 10
+  disk_autoresize                 = true
+  disk_autoresize_limit           = 50
+  backup_start_time               = var.sql_backup_start_time
+  backup_retained_backups         = 7
+  transaction_log_retention_days  = 7
+  ipv4_enabled                    = true
+  authorized_networks             = []
+  max_connections                 = "100"
+  maintenance_window_day          = 7
+  maintenance_window_hour         = 3
+  maintenance_window_update_track = "stable"
+  create_user                     = false
 }
 
 # Cloud Scheduler for MySQL Directus instance
