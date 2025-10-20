@@ -42,6 +42,17 @@ module "agent_data_service_test" {
   # Health check
   health_check_path = "/"
 
+  # Probe configuration - increased timeouts for container startup
+  startup_probe_initial_delay     = 10
+  startup_probe_timeout           = 3
+  startup_probe_period            = 10
+  startup_probe_failure_threshold = 10
+
+  liveness_probe_initial_delay     = 10
+  liveness_probe_timeout           = 3
+  liveness_probe_period            = 10
+  liveness_probe_failure_threshold = 3
+
   # Network configuration
   vpc_connector_name    = ""
   vpc_egress_mode       = "PRIVATE_RANGES_ONLY"
