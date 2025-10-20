@@ -52,7 +52,7 @@ variable "run_service_name" {
 variable "sql_instance_name" {
   description = "Name for the managed Cloud SQL instance"
   type        = string
-  default     = "mysql-directus"
+  default     = "mysql-directus-web-test"
 }
 
 variable "sql_region" {
@@ -64,7 +64,7 @@ variable "sql_region" {
 variable "sql_tier" {
   description = "Machine type tier for Cloud SQL"
   type        = string
-  default     = "db-g1-small"
+  default     = "db-f1-micro"
 }
 
 variable "sql_database_version" {

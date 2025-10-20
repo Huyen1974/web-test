@@ -1,5 +1,5 @@
 locals {
-  managed_sql_instance_name = var.sql_instance_name != "" ? var.sql_instance_name : "agent-data-managed-sql"
+  managed_sql_instance_name = var.sql_instance_name != "" ? var.sql_instance_name : "mysql-directus-web-test"
 }
 
 resource "google_project_service" "sqladmin" {
@@ -29,31 +29,40 @@ resource "google_project_iam_member" "sql_scheduler_admin" {
   member  = "serviceAccount:${google_service_account.sql_scheduler.email}"
 }
 
-# Use minimum_cost_sql module from platform-infra
-module "managed_sql" {
-  source = "github.com/Huyen1974/platform-infra//terraform/modules/minimum_cost_sql?ref=v1.0.0"
+# MySQL instance for Directus with minimum cost configuration
+resource "google_sql_database_instance" "mysql_directus" {
+  name                = local.managed_sql_instance_name
+  database_version    = var.sql_database_version
+  region              = var.sql_region
+  project             = var.project_id
+  deletion_protection = false
 
-  project_id       = var.project_id
-  region           = var.sql_region
-  instance_name    = local.managed_sql_instance_name
-  database_version = var.sql_database_version
-  database_name    = "directus"
+  settings {
+    tier              = var.sql_tier
+    availability_type = "ZONAL"
+    disk_type         = "PD_HDD"
+    disk_size         = 10
+    disk_autoresize   = true
+    activation_policy = "NEVER"
 
-  # Override defaults to match current configuration
-  disk_type                        = "PD_SSD"
-  disk_size                        = 10
-  disk_autoresize                  = true
-  disk_autoresize_limit            = 50
-  backup_start_time                = var.sql_backup_start_time
-  backup_retained_backups          = 7
-  transaction_log_retention_days   = 7
-  ipv4_enabled                     = true
-  authorized_networks              = []
-  max_connections                  = "100"
-  maintenance_window_day           = 7
-  maintenance_window_hour          = 3
-  maintenance_window_update_track  = "stable"
-  create_user                      = false
+    backup_configuration {
+      enabled                        = true
+      start_time                     = var.sql_backup_start_time
+      point_in_time_recovery_enabled = false
+      binary_log_enabled             = false
+    }
+
+    ip_configuration {
+      ipv4_enabled = true
+    }
+  }
+}
+
+# Create the directus database
+resource "google_sql_database" "directus" {
+  name     = "directus"
+  instance = google_sql_database_instance.mysql_directus.name
+  project  = var.project_id
 }
 
 resource "google_cloud_scheduler_job" "sql_start" {
@@ -81,7 +90,7 @@ resource "google_cloud_scheduler_job" "sql_start" {
     google_project_service.cloudscheduler,
     google_service_account_iam_member.scheduler_token_creator,
     google_project_iam_member.sql_scheduler_admin,
-    module.managed_sql
+    google_sql_database_instance.mysql_directus
   ]
 }
 
