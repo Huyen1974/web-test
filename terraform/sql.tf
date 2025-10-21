@@ -1,7 +1,7 @@
 locals {
   # MySQL instance for Directus (web-test requirement)
-  # Note: Changed from "mysql-directus-web-test" due to 7-day retention period
-  mysql_directus_instance_name = "mysql-directus-web-test-v2"
+  # Note: Using completely new unique name to test if GCP error is name-related
+  mysql_directus_instance_name = "mysql-directus-temp-diag"
 }
 
 resource "google_project_service" "sqladmin" {
