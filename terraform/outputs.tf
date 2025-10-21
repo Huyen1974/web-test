@@ -27,10 +27,11 @@ output "artifact_registry_repository" {
 output "mysql_instance" {
   description = "MySQL instance details for Directus"
   value = {
-    name            = module.mysql_directus.instance_name
-    connection_name = module.mysql_directus.instance_connection_name
+    name            = google_sql_database_instance.mysql_directus.name
+    connection_name = google_sql_database_instance.mysql_directus.connection_name
     region          = var.sql_region
     database_name   = "directus"
+    tier            = google_sql_database_instance.mysql_directus.settings[0].tier
   }
   sensitive = false
 }

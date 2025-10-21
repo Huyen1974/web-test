@@ -31,7 +31,7 @@ module "directus_service" {
   # Environment variables for Directus
   env_vars = {
     DB_CLIENT          = "mysql"
-    DB_HOST            = module.mysql_directus.instance_connection_name
+    DB_HOST            = google_sql_database_instance.mysql_directus.connection_name
     DB_PORT            = "3306"
     DB_DATABASE        = "directus"
     DB_USER            = "directus"
