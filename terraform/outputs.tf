@@ -1,3 +1,5 @@
+# Outputs for web-test infrastructure
+
 output "project_id" {
   description = "The GCP project ID"
   value       = var.project_id
@@ -13,24 +15,36 @@ output "environment" {
   value       = var.env
 }
 
-output "gcs_buckets" {
-  description = "Map of GCS bucket purposes to their names"
+output "artifact_registry_repository" {
+  description = "Artifact Registry repository for web-test"
   value = {
-    artifacts        = module.bucket_artifacts.bucket_name
-    knowledge        = module.bucket_knowledge.bucket_name
-    logs             = module.bucket_logs.bucket_name
-    qdrant_snapshots = module.bucket_qdrant_snapshots.bucket_name
-    source           = module.bucket_source.bucket_name
-    tfstate          = module.bucket_tfstate.bucket_name
+    id       = google_artifact_registry_repository.web_test_docker_repo.repository_id
+    name     = google_artifact_registry_repository.web_test_docker_repo.name
+    location = google_artifact_registry_repository.web_test_docker_repo.location
   }
 }
 
-output "artifact_registry_repository" {
-  description = "Artifact Registry repository details"
+output "mysql_instance" {
+  description = "MySQL instance details for Directus"
   value = {
-    name     = google_artifact_registry_repository.agent_data_docker_repo.name
-    location = google_artifact_registry_repository.agent_data_docker_repo.location
-    id       = google_artifact_registry_repository.agent_data_docker_repo.repository_id
+    name            = module.mysql_directus.instance_name
+    connection_name = module.mysql_directus.instance_connection_name
+    region          = var.sql_region
+    database_name   = "directus"
+  }
+  sensitive = false
+}
+
+output "directus_service_url" {
+  description = "Cloud Run service URL for Directus"
+  value       = module.directus_service.service_url
+}
+
+output "cloud_scheduler_jobs" {
+  description = "Cloud Scheduler jobs for MySQL start/stop"
+  value = {
+    start_job = google_cloud_scheduler_job.mysql_directus_start.name
+    stop_job  = google_cloud_scheduler_job.mysql_directus_stop.name
   }
 }
 

@@ -54,7 +54,11 @@ module "mysql_directus" {
   maintenance_window_day          = 7
   maintenance_window_hour         = 3
   maintenance_window_update_track = "stable"
-  create_user                     = false
+
+  # Create Directus database user
+  create_user   = true
+  user_name     = "directus"
+  user_password = random_password.directus_db_password.result
 }
 
 # Cloud Scheduler for MySQL Directus instance

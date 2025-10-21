@@ -1,32 +1,58 @@
-# Artifact Registry for agent-data-test
-resource "google_artifact_registry_repository" "agent_data_test" {
-  project       = "github-chatgpt-ggcloud"
+# Artifact Registry for web-test
+resource "google_artifact_registry_repository" "web_test_docker_repo" {
+  project       = var.project_id
   location      = "asia-southeast1"
-  repository_id = "agent-data-test"
-  description   = "Docker repository for agent-data-test"
+  repository_id = "web-test"
+  description   = "Docker repository for the web-test project"
   format        = "DOCKER"
+
+  labels = {
+    environment = var.env
+    project     = "web-test"
+    managed_by  = "terraform"
+  }
 }
 
 # Service account for Cloud Run
 data "google_compute_default_service_account" "default" {
-  project = "github-chatgpt-ggcloud"
+  project = var.project_id
 }
 
-# Cloud Run service using standard_cloud_run module from platform-infra
-module "agent_data_service_test" {
+# Cloud Run service for Directus CMS using standard_cloud_run module from platform-infra
+module "directus_service" {
   source = "github.com/Huyen1974/platform-infra//terraform/modules/standard_cloud_run?ref=v1.0.0"
 
-  project_id            = "github-chatgpt-ggcloud"
-  region                = "asia-southeast1"
-  service_name          = "agent-data-test"
-  image                 = "asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/agent-data-test/agent-data-test:latest"
+  project_id            = var.project_id
+  region                = var.region
+  service_name          = "directus-${var.env}"
+  image                 = "directus/directus:11.2.2" # Pinned stable version, not :latest
   service_account_email = data.google_compute_default_service_account.default.email
 
-  # Secret environment variables
+  # Environment variables for Directus
+  env_vars = {
+    DB_CLIENT          = "mysql"
+    DB_HOST            = module.mysql_directus.instance_connection_name
+    DB_PORT            = "3306"
+    DB_DATABASE        = "directus"
+    DB_USER            = "directus"
+    ADMIN_EMAIL        = var.directus_admin_email
+    PUBLIC_URL         = "https://directus-${var.env}-${var.project_id}.run.app"
+    WEBSOCKETS_ENABLED = "true"
+  }
+
+  # Secret environment variables for Directus
   secret_env_vars = {
-    API_KEY = {
-      secret  = google_secret_manager_secret.agent_data_api_key.secret_id
-      version = google_secret_manager_secret_version.agent_data_api_key.version
+    DB_PASSWORD = {
+      secret  = google_secret_manager_secret.directus_db_password.secret_id
+      version = google_secret_manager_secret_version.directus_db_password.version
+    }
+    KEY = {
+      secret  = google_secret_manager_secret.directus_key.secret_id
+      version = google_secret_manager_secret_version.directus_key.version
+    }
+    SECRET = {
+      secret  = google_secret_manager_secret.directus_secret.secret_id
+      version = google_secret_manager_secret_version.directus_secret.version
     }
   }
 
@@ -36,13 +62,13 @@ module "agent_data_service_test" {
 
   # Auto-scaling
   min_instances = 0
-  max_instances = 10
+  max_instances = 5
   concurrency   = 80
 
   # Health check
-  health_check_path = "/"
+  health_check_path = "/server/health"
 
-  # Probe configuration - increased timeouts for container startup
+  # Probe configuration - optimized for Directus startup
   startup_probe_initial_delay     = 10
   startup_probe_timeout           = 3
   startup_probe_period            = 10

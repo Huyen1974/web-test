@@ -108,3 +108,9 @@ variable "sql_deletion_protection" {
   type        = bool
   default     = false
 }
+
+variable "directus_admin_email" {
+  description = "Admin email for Directus CMS"
+  type        = string
+  default     = "admin@example.com"
+}
