@@ -27,18 +27,18 @@ output "artifact_registry_repository" {
 output "mysql_instance" {
   description = "MySQL instance details for Directus"
   value = {
-    name            = google_sql_database_instance.mysql_directus.name
-    connection_name = google_sql_database_instance.mysql_directus.connection_name
+    name            = module.mysql_directus.instance_name
+    connection_name = module.mysql_directus.instance_connection_name
     region          = var.sql_region
-    database_name   = "directus"
-    tier            = google_sql_database_instance.mysql_directus.settings[0].tier
+    database_name   = module.mysql_directus.database_name
+    tier            = "db-f1-micro"
   }
   sensitive = false
 }
 
 output "directus_service_url" {
   description = "Cloud Run service URL for Directus"
-  value       = google_cloud_run_v2_service.directus.uri
+  value       = module.directus_service.service_url
 }
 
 output "cloud_scheduler_jobs" {

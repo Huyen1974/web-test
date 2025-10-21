@@ -31,89 +31,45 @@ resource "google_project_iam_member" "sql_scheduler_admin" {
   member  = "serviceAccount:${google_service_account.sql_scheduler.email}"
 }
 
-# MySQL instance for Directus (web-test requirement)
-# Note: Using db-f1-micro with ALWAYS policy for initial creation
-# GCP API requires ALWAYS for new instances; can change to NEVER after creation
-resource "google_sql_database_instance" "mysql_directus" {
-  name             = local.mysql_directus_instance_name
-  database_version = "MYSQL_8_0"
+# MySQL instance for Directus using minimum_cost_sql module
+module "mysql_directus" {
+  source = "github.com/Huyen1974/platform-infra//terraform/modules/minimum_cost_sql?ref=v1.1.0"
+
+  project_id       = var.project_id
   region           = var.sql_region
-  project          = var.project_id
+  instance_name    = local.mysql_directus_instance_name
+  database_version = "MYSQL_8_0"
+  database_name    = "directus"
 
-  # REQUIRED: Deletion protection to prevent accidental deletion
-  deletion_protection = true
+  # Cost optimization settings
+  disk_type             = "PD_HDD"
+  disk_size             = 10
+  disk_autoresize       = true
+  disk_autoresize_limit = 50
 
-  settings {
-    # Cost-optimized tier for Directus
-    tier = "db-f1-micro"
+  # Activation policy: ALWAYS for GCP API compliance
+  activation_policy = "ALWAYS"
 
-    # REQUIRED: ZONAL availability for cost optimization
-    availability_type = "ZONAL"
+  # Backup configuration
+  backup_start_time              = var.sql_backup_start_time
+  backup_retained_backups        = 7
+  transaction_log_retention_days = 7
 
-    # REQUIRED: ALWAYS for initial creation (GCP API requirement)
-    # Can be changed to NEVER via Cloud Scheduler after instance is created
-    activation_policy = "ALWAYS"
+  # Network configuration
+  ipv4_enabled = true
 
-    disk_type = "PD_HDD"
-    disk_size = 10
+  # Database flags
+  max_connections = "100"
 
-    disk_autoresize       = true
-    disk_autoresize_limit = 50
+  # Maintenance window
+  maintenance_window_day          = 7
+  maintenance_window_hour         = 3
+  maintenance_window_update_track = "stable"
 
-    backup_configuration {
-      # REQUIRED: Backup enabled
-      enabled = true
-
-      # REQUIRED: Binary logging enabled (for point-in-time recovery)
-      binary_log_enabled = true
-
-      start_time = var.sql_backup_start_time
-
-      backup_retention_settings {
-        retained_backups = 7
-        retention_unit   = "COUNT"
-      }
-
-      transaction_log_retention_days = 7
-    }
-
-    ip_configuration {
-      ipv4_enabled = true
-    }
-
-    database_flags {
-      name  = "max_connections"
-      value = "100"
-    }
-
-    maintenance_window {
-      day          = 7
-      hour         = 3
-      update_track = "stable"
-    }
-  }
-
-  lifecycle {
-    prevent_destroy = false
-    ignore_changes = [
-      settings[0].disk_size,
-    ]
-  }
-}
-
-# Directus database
-resource "google_sql_database" "directus" {
-  name     = "directus"
-  instance = google_sql_database_instance.mysql_directus.name
-  project  = var.project_id
-}
-
-# Directus database user
-resource "google_sql_user" "directus" {
-  name     = "directus"
-  instance = google_sql_database_instance.mysql_directus.name
-  password = random_password.directus_db_password.result
-  project  = var.project_id
+  # Create database user
+  create_user   = true
+  user_name     = "directus"
+  user_password = random_password.directus_db_password.result
 }
 
 # Cloud Scheduler for MySQL Directus instance
@@ -142,7 +98,7 @@ resource "google_cloud_scheduler_job" "mysql_directus_start" {
     google_project_service.cloudscheduler,
     google_service_account_iam_member.scheduler_token_creator,
     google_project_iam_member.sql_scheduler_admin,
-    google_sql_database_instance.mysql_directus
+    module.mysql_directus
   ]
 }
 
