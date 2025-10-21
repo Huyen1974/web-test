@@ -1,7 +1,7 @@
 locals {
   # MySQL instance for Directus (web-test requirement)
-  # Note: Using completely new unique name to test if GCP error is name-related
-  mysql_directus_instance_name = "mysql-directus-temp-diag"
+  # Note: Using standard name for production deployment
+  mysql_directus_instance_name = "mysql-directus-web-test"
 }
 
 resource "google_project_service" "sqladmin" {
@@ -32,7 +32,8 @@ resource "google_project_iam_member" "sql_scheduler_admin" {
 }
 
 # MySQL instance for Directus (web-test requirement)
-# Note: Using db-g1-small instead of db-f1-micro to diagnose GCP restriction
+# Note: Using db-f1-micro with ALWAYS policy for initial creation
+# GCP API requires ALWAYS for new instances; can change to NEVER after creation
 resource "google_sql_database_instance" "mysql_directus" {
   name             = local.mysql_directus_instance_name
   database_version = "MYSQL_8_0"
@@ -43,14 +44,15 @@ resource "google_sql_database_instance" "mysql_directus" {
   deletion_protection = true
 
   settings {
-    # Changed from db-f1-micro to db-g1-small for testing GCP restriction
-    tier = "db-g1-small"
+    # Cost-optimized tier for Directus
+    tier = "db-f1-micro"
 
     # REQUIRED: ZONAL availability for cost optimization
     availability_type = "ZONAL"
 
-    # REQUIRED: NEVER activation policy to minimize costs
-    activation_policy = "NEVER"
+    # REQUIRED: ALWAYS for initial creation (GCP API requirement)
+    # Can be changed to NEVER via Cloud Scheduler after instance is created
+    activation_policy = "ALWAYS"
 
     disk_type = "PD_HDD"
     disk_size = 10
