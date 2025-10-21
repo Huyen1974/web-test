@@ -1,5 +1,7 @@
 locals {
-  managed_sql_instance_name = var.sql_instance_name != "" ? var.sql_instance_name : "agent-data-managed-sql"
+  # MySQL instance for Directus (web-test requirement)
+  # Note: Using standard name for production deployment
+  mysql_directus_instance_name = "mysql-directus-web-test"
 }
 
 resource "google_project_service" "sqladmin" {
@@ -29,39 +31,57 @@ resource "google_project_iam_member" "sql_scheduler_admin" {
   member  = "serviceAccount:${google_service_account.sql_scheduler.email}"
 }
 
-resource "google_sql_database_instance" "managed" {
-  name                = local.managed_sql_instance_name
-  database_version    = var.sql_database_version
-  region              = var.sql_region
-  project             = var.project_id
-  deletion_protection = var.sql_deletion_protection
+# MySQL instance for Directus using minimum_cost_sql module
+module "mysql_directus" {
+  source = "github.com/Huyen1974/platform-infra//terraform/modules/minimum_cost_sql?ref=v1.1.0"
 
-  settings {
-    tier              = var.sql_tier
-    availability_type = "ZONAL"
-    activation_policy = "ALWAYS"
+  project_id       = var.project_id
+  region           = var.sql_region
+  instance_name    = local.mysql_directus_instance_name
+  database_version = "MYSQL_8_0"
+  database_name    = "directus"
 
-    backup_configuration {
-      enabled                        = true
-      start_time                     = var.sql_backup_start_time
-      point_in_time_recovery_enabled = false
-    }
+  # Cost optimization settings
+  disk_type             = "PD_HDD"
+  disk_size             = 10
+  disk_autoresize       = true
+  disk_autoresize_limit = 50
 
-    ip_configuration {
-      ipv4_enabled = true
-    }
-  }
+  # Activation policy: NEVER for cost optimization (Cloud Scheduler will start/stop on schedule)
+  activation_policy = "NEVER"
+
+  # Backup configuration
+  backup_start_time              = var.sql_backup_start_time
+  backup_retained_backups        = 7
+  transaction_log_retention_days = 7
+
+  # Network configuration
+  ipv4_enabled = true
+
+  # Database flags
+  max_connections = "100"
+
+  # Maintenance window
+  maintenance_window_day          = 7
+  maintenance_window_hour         = 3
+  maintenance_window_update_track = "stable"
+
+  # Create database user
+  create_user   = true
+  user_name     = "directus"
+  user_password = random_password.directus_db_password.result
 }
 
-resource "google_cloud_scheduler_job" "sql_start" {
-  name      = "${local.managed_sql_instance_name}-start"
+# Cloud Scheduler for MySQL Directus instance
+resource "google_cloud_scheduler_job" "mysql_directus_start" {
+  name      = "${local.mysql_directus_instance_name}-start"
   schedule  = var.sql_start_schedule
   time_zone = var.sql_schedule_timezone
   region    = var.sql_scheduler_region
 
   http_target {
     http_method = "PATCH"
-    uri         = "https://sqladmin.googleapis.com/v1/projects/${var.project_id}/instances/${local.managed_sql_instance_name}?updateMask=settings.activationPolicy"
+    uri         = "https://sqladmin.googleapis.com/v1/projects/${var.project_id}/instances/${local.mysql_directus_instance_name}?updateMask=settings.activationPolicy"
     body        = base64encode(jsonencode({ settings = { activationPolicy = "ALWAYS" } }))
 
     headers = {
@@ -78,19 +98,19 @@ resource "google_cloud_scheduler_job" "sql_start" {
     google_project_service.cloudscheduler,
     google_service_account_iam_member.scheduler_token_creator,
     google_project_iam_member.sql_scheduler_admin,
-    google_sql_database_instance.managed
+    module.mysql_directus
   ]
 }
 
-resource "google_cloud_scheduler_job" "sql_stop" {
-  name      = "${local.managed_sql_instance_name}-stop"
+resource "google_cloud_scheduler_job" "mysql_directus_stop" {
+  name      = "${local.mysql_directus_instance_name}-stop"
   schedule  = var.sql_stop_schedule
   time_zone = var.sql_schedule_timezone
   region    = var.sql_scheduler_region
 
   http_target {
     http_method = "PATCH"
-    uri         = "https://sqladmin.googleapis.com/v1/projects/${var.project_id}/instances/${local.managed_sql_instance_name}?updateMask=settings.activationPolicy"
+    uri         = "https://sqladmin.googleapis.com/v1/projects/${var.project_id}/instances/${local.mysql_directus_instance_name}?updateMask=settings.activationPolicy"
     body        = base64encode(jsonencode({ settings = { activationPolicy = "NEVER" } }))
 
     headers = {
@@ -103,7 +123,7 @@ resource "google_cloud_scheduler_job" "sql_stop" {
   }
 
   depends_on = [
-    google_cloud_scheduler_job.sql_start,
+    google_cloud_scheduler_job.mysql_directus_start,
     google_project_service.sqladmin,
     google_project_service.cloudscheduler,
     google_service_account_iam_member.scheduler_token_creator,

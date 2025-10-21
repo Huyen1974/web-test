@@ -24,3 +24,8 @@ provider "google" {
   project = var.project_id
   region  = "us-east4"
 }
+
+# Data source for project information
+data "google_project" "current" {
+  project_id = var.project_id
+}

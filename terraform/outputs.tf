@@ -1,3 +1,5 @@
+# Outputs for web-test infrastructure
+
 output "project_id" {
   description = "The GCP project ID"
   value       = var.project_id
@@ -13,24 +15,37 @@ output "environment" {
   value       = var.env
 }
 
-output "gcs_buckets" {
-  description = "Map of GCS bucket purposes to their names"
+output "artifact_registry_repository" {
+  description = "Artifact Registry repository for web-test"
   value = {
-    artifacts        = google_storage_bucket.huyen1974_agent_data_artifacts_test.name
-    knowledge        = google_storage_bucket.huyen1974_agent_data_knowledge_test.name
-    logs             = google_storage_bucket.huyen1974_agent_data_logs_test.name
-    qdrant_snapshots = google_storage_bucket.huyen1974_agent_data_qdrant_snapshots_test.name
-    source           = google_storage_bucket.huyen1974_agent_data_source_test.name
-    tfstate          = google_storage_bucket.huyen1974_agent_data_tfstate_test.name
+    id       = google_artifact_registry_repository.web_test_docker_repo.repository_id
+    name     = google_artifact_registry_repository.web_test_docker_repo.name
+    location = google_artifact_registry_repository.web_test_docker_repo.location
   }
 }
 
-output "artifact_registry_repository" {
-  description = "Artifact Registry repository details"
+output "mysql_instance" {
+  description = "MySQL instance details for Directus"
   value = {
-    name     = google_artifact_registry_repository.agent_data_docker_repo.name
-    location = google_artifact_registry_repository.agent_data_docker_repo.location
-    id       = google_artifact_registry_repository.agent_data_docker_repo.repository_id
+    name            = module.mysql_directus.instance_name
+    connection_name = module.mysql_directus.instance_connection_name
+    region          = var.sql_region
+    database_name   = module.mysql_directus.database_name
+    tier            = "db-f1-micro"
+  }
+  sensitive = false
+}
+
+output "directus_service_url" {
+  description = "Cloud Run service URL for Directus"
+  value       = module.directus_service.service_url
+}
+
+output "cloud_scheduler_jobs" {
+  description = "Cloud Scheduler jobs for MySQL start/stop"
+  value = {
+    start_job = google_cloud_scheduler_job.mysql_directus_start.name
+    stop_job  = google_cloud_scheduler_job.mysql_directus_stop.name
   }
 }
 
