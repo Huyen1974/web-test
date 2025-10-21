@@ -38,7 +38,7 @@ output "mysql_instance" {
 
 output "directus_service_url" {
   description = "Cloud Run service URL for Directus"
-  value       = module.directus_service.service_url
+  value       = google_cloud_run_v2_service.directus.uri
 }
 
 output "cloud_scheduler_jobs" {

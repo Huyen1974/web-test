@@ -111,3 +111,25 @@ resource "google_secret_manager_secret_version" "directus_db_password" {
   secret      = google_secret_manager_secret.directus_db_password.id
   secret_data = random_password.directus_db_password.result
 }
+
+# IAM bindings for chatgpt-deployer SA to access Directus secrets
+resource "google_secret_manager_secret_iam_member" "directus_key_accessor" {
+  secret_id = google_secret_manager_secret.directus_key.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com"
+  project   = var.project_id
+}
+
+resource "google_secret_manager_secret_iam_member" "directus_secret_accessor" {
+  secret_id = google_secret_manager_secret.directus_secret.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com"
+  project   = var.project_id
+}
+
+resource "google_secret_manager_secret_iam_member" "directus_db_password_accessor" {
+  secret_id = google_secret_manager_secret.directus_db_password.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com"
+  project   = var.project_id
+}
