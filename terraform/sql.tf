@@ -47,8 +47,8 @@ module "mysql_directus" {
   disk_autoresize       = true
   disk_autoresize_limit = 50
 
-  # Activation policy: ALWAYS for GCP API compliance
-  activation_policy = "ALWAYS"
+  # Activation policy: NEVER for cost optimization (Cloud Scheduler will start/stop on schedule)
+  activation_policy = "NEVER"
 
   # Backup configuration
   backup_start_time              = var.sql_backup_start_time
