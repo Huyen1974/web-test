@@ -152,12 +152,17 @@ jobs:
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
 
+      - name: Get GitHub PAT from Secret Manager
+        id: get-pat
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          secrets: |-
+            github-pat:projects/${{ secrets.GCP_PROJECT_ID }}/secrets/github-token-sg/versions/latest
+
       - name: Configure Git for private modules
         run: |
-          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          git config --global --add url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "git::https://github.com/"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          git config --global url."https://x-access-token:${{ steps.get-pat.outputs.github-pat }}@github.com/".insteadOf "https://github.com/"
+          git config --global --add url."https://x-access-token:${{ steps.get-pat.outputs.github-pat }}@github.com/".insteadOf "git::https://github.com/"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
