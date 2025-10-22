@@ -13,18 +13,27 @@ on:
 
 permissions:
   contents: read
-  id-token: write
-  actions: read
 
 jobs:
   terraform:
-    uses: ./.github/workflows/terraform-apply.yml
-    with:
-      project_id: ${{ secrets.GCP_PROJECT_ID }}
-      service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-      workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-      terraform_directory: ./terraform
-      backend_bucket: huyen1974-web-test-tfstate
-      backend_prefix: terraform/state
-      terraform_version: "1.9.0"
-      auto_apply: false
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./terraform
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.0
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init (no backend)
+        run: terraform init -backend=false
+
+      - name: Terraform Validate
+        run: terraform validate
