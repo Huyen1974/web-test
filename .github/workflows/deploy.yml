@@ -173,6 +173,10 @@ jobs:
         run: terraform fmt -check -recursive
 
       - name: Terraform Init
+        env:
+          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_KEY_0: url.https://x-access-token:${{ steps.get-pat.outputs.github-pat }}@github.com/.insteadOf
+          GIT_CONFIG_VALUE_0: https://github.com/
         run: |
           terraform init \
             -backend-config="bucket=${{ secrets.GCP_PROJECT_ID }}-tfstate" \
