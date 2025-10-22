@@ -67,10 +67,12 @@ jobs:
 
       - name: Run ESLint (if configured)
         run: |
-          if [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ] || [ -f "eslint.config.js" ]; then
-            npm run lint || echo "No lint script found, skipping"
+          # Check if lint script exists in package.json
+          if grep -q '"lint"' package.json; then
+            echo "Lint script found, running..."
+            npm run lint
           else
-            echo "ESLint not configured, performing basic quality checks"
+            echo "No lint script configured in package.json, skipping"
           fi
 
       - name: Check package.json validity
@@ -179,8 +181,8 @@ jobs:
           GIT_CONFIG_VALUE_0: https://github.com/
         run: |
           terraform init \
-            -backend-config="bucket=${{ secrets.GCP_PROJECT_ID }}-tfstate" \
-            -backend-config="prefix=web-test/terraform/state"
+            -backend-config="bucket=huyen1974-web-test-tfstate" \
+            -backend-config="prefix=terraform/state"
 
       - name: Terraform Validate
         run: terraform validate -no-color
