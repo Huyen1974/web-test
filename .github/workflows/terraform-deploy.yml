@@ -11,6 +11,11 @@ on:
       - 'terraform/**'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  id-token: write
+  actions: read
+
 jobs:
   terraform:
     uses: Huyen1974/platform-infra/.github/workflows/terraform-apply.yml@v1.0.0
