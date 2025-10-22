@@ -17,8 +17,8 @@ permissions:
   actions: read
 
 jobs:
-  terraform:
-    uses: ./.github/workflows/terraform-apply.yml
+  deploy:
+    uses: ./.github/workflows/deploy.yml
     with:
       project_id: ${{ secrets.GCP_PROJECT_ID }}
       service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}

@@ -1,0 +1,48 @@
+name: Terraform Deploy
+
+on:
+  workflow_call:
+    inputs:
+      project_id:
+        required: true
+        type: string
+      service_account:
+        required: true
+        type: string
+      workload_identity_provider:
+        required: true
+        type: string
+      terraform_directory:
+        required: true
+        type: string
+      backend_bucket:
+        required: true
+        type: string
+      backend_prefix:
+        required: true
+        type: string
+      terraform_version:
+        required: false
+        type: string
+        default: "1.9.0"
+      auto_apply:
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  terraform:
+    uses: ./.github/workflows/terraform-apply.yml
+    with:
+      project_id: ${{ inputs.project_id }}
+      service_account: ${{ inputs.service_account }}
+      workload_identity_provider: ${{ inputs.workload_identity_provider }}
+      terraform_directory: ${{ inputs.terraform_directory }}
+      backend_bucket: ${{ inputs.backend_bucket }}
+      backend_prefix: ${{ inputs.backend_prefix }}
+      terraform_version: ${{ inputs.terraform_version }}
+      auto_apply: ${{ inputs.auto_apply }}
