@@ -20,9 +20,9 @@ jobs:
   terraform:
     uses: ./.github/workflows/terraform-apply.yml
     with:
-      project_id: github-chatgpt-ggcloud
-      service_account: chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com
-      workload_identity_provider: projects/812872501910/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+      project_id: ${{ secrets.GCP_PROJECT_ID }}
+      service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
       terraform_directory: ./terraform
       backend_bucket: huyen1974-web-test-tfstate
       backend_prefix: terraform/state
