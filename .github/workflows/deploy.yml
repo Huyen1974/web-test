@@ -9,35 +9,116 @@ on:
 
 permissions:
   contents: read
+  id-token: write
+  pull-requests: write
 
 jobs:
   pass_gate:
     name: Pass Gate
     runs-on: ubuntu-latest
     steps:
-      - name: Emit Pass Gate status
-        run: echo "Pass Gate check satisfied."
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run Nuxt type check
+        run: npx nuxi typecheck
 
   guard_bootstrap_scaffold:
     name: Guard Bootstrap Scaffold
     runs-on: ubuntu-latest
     steps:
-      - name: Emit Guard Bootstrap Scaffold status
-        run: echo "Guard Bootstrap Scaffold check satisfied."
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate Terraform structure
+        run: |
+          if [ ! -f "terraform/main.tf" ]; then
+            echo "Error: terraform/main.tf not found"
+            exit 1
+          fi
+          if [ ! -f "terraform/backend.tf" ]; then
+            echo "Error: terraform/backend.tf not found"
+            exit 1
+          fi
+          echo "Bootstrap scaffold validation passed"
 
   quality_gate:
     name: Quality Gate
     runs-on: ubuntu-latest
     steps:
-      - name: Emit Quality Gate status
-        run: echo "Quality Gate check satisfied."
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run ESLint (if configured)
+        run: |
+          if [ -f ".eslintrc.js" ] || [ -f ".eslintrc.json" ] || [ -f "eslint.config.js" ]; then
+            npm run lint || echo "No lint script found, skipping"
+          else
+            echo "ESLint not configured, performing basic quality checks"
+          fi
+
+      - name: Check package.json validity
+        run: |
+          node -e "JSON.parse(require('fs').readFileSync('package.json', 'utf8'))"
+          echo "package.json is valid JSON"
+
+      - name: Check for common issues
+        run: |
+          # Check for .env files that shouldn't be committed
+          if [ -f ".env" ] || [ -f ".env.local" ]; then
+            echo "Warning: .env files found in repository"
+          fi
+          echo "Quality checks passed"
 
   e2e_smoke_test:
     name: E2E Smoke Test
     runs-on: ubuntu-latest
     steps:
-      - name: Emit E2E Smoke Test status
-        run: echo "E2E Smoke Test check satisfied."
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Nuxt application
+        run: npm run build
+
+      - name: Smoke test build output
+        run: |
+          if [ -d ".output" ]; then
+            echo "Build output directory exists"
+            if [ -d ".output/server" ]; then
+              echo "Server build found"
+            else
+              echo "Error: Server build not found"
+              exit 1
+            fi
+            echo "Smoke test passed"
+          else
+            echo "Error: Build output not found"
+            exit 1
+          fi
 
   deploy:
     name: deploy.yml
@@ -50,9 +131,32 @@ jobs:
     defaults:
       run:
         working-directory: ./terraform
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          token_format: 'access_token'
+          create_credentials_file: true
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Configure Git for private modules
+        run: |
+          git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -61,3 +165,64 @@ jobs:
 
       - name: Terraform Format Check
         run: terraform fmt -check -recursive
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.GCP_PROJECT_ID }}-tfstate" \
+            -backend-config="prefix=web-test/terraform/state"
+
+      - name: Terraform Validate
+        run: terraform validate -no-color
+
+      - name: Terraform Plan
+        id: plan
+        run: |
+          terraform plan -no-color -detailed-exitcode \
+            -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
+            -var="env=test" \
+            -var="qdrant_cluster_id=${{ secrets.QDRANT_CLUSTER1_ID }}" \
+            -var="qdrant_api_key=${{ secrets.QDRANT_CLUSTER1_KEY }}" \
+            -out=tfplan || exit_code=$?
+
+          # Exit code 0 = no changes, 1 = error, 2 = changes detected
+          if [ "${exit_code:-0}" = "1" ]; then
+            echo "Terraform plan failed"
+            exit 1
+          elif [ "${exit_code:-0}" = "2" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Changes detected in plan"
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No changes detected"
+          fi
+
+      - name: Comment PR with Plan (on pull request)
+        if: github.event_name == 'pull_request' && (success() || failure())
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const planStatus = '${{ steps.plan.outcome }}';
+            const hasChanges = '${{ steps.plan.outputs.has_changes }}';
+
+            const statusEmoji = planStatus === 'success' ? '✅' : '❌';
+
+            const output = `#### Terraform Plan ${statusEmoji}
+
+            **Status:** ${planStatus}
+            **Changes Detected:** ${hasChanges === 'true' ? 'Yes' : 'No'}
+
+            <details><summary>View Full Plan Output</summary>
+
+            Check the workflow logs for detailed plan output.
+
+            </details>
+
+            *Terraform CI check completed for commit ${context.sha.substring(0, 7)}*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
