@@ -16,8 +16,8 @@ This Terraform configuration manages the following GCP infrastructure:
    - Secret Manager API
 2. Terraform >= 1.8.x
 3. GCP credentials configured (`gcloud auth application-default login`)
-4. Repository secrets synced (`GCP_PROJECT_ID`, `GCP_SERVICE_ACCOUNT`, `GCP_WIF_PROVIDER`, optional `GCP_REGION`)
-5. GitHub Actions workflow `.github/workflows/deploy.yml` enabled on the repository (required for CI checks)
+4. Repository secrets synced (`GCP_PROJECT_ID`, `GCP_SERVICE_ACCOUNT`, `GCP_WIF_PROVIDER`, optional `GCP_REGION`).
+5. GitHub Actions workflow `.github/workflows/deploy.yml` enabled on the repository (required for CI checks).
 4. GitHub repository secrets configured for CI (`GCP_PROJECT_ID`, `GCP_SERVICE_ACCOUNT`, `GCP_WIF_PROVIDER`, optional `GCP_REGION`)
 5. GitHub Actions workflow `.github/workflows/deploy.yml` enabled on the repository (required for CI checks, uses WIF provider `github-pool/github-provider`)
 
