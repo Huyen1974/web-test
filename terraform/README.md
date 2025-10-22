@@ -16,6 +16,11 @@ This Terraform configuration manages the following GCP infrastructure:
    - Secret Manager API
 2. Terraform >= 1.8.x
 3. GCP credentials configured (`gcloud auth application-default login`)
+4. GitHub repository secrets configured for CI:
+   - `GCP_PROJECT_ID`
+   - `GCP_SERVICE_ACCOUNT`
+   - `GCP_WIF_PROVIDER`
+   - (optional) `GCP_REGION`
 
 ## Usage
 
