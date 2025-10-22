@@ -199,6 +199,7 @@ jobs:
 
       - name: Comment PR with Plan (on pull request)
         if: github.event_name == 'pull_request' && (success() || failure())
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           script: |
