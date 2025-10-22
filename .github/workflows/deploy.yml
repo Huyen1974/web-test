@@ -22,7 +22,7 @@ jobs:
     with:
       project_id: github-chatgpt-ggcloud
       service_account: chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com
-      workload_identity_provider: projects/812872501910/locations/global/workloadIdentityPools/agent-data-pool/providers/github-provider
+      workload_identity_provider: projects/812872501910/locations/global/workloadIdentityPools/github-pool/providers/github-provider
       terraform_directory: ./terraform
       backend_bucket: huyen1974-web-test-tfstate
       backend_prefix: terraform/state
