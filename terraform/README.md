@@ -17,6 +17,7 @@ This Terraform configuration manages the following GCP infrastructure:
 2. Terraform >= 1.8.x
 3. GCP credentials configured (`gcloud auth application-default login`)
 4. GitHub repository secrets configured for CI (`GCP_PROJECT_ID`, `GCP_SERVICE_ACCOUNT`, `GCP_WIF_PROVIDER`, optional `GCP_REGION`)
+5. GitHub Actions workflow `.github/workflows/deploy.yml` enabled on the repository
 
 ## Usage
 
