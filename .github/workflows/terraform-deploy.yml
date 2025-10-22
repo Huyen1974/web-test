@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   terraform:
-    uses: Huyen1974/platform-infra/.github/workflows/terraform-apply.yml@v1.0.0
+    uses: ./.github/workflows/terraform-apply.yml
     with:
       project_id: github-chatgpt-ggcloud
       service_account: chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com
