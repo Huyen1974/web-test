@@ -41,8 +41,8 @@ module "mysql_directus" {
   database_version = "MYSQL_8_0"
   database_name    = "directus"
 
-  # Cost optimization settings
-  disk_type             = "PD_HDD"
+  # Cost optimization settings - upgraded to SSD for faster startup (13+ min → ~2-3 min)
+  disk_type             = "PD_SSD"
   disk_size             = 10
   disk_autoresize       = true
   disk_autoresize_limit = 50
