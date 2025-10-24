@@ -12,10 +12,11 @@ resource "google_artifact_registry_repository_iam_member" "github_actions_writer
 }
 
 # IAM binding for Artifact Registry - Allow Cloud Run to pull images
+# Cloud Run services use chatgpt-deployer SA (as configured in main.tf)
 resource "google_artifact_registry_repository_iam_member" "cloud_run_reader" {
   project    = var.project_id
   location   = google_artifact_registry_repository.web_test_docker_repo.location
   repository = google_artifact_registry_repository.web_test_docker_repo.name
   role       = "roles/artifactregistry.reader"
-  member     = "serviceAccount:${data.google_project.current.number}-compute@developer.gserviceaccount.com"
+  member     = "serviceAccount:chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com"
 }

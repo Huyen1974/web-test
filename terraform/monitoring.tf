@@ -98,7 +98,7 @@ resource "google_monitoring_dashboard" "web_test_services_dashboard" {
                         alignmentPeriod    = "60s"
                         perSeriesAligner   = "ALIGN_DELTA"
                         crossSeriesReducer = "REDUCE_PERCENTILE_50"
-                        groupByFields      = ["resource.service_name"]
+                        groupByFields      = ["resource.labels.service_name"]
                       }
                     }
                   }
@@ -114,7 +114,7 @@ resource "google_monitoring_dashboard" "web_test_services_dashboard" {
                         alignmentPeriod    = "60s"
                         perSeriesAligner   = "ALIGN_DELTA"
                         crossSeriesReducer = "REDUCE_PERCENTILE_95"
-                        groupByFields      = ["resource.service_name"]
+                        groupByFields      = ["resource.labels.service_name"]
                       }
                     }
                   }
@@ -130,7 +130,7 @@ resource "google_monitoring_dashboard" "web_test_services_dashboard" {
                         alignmentPeriod    = "60s"
                         perSeriesAligner   = "ALIGN_DELTA"
                         crossSeriesReducer = "REDUCE_PERCENTILE_99"
-                        groupByFields      = ["resource.service_name"]
+                        groupByFields      = ["resource.labels.service_name"]
                       }
                     }
                   }
@@ -192,7 +192,7 @@ resource "google_monitoring_dashboard" "web_test_services_dashboard" {
                         alignmentPeriod    = "60s"
                         perSeriesAligner   = "ALIGN_RATE"
                         crossSeriesReducer = "REDUCE_SUM"
-                        groupByFields      = ["resource.service_name"]
+                        groupByFields      = ["resource.labels.service_name"]
                       }
                     }
                   }
