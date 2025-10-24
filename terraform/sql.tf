@@ -90,6 +90,7 @@ resource "google_cloud_scheduler_job" "mysql_directus_start" {
 
     oidc_token {
       service_account_email = google_service_account.sql_scheduler.email
+      audience              = "https://sqladmin.googleapis.com/"
     }
   }
 
@@ -119,6 +120,7 @@ resource "google_cloud_scheduler_job" "mysql_directus_stop" {
 
     oidc_token {
       service_account_email = google_service_account.sql_scheduler.email
+      audience              = "https://sqladmin.googleapis.com/"
     }
   }
 
