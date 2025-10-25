@@ -41,14 +41,6 @@ output "directus_service_url" {
   value       = module.directus_service.service_url
 }
 
-output "cloud_scheduler_jobs" {
-  description = "Cloud Scheduler jobs for MySQL start/stop"
-  value = {
-    start_job = google_cloud_scheduler_job.mysql_directus_start.name
-    stop_job  = google_cloud_scheduler_job.mysql_directus_stop.name
-  }
-}
-
 output "qdrant_endpoint" {
   description = "Qdrant cluster endpoint"
   value       = "https://${var.qdrant_cluster_id}.qdrant.tech"
