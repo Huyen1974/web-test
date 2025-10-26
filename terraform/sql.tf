@@ -10,9 +10,10 @@ resource "google_project_service" "sqladmin" {
 }
 
 
-# MySQL instance for Directus using minimum_cost_sql module
+# MySQL instance for Directus using minimum_cost_sql module (local fixed version)
+# Fixed version handles stopped instances (activation_policy = NEVER) without refresh errors
 module "mysql_directus" {
-  source = "github.com/Huyen1974/platform-infra//terraform/modules/minimum_cost_sql?ref=v1.1.0"
+  source = "./modules/minimum_cost_sql_fixed"
 
   project_id       = var.project_id
   region           = var.sql_region
@@ -46,7 +47,9 @@ module "mysql_directus" {
   maintenance_window_update_track = "stable"
 
   # Create database user
-  create_user   = true
+  # NOTE: User already created. Disabled to avoid "instance not running" errors during terraform plan
+  # The user exists and is managed manually or via Cloud Console when instance is running
+  create_user   = false
   user_name     = "directus"
   user_password = random_password.directus_db_password.result
 }
