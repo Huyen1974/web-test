@@ -12,20 +12,17 @@ export default defineNuxtConfig({
       {
         code: 'vi',
         iso: 'vi-VN',
-        name: 'Tiếng Việt',
-        file: 'vi.json'
+        name: 'Tiếng Việt'
       },
       {
         code: 'ja',
         iso: 'ja-JP',
-        name: '日本語',
-        file: 'ja.json'
+        name: '日本語'
       }
     ],
     defaultLocale: 'vi',
     strategy: 'prefix_except_default',
-    langDir: 'locales/',
-    lazy: true,
+    vueI18n: './i18n.config.ts',
     detectBrowserLanguage: {
       useCookie: true,
       cookieKey: 'i18n_redirected',
