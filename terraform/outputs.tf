@@ -71,6 +71,6 @@ output "kestra_service_url" {
 
 output "kestra_db_password_secret" {
   description = "Secret name for Kestra database password"
-  value       = google_secret_manager_secret.kestra_db_password.secret_id
+  value       = "kestra-db-password-test"
   sensitive   = false
 }
