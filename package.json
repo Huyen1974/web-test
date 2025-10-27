@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@directus/sdk": "^20.1.0",
+    "@nuxtjs/i18n": "^10.1.2",
     "firebase": "^12.4.0",
     "nuxt": "^3.13.0",
     "vue": "latest"

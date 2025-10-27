@@ -3,6 +3,35 @@ export default defineNuxtConfig({
   compatibilityDate: '2024-04-03',
   devtools: { enabled: true },
 
+  modules: [
+    '@nuxtjs/i18n'
+  ],
+
+  i18n: {
+    locales: [
+      {
+        code: 'vi',
+        iso: 'vi-VN',
+        name: 'Tiếng Việt'
+      },
+      {
+        code: 'ja',
+        iso: 'ja-JP',
+        name: '日本語'
+      }
+    ],
+    defaultLocale: 'vi',
+    strategy: 'prefix_except_default',
+    vueI18n: './i18n.config.ts',
+    detectBrowserLanguage: {
+      useCookie: true,
+      cookieKey: 'i18n_redirected',
+      redirectOn: 'root',
+      alwaysRedirect: false,
+      fallbackLocale: 'vi'
+    }
+  },
+
   runtimeConfig: {
     public: {
       firebaseApiKey: process.env.VITE_FIREBASE_API_KEY || '',

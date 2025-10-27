@@ -1,0 +1,64 @@
+{
+  "common": {
+    "welcome": "Chào mừng",
+    "home": "Trang chủ",
+    "about": "Giới thiệu",
+    "contact": "Liên hệ",
+    "login": "Đăng nhập",
+    "logout": "Đăng xuất",
+    "signup": "Đăng ký",
+    "search": "Tìm kiếm",
+    "submit": "Gửi",
+    "cancel": "Hủy",
+    "save": "Lưu",
+    "edit": "Chỉnh sửa",
+    "delete": "Xóa",
+    "loading": "Đang tải...",
+    "error": "Lỗi",
+    "success": "Thành công"
+  },
+  "students": {
+    "title": "Sinh viên",
+    "list": "Danh sách sinh viên",
+    "detail": "Thông tin sinh viên",
+    "name": "Tên",
+    "email": "Email",
+    "phone": "Số điện thoại",
+    "address": "Địa chỉ",
+    "dateOfBirth": "Ngày sinh",
+    "major": "Chuyên ngành",
+    "status": "Trạng thái"
+  },
+  "jobs": {
+    "title": "Việc làm",
+    "list": "Danh sách việc làm",
+    "detail": "Chi tiết việc làm",
+    "jobTitle": "Tiêu đề công việc",
+    "company": "Công ty",
+    "location": "Địa điểm",
+    "salary": "Lương",
+    "description": "Mô tả",
+    "requirements": "Yêu cầu",
+    "benefits": "Quyền lợi",
+    "deadline": "Hạn chót",
+    "applyNow": "Ứng tuyển ngay"
+  },
+  "affiliate": {
+    "title": "Đối tác",
+    "list": "Danh sách đối tác",
+    "detail": "Thông tin đối tác",
+    "name": "Tên đối tác",
+    "type": "Loại hình",
+    "website": "Website",
+    "description": "Giới thiệu",
+    "contactPerson": "Người liên hệ",
+    "partnership": "Hợp tác"
+  },
+  "nav": {
+    "students": "Sinh viên",
+    "jobs": "Việc làm",
+    "affiliates": "Đối tác",
+    "profile": "Hồ sơ",
+    "settings": "Cài đặt"
+  }
+}
