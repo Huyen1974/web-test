@@ -46,40 +46,21 @@ module "postgres_kestra" {
   # User will be created manually when instance is started
   create_user   = false
   user_name     = "kestra"
-  user_password = random_password.kestra_db_password.result
+  user_password = data.google_secret_manager_secret_version.kestra_db_password.secret_data
 }
 
-# Generate random password for Kestra database user
-resource "random_password" "kestra_db_password" {
-  length  = 32
-  special = true
-}
-
-# Store Kestra DB password in Secret Manager
-resource "google_secret_manager_secret" "kestra_db_password" {
-  project   = var.project_id
-  secret_id = "KESTRA_DB_PASSWORD_${var.env}"
-
-  replication {
-    auto {}
-  }
-
-  labels = {
-    app         = "kestra"
-    environment = var.env
-    managed_by  = "terraform"
-  }
-}
-
-resource "google_secret_manager_secret_version" "kestra_db_password" {
-  secret      = google_secret_manager_secret.kestra_db_password.id
-  secret_data = random_password.kestra_db_password.result
+# Read existing Kestra DB password from Secret Manager
+# Secret was created manually via gcloud in Task #199
+data "google_secret_manager_secret_version" "kestra_db_password" {
+  project = var.project_id
+  secret  = "kestra-db-password-test"
+  version = "latest"
 }
 
 # Grant Secret Manager access to the deployer service account
 resource "google_secret_manager_secret_iam_member" "kestra_db_password_accessor" {
   project   = var.project_id
-  secret_id = google_secret_manager_secret.kestra_db_password.secret_id
+  secret_id = "kestra-db-password-test"
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${local.chatgpt_deployer_sa}"
 }

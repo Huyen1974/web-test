@@ -1,70 +1,33 @@
 # Kestra Service Configuration for Sprint 2
 # Kestra is a workflow orchestration platform running on Cloud Run
 
-# Generate random secrets for Kestra encryption
-resource "random_password" "kestra_encryption_key" {
-  length  = 32
-  special = false # Alphanumeric only for encryption keys
+# Read existing Kestra encryption key from Secret Manager
+# Secret was created manually via gcloud in Task #199
+data "google_secret_manager_secret_version" "kestra_encryption_key" {
+  project = var.project_id
+  secret  = "kestra-encryption-key-test"
+  version = "latest"
 }
 
-resource "random_password" "kestra_secret_key" {
-  length  = 64
-  special = true
-}
-
-# Store Kestra encryption key in Secret Manager
-resource "google_secret_manager_secret" "kestra_encryption_key" {
-  project   = var.project_id
-  secret_id = "KESTRA_ENCRYPTION_KEY_${var.env}"
-
-  replication {
-    auto {}
-  }
-
-  labels = {
-    app         = "kestra"
-    environment = var.env
-    managed_by  = "terraform"
-  }
-}
-
-resource "google_secret_manager_secret_version" "kestra_encryption_key" {
-  secret      = google_secret_manager_secret.kestra_encryption_key.id
-  secret_data = random_password.kestra_encryption_key.result
-}
-
-# Store Kestra secret key in Secret Manager
-resource "google_secret_manager_secret" "kestra_secret_key" {
-  project   = var.project_id
-  secret_id = "KESTRA_SECRET_KEY_${var.env}"
-
-  replication {
-    auto {}
-  }
-
-  labels = {
-    app         = "kestra"
-    environment = var.env
-    managed_by  = "terraform"
-  }
-}
-
-resource "google_secret_manager_secret_version" "kestra_secret_key" {
-  secret      = google_secret_manager_secret.kestra_secret_key.id
-  secret_data = random_password.kestra_secret_key.result
+# Read existing Kestra secret key from Secret Manager
+# Secret was created manually via gcloud in Task #199
+data "google_secret_manager_secret_version" "kestra_secret_key" {
+  project = var.project_id
+  secret  = "kestra-secret-key-test"
+  version = "latest"
 }
 
 # Grant Secret Manager access for Kestra secrets
 resource "google_secret_manager_secret_iam_member" "kestra_encryption_key_accessor" {
   project   = var.project_id
-  secret_id = google_secret_manager_secret.kestra_encryption_key.secret_id
+  secret_id = "kestra-encryption-key-test"
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${local.chatgpt_deployer_sa}"
 }
 
 resource "google_secret_manager_secret_iam_member" "kestra_secret_key_accessor" {
   project   = var.project_id
-  secret_id = google_secret_manager_secret.kestra_secret_key.secret_id
+  secret_id = "kestra-secret-key-test"
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${local.chatgpt_deployer_sa}"
 }
@@ -112,16 +75,16 @@ module "kestra_service" {
   # Secret environment variables for Kestra
   secret_env_vars = {
     KESTRA_DATASOURCE_PASSWORD = {
-      secret  = google_secret_manager_secret.kestra_db_password.secret_id
-      version = google_secret_manager_secret_version.kestra_db_password.version
+      secret  = "kestra-db-password-test"
+      version = "latest"
     }
     KESTRA_ENCRYPTION_SECRET_KEY = {
-      secret  = google_secret_manager_secret.kestra_encryption_key.secret_id
-      version = google_secret_manager_secret_version.kestra_encryption_key.version
+      secret  = "kestra-encryption-key-test"
+      version = "latest"
     }
     KESTRA_SECRET_KEY = {
-      secret  = google_secret_manager_secret.kestra_secret_key.secret_id
-      version = google_secret_manager_secret_version.kestra_secret_key.version
+      secret  = "kestra-secret-key-test"
+      version = "latest"
     }
   }
 
