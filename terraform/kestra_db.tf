@@ -21,9 +21,10 @@ module "postgres_kestra" {
   disk_autoresize       = true
   disk_autoresize_limit = 30
 
-  # Activation policy: NEVER for cost optimization (manual start/stop)
-  # Kestra can be started on-demand when workflow execution is needed
-  activation_policy = "NEVER"
+  # Activation policy: Cannot set NEVER during instance creation (GCP API limitation)
+  # Instance will be created with default ALWAYS policy, then manually patched to NEVER
+  # See Task #203 investigation - Cloud SQL API rejects activation_policy=NEVER on create
+  # activation_policy = "NEVER"  # Commented out - will be set manually after creation
 
   # Backup configuration
   backup_start_time              = var.sql_backup_start_time
