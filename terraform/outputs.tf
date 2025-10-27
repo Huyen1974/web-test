@@ -50,3 +50,27 @@ output "qdrant_secret_name" {
   description = "Qdrant API key secret name"
   value       = google_secret_manager_secret.qdrant_api.secret_id
 }
+
+# Sprint 2: Kestra outputs
+output "postgres_kestra_instance" {
+  description = "PostgreSQL instance details for Kestra"
+  value = {
+    name            = module.postgres_kestra.instance_name
+    connection_name = module.postgres_kestra.instance_connection_name
+    region          = var.sql_region
+    database_name   = module.postgres_kestra.database_name
+    tier            = "db-f1-micro"
+  }
+  sensitive = false
+}
+
+output "kestra_service_url" {
+  description = "Cloud Run service URL for Kestra"
+  value       = module.kestra_service.service_url
+}
+
+output "kestra_db_password_secret" {
+  description = "Secret name for Kestra database password"
+  value       = google_secret_manager_secret.kestra_db_password.secret_id
+  sensitive   = false
+}
