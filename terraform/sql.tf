@@ -52,4 +52,7 @@ module "mysql_directus" {
   create_user   = false
   user_name     = "directus"
   user_password = random_password.directus_db_password.result
+
+  # Database creation is managed manually to avoid Terraform drift when the instance is stopped.
+  manage_database = false
 }

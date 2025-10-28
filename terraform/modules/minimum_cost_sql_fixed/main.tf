@@ -74,6 +74,7 @@ resource "google_sql_database_instance" "instance" {
 }
 
 resource "google_sql_database" "database" {
+  count    = var.manage_database ? 1 : 0
   name     = var.database_name
   instance = google_sql_database_instance.instance.name
   project  = var.project_id

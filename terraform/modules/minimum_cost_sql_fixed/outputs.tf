@@ -20,7 +20,7 @@ output "instance_first_ip_address" {
 
 output "database_name" {
   description = "Name of the database"
-  value       = google_sql_database.database.name
+  value       = var.manage_database ? google_sql_database.database[0].name : var.database_name
 }
 
 output "user_name" {
