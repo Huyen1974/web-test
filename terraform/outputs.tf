@@ -66,7 +66,7 @@ output "postgres_kestra_instance" {
 
 output "kestra_service_url" {
   description = "Cloud Run service URL for Kestra"
-  value       = module.kestra_service.service_url
+  value       = google_cloud_run_v2_service.kestra.uri
 }
 
 output "kestra_db_password_secret" {
