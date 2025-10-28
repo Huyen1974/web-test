@@ -48,9 +48,9 @@ module "kestra_service" {
   # Environment variables for Kestra
   env_vars = {
     # Database configuration
-    KESTRA_DATASOURCE_URL      = "jdbc:postgresql://localhost:5432/kestra?socketFactory=com.google.cloud.sql.postgres.SocketFactory&cloudSqlInstance=${module.postgres_kestra.instance_connection_name}"
-    KESTRA_DATASOURCE_USERNAME = "kestra"
-    KESTRA_DATASOURCE_DRIVER   = "org.postgresql.Driver"
+    DATASOURCES_POSTGRES_URL               = "jdbc:postgresql://localhost:5432/kestra?socketFactory=com.google.cloud.sql.postgres.SocketFactory&cloudSqlInstance=${module.postgres_kestra.instance_connection_name}"
+    DATASOURCES_POSTGRES_USERNAME          = "kestra"
+    DATASOURCES_POSTGRES_DRIVER_CLASS_NAME = "org.postgresql.Driver"
 
     # Kestra configuration
     KESTRA_SERVER_BASE_URL = "https://kestra-${var.env}-${var.project_id}.run.app"
@@ -74,7 +74,7 @@ module "kestra_service" {
 
   # Secret environment variables for Kestra
   secret_env_vars = {
-    KESTRA_DATASOURCE_PASSWORD = {
+    DATASOURCES_POSTGRES_PASSWORD = {
       secret  = "kestra-db-password-test"
       version = "latest"
     }
