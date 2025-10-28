@@ -32,87 +32,189 @@ resource "google_secret_manager_secret_iam_member" "kestra_secret_key_accessor" 
   member    = "serviceAccount:${local.chatgpt_deployer_sa}"
 }
 
-# Cloud Run service for Kestra using standard_cloud_run module
-module "kestra_service" {
-  source = "github.com/Huyen1974/platform-infra//terraform/modules/standard_cloud_run?ref=v1.1.0"
+# Cloud Run service for Kestra with Cloud SQL Auth Proxy sidecar
+# Using direct resource definition instead of module to enable sidecar pattern
+resource "google_cloud_run_v2_service" "kestra" {
+  name     = "kestra-${var.env}"
+  location = var.region
+  project  = var.project_id
 
-  project_id            = var.project_id
-  region                = var.region
-  service_name          = "kestra-${var.env}"
-  image                 = "kestra/kestra:latest" # Using official Kestra image
-  service_account_email = local.chatgpt_deployer_sa
+  template {
+    # Service account for Kestra
+    service_account = local.chatgpt_deployer_sa
 
-  # Cloud SQL connection configuration for PostgreSQL
-  cloud_sql_instances = [module.postgres_kestra.instance_connection_name]
+    # Scaling configuration
+    scaling {
+      min_instance_count = 0 # Cost optimization: scale to zero when not in use
+      max_instance_count = 3
+    }
 
-  # Environment variables for Kestra
-  env_vars = {
-    # Database configuration
-    DATASOURCES_POSTGRES_URL               = "jdbc:postgresql://localhost:5432/kestra?socketFactory=com.google.cloud.sql.postgres.SocketFactory&cloudSqlInstance=${module.postgres_kestra.instance_connection_name}"
-    DATASOURCES_POSTGRES_USERNAME          = "kestra"
-    DATASOURCES_POSTGRES_DRIVER_CLASS_NAME = "org.postgresql.Driver"
+    # Maximum concurrent requests per instance
+    max_instance_request_concurrency = 40
 
-    # Kestra configuration
-    KESTRA_SERVER_BASE_URL = "https://kestra-${var.env}-${var.project_id}.run.app"
+    # Main Kestra container
+    containers {
+      name  = "kestra"
+      image = "kestra/kestra:latest"
 
-    # Repository configuration (using database storage)
-    KESTRA_REPOSITORY_TYPE = "postgres"
+      # Resource limits - increased for workflow orchestration
+      resources {
+        limits = {
+          cpu    = "2000m"
+          memory = "1Gi"
+        }
+        cpu_idle = true
+      }
 
-    # Queue configuration (using database)
-    KESTRA_QUEUE_TYPE = "postgres"
+      # Environment variables for Kestra
+      env {
+        name  = "DATASOURCES_POSTGRES_URL"
+        value = "jdbc:postgresql://127.0.0.1:5432/kestra"
+      }
+      env {
+        name  = "DATASOURCES_POSTGRES_USERNAME"
+        value = "kestra"
+      }
+      env {
+        name  = "DATASOURCES_POSTGRES_DRIVER_CLASS_NAME"
+        value = "org.postgresql.Driver"
+      }
+      env {
+        name  = "KESTRA_SERVER_BASE_URL"
+        value = "https://kestra-${var.env}-${var.project_id}.run.app"
+      }
+      env {
+        name  = "KESTRA_REPOSITORY_TYPE"
+        value = "postgres"
+      }
+      env {
+        name  = "KESTRA_QUEUE_TYPE"
+        value = "postgres"
+      }
+      env {
+        name  = "KESTRA_STORAGE_TYPE"
+        value = "local"
+      }
+      env {
+        name  = "KESTRA_WEBSERVER_ENABLED"
+        value = "true"
+      }
+      env {
+        name  = "MICRONAUT_SERVER_PORT"
+        value = "8080"
+      }
+      env {
+        name  = "KESTRA_LOGGING_LEVEL"
+        value = "INFO"
+      }
 
-    # Storage configuration (using local storage for now)
-    KESTRA_STORAGE_TYPE = "local"
+      # Secret environment variables
+      env {
+        name = "DATASOURCES_POSTGRES_PASSWORD"
+        value_source {
+          secret_key_ref {
+            secret  = "kestra-db-password-test"
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "KESTRA_ENCRYPTION_SECRET_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "kestra-encryption-key-test"
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "KESTRA_SECRET_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "kestra-secret-key-test"
+            version = "latest"
+          }
+        }
+      }
 
-    # Webserver configuration
-    KESTRA_WEBSERVER_ENABLED = "true"
-    MICRONAUT_SERVER_PORT    = "8080"
+      # Ports
+      ports {
+        name           = "http1"
+        container_port = 8080
+      }
 
-    # Logging
-    KESTRA_LOGGING_LEVEL = "INFO"
+      # Startup probe - Kestra needs more time to start
+      startup_probe {
+        initial_delay_seconds = 30
+        timeout_seconds       = 5
+        period_seconds        = 10
+        failure_threshold     = 12
+
+        http_get {
+          path = "/api/v1/ping"
+          port = 8080
+        }
+      }
+
+      # Liveness probe
+      liveness_probe {
+        initial_delay_seconds = 30
+        timeout_seconds       = 5
+        period_seconds        = 15
+        failure_threshold     = 3
+
+        http_get {
+          path = "/api/v1/ping"
+          port = 8080
+        }
+      }
+    }
+
+    # Cloud SQL Auth Proxy sidecar container
+    containers {
+      name  = "cloud-sql-proxy"
+      image = "gcr.io/cloud-sql-connectors/cloud-sql-proxy:latest"
+
+      args = [
+        "--port=5432",
+        "--address=0.0.0.0",
+        module.postgres_kestra.instance_connection_name
+      ]
+
+      # Resource limits for proxy
+      resources {
+        limits = {
+          cpu    = "1000m"
+          memory = "512Mi"
+        }
+        cpu_idle = false
+      }
+
+      # Startup probe for proxy
+      startup_probe {
+        initial_delay_seconds = 0
+        timeout_seconds       = 1
+        period_seconds        = 1
+        failure_threshold     = 10
+
+        tcp_socket {
+          port = 5432
+        }
+      }
+    }
   }
 
-  # Secret environment variables for Kestra
-  secret_env_vars = {
-    DATASOURCES_POSTGRES_PASSWORD = {
-      secret  = "kestra-db-password-test"
-      version = "latest"
-    }
-    KESTRA_ENCRYPTION_SECRET_KEY = {
-      secret  = "kestra-encryption-key-test"
-      version = "latest"
-    }
-    KESTRA_SECRET_KEY = {
-      secret  = "kestra-secret-key-test"
-      version = "latest"
-    }
+  traffic {
+    type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
+    percent = 100
   }
+}
 
-  # Resource limits - increased for workflow orchestration
-  cpu_limit    = "2000m"
-  memory_limit = "1Gi"
-
-  # Auto-scaling configuration
-  min_instances = 0 # Cost optimization: scale to zero when not in use
-  max_instances = 3
-  concurrency   = 40
-
-  # Health check
-  health_check_path = "/api/v1/ping"
-
-  # Probe configuration - Kestra needs more time to start
-  startup_probe_initial_delay     = 30
-  startup_probe_timeout           = 5
-  startup_probe_period            = 10
-  startup_probe_failure_threshold = 12
-
-  liveness_probe_initial_delay     = 30
-  liveness_probe_timeout           = 5
-  liveness_probe_period            = 15
-  liveness_probe_failure_threshold = 3
-
-  # Network configuration
-  vpc_connector_name    = ""
-  vpc_egress_mode       = "PRIVATE_RANGES_ONLY"
-  allow_unauthenticated = true # For now, will add authentication later
+# IAM policy to allow unauthenticated access (for now, will add authentication later)
+resource "google_cloud_run_v2_service_iam_member" "kestra_noauth" {
+  project  = google_cloud_run_v2_service.kestra.project
+  location = google_cloud_run_v2_service.kestra.location
+  name     = google_cloud_run_v2_service.kestra.name
+  role     = "roles/run.invoker"
+  member   = "allUsers"
 }
