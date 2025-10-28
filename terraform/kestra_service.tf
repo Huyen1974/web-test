@@ -114,6 +114,10 @@ resource "google_cloud_run_v2_service" "kestra" {
         name  = "JAVA_OPTS"
         value = "-Xmx1536m -XX:+UseG1GC -Dmicronaut.server.port=8080"
       }
+      env {
+        name  = "ENDPOINTS_ALL_PORT"
+        value = "8080"
+      }
 
       # Secret environment variables
       env {
@@ -149,10 +153,6 @@ resource "google_cloud_run_v2_service" "kestra" {
         name           = "http1"
         container_port = 8080
       }
-      ports {
-        name           = "http2"
-        container_port = 8081
-      }
 
       # Startup probe - Kestra needs more time to start
       startup_probe {
@@ -163,7 +163,7 @@ resource "google_cloud_run_v2_service" "kestra" {
 
         http_get {
           path = "/health"
-          port = 8081
+          port = 8080
         }
       }
 
@@ -176,7 +176,7 @@ resource "google_cloud_run_v2_service" "kestra" {
 
         http_get {
           path = "/health/liveness"
-          port = 8081
+          port = 8080
         }
       }
     }
