@@ -57,11 +57,14 @@ resource "google_cloud_run_v2_service" "kestra" {
       name  = "kestra"
       image = "kestra/kestra:latest"
 
+      # Container arguments - run Kestra in standalone mode
+      args = ["server", "standalone"]
+
       # Resource limits - increased for workflow orchestration
       resources {
         limits = {
-          cpu    = "2000m"
-          memory = "1Gi"
+          cpu    = "4000m"
+          memory = "2Gi"
         }
         cpu_idle = true
       }
@@ -107,6 +110,10 @@ resource "google_cloud_run_v2_service" "kestra" {
         name  = "KESTRA_LOGGING_LEVEL"
         value = "INFO"
       }
+      env {
+        name  = "JAVA_OPTS"
+        value = "-Xmx1536m -XX:+UseG1GC -Dmicronaut.server.port=8080"
+      }
 
       # Secret environment variables
       env {
@@ -142,30 +149,34 @@ resource "google_cloud_run_v2_service" "kestra" {
         name           = "http1"
         container_port = 8080
       }
+      ports {
+        name           = "http2"
+        container_port = 8081
+      }
 
       # Startup probe - Kestra needs more time to start
       startup_probe {
-        initial_delay_seconds = 30
-        timeout_seconds       = 5
-        period_seconds        = 10
-        failure_threshold     = 12
+        initial_delay_seconds = 1
+        timeout_seconds       = 3
+        period_seconds        = 1
+        failure_threshold     = 120
 
         http_get {
-          path = "/api/v1/ping"
-          port = 8080
+          path = "/health"
+          port = 8081
         }
       }
 
       # Liveness probe
       liveness_probe {
-        initial_delay_seconds = 30
-        timeout_seconds       = 5
-        period_seconds        = 15
+        initial_delay_seconds = 0
+        timeout_seconds       = 3
+        period_seconds        = 5
         failure_threshold     = 3
 
         http_get {
-          path = "/api/v1/ping"
-          port = 8080
+          path = "/health/liveness"
+          port = 8081
         }
       }
     }
