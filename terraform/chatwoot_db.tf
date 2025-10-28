@@ -1,0 +1,67 @@
+locals {
+  # PostgreSQL instance for Chatwoot (Sprint 3 requirement)
+  # Note: Using cost-optimized configuration
+  postgres_chatwoot_instance_name = "postgres-chatwoot-web-test"
+}
+
+# PostgreSQL instance for Chatwoot using minimum_cost_sql_fixed module
+# Configured for cost optimization with manual start/stop capability
+module "postgres_chatwoot" {
+  source = "./modules/minimum_cost_sql_fixed"
+
+  project_id       = var.project_id
+  region           = var.sql_region
+  instance_name    = local.postgres_chatwoot_instance_name
+  database_version = "POSTGRES_15"
+  database_name    = "chatwoot"
+
+  # Cost optimization settings - small SSD for Chatwoot data
+  disk_type             = "PD_SSD"
+  disk_size             = 10
+  disk_autoresize       = true
+  disk_autoresize_limit = 30
+
+  # Activation policy: Cannot set NEVER during instance creation (GCP API limitation)
+  # Instance will be created with default ALWAYS policy, then manually patched to NEVER
+  # See Task #203 investigation - Cloud SQL API rejects activation_policy=NEVER on create
+  # activation_policy = "NEVER"  # Commented out - will be set manually after creation
+
+  # Backup configuration
+  backup_start_time              = var.sql_backup_start_time
+  backup_retained_backups        = 7
+  transaction_log_retention_days = 7
+
+  # Network configuration
+  ipv4_enabled = true
+
+  # Database flags for PostgreSQL
+  max_connections = "100"
+
+  # Maintenance window
+  maintenance_window_day          = 7
+  maintenance_window_hour         = 3
+  maintenance_window_update_track = "stable"
+
+  # Create database user for Chatwoot
+  # NOTE: Disabled initially to avoid "instance not running" errors
+  # User will be created manually when instance is started
+  create_user   = false
+  user_name     = "chatwoot"
+  user_password = data.google_secret_manager_secret_version.chatwoot_db_password.secret_data
+}
+
+# Read existing Chatwoot DB password from Secret Manager
+# Secret will be created manually via gcloud in Task #239
+data "google_secret_manager_secret_version" "chatwoot_db_password" {
+  project = var.project_id
+  secret  = "CHATWOOT_POSTGRES_PASSWORD_test"
+  version = "latest"
+}
+
+# Grant Secret Manager access to the deployer service account
+resource "google_secret_manager_secret_iam_member" "chatwoot_db_password_accessor" {
+  project   = var.project_id
+  secret_id = "CHATWOOT_POSTGRES_PASSWORD_test"
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${local.chatgpt_deployer_sa}"
+}
