@@ -29,6 +29,12 @@ variable "database_name" {
   type        = string
 }
 
+variable "manage_database" {
+  description = "Whether Terraform should manage creation of the default database"
+  type        = bool
+  default     = true
+}
+
 variable "disk_type" {
   description = "Disk type for the instance"
   type        = string
