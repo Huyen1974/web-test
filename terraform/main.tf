@@ -72,11 +72,20 @@ module "directus_service" {
   # Health check
   health_check_path = "/server/health"
 
-  # Probe configuration - optimized for Directus startup
+  # Probe configuration - extended for MySQL STOPPED -> RUNNING transition
+  # IMPORTANT: MySQL instance uses activation_policy=NEVER for cost savings
+  # When deploying/updating Directus:
+  # 1. Manually start MySQL: gcloud sql instances patch mysql-directus-web-test --activation-policy=ALWAYS
+  # 2. Wait ~2-3 min for MySQL to be fully ready (PD_SSD)
+  # 3. Deploy Directus (or wait for existing revision to pass health check)
+  # 4. Optionally stop MySQL after successful deployment
+  #
+  # Startup probe gives 20+ minutes for this manual process:
+  # Total time = 10s + (30s × 40) = 1210s ≈ 20 minutes
   startup_probe_initial_delay     = 10
   startup_probe_timeout           = 3
-  startup_probe_period            = 10
-  startup_probe_failure_threshold = 10
+  startup_probe_period            = 30
+  startup_probe_failure_threshold = 40
 
   liveness_probe_initial_delay     = 10
   liveness_probe_timeout           = 3
