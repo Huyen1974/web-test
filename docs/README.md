@@ -6,15 +6,19 @@ Welcome to the web-test project documentation. This directory contains comprehen
 
 ### Setup & Configuration
 - **[Directus Schema Definitions](./directus-schemas.md)** - Complete guide for setting up CMS collections (Students, Jobs, Affiliate) with bilingual support
+- **[Infrastructure Documentation](./infrastructure.md)** - Complete IaC setup for all services (Directus, Kestra, Chatwoot) ✅ **NEW**
 
 ### Architecture
 - **Technology Stack**:
   - Frontend: Nuxt 3 + Vue 3
-  - CMS: Directus (Cloud Run)
-  - Database: Cloud SQL MySQL
+  - CMS: Directus (Cloud Run + MySQL)
+  - Workflow Engine: Kestra (Cloud Run + PostgreSQL)
+  - Customer Support: Chatwoot (Cloud Run + PostgreSQL + Redis)
+  - Database: Cloud SQL (MySQL, 2x PostgreSQL)
   - Auth: Firebase Authentication
   - API: FastAPI Agent Data
   - i18n: @nuxtjs/i18n (Vietnamese/Japanese)
+  - Infrastructure: Terraform (IaC)
 
 ### Quick Links
 - [Nuxt.js Documentation](https://nuxt.com/docs)
@@ -55,19 +59,42 @@ VITE_FIREBASE_APP_ID=your_app_id
 VITE_DIRECTUS_URL=https://directus-test-xxx.run.app
 ```
 
-## 📖 Sprint 1 Features
+## 📖 Infrastructure Sprints Status
 
-### ✅ Completed
+### ✅ Sprint 1: Directus + MySQL (Completed)
 - [x] Nuxt 3 project setup
 - [x] Firebase Authentication integration
 - [x] Directus SDK integration
 - [x] i18n configuration (Vietnamese/Japanese)
-- [x] Terraform infrastructure (Cloud Run, Cloud SQL)
+- [x] Terraform infrastructure (Cloud Run, Cloud SQL MySQL)
 - [x] Schema documentation (Students, Jobs, Affiliate)
 
-### 🔄 In Progress
+### ✅ Sprint 2: Kestra + PostgreSQL (Completed)
+- [x] Kestra Cloud Run service deployment
+- [x] PostgreSQL Cloud SQL instance
+- [x] Cloud SQL Proxy sidecar pattern
+- [x] Workflow orchestration platform ready
+
+### ✅ Sprint 3: Chatwoot + PostgreSQL (Completed)
+- [x] Chatwoot Cloud Run service deployment
+- [x] PostgreSQL Cloud SQL instance for Chatwoot
+- [x] Redis sidecar for caching/queues
+- [x] Database migration automation
+- [x] URL-encoded password security fixes
+- [x] Multi-container Cloud Run setup
+
+### 🎉 Infrastructure Milestone
+**Status**: ✅ **Production Ready** (v0.1.0-infra-ready)
+
+All infrastructure components deployed, tested, and verified. Ready for application feature development.
+
+See [infrastructure.md](./infrastructure.md) for complete details.
+
+### 🔄 Next Phase: Application Development
 - [ ] Directus collection setup (manual via UI)
-- [ ] Webhook configuration (Directus → FastAPI)
+- [ ] Kestra workflow definitions
+- [ ] Chatwoot widget integration
+- [ ] Frontend-backend integration
 - [ ] Sample data creation
 
 ## 🌐 Internationalization (i18n)
@@ -192,6 +219,7 @@ For questions or issues:
 
 ---
 
-**Last Updated**: 2025-10-27
+**Last Updated**: 2025-10-29
 **Project**: web-test
-**Sprint**: Sprint 1
+**Phase**: Infrastructure Complete (Sprints 1-3)
+**Next Phase**: Application Development
