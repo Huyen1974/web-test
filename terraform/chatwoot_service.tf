@@ -50,7 +50,7 @@ resource "google_secret_manager_secret" "chatwoot_redis_url" {
 
 resource "google_secret_manager_secret_version" "chatwoot_redis_url" {
   secret      = google_secret_manager_secret.chatwoot_redis_url.id
-  secret_data = "redis://:${data.google_secret_manager_secret_version.chatwoot_redis_password.secret_data}@127.0.0.1:6379"
+  secret_data = format("redis://:%s@127.0.0.1:6379", urlencode(data.google_secret_manager_secret_version.chatwoot_redis_password.secret_data))
 }
 
 # Create DATABASE_URL secret with full connection string
@@ -66,7 +66,7 @@ resource "google_secret_manager_secret" "chatwoot_database_url" {
 
 resource "google_secret_manager_secret_version" "chatwoot_database_url" {
   secret      = google_secret_manager_secret.chatwoot_database_url.id
-  secret_data = "postgresql://chatwoot:${data.google_secret_manager_secret_version.chatwoot_db_password.secret_data}@127.0.0.1:5432/chatwoot"
+  secret_data = format("postgresql://chatwoot:%s@127.0.0.1:5432/chatwoot", urlencode(data.google_secret_manager_secret_version.chatwoot_db_password.secret_data))
 }
 
 # Note: chatwoot_db_password data source is defined in chatwoot_db.tf
