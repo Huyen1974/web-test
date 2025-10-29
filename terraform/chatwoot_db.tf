@@ -46,7 +46,7 @@ module "postgres_chatwoot" {
   # Create database user for Chatwoot
   # NOTE: Disabled initially to avoid "instance not running" errors
   # User will be created manually when instance is started
-  create_user   = true
+  create_user   = false # User managed manually to avoid refresh failures when instance is stopped
   user_name     = "chatwoot"
   user_password = data.google_secret_manager_secret_version.chatwoot_db_password.secret_data
 }
