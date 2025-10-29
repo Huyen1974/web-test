@@ -205,4 +205,16 @@ resource "google_monitoring_dashboard" "web_test_services_dashboard" {
       ]
     }
   })
+
+  # Lifecycle: Ignore changes to dashboard_json to prevent drift
+  # Reasoning (Minimalism Principle - HP-02, TF-LAW §1):
+  # - Dashboard layout (xPos, yPos, etc.) can change via GCP Console UI
+  # - GCP API may reorder/add fields when reading dashboard configuration
+  # - Terraform should manage dashboard EXISTENCE and INITIAL CONFIG only
+  # - Layout adjustments don't affect monitoring functionality
+  # - This prevents unnecessary drift from cosmetic changes
+  # Known issue: https://github.com/hashicorp/terraform-provider-google/issues/7242
+  lifecycle {
+    ignore_changes = [dashboard_json]
+  }
 }
