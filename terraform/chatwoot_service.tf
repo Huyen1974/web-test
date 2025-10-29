@@ -37,6 +37,40 @@ data "google_secret_manager_secret_version" "chatwoot_encryption_key_derivation_
   version = "latest"
 }
 
+# Create REDIS_URL secret with full connection string
+# This is needed because Chatwoot requires REDIS_URL format, not individual REDIS_HOST/PORT
+resource "google_secret_manager_secret" "chatwoot_redis_url" {
+  project   = var.project_id
+  secret_id = "CHATWOOT_REDIS_URL_test"
+
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "chatwoot_redis_url" {
+  secret      = google_secret_manager_secret.chatwoot_redis_url.id
+  secret_data = "redis://:${data.google_secret_manager_secret_version.chatwoot_redis_password.secret_data}@127.0.0.1:6379"
+}
+
+# Create DATABASE_URL secret with full connection string
+# PostgreSQL connection string format for Chatwoot
+resource "google_secret_manager_secret" "chatwoot_database_url" {
+  project   = var.project_id
+  secret_id = "CHATWOOT_DATABASE_URL_test"
+
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "chatwoot_database_url" {
+  secret      = google_secret_manager_secret.chatwoot_database_url.id
+  secret_data = "postgresql://chatwoot:${data.google_secret_manager_secret_version.chatwoot_db_password.secret_data}@127.0.0.1:5432/chatwoot"
+}
+
+# Note: chatwoot_db_password data source is defined in chatwoot_db.tf
+
 # Grant Secret Manager access for Chatwoot secrets
 resource "google_secret_manager_secret_iam_member" "chatwoot_secret_key_base_accessor" {
   project   = var.project_id
@@ -73,6 +107,20 @@ resource "google_secret_manager_secret_iam_member" "chatwoot_encryption_key_deri
   member    = "serviceAccount:${local.chatgpt_deployer_sa}"
 }
 
+resource "google_secret_manager_secret_iam_member" "chatwoot_redis_url_accessor" {
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.chatwoot_redis_url.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${local.chatgpt_deployer_sa}"
+}
+
+resource "google_secret_manager_secret_iam_member" "chatwoot_database_url_accessor" {
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.chatwoot_database_url.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${local.chatgpt_deployer_sa}"
+}
+
 # Cloud Run service for Chatwoot with Cloud SQL Auth Proxy sidecar
 # Using direct resource definition instead of module to enable sidecar pattern
 resource "google_cloud_run_v2_service" "chatwoot" {
@@ -97,6 +145,11 @@ resource "google_cloud_run_v2_service" "chatwoot" {
     containers {
       name  = "chatwoot-rails"
       image = "chatwoot/chatwoot:latest"
+
+      # Run database migrations before starting server
+      # db:chatwoot_prepare is idempotent and safe to run on every startup
+      command = ["/app/docker/entrypoints/rails.sh"]
+      args    = ["sh", "-c", "bundle exec rails db:chatwoot_prepare && bundle exec rails s -p 8080 -b 0.0.0.0"]
 
       # Resource limits
       resources {
@@ -125,14 +178,26 @@ resource "google_cloud_run_v2_service" "chatwoot" {
         value = "chatwoot"
       }
 
-      # Redis environment variables
+      # Database URL - Full PostgreSQL connection string (preferred by Chatwoot)
       env {
-        name  = "REDIS_HOST"
-        value = "127.0.0.1"
+        name = "DATABASE_URL"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.chatwoot_database_url.secret_id
+            version = "latest"
+          }
+        }
       }
+
+      # Redis URL - Full connection string (required by Chatwoot, not REDIS_HOST/PORT)
       env {
-        name  = "REDIS_PORT"
-        value = "6379"
+        name = "REDIS_URL"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.chatwoot_redis_url.secret_id
+            version = "latest"
+          }
+        }
       }
 
       # Application environment variables
@@ -167,6 +232,10 @@ resource "google_cloud_run_v2_service" "chatwoot" {
       env {
         name  = "INSTALLATION_NAME"
         value = "Chatwoot ${var.env}"
+      }
+      env {
+        name  = "MAILER_SENDER_EMAIL"
+        value = "noreply@chatwoot-${var.env}.local"
       }
 
       # Secret environment variables
@@ -228,19 +297,20 @@ resource "google_cloud_run_v2_service" "chatwoot" {
       # Ports
       ports {
         name           = "http1"
-        container_port = 3000
+        container_port = 8080
       }
 
-      # Startup probe - Chatwoot needs time to start
+      # Startup probe - Chatwoot needs time to start (including migrations)
+      # Using root path / instead of /api which may require authentication
       startup_probe {
         initial_delay_seconds = 10
         timeout_seconds       = 3
         period_seconds        = 10
-        failure_threshold     = 30
+        failure_threshold     = 50 # Increased to allow time for db:chatwoot_prepare
 
         http_get {
-          path = "/api"
-          port = 3000
+          path = "/"
+          port = 8080
         }
       }
 
@@ -252,8 +322,8 @@ resource "google_cloud_run_v2_service" "chatwoot" {
         failure_threshold     = 3
 
         http_get {
-          path = "/api"
-          port = 3000
+          path = "/"
+          port = 8080
         }
       }
     }
@@ -296,11 +366,8 @@ resource "google_cloud_run_v2_service" "chatwoot" {
       name  = "redis"
       image = "redis:7-alpine"
 
-      args = [
-        "redis-server",
-        "--requirepass",
-        "$(REDIS_PASSWORD)"
-      ]
+      command = ["/bin/sh", "-c"]
+      args    = ["redis-server --requirepass \"$REDIS_PASSWORD\""]
 
       # Resource limits for Redis
       resources {
@@ -320,11 +387,6 @@ resource "google_cloud_run_v2_service" "chatwoot" {
             version = "latest"
           }
         }
-      }
-
-      # Ports
-      ports {
-        container_port = 6379
       }
 
       # Startup probe for Redis
