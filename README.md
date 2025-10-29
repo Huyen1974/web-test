@@ -28,3 +28,14 @@ npm run preview
 ## Infrastructure
 
 The infrastructure is managed with Terraform in the `terraform/` directory.
+
+**Status**: ✅ Production Ready (v0.1.0-infra-ready)
+
+### Deployed Services
+- **Directus** (CMS) - Cloud Run + Cloud SQL MySQL
+- **Kestra** (Workflow Orchestration) - Cloud Run + Cloud SQL PostgreSQL
+- **Chatwoot** (Customer Support) - Cloud Run + Cloud SQL PostgreSQL + Redis
+
+All services are deployed, verified, and ready for application development.
+
+For complete infrastructure documentation, see [docs/infrastructure.md](./docs/infrastructure.md).
