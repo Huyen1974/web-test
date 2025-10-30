@@ -7,6 +7,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Prevent concurrent Terraform deployments to avoid state conflicts
+concurrency:
+  group: terraform-deploy-lock
+  cancel-in-progress: false
+
 permissions:
   contents: read
   id-token: write
@@ -242,103 +247,107 @@ jobs:
             })
 
       # Steps below only run on push to main (actual deployment)
-      - name: Start MySQL Directus Instance
+      # Start all SQL instances in parallel using async operations
+      - name: Start All SQL Instances (Async)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: start_instances
         run: |
-          echo "Starting MySQL instance mysql-directus-web-test..."
-          gcloud sql instances patch mysql-directus-web-test \
+          echo "Starting all SQL instances asynchronously (in parallel)..."
+
+          # Start MySQL Directus (async)
+          echo "Initiating start for MySQL instance mysql-directus-web-test..."
+          mysql_op=$(gcloud sql instances patch mysql-directus-web-test \
             --activation-policy=ALWAYS \
-            --project=${{ secrets.GCP_PROJECT_ID }}
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --async \
+            --format="value(name)")
+          echo "MySQL operation ID: $mysql_op"
+          echo "mysql_operation_id=$mysql_op" >> $GITHUB_OUTPUT
+
+          # Start PostgreSQL Kestra (async)
+          echo "Initiating start for PostgreSQL instance postgres-kestra-web-test..."
+          kestra_op=$(gcloud sql instances patch postgres-kestra-web-test \
+            --activation-policy=ALWAYS \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --async \
+            --format="value(name)")
+          echo "Kestra operation ID: $kestra_op"
+          echo "kestra_operation_id=$kestra_op" >> $GITHUB_OUTPUT
+
+          # Start PostgreSQL Chatwoot (async)
+          echo "Initiating start for PostgreSQL instance postgres-chatwoot-web-test..."
+          chatwoot_op=$(gcloud sql instances patch postgres-chatwoot-web-test \
+            --activation-policy=ALWAYS \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --async \
+            --format="value(name)")
+          echo "Chatwoot operation ID: $chatwoot_op"
+          echo "chatwoot_operation_id=$chatwoot_op" >> $GITHUB_OUTPUT
+
+          echo "All SQL instance start operations initiated successfully"
         working-directory: .
 
-      - name: Start PostgreSQL Kestra Instance
+      # Wait for all async operations to complete (with 20 minute timeout per operation)
+      - name: Wait for SQL Instances to Start
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          echo "Starting PostgreSQL instance postgres-kestra-web-test..."
-          gcloud sql instances patch postgres-kestra-web-test \
-            --activation-policy=ALWAYS \
-            --project=${{ secrets.GCP_PROJECT_ID }}
+          echo "Waiting for all SQL instances to start (timeout: 20 minutes per instance)..."
+
+          # Wait for MySQL operation (20 minute timeout = 1200 seconds)
+          echo "Waiting for MySQL operation ${{ steps.start_instances.outputs.mysql_operation_id }}..."
+          if gcloud beta sql operations wait ${{ steps.start_instances.outputs.mysql_operation_id }} \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --timeout=1200; then
+            echo "✓ MySQL instance started successfully"
+          else
+            echo "✗ MySQL start operation timed out or failed"
+            exit 1
+          fi
+
+          # Wait for Kestra operation (20 minute timeout = 1200 seconds)
+          echo "Waiting for Kestra operation ${{ steps.start_instances.outputs.kestra_operation_id }}..."
+          if gcloud beta sql operations wait ${{ steps.start_instances.outputs.kestra_operation_id }} \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --timeout=1200; then
+            echo "✓ PostgreSQL Kestra instance started successfully"
+          else
+            echo "✗ Kestra start operation timed out or failed"
+            exit 1
+          fi
+
+          # Wait for Chatwoot operation (20 minute timeout = 1200 seconds)
+          echo "Waiting for Chatwoot operation ${{ steps.start_instances.outputs.chatwoot_operation_id }}..."
+          if gcloud beta sql operations wait ${{ steps.start_instances.outputs.chatwoot_operation_id }} \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --timeout=1200; then
+            echo "✓ PostgreSQL Chatwoot instance started successfully"
+          else
+            echo "✗ Chatwoot start operation timed out or failed"
+            exit 1
+          fi
+
+          echo "All SQL instances started successfully"
         working-directory: .
 
-      - name: Start PostgreSQL Chatwoot Instance
+      # Verify all instances are actually in RUNNABLE state
+      - name: Verify All Instances are RUNNABLE
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          echo "Starting PostgreSQL instance postgres-chatwoot-web-test..."
-          gcloud sql instances patch postgres-chatwoot-web-test \
-            --activation-policy=ALWAYS \
-            --project=${{ secrets.GCP_PROJECT_ID }}
-        working-directory: .
+          echo "Verifying all SQL instances are RUNNABLE..."
 
-      - name: Wait for MySQL Directus to be RUNNABLE
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          echo "Waiting for MySQL instance to be RUNNABLE..."
-          max_attempts=60
-          attempt=0
-          while [ $attempt -lt $max_attempts ]; do
-            state=$(gcloud sql instances describe mysql-directus-web-test \
+          for instance in mysql-directus-web-test postgres-kestra-web-test postgres-chatwoot-web-test; do
+            state=$(gcloud sql instances describe $instance \
               --project=${{ secrets.GCP_PROJECT_ID }} \
               --format="value(state)")
-            echo "Current state: $state (attempt $((attempt+1))/$max_attempts)"
-            if [ "$state" = "RUNNABLE" ]; then
-              echo "MySQL instance is RUNNABLE"
-              break
-            fi
-            attempt=$((attempt+1))
-            if [ $attempt -ge $max_attempts ]; then
-              echo "Timeout waiting for MySQL instance to be RUNNABLE"
-              exit 1
-            fi
-            sleep 10
-          done
-        working-directory: .
 
-      - name: Wait for PostgreSQL Kestra to be RUNNABLE
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          echo "Waiting for PostgreSQL Kestra instance to be RUNNABLE..."
-          max_attempts=60
-          attempt=0
-          while [ $attempt -lt $max_attempts ]; do
-            state=$(gcloud sql instances describe postgres-kestra-web-test \
-              --project=${{ secrets.GCP_PROJECT_ID }} \
-              --format="value(state)")
-            echo "Current state: $state (attempt $((attempt+1))/$max_attempts)"
-            if [ "$state" = "RUNNABLE" ]; then
-              echo "PostgreSQL Kestra instance is RUNNABLE"
-              break
-            fi
-            attempt=$((attempt+1))
-            if [ $attempt -ge $max_attempts ]; then
-              echo "Timeout waiting for PostgreSQL Kestra instance to be RUNNABLE"
+            if [ "$state" != "RUNNABLE" ]; then
+              echo "✗ Error: $instance is not RUNNABLE (current state: $state)"
               exit 1
             fi
-            sleep 10
+            echo "✓ $instance is RUNNABLE"
           done
-        working-directory: .
 
-      - name: Wait for PostgreSQL Chatwoot to be RUNNABLE
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          echo "Waiting for PostgreSQL Chatwoot instance to be RUNNABLE..."
-          max_attempts=60
-          attempt=0
-          while [ $attempt -lt $max_attempts ]; do
-            state=$(gcloud sql instances describe postgres-chatwoot-web-test \
-              --project=${{ secrets.GCP_PROJECT_ID }} \
-              --format="value(state)")
-            echo "Current state: $state (attempt $((attempt+1))/$max_attempts)"
-            if [ "$state" = "RUNNABLE" ]; then
-              echo "PostgreSQL Chatwoot instance is RUNNABLE"
-              break
-            fi
-            attempt=$((attempt+1))
-            if [ $attempt -ge $max_attempts ]; then
-              echo "Timeout waiting for PostgreSQL Chatwoot instance to be RUNNABLE"
-              exit 1
-            fi
-            sleep 10
-          done
+          echo "All SQL instances verified as RUNNABLE"
         working-directory: .
 
       - name: Terraform Apply
