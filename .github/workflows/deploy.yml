@@ -160,6 +160,9 @@ jobs:
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
 
+      - name: Install gcloud beta components
+        run: gcloud components install beta --quiet
+
       - name: Get GitHub PAT from Secret Manager
         id: get-pat
         uses: google-github-actions/get-secretmanager-secrets@v2
