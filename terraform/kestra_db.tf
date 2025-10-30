@@ -14,6 +14,7 @@ module "postgres_kestra" {
   instance_name    = local.postgres_kestra_instance_name
   database_version = "POSTGRES_15"
   database_name    = "kestra"
+  manage_database  = false # Managed manually to avoid refresh failures when instance is stopped
 
   # Cost optimization settings - small SSD for Kestra workflow metadata
   disk_type             = "PD_SSD"

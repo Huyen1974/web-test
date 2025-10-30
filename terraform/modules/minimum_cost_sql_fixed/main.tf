@@ -69,6 +69,7 @@ resource "google_sql_database_instance" "instance" {
     prevent_destroy = false
     ignore_changes = [
       settings[0].disk_size,
+      settings[0].activation_policy,
     ]
   }
 }
