@@ -277,16 +277,6 @@ jobs:
           echo "Kestra operation ID: $kestra_op"
           echo "kestra_operation_id=$kestra_op" >> $GITHUB_OUTPUT
 
-          # Start PostgreSQL Chatwoot (async)
-          echo "Initiating start for PostgreSQL instance postgres-chatwoot-web-test..."
-          chatwoot_op=$(gcloud sql instances patch postgres-chatwoot-web-test \
-            --activation-policy=ALWAYS \
-            --project=${{ secrets.GCP_PROJECT_ID }} \
-            --async \
-            --format="value(name)")
-          echo "Chatwoot operation ID: $chatwoot_op"
-          echo "chatwoot_operation_id=$chatwoot_op" >> $GITHUB_OUTPUT
-
           echo "All SQL instance start operations initiated successfully"
         working-directory: .
 
@@ -318,17 +308,6 @@ jobs:
             exit 1
           fi
 
-          # Wait for Chatwoot operation (20 minute timeout = 1200 seconds)
-          echo "Waiting for Chatwoot operation ${{ steps.start_instances.outputs.chatwoot_operation_id }}..."
-          if gcloud beta sql operations wait ${{ steps.start_instances.outputs.chatwoot_operation_id }} \
-            --project=${{ secrets.GCP_PROJECT_ID }} \
-            --timeout=1200; then
-            echo "✓ PostgreSQL Chatwoot instance started successfully"
-          else
-            echo "✗ Chatwoot start operation timed out or failed"
-            exit 1
-          fi
-
           echo "All SQL instances started successfully"
         working-directory: .
 
@@ -338,7 +317,7 @@ jobs:
         run: |
           echo "Verifying all SQL instances are RUNNABLE..."
 
-          for instance in mysql-directus-web-test postgres-kestra-web-test postgres-chatwoot-web-test; do
+          for instance in mysql-directus-web-test postgres-kestra-web-test; do
             state=$(gcloud sql instances describe $instance \
               --project=${{ secrets.GCP_PROJECT_ID }} \
               --format="value(state)")
@@ -373,11 +352,6 @@ jobs:
           gcloud sql instances patch postgres-kestra-web-test \
             --activation-policy=NEVER \
             --project=${{ secrets.GCP_PROJECT_ID }} || echo "Failed to stop PostgreSQL Kestra instance"
-
-          echo "Stopping PostgreSQL instance postgres-chatwoot-web-test..."
-          gcloud sql instances patch postgres-chatwoot-web-test \
-            --activation-policy=NEVER \
-            --project=${{ secrets.GCP_PROJECT_ID }} || echo "Failed to stop PostgreSQL Chatwoot instance"
 
           echo "All SQL instances stopped successfully"
         working-directory: .
