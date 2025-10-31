@@ -23,17 +23,18 @@ resource "google_project_iam_member" "chatwoot_sql_client" {
 }
 
 # Read existing Chatwoot DB password from Secret Manager
-# Secret will be created manually via gcloud in Task #239
+# NOTE: Temporarily using existing POSTGRES password secret for testing
+# TODO: Create CHATWOOT_MYSQL_PASSWORD_test secret before production deployment
 data "google_secret_manager_secret_version" "chatwoot_db_password" {
   project = var.project_id
-  secret  = "CHATWOOT_MYSQL_PASSWORD_test"
+  secret  = "CHATWOOT_POSTGRES_PASSWORD_test"
   version = "latest"
 }
 
 # Grant Secret Manager access to the deployer service account
 resource "google_secret_manager_secret_iam_member" "chatwoot_db_password_accessor" {
   project   = var.project_id
-  secret_id = "CHATWOOT_MYSQL_PASSWORD_test"
+  secret_id = "CHATWOOT_POSTGRES_PASSWORD_test"
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${local.chatgpt_deployer_sa}"
 }

@@ -256,7 +256,7 @@ resource "google_cloud_run_v2_service" "chatwoot" {
         name = "DB_PASSWORD"
         value_source {
           secret_key_ref {
-            secret  = "CHATWOOT_MYSQL_PASSWORD_test"
+            secret  = "CHATWOOT_POSTGRES_PASSWORD_test"
             version = "latest"
           }
         }
