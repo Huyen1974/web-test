@@ -1,20 +1,19 @@
-# Chatwoot database and user within postgres-kestra-web-test instance
-# Part of CMD-007 SQL consolidation - migrating Chatwoot from dedicated instance to shared Kestra instance
+# Chatwoot database and user within mysql-directus-web-test instance
+# Part of "2-SQL Constitution" - consolidating Chatwoot onto shared MySQL instance
 
-resource "google_sql_database" "chatwoot_on_kestra" {
+resource "google_sql_database" "chatwoot_on_mysql" {
   name     = "chatwoot_production"
-  instance = module.postgres_kestra.instance_name
+  instance = module.mysql_directus.instance_name
   project  = var.project_id
 }
 
-# Note: User creation disabled to avoid conflicts with existing user
-# User 'chatwoot' should be created manually or via Cloud Console when instance is running
-# resource "google_sql_user" "chatwoot_user_on_kestra" {
-#   name     = "chatwoot"
-#   instance = module.postgres_kestra.instance_name
-#   password = data.google_secret_manager_secret_version.chatwoot_db_password.secret_data
-#   project  = var.project_id
-# }
+# Create Chatwoot MySQL user
+resource "google_sql_user" "chatwoot_mysql_user" {
+  name     = "chatwoot"
+  instance = module.mysql_directus.instance_name
+  password = data.google_secret_manager_secret_version.chatwoot_db_password.secret_data
+  project  = var.project_id
+}
 
 # IAM permissions for Chatwoot to access the database
 resource "google_project_iam_member" "chatwoot_sql_client" {
@@ -24,7 +23,8 @@ resource "google_project_iam_member" "chatwoot_sql_client" {
 }
 
 # Read existing Chatwoot DB password from Secret Manager
-# Secret will be created manually via gcloud in Task #239
+# NOTE: Temporarily using existing POSTGRES password secret for testing
+# TODO: Create CHATWOOT_MYSQL_PASSWORD_test secret before production deployment
 data "google_secret_manager_secret_version" "chatwoot_db_password" {
   project = var.project_id
   secret  = "CHATWOOT_POSTGRES_PASSWORD_test"
