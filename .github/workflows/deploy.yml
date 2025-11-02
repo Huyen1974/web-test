@@ -456,22 +456,6 @@ jobs:
             else
               echo "No deletion operation started (instance may already be gone)."
             fi
-
-            for attempt in {1..12}; do
-              if ! gcloud sql instances describe postgres-chatwoot-web-test \
-                --project=${{ secrets.GCP_PROJECT_ID }} >/dev/null 2>&1; then
-                echo "Confirmed legacy Chatwoot instance is gone."
-                break
-              fi
-
-              if [ "$attempt" -eq 12 ]; then
-                echo "Instance still present after deletion wait window; continuing anyway."
-                break
-              fi
-
-              echo "Legacy instance still reported by API; checking again in 10 seconds..."
-              sleep 10
-            done
           else
             echo "Legacy Chatwoot instance not found, skipping deletion protection update."
           fi
