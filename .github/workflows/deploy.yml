@@ -244,6 +244,8 @@ jobs:
 
             if [ "$state" = "RUNNABLE" ]; then
               echo "✓ mysql-directus-web-test is RUNNABLE"
+              echo "Waiting 60s for instance to fully stabilize before Terraform queries..."
+              sleep 60
               exit 0
             fi
           done
@@ -429,6 +431,8 @@ jobs:
 
               if [ "$state" = "RUNNABLE" ]; then
                 echo "✓ $instance_name is RUNNABLE"
+                echo "Waiting 60s for instance to fully stabilize before Terraform queries..."
+                sleep 60
                 return 0
               fi
             done
