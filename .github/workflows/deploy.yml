@@ -412,25 +412,6 @@ jobs:
               --project=${{ secrets.GCP_PROJECT_ID }} \
               --no-deletion-protection \
               --quiet
-
-            for attempt in {1..12}; do
-              status=$(gcloud sql instances describe postgres-chatwoot-web-test \
-                --project=${{ secrets.GCP_PROJECT_ID }} \
-                --format="value(settings.deletionProtectionEnabled)" 2>/dev/null || echo "unknown")
-
-              if [ "$status" = "false" ]; then
-                echo "Deletion protection disabled successfully."
-                break
-              fi
-
-              if [ "$attempt" -eq 12 ]; then
-                echo "Failed to disable deletion protection after waiting 120 seconds."
-                exit 1
-              fi
-
-              echo "Deletion protection still enabled (status: $status). Retrying in 10 seconds..."
-              sleep 10
-            done
           else
             echo "Legacy Chatwoot instance not found, skipping deletion protection update."
           fi
