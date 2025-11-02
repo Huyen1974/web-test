@@ -66,10 +66,10 @@ resource "google_secret_manager_secret" "chatwoot_database_url" {
 
 resource "google_secret_manager_secret_version" "chatwoot_database_url" {
   secret      = google_secret_manager_secret.chatwoot_database_url.id
-  secret_data = format("mysql2://chatwoot:%s@127.0.0.1:3306/chatwoot_production", urlencode(data.google_secret_manager_secret_version.chatwoot_db_password.secret_data))
+  secret_data = format("mysql2://chatwoot:%s@127.0.0.1:3306/chatwoot_production", urlencode(random_password.chatwoot_mysql_password.result))
 }
 
-# Note: chatwoot_db_password data source is defined in chatwoot_internal_db.tf
+# Note: chatwoot_mysql_password resource is defined in chatwoot_internal_db.tf
 
 # Grant Secret Manager access for Chatwoot secrets
 resource "google_secret_manager_secret_iam_member" "chatwoot_secret_key_base_accessor" {
@@ -258,7 +258,7 @@ resource "google_cloud_run_v2_service" "chatwoot" {
         name = "DB_PASSWORD"
         value_source {
           secret_key_ref {
-            secret  = "CHATWOOT_MYSQL_PASSWORD_test"
+            secret  = google_secret_manager_secret.chatwoot_mysql_password.secret_id
             version = "latest"
           }
         }

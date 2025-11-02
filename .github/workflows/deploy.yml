@@ -198,6 +198,9 @@ jobs:
 
       - name: Ensure MySQL Instance Running for Plan
         run: |
+          # Smart Workflow 3 Logic (Report #0321) - saves 18+ minutes when instance already running
+
+          # Logic 1: Check if already RUNNABLE
           state=$(gcloud sql instances describe mysql-directus-web-test \
             --project=${{ secrets.GCP_PROJECT_ID }} \
             --format="value(state)" 2>/dev/null || echo "NOT_FOUND")
@@ -207,23 +210,46 @@ jobs:
             exit 1
           fi
 
-          if [ "$state" != "RUNNABLE" ]; then
-            echo "Starting mysql-directus-web-test instance to support Terraform plan..."
-            start_op=$(gcloud sql instances patch mysql-directus-web-test \
+          if [ "$state" = "RUNNABLE" ]; then
+            echo "✓ mysql-directus-web-test already RUNNABLE - skipping"
+            exit 0
+          fi
+
+          # Logic 2: Start instance if STOPPED
+          if [ "$state" = "STOPPED" ]; then
+            echo "Starting mysql-directus-web-test instance (state: STOPPED)..."
+            gcloud sql instances patch mysql-directus-web-test \
               --project=${{ secrets.GCP_PROJECT_ID }} \
               --activation-policy=ALWAYS \
               --async \
-              --quiet \
-              --format="value(name)")
-
-            if [ -n "$start_op" ]; then
-              gcloud beta sql operations wait "$start_op" \
-                --project=${{ secrets.GCP_PROJECT_ID }} \
-                --timeout=1200
-            fi
-          else
-            echo "mysql-directus-web-test already RUNNABLE"
+              --quiet
+          elif [[ "$state" == PENDING* ]]; then
+            echo "Instance already starting (state: $state) - will poll for completion"
           fi
+
+          # Logic 3: Smart polling loop (60s intervals, max 40 minutes)
+          echo "Polling for RUNNABLE state (max 40 minutes)..."
+          max_attempts=40
+          attempt=0
+
+          while [ $attempt -lt $max_attempts ]; do
+            sleep 60
+            attempt=$((attempt + 1))
+
+            state=$(gcloud sql instances describe mysql-directus-web-test \
+              --project=${{ secrets.GCP_PROJECT_ID }} \
+              --format="value(state)")
+
+            echo "Attempt $attempt/$max_attempts: state=$state"
+
+            if [ "$state" = "RUNNABLE" ]; then
+              echo "✓ mysql-directus-web-test is RUNNABLE"
+              exit 0
+            fi
+          done
+
+          echo "✗ Timeout: Instance did not become RUNNABLE after 40 minutes"
+          exit 1
         working-directory: .
 
       - name: Terraform Plan
@@ -304,83 +330,118 @@ jobs:
       - name: Stop MySQL Instance After Plan (PR only)
         if: github.event_name == 'pull_request'
         run: |
-          echo "Restoring mysql-directus-web-test activation policy to NEVER..."
-          stop_op=$(gcloud sql instances patch mysql-directus-web-test \
-            --project=${{ secrets.GCP_PROJECT_ID }} \
-            --activation-policy=NEVER \
-            --async \
-            --quiet \
-            --format="value(name)")
+          # Smart Workflow 3 Logic (Report #0321) for stopping instance
 
-          if [ -n "$stop_op" ]; then
-            gcloud beta sql operations wait "$stop_op" \
-              --project=${{ secrets.GCP_PROJECT_ID }} \
-              --timeout=1200 || echo "Warning: stop operation wait timed out"
-          else
-            echo "No stop operation returned; assuming instance already configured."
+          # Logic 1: Check if already STOPPED
+          state=$(gcloud sql instances describe mysql-directus-web-test \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --format="value(state)")
+
+          if [ "$state" = "STOPPED" ]; then
+            echo "✓ mysql-directus-web-test already STOPPED - skipping"
+            exit 0
           fi
+
+          # Logic 2: Stop instance if RUNNABLE
+          if [ "$state" = "RUNNABLE" ]; then
+            echo "Stopping mysql-directus-web-test instance (state: RUNNABLE)..."
+            gcloud sql instances patch mysql-directus-web-test \
+              --project=${{ secrets.GCP_PROJECT_ID }} \
+              --activation-policy=NEVER \
+              --async \
+              --quiet
+          elif [[ "$state" == PENDING* ]]; then
+            echo "Instance already stopping (state: $state) - will poll for completion"
+          fi
+
+          # Logic 3: Smart polling loop (60s intervals, max 40 minutes)
+          echo "Polling for STOPPED state (max 40 minutes)..."
+          max_attempts=40
+          attempt=0
+
+          while [ $attempt -lt $max_attempts ]; do
+            sleep 60
+            attempt=$((attempt + 1))
+
+            state=$(gcloud sql instances describe mysql-directus-web-test \
+              --project=${{ secrets.GCP_PROJECT_ID }} \
+              --format="value(state)")
+
+            echo "Attempt $attempt/$max_attempts: state=$state"
+
+            if [ "$state" = "STOPPED" ]; then
+              echo "✓ mysql-directus-web-test is STOPPED"
+              exit 0
+            fi
+          done
+
+          echo "⚠ Warning: Instance did not stop after 40 minutes (state: $state)"
+          # Don't fail the build - stopping is best-effort for cost savings
+          exit 0
         working-directory: .
 
       # Steps below only run on push to main (actual deployment)
-      # Start all SQL instances in parallel using async operations
-      - name: Start All SQL Instances (Async)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        id: start_instances
-        run: |
-          echo "Starting all SQL instances asynchronously (in parallel)..."
-
-          # Start MySQL Directus (async)
-          echo "Initiating start for MySQL instance mysql-directus-web-test..."
-          mysql_op=$(gcloud sql instances patch mysql-directus-web-test \
-            --activation-policy=ALWAYS \
-            --project=${{ secrets.GCP_PROJECT_ID }} \
-            --async \
-            --format="value(name)")
-          echo "MySQL operation ID: $mysql_op"
-          echo "mysql_operation_id=$mysql_op" >> $GITHUB_OUTPUT
-
-          # Start PostgreSQL Kestra (async)
-          echo "Initiating start for PostgreSQL instance postgres-kestra-web-test..."
-          kestra_op=$(gcloud sql instances patch postgres-kestra-web-test \
-            --activation-policy=ALWAYS \
-            --project=${{ secrets.GCP_PROJECT_ID }} \
-            --async \
-            --format="value(name)")
-          echo "Kestra operation ID: $kestra_op"
-          echo "kestra_operation_id=$kestra_op" >> $GITHUB_OUTPUT
-
-          echo "All SQL instance start operations initiated successfully"
-        working-directory: .
-
-      # Wait for all async operations to complete (with 20 minute timeout per operation)
-      - name: Wait for SQL Instances to Start
+      # Smart Workflow 3 Logic for SQL instance management (Report #0321)
+      - name: Ensure All SQL Instances Running (Smart Workflow)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          echo "Waiting for all SQL instances to start (timeout: 20 minutes per instance)..."
+          # Function to ensure instance is RUNNABLE using Smart Workflow 3 Logic
+          ensure_instance_running() {
+            instance_name=$1
+            echo "=== Processing $instance_name ==="
 
-          # Wait for MySQL operation (20 minute timeout = 1200 seconds)
-          echo "Waiting for MySQL operation ${{ steps.start_instances.outputs.mysql_operation_id }}..."
-          if gcloud beta sql operations wait ${{ steps.start_instances.outputs.mysql_operation_id }} \
-            --project=${{ secrets.GCP_PROJECT_ID }} \
-            --timeout=1200; then
-            echo "✓ MySQL instance started successfully"
-          else
-            echo "✗ MySQL start operation timed out or failed"
-            exit 1
-          fi
+            # Logic 1: Check if already RUNNABLE
+            state=$(gcloud sql instances describe $instance_name \
+              --project=${{ secrets.GCP_PROJECT_ID }} \
+              --format="value(state)")
 
-          # Wait for Kestra operation (20 minute timeout = 1200 seconds)
-          echo "Waiting for Kestra operation ${{ steps.start_instances.outputs.kestra_operation_id }}..."
-          if gcloud beta sql operations wait ${{ steps.start_instances.outputs.kestra_operation_id }} \
-            --project=${{ secrets.GCP_PROJECT_ID }} \
-            --timeout=1200; then
-            echo "✓ PostgreSQL Kestra instance started successfully"
-          else
-            echo "✗ Kestra start operation timed out or failed"
-            exit 1
-          fi
+            if [ "$state" = "RUNNABLE" ]; then
+              echo "✓ $instance_name already RUNNABLE - skipping"
+              return 0
+            fi
 
-          echo "All SQL instances started successfully"
+            # Logic 2: Start instance if STOPPED
+            if [ "$state" = "STOPPED" ]; then
+              echo "Starting $instance_name (state: STOPPED)..."
+              gcloud sql instances patch $instance_name \
+                --activation-policy=ALWAYS \
+                --project=${{ secrets.GCP_PROJECT_ID }} \
+                --async \
+                --quiet
+            elif [[ "$state" == PENDING* ]]; then
+              echo "Instance already starting (state: $state) - will poll for completion"
+            fi
+
+            # Logic 3: Smart polling loop (60s intervals, max 40 minutes)
+            echo "Polling for RUNNABLE state (max 40 minutes)..."
+            max_attempts=40
+            attempt=0
+
+            while [ $attempt -lt $max_attempts ]; do
+              sleep 60
+              attempt=$((attempt + 1))
+
+              state=$(gcloud sql instances describe $instance_name \
+                --project=${{ secrets.GCP_PROJECT_ID }} \
+                --format="value(state)")
+
+              echo "Attempt $attempt/$max_attempts: state=$state"
+
+              if [ "$state" = "RUNNABLE" ]; then
+                echo "✓ $instance_name is RUNNABLE"
+                return 0
+              fi
+            done
+
+            echo "✗ Timeout: $instance_name did not become RUNNABLE after 40 minutes"
+            return 1
+          }
+
+          # Process both instances (sequentially for now - can be parallelized later)
+          ensure_instance_running "mysql-directus-web-test" || exit 1
+          ensure_instance_running "postgres-kestra-web-test" || exit 1
+
+          echo "✓ All SQL instances are RUNNABLE"
         working-directory: .
 
       # Verify all instances are actually in RUNNABLE state

@@ -11,7 +11,7 @@ resource "google_sql_database" "chatwoot_on_mysql" {
 resource "google_sql_user" "chatwoot_mysql_user" {
   name     = "chatwoot"
   instance = module.mysql_directus.instance_name
-  password = data.google_secret_manager_secret_version.chatwoot_db_password.secret_data
+  password = random_password.chatwoot_mysql_password.result
   project  = var.project_id
 }
 
@@ -22,18 +22,43 @@ resource "google_project_iam_member" "chatwoot_sql_client" {
   member  = "serviceAccount:chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com"
 }
 
-# Read existing Chatwoot DB password from Secret Manager
-# Using MYSQL password secret instead of POSTGRES password
-data "google_secret_manager_secret_version" "chatwoot_db_password" {
-  project = var.project_id
-  secret  = "CHATWOOT_MYSQL_PASSWORD_test"
-  version = "latest"
+# Generate Chatwoot MySQL password
+# Fix for Report #0321: Create secret via Terraform instead of manual creation
+resource "random_password" "chatwoot_mysql_password" {
+  length  = 32
+  special = true
+}
+
+# Create Chatwoot MySQL password secret
+resource "google_secret_manager_secret" "chatwoot_mysql_password" {
+  secret_id = "CHATWOOT_MYSQL_PASSWORD_${var.env}"
+  project   = var.project_id
+
+  replication {
+    user_managed {
+      replicas {
+        location = "asia-southeast1"
+      }
+    }
+  }
+
+  labels = {
+    environment = var.env
+    project     = "web-test"
+    managed_by  = "terraform"
+  }
+}
+
+# Store Chatwoot MySQL password in secret
+resource "google_secret_manager_secret_version" "chatwoot_mysql_password" {
+  secret      = google_secret_manager_secret.chatwoot_mysql_password.id
+  secret_data = random_password.chatwoot_mysql_password.result
 }
 
 # Grant Secret Manager access to the deployer service account
 resource "google_secret_manager_secret_iam_member" "chatwoot_db_password_accessor" {
   project   = var.project_id
-  secret_id = "CHATWOOT_MYSQL_PASSWORD_test"
+  secret_id = google_secret_manager_secret.chatwoot_mysql_password.secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${local.chatgpt_deployer_sa}"
 }
