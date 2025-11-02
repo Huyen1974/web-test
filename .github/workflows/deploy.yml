@@ -414,27 +414,22 @@ jobs:
               --quiet
 
             for attempt in {1..12}; do
-              raw_settings=$(gcloud sql instances describe postgres-chatwoot-web-test \
+              raw_status=$(gcloud sql instances describe postgres-chatwoot-web-test \
                 --project=${{ secrets.GCP_PROJECT_ID }} \
                 --format="value(settings.deletionProtectionEnabled)" 2>/dev/null || echo "unknown")
-              raw_top=$(gcloud sql instances describe postgres-chatwoot-web-test \
-                --project=${{ secrets.GCP_PROJECT_ID }} \
-                --format="value(deletionProtectionEnabled)" 2>/dev/null || echo "unknown")
-              status_settings=$(echo "$raw_settings" | tr '[:upper:]' '[:lower:]')
-              status_top=$(echo "$raw_top" | tr '[:upper:]' '[:lower:]')
+              status=$(echo "$raw_status" | tr '[:upper:]' '[:lower:]')
 
-              if { [ "$status_settings" = "false" ] || [ -z "$status_settings" ]; } \
-                && { [ "$status_top" = "false" ] || [ -z "$status_top" ]; }; then
-                echo "Deletion protection disabled successfully (settings=$raw_settings, top=$raw_top)."
+              if [ "$status" = "false" ] || [ -z "$status" ]; then
+                echo "Deletion protection disabled successfully."
                 break
               fi
 
               if [ "$attempt" -eq 12 ]; then
-                echo "Failed to disable deletion protection after waiting 120 seconds (settings=$raw_settings, top=$raw_top)."
+                echo "Failed to disable deletion protection after waiting 120 seconds."
                 exit 1
               fi
 
-              echo "Deletion protection still enabled (settings=$raw_settings, top=$raw_top). Retrying in 10 seconds..."
+              echo "Deletion protection still enabled (status: $raw_status). Retrying in 10 seconds..."
               sleep 10
             done
           else
