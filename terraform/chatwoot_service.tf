@@ -148,8 +148,10 @@ resource "google_cloud_run_v2_service" "chatwoot" {
 
       # Run database migrations before starting server
       # db:chatwoot_prepare is idempotent and safe to run on every startup
-      command = ["/app/docker/entrypoints/rails.sh"]
-      args    = ["sh", "-c", "bundle exec rails db:chatwoot_prepare && bundle exec rails s -p 8080 -b 0.0.0.0"]
+      # CRITICAL FIX: Bypass rails.sh entrypoint to avoid pg_isready check (Report #0319)
+      # rails.sh expects PostgreSQL but we're using MySQL - direct execution prevents startup failure
+      command = ["sh", "-c"]
+      args    = ["bundle exec rails db:chatwoot_prepare && bundle exec rails s -p 8080 -b 0.0.0.0"]
 
       # Resource limits
       resources {
