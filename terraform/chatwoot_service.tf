@@ -54,7 +54,7 @@ resource "google_secret_manager_secret_version" "chatwoot_redis_url" {
 }
 
 # Create DATABASE_URL secret with full connection string
-# MySQL connection string format for Chatwoot
+# PostgreSQL connection string format for Chatwoot
 resource "google_secret_manager_secret" "chatwoot_database_url" {
   project   = var.project_id
   secret_id = "CHATWOOT_DATABASE_URL_test"
@@ -66,7 +66,7 @@ resource "google_secret_manager_secret" "chatwoot_database_url" {
 
 resource "google_secret_manager_secret_version" "chatwoot_database_url" {
   secret      = google_secret_manager_secret.chatwoot_database_url.id
-  secret_data = format("mysql2://chatwoot:%s@127.0.0.1:3306/chatwoot_production", urlencode(data.google_secret_manager_secret_version.chatwoot_db_password.secret_data))
+  secret_data = format("postgresql://chatwoot:%s@127.0.0.1:5432/chatwoot_production", urlencode(data.google_secret_manager_secret_version.chatwoot_db_password.secret_data))
 }
 
 # Note: chatwoot_db_password data source is defined in chatwoot_internal_db.tf
@@ -160,29 +160,25 @@ resource "google_cloud_run_v2_service" "chatwoot" {
         cpu_idle = true
       }
 
-      # Database environment variables for MySQL
+      # Database environment variables
       env {
-        name  = "DB_ADAPTER"
-        value = "mysql2"
-      }
-      env {
-        name  = "DB_HOST"
+        name  = "POSTGRES_HOST"
         value = "127.0.0.1"
       }
       env {
-        name  = "DB_PORT"
-        value = "3306"
+        name  = "POSTGRES_PORT"
+        value = "5432"
       }
       env {
-        name  = "DB_USERNAME"
+        name  = "POSTGRES_USERNAME"
         value = "chatwoot"
       }
       env {
-        name  = "DB_NAME"
-        value = "chatwoot_production"
+        name  = "POSTGRES_DATABASE"
+        value = "chatwoot"
       }
 
-      # Database URL - Full MySQL connection string (preferred by Chatwoot)
+      # Database URL - Full PostgreSQL connection string (preferred by Chatwoot)
       env {
         name = "DATABASE_URL"
         value_source {
@@ -253,7 +249,7 @@ resource "google_cloud_run_v2_service" "chatwoot" {
         }
       }
       env {
-        name = "DB_PASSWORD"
+        name = "POSTGRES_PASSWORD"
         value_source {
           secret_key_ref {
             secret  = "CHATWOOT_POSTGRES_PASSWORD_test"
@@ -332,15 +328,15 @@ resource "google_cloud_run_v2_service" "chatwoot" {
       }
     }
 
-    # Cloud SQL Auth Proxy sidecar container for MySQL
+    # Cloud SQL Auth Proxy sidecar container for PostgreSQL
     containers {
       name  = "cloud-sql-proxy"
       image = "gcr.io/cloud-sql-connectors/cloud-sql-proxy:latest"
 
       args = [
-        "--port=3306",
+        "--port=5432",
         "--address=0.0.0.0",
-        module.mysql_directus.instance_connection_name
+        module.postgres_kestra.instance_connection_name
       ]
 
       # Resource limits for proxy
@@ -360,7 +356,7 @@ resource "google_cloud_run_v2_service" "chatwoot" {
         failure_threshold     = 10
 
         tcp_socket {
-          port = 3306
+          port = 5432
         }
       }
     }

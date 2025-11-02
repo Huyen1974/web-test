@@ -196,97 +196,27 @@ jobs:
       - name: Terraform Validate
         run: terraform validate -no-color
 
-      - name: Ensure MySQL Instance Running for Plan
-        run: |
-          state=$(gcloud sql instances describe mysql-directus-web-test \
-            --project=${{ secrets.GCP_PROJECT_ID }} \
-            --format="value(state)" 2>/dev/null || echo "NOT_FOUND")
-
-          if [ "$state" = "NOT_FOUND" ]; then
-            echo "✗ mysql-directus-web-test instance not found"
-            exit 1
-          fi
-
-          if [ "$state" != "RUNNABLE" ]; then
-            echo "Starting mysql-directus-web-test instance to support Terraform plan..."
-            start_op=$(gcloud sql instances patch mysql-directus-web-test \
-              --project=${{ secrets.GCP_PROJECT_ID }} \
-              --activation-policy=ALWAYS \
-              --async \
-              --quiet \
-              --format="value(name)")
-
-            if [ -n "$start_op" ]; then
-              gcloud beta sql operations wait "$start_op" \
-                --project=${{ secrets.GCP_PROJECT_ID }} \
-                --timeout=1200
-            fi
-          else
-            echo "mysql-directus-web-test already RUNNABLE"
-          fi
-        working-directory: .
-
       - name: Terraform Plan
         id: plan
         run: |
-          # Run terraform plan and capture both exit code and output
-          set +e
-          plan_output=$(terraform plan -no-color -detailed-exitcode \
+          terraform plan -no-color -detailed-exitcode \
             -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
             -var="env=test" \
             -var="qdrant_cluster_id=${{ secrets.QDRANT_CLUSTER1_ID }}" \
             -var="qdrant_api_key=${{ secrets.QDRANT_CLUSTER1_KEY }}" \
-            -out=tfplan 2>&1)
-          exit_code=$?
-          set -e
+            -out=tfplan || exit_code=$?
 
-          # Print the output for debugging
-          echo "$plan_output"
-
-          # Check for errors (exit code 1)
-          if [ "$exit_code" = "1" ]; then
-            echo "❌ Terraform plan failed"
+          # Exit code 0 = no changes, 1 = error, 2 = changes detected
+          if [ "${exit_code:-0}" = "1" ]; then
+            echo "Terraform plan failed"
             exit 1
-          fi
-
-          # Parse plan output to detect changes (more reliable than exit code)
-          # Look for "Plan: X to add, Y to change, Z to destroy"
-          if echo "$plan_output" | grep -q "Plan:.*to add\|to change\|to destroy"; then
+          elif [ "${exit_code:-0}" = "2" ]; then
             echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "✓ Changes detected in plan - will apply"
-          elif echo "$plan_output" | grep -q "No changes"; then
+            echo "Changes detected in plan"
+          else
             echo "has_changes=false" >> $GITHUB_OUTPUT
-            echo "✓ No changes detected - nothing to apply"
-          else
-            # If we can't determine from output, use exit code as fallback
-            if [ "$exit_code" = "2" ]; then
-              echo "has_changes=true" >> $GITHUB_OUTPUT
-              echo "✓ Changes detected in plan (via exit code) - will apply"
-            else
-              echo "has_changes=false" >> $GITHUB_OUTPUT
-              echo "✓ No changes detected (via exit code) - nothing to apply"
-            fi
+            echo "No changes detected"
           fi
-
-      - name: Stop MySQL Instance After Plan (PR only)
-        if: github.event_name == 'pull_request'
-        run: |
-          echo "Restoring mysql-directus-web-test activation policy to NEVER..."
-          stop_op=$(gcloud sql instances patch mysql-directus-web-test \
-            --project=${{ secrets.GCP_PROJECT_ID }} \
-            --activation-policy=NEVER \
-            --async \
-            --quiet \
-            --format="value(name)")
-
-          if [ -n "$stop_op" ]; then
-            gcloud beta sql operations wait "$stop_op" \
-              --project=${{ secrets.GCP_PROJECT_ID }} \
-              --timeout=1200 || echo "Warning: stop operation wait timed out"
-          else
-            echo "No stop operation returned; assuming instance already configured."
-          fi
-        working-directory: .
 
       - name: Comment PR with Plan (on pull request)
         if: github.event_name == 'pull_request' && (success() || failure())
@@ -402,81 +332,6 @@ jobs:
           echo "All SQL instances verified as RUNNABLE"
         working-directory: .
 
-      - name: Disable Legacy Chatwoot Deletion Protection
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          if gcloud sql instances describe postgres-chatwoot-web-test \
-            --project=${{ secrets.GCP_PROJECT_ID }} >/dev/null 2>&1; then
-            echo "Disabling deletion protection on legacy postgres-chatwoot-web-test instance..."
-            gcloud sql instances patch postgres-chatwoot-web-test \
-              --project=${{ secrets.GCP_PROJECT_ID }} \
-              --no-deletion-protection \
-              --quiet
-
-            for attempt in {1..12}; do
-              raw_settings=$(gcloud sql instances describe postgres-chatwoot-web-test \
-                --project=${{ secrets.GCP_PROJECT_ID }} \
-                --format="value(settings.deletionProtectionEnabled)" 2>/dev/null || echo "unknown")
-              raw_top=$(gcloud sql instances describe postgres-chatwoot-web-test \
-                --project=${{ secrets.GCP_PROJECT_ID }} \
-                --format="value(deletionProtectionEnabled)" 2>/dev/null || echo "unknown")
-              status_settings=$(echo "$raw_settings" | tr '[:upper:]' '[:lower:]')
-              status_top=$(echo "$raw_top" | tr '[:upper:]' '[:lower:]')
-
-              if { [ "$status_settings" = "false" ] || [ -z "$status_settings" ]; } \
-                && { [ "$status_top" = "false" ] || [ -z "$status_top" ]; }; then
-                echo "Deletion protection disabled successfully (settings=$raw_settings, top=$raw_top)."
-                break
-              fi
-
-              if [ "$attempt" -eq 12 ]; then
-                echo "Failed to disable deletion protection after waiting 120 seconds (settings=$raw_settings, top=$raw_top)."
-                exit 1
-              fi
-
-              echo "Deletion protection still enabled (settings=$raw_settings, top=$raw_top). Retrying in 10 seconds..."
-              sleep 10
-            done
-
-            echo "Deleting legacy postgres-chatwoot-web-test instance via gcloud..."
-            delete_op=$(gcloud sql instances delete postgres-chatwoot-web-test \
-              --project=${{ secrets.GCP_PROJECT_ID }} \
-              --quiet \
-              --async \
-              --format="value(name)" 2>/dev/null || echo "")
-
-            if [ -n "$delete_op" ]; then
-              if gcloud beta sql operations wait "$delete_op" \
-                --project=${{ secrets.GCP_PROJECT_ID }} \
-                --timeout=1200; then
-                echo "Legacy Chatwoot instance deletion operation completed."
-              else
-                echo "Warning: legacy Chatwoot deletion operation wait timed out."
-              fi
-            else
-              echo "No deletion operation started (instance may already be gone)."
-            fi
-
-            for attempt in {1..12}; do
-              if ! gcloud sql instances describe postgres-chatwoot-web-test \
-                --project=${{ secrets.GCP_PROJECT_ID }} >/dev/null 2>&1; then
-                echo "Confirmed legacy Chatwoot instance is gone."
-                break
-              fi
-
-              if [ "$attempt" -eq 12 ]; then
-                echo "Instance still present after deletion wait window; continuing anyway."
-                break
-              fi
-
-              echo "Legacy instance still reported by API; checking again in 10 seconds..."
-              sleep 10
-            done
-          else
-            echo "Legacy Chatwoot instance not found, skipping deletion protection update."
-          fi
-        working-directory: .
-
       - name: Terraform Apply
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.plan.outputs.has_changes == 'true'
         run: |
@@ -500,3 +355,4 @@ jobs:
 
           echo "All SQL instances stopped successfully"
         working-directory: .
+
