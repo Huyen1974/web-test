@@ -414,12 +414,11 @@ jobs:
               --quiet
 
             for attempt in {1..12}; do
-              raw_status=$(gcloud sql instances describe postgres-chatwoot-web-test \
+              status=$(gcloud sql instances describe postgres-chatwoot-web-test \
                 --project=${{ secrets.GCP_PROJECT_ID }} \
                 --format="value(settings.deletionProtectionEnabled)" 2>/dev/null || echo "unknown")
-              status=$(echo "$raw_status" | tr '[:upper:]' '[:lower:]')
 
-              if [ "$status" = "false" ] || [ -z "$status" ]; then
+              if [ "$status" = "false" ]; then
                 echo "Deletion protection disabled successfully."
                 break
               fi
@@ -429,7 +428,7 @@ jobs:
                 exit 1
               fi
 
-              echo "Deletion protection still enabled (status: $raw_status). Retrying in 10 seconds..."
+              echo "Deletion protection still enabled (status: $status). Retrying in 10 seconds..."
               sleep 10
             done
           else
