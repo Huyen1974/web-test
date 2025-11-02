@@ -251,8 +251,9 @@ jobs:
           fi
 
           # Parse plan output to detect changes (more reliable than exit code)
-          # Look for "Plan: X to add, Y to change, Z to destroy"
-          if echo "$plan_output" | grep -q "Plan:.*to add\|to change\|to destroy"; then
+          # Look for "Plan: X to add, Y to change, Z to destroy" where X, Y, or Z > 0
+          # Fix for Report #0320: Only match non-zero changes to avoid false positives
+          if echo "$plan_output" | grep -Eq "Plan: [1-9][0-9]* to add|[1-9][0-9]* to change|[1-9][0-9]* to destroy"; then
             echo "has_changes=true" >> $GITHUB_OUTPUT
             echo "✓ Changes detected in plan - will apply"
           elif echo "$plan_output" | grep -q "No changes"; then
