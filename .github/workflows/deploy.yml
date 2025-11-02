@@ -437,25 +437,6 @@ jobs:
               echo "Deletion protection still enabled (settings=$raw_settings, top=$raw_top). Retrying in 10 seconds..."
               sleep 10
             done
-
-            echo "Deleting legacy postgres-chatwoot-web-test instance via gcloud..."
-            delete_op=$(gcloud sql instances delete postgres-chatwoot-web-test \
-              --project=${{ secrets.GCP_PROJECT_ID }} \
-              --quiet \
-              --async \
-              --format="value(name)" 2>/dev/null || echo "")
-
-            if [ -n "$delete_op" ]; then
-              if gcloud beta sql operations wait "$delete_op" \
-                --project=${{ secrets.GCP_PROJECT_ID }} \
-                --timeout=1200; then
-                echo "Legacy Chatwoot instance deletion operation completed."
-              else
-                echo "Warning: legacy Chatwoot deletion operation wait timed out."
-              fi
-            else
-              echo "No deletion operation started (instance may already be gone)."
-            fi
           else
             echo "Legacy Chatwoot instance not found, skipping deletion protection update."
           fi
