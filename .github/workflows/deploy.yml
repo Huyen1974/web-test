@@ -196,6 +196,12 @@ jobs:
       - name: Terraform Validate
         run: terraform validate -no-color
 
+      - name: Ensure Secret Admin Binding (main)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          echo "Ensuring deployer service account can administer Secret Manager IAM..."
+          terraform apply -auto-approve -target=google_project_iam_member.deployer_secret_admin
+
       - name: Ensure MySQL Instance Running for Plan
         run: |
           # Smart Workflow 3 Logic (Report #0321) - saves 18+ minutes when instance already running
