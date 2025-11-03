@@ -23,9 +23,14 @@ resource "google_secret_manager_secret" "qdrant_api" {
 # Note: qdrant_api_v1 secret version is defined in qdrant.tf
 
 # Directus KEY secret (for signing tokens)
+# Fix for Report #0327 CRITICAL-002: Prevent accidental password rotation
 resource "random_password" "directus_key" {
   length  = 64
   special = false
+
+  lifecycle {
+    ignore_changes = [result]
+  }
 }
 
 resource "google_secret_manager_secret" "directus_key" {
@@ -53,9 +58,14 @@ resource "google_secret_manager_secret_version" "directus_key" {
 }
 
 # Directus SECRET secret (for signing sessions)
+# Fix for Report #0327 CRITICAL-002: Prevent accidental password rotation
 resource "random_password" "directus_secret" {
   length  = 64
   special = false
+
+  lifecycle {
+    ignore_changes = [result]
+  }
 }
 
 resource "google_secret_manager_secret" "directus_secret" {
@@ -83,9 +93,14 @@ resource "google_secret_manager_secret_version" "directus_secret" {
 }
 
 # Directus database password
+# Fix for Report #0327 CRITICAL-002: Prevent accidental password rotation
 resource "random_password" "directus_db_password" {
   length  = 32
   special = true
+
+  lifecycle {
+    ignore_changes = [result]
+  }
 }
 
 resource "google_secret_manager_secret" "directus_db_password" {

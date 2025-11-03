@@ -44,7 +44,11 @@ resource "google_secret_manager_secret" "chatwoot_redis_url" {
   secret_id = "CHATWOOT_REDIS_URL_test"
 
   replication {
-    auto {}
+    user_managed {
+      replicas {
+        location = "asia-southeast1"
+      }
+    }
   }
 }
 
@@ -60,7 +64,11 @@ resource "google_secret_manager_secret" "chatwoot_database_url" {
   secret_id = "CHATWOOT_DATABASE_URL_test"
 
   replication {
-    auto {}
+    user_managed {
+      replicas {
+        location = "asia-southeast1"
+      }
+    }
   }
 }
 
