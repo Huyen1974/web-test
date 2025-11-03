@@ -227,10 +227,53 @@ jobs:
           fi
 
           # Logic 2: Start instance if STOPPED
+          # Fix for Report #0325 NEW-001: Check for in-progress operations before patching
           if [ "$state" = "MAINTENANCE" ]; then
             echo "⚠ Instance in MAINTENANCE - skipping to polling loop"
           elif [ "$state" = "STOPPED" ]; then
             echo "Starting mysql-directus-web-test instance (state: STOPPED)..."
+
+            # Check for pending operations to avoid 409 conflicts
+            echo "Checking for in-progress operations..."
+            pending_ops=$(gcloud sql operations list \
+              --instance=mysql-directus-web-test \
+              --project=${{ secrets.GCP_PROJECT_ID }} \
+              --filter="status!=DONE" \
+              --format="value(name)" \
+              --limit=1 2>/dev/null || echo "")
+
+            if [ -n "$pending_ops" ]; then
+              echo "⚠ Operations in progress detected: $pending_ops"
+              echo "Waiting for operations to complete before issuing new patch command..."
+
+              # Wait for operations to complete (max 5 minutes)
+              op_wait_attempts=30
+              op_attempt=0
+              while [ $op_attempt -lt $op_wait_attempts ]; do
+                sleep 10
+                op_attempt=$((op_attempt + 1))
+
+                pending_ops=$(gcloud sql operations list \
+                  --instance=mysql-directus-web-test \
+                  --project=${{ secrets.GCP_PROJECT_ID }} \
+                  --filter="status!=DONE" \
+                  --format="value(name)" \
+                  --limit=1 2>/dev/null || echo "")
+
+                if [ -z "$pending_ops" ]; then
+                  echo "✓ All operations completed"
+                  break
+                fi
+
+                echo "Attempt $op_attempt/$op_wait_attempts: Still waiting for operations..."
+              done
+
+              if [ -n "$pending_ops" ]; then
+                echo "✗ Timeout: Operations did not complete after 5 minutes"
+                exit 1
+              fi
+            fi
+
             gcloud sql instances patch mysql-directus-web-test \
               --project=${{ secrets.GCP_PROJECT_ID }} \
               --activation-policy=ALWAYS \
@@ -262,6 +305,34 @@ jobs:
               echo "✓ mysql-directus-web-test is RUNNABLE"
               echo "Waiting 60s for instance to fully stabilize before Terraform queries..."
               sleep 60
+
+              # Fix for Report #0325 NEW-002: API Readiness Check
+              echo "Verifying SQL Admin API readiness..."
+              api_check_attempts=5
+              api_attempt=0
+              api_ready=false
+
+              while [ $api_attempt -lt $api_check_attempts ]; do
+                api_attempt=$((api_attempt + 1))
+
+                if gcloud sql instances describe mysql-directus-web-test \
+                  --project=${{ secrets.GCP_PROJECT_ID }} \
+                  --format="value(state)" >/dev/null 2>&1; then
+                  echo "✓ API check $api_attempt/$api_check_attempts: Success"
+                  api_ready=true
+                  break
+                else
+                  echo "⚠ API check $api_attempt/$api_check_attempts: Failed, retrying in 10s..."
+                  sleep 10
+                fi
+              done
+
+              if [ "$api_ready" = false ]; then
+                echo "✗ SQL Admin API not ready after $api_check_attempts attempts"
+                exit 1
+              fi
+
+              echo "✓ SQL Admin API is ready for Terraform operations"
               exit 0
             elif [[ "$state" == "SUSPENDED" || "$state" == "FAILED" ]]; then
               echo "✗ Instance in terminal state: $state"
@@ -500,9 +571,33 @@ jobs:
             return 1
           }
 
-          # Process both instances (sequentially for now - can be parallelized later)
-          ensure_instance_running "mysql-directus-web-test" || exit 1
-          ensure_instance_running "postgres-kestra-web-test" || exit 1
+          # Fix for Report #0325 NEW-003: Process both instances in parallel to save time
+          echo "Starting both instances in parallel..."
+
+          ensure_instance_running "mysql-directus-web-test" &
+          pid_mysql=$!
+
+          ensure_instance_running "postgres-kestra-web-test" &
+          pid_postgres=$!
+
+          # Wait for both to complete
+          echo "Waiting for both instances to become RUNNABLE..."
+
+          mysql_result=0
+          postgres_result=0
+
+          wait $pid_mysql || mysql_result=$?
+          wait $pid_postgres || postgres_result=$?
+
+          if [ $mysql_result -ne 0 ]; then
+            echo "✗ mysql-directus-web-test failed to start (exit code: $mysql_result)"
+            exit 1
+          fi
+
+          if [ $postgres_result -ne 0 ]; then
+            echo "✗ postgres-kestra-web-test failed to start (exit code: $postgres_result)"
+            exit 1
+          fi
 
           echo "✓ All SQL instances are RUNNABLE"
         working-directory: .
