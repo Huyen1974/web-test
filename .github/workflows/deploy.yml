@@ -478,6 +478,46 @@ jobs:
           # Logic 2: Stop instance if RUNNABLE
           if [ "$state" = "RUNNABLE" ]; then
             echo "Stopping mysql-directus-web-test instance (state: RUNNABLE)..."
+            echo "Checking for in-progress operations before issuing stop command..."
+
+            pending_ops=$(gcloud sql operations list \
+              --instance=mysql-directus-web-test \
+              --project=${{ secrets.GCP_PROJECT_ID }} \
+              --filter="status!=DONE" \
+              --format="value(name)" \
+              --limit=1 2>/dev/null || echo "")
+
+            if [ -n "$pending_ops" ]; then
+              echo "⚠ Operations in progress detected: $pending_ops"
+              echo "Waiting for operations to complete before stopping instance..."
+
+              op_wait_attempts=30
+              op_attempt=0
+              while [ $op_attempt -lt $op_wait_attempts ]; do
+                sleep 10
+                op_attempt=$((op_attempt + 1))
+
+                pending_ops=$(gcloud sql operations list \
+                  --instance=mysql-directus-web-test \
+                  --project=${{ secrets.GCP_PROJECT_ID }} \
+                  --filter="status!=DONE" \
+                  --format="value(name)" \
+                  --limit=1 2>/dev/null || echo "")
+
+                if [ -z "$pending_ops" ]; then
+                  echo "✓ All operations completed"
+                  break
+                fi
+
+                echo "Attempt $op_attempt/$op_wait_attempts: Still waiting for operations..."
+              done
+
+              if [ -n "$pending_ops" ]; then
+                echo "✗ Timeout: Operations did not complete after 5 minutes"
+                exit 1
+              fi
+            fi
+
             gcloud sql instances patch mysql-directus-web-test \
               --project=${{ secrets.GCP_PROJECT_ID }} \
               --activation-policy=NEVER \
@@ -735,16 +775,57 @@ jobs:
         run: |
           echo "Stopping all SQL instances to save costs..."
 
-          echo "Stopping MySQL instance mysql-directus-web-test..."
-          gcloud sql instances patch mysql-directus-web-test \
-            --activation-policy=NEVER \
-            --project=${{ secrets.GCP_PROJECT_ID }} || echo "Failed to stop MySQL instance"
+          stop_instance() {
+            instance_name=$1
 
-          echo "Stopping PostgreSQL instance postgres-kestra-web-test..."
-          gcloud sql instances patch postgres-kestra-web-test \
-            --activation-policy=NEVER \
-            --project=${{ secrets.GCP_PROJECT_ID }} || echo "Failed to stop PostgreSQL Kestra instance"
+            echo "Stopping ${instance_name}..."
+
+            echo "Checking for in-progress operations before stopping ${instance_name}..."
+            pending_ops=$(gcloud sql operations list \
+              --instance="${instance_name}" \
+              --project=${{ secrets.GCP_PROJECT_ID }} \
+              --filter="status!=DONE" \
+              --format="value(name)" \
+              --limit=1 2>/dev/null || echo "")
+
+            if [ -n "$pending_ops" ]; then
+              echo "⚠ Operations in progress detected for ${instance_name}: $pending_ops"
+              echo "Waiting for operations to complete before stopping..."
+
+              op_wait_attempts=30
+              op_attempt=0
+              while [ $op_attempt -lt $op_wait_attempts ]; do
+                sleep 10
+                op_attempt=$((op_attempt + 1))
+
+                pending_ops=$(gcloud sql operations list \
+                  --instance="${instance_name}" \
+                  --project=${{ secrets.GCP_PROJECT_ID }} \
+                  --filter="status!=DONE" \
+                  --format="value(name)" \
+                  --limit=1 2>/dev/null || echo "")
+
+                if [ -z "$pending_ops" ]; then
+                  echo "✓ All operations completed for ${instance_name}"
+                  break
+                fi
+
+                echo "Attempt $op_attempt/$op_wait_attempts: Still waiting for operations on ${instance_name}..."
+              done
+
+              if [ -n "$pending_ops" ]; then
+                echo "⚠ Warning: Operations did not complete for ${instance_name} after 5 minutes - skipping stop"
+                return
+              fi
+            fi
+
+            gcloud sql instances patch "${instance_name}" \
+              --activation-policy=NEVER \
+              --project=${{ secrets.GCP_PROJECT_ID }} || echo "Failed to stop ${instance_name}"
+          }
+
+          stop_instance "mysql-directus-web-test"
+          stop_instance "postgres-kestra-web-test"
 
           echo "All SQL instances stopped successfully"
         working-directory: .
-

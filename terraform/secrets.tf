@@ -129,22 +129,25 @@ resource "google_secret_manager_secret_version" "directus_db_password" {
 
 # IAM bindings for chatgpt-deployer SA to access Directus secrets
 resource "google_secret_manager_secret_iam_member" "directus_key_accessor" {
-  secret_id = google_secret_manager_secret.directus_key.secret_id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com"
-  project   = var.project_id
+  secret_id  = google_secret_manager_secret.directus_key.secret_id
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com"
+  project    = var.project_id
+  depends_on = [google_project_iam_member.deployer_secret_admin]
 }
 
 resource "google_secret_manager_secret_iam_member" "directus_secret_accessor" {
-  secret_id = google_secret_manager_secret.directus_secret.secret_id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com"
-  project   = var.project_id
+  secret_id  = google_secret_manager_secret.directus_secret.secret_id
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com"
+  project    = var.project_id
+  depends_on = [google_project_iam_member.deployer_secret_admin]
 }
 
 resource "google_secret_manager_secret_iam_member" "directus_db_password_accessor" {
-  secret_id = google_secret_manager_secret.directus_db_password.secret_id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com"
-  project   = var.project_id
+  secret_id  = google_secret_manager_secret.directus_db_password.secret_id
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com"
+  project    = var.project_id
+  depends_on = [google_project_iam_member.deployer_secret_admin]
 }

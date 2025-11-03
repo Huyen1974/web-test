@@ -81,52 +81,59 @@ resource "google_secret_manager_secret_version" "chatwoot_database_url" {
 
 # Grant Secret Manager access for Chatwoot secrets
 resource "google_secret_manager_secret_iam_member" "chatwoot_secret_key_base_accessor" {
-  project   = var.project_id
-  secret_id = "CHATWOOT_SECRET_KEY_BASE_test"
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${local.chatgpt_deployer_sa}"
+  project    = var.project_id
+  secret_id  = "CHATWOOT_SECRET_KEY_BASE_test"
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:${local.chatgpt_deployer_sa}"
+  depends_on = [google_project_iam_member.deployer_secret_admin]
 }
 
 resource "google_secret_manager_secret_iam_member" "chatwoot_redis_password_accessor" {
-  project   = var.project_id
-  secret_id = "CHATWOOT_REDIS_PASSWORD_test"
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${local.chatgpt_deployer_sa}"
+  project    = var.project_id
+  secret_id  = "CHATWOOT_REDIS_PASSWORD_test"
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:${local.chatgpt_deployer_sa}"
+  depends_on = [google_project_iam_member.deployer_secret_admin]
 }
 
 resource "google_secret_manager_secret_iam_member" "chatwoot_encryption_primary_key_accessor" {
-  project   = var.project_id
-  secret_id = "CHATWOOT_ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY_test"
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${local.chatgpt_deployer_sa}"
+  project    = var.project_id
+  secret_id  = "CHATWOOT_ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY_test"
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:${local.chatgpt_deployer_sa}"
+  depends_on = [google_project_iam_member.deployer_secret_admin]
 }
 
 resource "google_secret_manager_secret_iam_member" "chatwoot_encryption_deterministic_key_accessor" {
-  project   = var.project_id
-  secret_id = "CHATWOOT_ACTIVE_RECORD_ENCRYPTION_DETERMINISTIC_KEY_test"
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${local.chatgpt_deployer_sa}"
+  project    = var.project_id
+  secret_id  = "CHATWOOT_ACTIVE_RECORD_ENCRYPTION_DETERMINISTIC_KEY_test"
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:${local.chatgpt_deployer_sa}"
+  depends_on = [google_project_iam_member.deployer_secret_admin]
 }
 
 resource "google_secret_manager_secret_iam_member" "chatwoot_encryption_key_derivation_salt_accessor" {
-  project   = var.project_id
-  secret_id = "CHATWOOT_ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT_test"
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${local.chatgpt_deployer_sa}"
+  project    = var.project_id
+  secret_id  = "CHATWOOT_ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT_test"
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:${local.chatgpt_deployer_sa}"
+  depends_on = [google_project_iam_member.deployer_secret_admin]
 }
 
 resource "google_secret_manager_secret_iam_member" "chatwoot_redis_url_accessor" {
-  project   = var.project_id
-  secret_id = google_secret_manager_secret.chatwoot_redis_url.secret_id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${local.chatgpt_deployer_sa}"
+  project    = var.project_id
+  secret_id  = google_secret_manager_secret.chatwoot_redis_url.secret_id
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:${local.chatgpt_deployer_sa}"
+  depends_on = [google_project_iam_member.deployer_secret_admin]
 }
 
 resource "google_secret_manager_secret_iam_member" "chatwoot_database_url_accessor" {
-  project   = var.project_id
-  secret_id = google_secret_manager_secret.chatwoot_database_url.secret_id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${local.chatgpt_deployer_sa}"
+  project    = var.project_id
+  secret_id  = google_secret_manager_secret.chatwoot_database_url.secret_id
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:${local.chatgpt_deployer_sa}"
+  depends_on = [google_project_iam_member.deployer_secret_admin]
 }
 
 # Cloud Run service for Chatwoot with Cloud SQL Auth Proxy sidecar

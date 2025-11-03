@@ -14,6 +14,13 @@ resource "google_project_iam_member" "run_sa_secret_accessor" {
   member  = "serviceAccount:${local.default_compute_sa}"
 }
 
+# Ensure the GitHub deployer service account can administer Secret Manager IAM
+resource "google_project_iam_member" "deployer_secret_admin" {
+  project = var.project_id
+  role    = "roles/secretmanager.admin"
+  member  = "serviceAccount:${local.chatgpt_deployer_sa}"
+}
+
 # Grant Cloud Run services access to Cloud SQL (for Directus and Chatwoot)
 resource "google_project_iam_member" "run_sa_cloudsql_client" {
   project = var.project_id

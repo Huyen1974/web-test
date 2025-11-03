@@ -19,17 +19,19 @@ data "google_secret_manager_secret_version" "kestra_secret_key" {
 
 # Grant Secret Manager access for Kestra secrets
 resource "google_secret_manager_secret_iam_member" "kestra_encryption_key_accessor" {
-  project   = var.project_id
-  secret_id = "kestra-encryption-key-test"
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${local.chatgpt_deployer_sa}"
+  project    = var.project_id
+  secret_id  = "kestra-encryption-key-test"
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:${local.chatgpt_deployer_sa}"
+  depends_on = [google_project_iam_member.deployer_secret_admin]
 }
 
 resource "google_secret_manager_secret_iam_member" "kestra_secret_key_accessor" {
-  project   = var.project_id
-  secret_id = "kestra-secret-key-test"
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${local.chatgpt_deployer_sa}"
+  project    = var.project_id
+  secret_id  = "kestra-secret-key-test"
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:${local.chatgpt_deployer_sa}"
+  depends_on = [google_project_iam_member.deployer_secret_admin]
 }
 
 # Cloud Run service for Kestra with Cloud SQL Auth Proxy sidecar
