@@ -1,20 +1,19 @@
-# Chatwoot database and user within postgres-kestra-web-test instance
-# Part of CMD-007 SQL consolidation - migrating Chatwoot from dedicated instance to shared Kestra instance
+# Chatwoot database and user within mysql-directus-web-test instance
+# Part of "2-SQL Constitution" - consolidating Chatwoot onto shared MySQL instance
 
-resource "google_sql_database" "chatwoot_on_kestra" {
+resource "google_sql_database" "chatwoot_on_mysql" {
   name     = "chatwoot_production"
-  instance = module.postgres_kestra.instance_name
+  instance = module.mysql_directus.instance_name
   project  = var.project_id
 }
 
-# Note: User creation disabled to avoid conflicts with existing user
-# User 'chatwoot' should be created manually or via Cloud Console when instance is running
-# resource "google_sql_user" "chatwoot_user_on_kestra" {
-#   name     = "chatwoot"
-#   instance = module.postgres_kestra.instance_name
-#   password = data.google_secret_manager_secret_version.chatwoot_db_password.secret_data
-#   project  = var.project_id
-# }
+# Create Chatwoot MySQL user
+resource "google_sql_user" "chatwoot_mysql_user" {
+  name     = "chatwoot"
+  instance = module.mysql_directus.instance_name
+  password = random_password.chatwoot_mysql_password.result
+  project  = var.project_id
+}
 
 # IAM permissions for Chatwoot to access the database
 resource "google_project_iam_member" "chatwoot_sql_client" {
@@ -23,18 +22,48 @@ resource "google_project_iam_member" "chatwoot_sql_client" {
   member  = "serviceAccount:chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com"
 }
 
-# Read existing Chatwoot DB password from Secret Manager
-# Secret will be created manually via gcloud in Task #239
-data "google_secret_manager_secret_version" "chatwoot_db_password" {
-  project = var.project_id
-  secret  = "CHATWOOT_POSTGRES_PASSWORD_test"
-  version = "latest"
+# Generate Chatwoot MySQL password
+# Fix for Report #0321: Create secret via Terraform instead of manual creation
+# Fix for Report #0323 VULN-004: Prevent accidental password rotation
+resource "random_password" "chatwoot_mysql_password" {
+  length  = 32
+  special = true
+
+  lifecycle {
+    ignore_changes = [result]
+  }
+}
+
+# Create Chatwoot MySQL password secret
+resource "google_secret_manager_secret" "chatwoot_mysql_password" {
+  secret_id = "CHATWOOT_MYSQL_PASSWORD_${var.env}"
+  project   = var.project_id
+
+  replication {
+    user_managed {
+      replicas {
+        location = "asia-southeast1"
+      }
+    }
+  }
+
+  labels = {
+    environment = var.env
+    project     = "web-test"
+    managed_by  = "terraform"
+  }
+}
+
+# Store Chatwoot MySQL password in secret
+resource "google_secret_manager_secret_version" "chatwoot_mysql_password" {
+  secret      = google_secret_manager_secret.chatwoot_mysql_password.id
+  secret_data = random_password.chatwoot_mysql_password.result
 }
 
 # Grant Secret Manager access to the deployer service account
 resource "google_secret_manager_secret_iam_member" "chatwoot_db_password_accessor" {
   project   = var.project_id
-  secret_id = "CHATWOOT_POSTGRES_PASSWORD_test"
+  secret_id = google_secret_manager_secret.chatwoot_mysql_password.secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${local.chatgpt_deployer_sa}"
 }

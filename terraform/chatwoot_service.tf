@@ -44,7 +44,11 @@ resource "google_secret_manager_secret" "chatwoot_redis_url" {
   secret_id = "CHATWOOT_REDIS_URL_test"
 
   replication {
-    auto {}
+    user_managed {
+      replicas {
+        location = "asia-southeast1"
+      }
+    }
   }
 }
 
@@ -54,22 +58,26 @@ resource "google_secret_manager_secret_version" "chatwoot_redis_url" {
 }
 
 # Create DATABASE_URL secret with full connection string
-# PostgreSQL connection string format for Chatwoot
+# MySQL connection string format for Chatwoot (mysql2 adapter)
 resource "google_secret_manager_secret" "chatwoot_database_url" {
   project   = var.project_id
   secret_id = "CHATWOOT_DATABASE_URL_test"
 
   replication {
-    auto {}
+    user_managed {
+      replicas {
+        location = "asia-southeast1"
+      }
+    }
   }
 }
 
 resource "google_secret_manager_secret_version" "chatwoot_database_url" {
   secret      = google_secret_manager_secret.chatwoot_database_url.id
-  secret_data = format("postgresql://chatwoot:%s@127.0.0.1:5432/chatwoot_production", urlencode(data.google_secret_manager_secret_version.chatwoot_db_password.secret_data))
+  secret_data = format("mysql2://chatwoot:%s@127.0.0.1:3306/chatwoot_production", urlencode(random_password.chatwoot_mysql_password.result))
 }
 
-# Note: chatwoot_db_password data source is defined in chatwoot_internal_db.tf
+# Note: chatwoot_mysql_password resource is defined in chatwoot_internal_db.tf
 
 # Grant Secret Manager access for Chatwoot secrets
 resource "google_secret_manager_secret_iam_member" "chatwoot_secret_key_base_accessor" {
@@ -148,8 +156,11 @@ resource "google_cloud_run_v2_service" "chatwoot" {
 
       # Run database migrations before starting server
       # db:chatwoot_prepare is idempotent and safe to run on every startup
-      command = ["/app/docker/entrypoints/rails.sh"]
-      args    = ["sh", "-c", "bundle exec rails db:chatwoot_prepare && bundle exec rails s -p 8080 -b 0.0.0.0"]
+      # CRITICAL FIX: Bypass rails.sh entrypoint to avoid pg_isready check (Report #0319)
+      # rails.sh expects PostgreSQL but we're using MySQL - direct execution prevents startup failure
+      # CRITICAL FIX: Remove stale PID file to prevent restart failures (Report #0323 VULN-001)
+      command = ["sh", "-c"]
+      args    = ["rm -rf /app/tmp/pids/server.pid && bundle exec rails db:chatwoot_prepare && bundle exec rails s -p 8080 -b 0.0.0.0"]
 
       # Resource limits
       resources {
@@ -160,25 +171,29 @@ resource "google_cloud_run_v2_service" "chatwoot" {
         cpu_idle = true
       }
 
-      # Database environment variables
+      # Database environment variables for MySQL
       env {
-        name  = "POSTGRES_HOST"
+        name  = "DB_ADAPTER"
+        value = "mysql2"
+      }
+      env {
+        name  = "DB_HOST"
         value = "127.0.0.1"
       }
       env {
-        name  = "POSTGRES_PORT"
-        value = "5432"
+        name  = "DB_PORT"
+        value = "3306"
       }
       env {
-        name  = "POSTGRES_USERNAME"
+        name  = "DB_USERNAME"
         value = "chatwoot"
       }
       env {
-        name  = "POSTGRES_DATABASE"
-        value = "chatwoot"
+        name  = "DB_NAME"
+        value = "chatwoot_production"
       }
 
-      # Database URL - Full PostgreSQL connection string (preferred by Chatwoot)
+      # Database URL - Full MySQL connection string (preferred by Chatwoot)
       env {
         name = "DATABASE_URL"
         value_source {
@@ -249,10 +264,10 @@ resource "google_cloud_run_v2_service" "chatwoot" {
         }
       }
       env {
-        name = "POSTGRES_PASSWORD"
+        name = "DB_PASSWORD"
         value_source {
           secret_key_ref {
-            secret  = "CHATWOOT_POSTGRES_PASSWORD_test"
+            secret  = google_secret_manager_secret.chatwoot_mysql_password.secret_id
             version = "latest"
           }
         }
@@ -302,11 +317,12 @@ resource "google_cloud_run_v2_service" "chatwoot" {
 
       # Startup probe - Chatwoot needs time to start (including migrations)
       # Using root path / instead of /api which may require authentication
+      # Lesson #3 from Report #0313: Increase timeout for first-time migration
       startup_probe {
         initial_delay_seconds = 10
         timeout_seconds       = 3
         period_seconds        = 10
-        failure_threshold     = 50 # Increased to allow time for db:chatwoot_prepare
+        failure_threshold     = 180 # 30 minutes for database migration (10s × 180 = 1800s)
 
         http_get {
           path = "/"
@@ -328,15 +344,16 @@ resource "google_cloud_run_v2_service" "chatwoot" {
       }
     }
 
-    # Cloud SQL Auth Proxy sidecar container for PostgreSQL
+    # Cloud SQL Auth Proxy sidecar container for MySQL
+    # Part of 2-SQL Constitution: Chatwoot uses mysql-directus instance
     containers {
       name  = "cloud-sql-proxy"
       image = "gcr.io/cloud-sql-connectors/cloud-sql-proxy:latest"
 
       args = [
-        "--port=5432",
+        "--port=3306",
         "--address=0.0.0.0",
-        module.postgres_kestra.instance_connection_name
+        module.mysql_directus.instance_connection_name
       ]
 
       # Resource limits for proxy
@@ -356,7 +373,7 @@ resource "google_cloud_run_v2_service" "chatwoot" {
         failure_threshold     = 10
 
         tcp_socket {
-          port = 5432
+          port = 3306
         }
       }
     }
