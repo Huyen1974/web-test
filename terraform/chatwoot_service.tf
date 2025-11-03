@@ -150,8 +150,9 @@ resource "google_cloud_run_v2_service" "chatwoot" {
       # db:chatwoot_prepare is idempotent and safe to run on every startup
       # CRITICAL FIX: Bypass rails.sh entrypoint to avoid pg_isready check (Report #0319)
       # rails.sh expects PostgreSQL but we're using MySQL - direct execution prevents startup failure
+      # CRITICAL FIX: Remove stale PID file to prevent restart failures (Report #0323 VULN-001)
       command = ["sh", "-c"]
-      args    = ["bundle exec rails db:chatwoot_prepare && bundle exec rails s -p 8080 -b 0.0.0.0"]
+      args    = ["rm -rf /app/tmp/pids/server.pid && bundle exec rails db:chatwoot_prepare && bundle exec rails s -p 8080 -b 0.0.0.0"]
 
       # Resource limits
       resources {

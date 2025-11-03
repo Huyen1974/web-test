@@ -201,18 +201,33 @@ jobs:
           # Smart Workflow 3 Logic (Report #0321) - saves 18+ minutes when instance already running
 
           # Logic 1: Check if already RUNNABLE
-          state=$(gcloud sql instances describe mysql-directus-web-test \
+          # Fix for Report #0323 VULN-002: Proper error handling without masking
+          if ! state=$(gcloud sql instances describe mysql-directus-web-test \
             --project=${{ secrets.GCP_PROJECT_ID }} \
-            --format="value(state)" 2>/dev/null || echo "NOT_FOUND")
-
-          if [ "$state" = "NOT_FOUND" ]; then
-            echo "✗ mysql-directus-web-test instance not found"
-            exit 1
+            --format="value(state)" 2>&1); then
+            if echo "$state" | grep -qi "NOT_FOUND\|does not exist"; then
+              echo "✗ mysql-directus-web-test instance not found"
+              exit 1
+            else
+              echo "✗ gcloud error: $state"
+              exit 1
+            fi
           fi
 
           if [ "$state" = "RUNNABLE" ]; then
             echo "✓ mysql-directus-web-test already RUNNABLE - skipping"
             exit 0
+          fi
+
+          # Fix for Report #0323 VULN-003: Handle terminal states
+          if [[ "$state" == "SUSPENDED" || "$state" == "FAILED" ]]; then
+            echo "✗ Instance in terminal state: $state"
+            echo "Manual intervention required"
+            exit 1
+          fi
+
+          if [ "$state" = "MAINTENANCE" ]; then
+            echo "⚠ Instance in MAINTENANCE - will wait for completion"
           fi
 
           # Logic 2: Start instance if STOPPED
@@ -335,12 +350,22 @@ jobs:
           # Smart Workflow 3 Logic (Report #0321) for stopping instance
 
           # Logic 1: Check if already STOPPED
-          state=$(gcloud sql instances describe mysql-directus-web-test \
+          # Fix for Report #0323 VULN-002: Proper error handling
+          if ! state=$(gcloud sql instances describe mysql-directus-web-test \
             --project=${{ secrets.GCP_PROJECT_ID }} \
-            --format="value(state)")
+            --format="value(state)" 2>&1); then
+            echo "✗ gcloud error: $state"
+            exit 1
+          fi
 
           if [ "$state" = "STOPPED" ]; then
             echo "✓ mysql-directus-web-test already STOPPED - skipping"
+            exit 0
+          fi
+
+          # Fix for Report #0323 VULN-003: Handle terminal states
+          if [[ "$state" == "SUSPENDED" || "$state" == "FAILED" ]]; then
+            echo "⚠ Instance in terminal state: $state - skipping stop"
             exit 0
           fi
 
@@ -393,13 +418,33 @@ jobs:
             echo "=== Processing $instance_name ==="
 
             # Logic 1: Check if already RUNNABLE
-            state=$(gcloud sql instances describe $instance_name \
+            # Fix for Report #0323 VULN-002: Proper error handling
+            if ! state=$(gcloud sql instances describe $instance_name \
               --project=${{ secrets.GCP_PROJECT_ID }} \
-              --format="value(state)")
+              --format="value(state)" 2>&1); then
+              if echo "$state" | grep -qi "NOT_FOUND\|does not exist"; then
+                echo "✗ $instance_name instance not found"
+                return 1
+              else
+                echo "✗ gcloud error: $state"
+                return 1
+              fi
+            fi
 
             if [ "$state" = "RUNNABLE" ]; then
               echo "✓ $instance_name already RUNNABLE - skipping"
               return 0
+            fi
+
+            # Fix for Report #0323 VULN-003: Handle terminal states
+            if [[ "$state" == "SUSPENDED" || "$state" == "FAILED" ]]; then
+              echo "✗ $instance_name in terminal state: $state"
+              echo "Manual intervention required"
+              return 1
+            fi
+
+            if [ "$state" = "MAINTENANCE" ]; then
+              echo "⚠ $instance_name in MAINTENANCE - will wait for completion"
             fi
 
             # Logic 2: Start instance if STOPPED

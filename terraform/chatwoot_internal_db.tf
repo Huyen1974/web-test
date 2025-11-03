@@ -24,9 +24,14 @@ resource "google_project_iam_member" "chatwoot_sql_client" {
 
 # Generate Chatwoot MySQL password
 # Fix for Report #0321: Create secret via Terraform instead of manual creation
+# Fix for Report #0323 VULN-004: Prevent accidental password rotation
 resource "random_password" "chatwoot_mysql_password" {
   length  = 32
   special = true
+
+  lifecycle {
+    ignore_changes = [result]
+  }
 }
 
 # Create Chatwoot MySQL password secret
