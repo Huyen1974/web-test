@@ -226,12 +226,10 @@ jobs:
             exit 1
           fi
 
-          if [ "$state" = "MAINTENANCE" ]; then
-            echo "⚠ Instance in MAINTENANCE - will wait for completion"
-          fi
-
           # Logic 2: Start instance if STOPPED
-          if [ "$state" = "STOPPED" ]; then
+          if [ "$state" = "MAINTENANCE" ]; then
+            echo "⚠ Instance in MAINTENANCE - skipping to polling loop"
+          elif [ "$state" = "STOPPED" ]; then
             echo "Starting mysql-directus-web-test instance (state: STOPPED)..."
             gcloud sql instances patch mysql-directus-web-test \
               --project=${{ secrets.GCP_PROJECT_ID }} \
@@ -251,9 +249,12 @@ jobs:
             sleep 60
             attempt=$((attempt + 1))
 
-            state=$(gcloud sql instances describe mysql-directus-web-test \
+            if ! state=$(gcloud sql instances describe mysql-directus-web-test \
               --project=${{ secrets.GCP_PROJECT_ID }} \
-              --format="value(state)")
+              --format="value(state)" 2>&1); then
+              echo "✗ Error querying instance state: $state"
+              exit 1
+            fi
 
             echo "Attempt $attempt/$max_attempts: state=$state"
 
@@ -262,6 +263,9 @@ jobs:
               echo "Waiting 60s for instance to fully stabilize before Terraform queries..."
               sleep 60
               exit 0
+            elif [[ "$state" == "SUSPENDED" || "$state" == "FAILED" ]]; then
+              echo "✗ Instance in terminal state: $state"
+              exit 1
             fi
           done
 
@@ -390,14 +394,20 @@ jobs:
             sleep 60
             attempt=$((attempt + 1))
 
-            state=$(gcloud sql instances describe mysql-directus-web-test \
+            if ! state=$(gcloud sql instances describe mysql-directus-web-test \
               --project=${{ secrets.GCP_PROJECT_ID }} \
-              --format="value(state)")
+              --format="value(state)" 2>&1); then
+              echo "✗ Error querying instance state: $state"
+              exit 1
+            fi
 
             echo "Attempt $attempt/$max_attempts: state=$state"
 
             if [ "$state" = "STOPPED" ]; then
               echo "✓ mysql-directus-web-test is STOPPED"
+              exit 0
+            elif [[ "$state" == "SUSPENDED" || "$state" == "FAILED" ]]; then
+              echo "⚠ Instance in terminal state: $state - skipping stop"
               exit 0
             fi
           done
@@ -443,12 +453,10 @@ jobs:
               return 1
             fi
 
-            if [ "$state" = "MAINTENANCE" ]; then
-              echo "⚠ $instance_name in MAINTENANCE - will wait for completion"
-            fi
-
             # Logic 2: Start instance if STOPPED
-            if [ "$state" = "STOPPED" ]; then
+            if [ "$state" = "MAINTENANCE" ]; then
+              echo "⚠ $instance_name in MAINTENANCE - skipping to polling loop"
+            elif [ "$state" = "STOPPED" ]; then
               echo "Starting $instance_name (state: STOPPED)..."
               gcloud sql instances patch $instance_name \
                 --activation-policy=ALWAYS \
@@ -468,9 +476,12 @@ jobs:
               sleep 60
               attempt=$((attempt + 1))
 
-              state=$(gcloud sql instances describe $instance_name \
+              if ! state=$(gcloud sql instances describe $instance_name \
                 --project=${{ secrets.GCP_PROJECT_ID }} \
-                --format="value(state)")
+                --format="value(state)" 2>&1); then
+                echo "✗ Error querying instance state: $state"
+                return 1
+              fi
 
               echo "Attempt $attempt/$max_attempts: state=$state"
 
@@ -479,6 +490,9 @@ jobs:
                 echo "Waiting 60s for instance to fully stabilize before Terraform queries..."
                 sleep 60
                 return 0
+              elif [[ "$state" == "SUSPENDED" || "$state" == "FAILED" ]]; then
+                echo "✗ Instance in terminal state: $state"
+                return 1
               fi
             done
 
