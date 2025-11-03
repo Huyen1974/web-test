@@ -61,8 +61,9 @@ data "google_secret_manager_secret_version" "kestra_db_password" {
 
 # Grant Secret Manager access to the deployer service account
 resource "google_secret_manager_secret_iam_member" "kestra_db_password_accessor" {
-  project   = var.project_id
-  secret_id = "kestra-db-password-test"
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${local.chatgpt_deployer_sa}"
+  project    = var.project_id
+  secret_id  = "kestra-db-password-test"
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:${local.chatgpt_deployer_sa}"
+  depends_on = [google_project_iam_member.deployer_secret_admin]
 }

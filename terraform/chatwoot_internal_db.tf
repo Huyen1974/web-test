@@ -62,8 +62,9 @@ resource "google_secret_manager_secret_version" "chatwoot_mysql_password" {
 
 # Grant Secret Manager access to the deployer service account
 resource "google_secret_manager_secret_iam_member" "chatwoot_db_password_accessor" {
-  project   = var.project_id
-  secret_id = google_secret_manager_secret.chatwoot_mysql_password.secret_id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${local.chatgpt_deployer_sa}"
+  project    = var.project_id
+  secret_id  = google_secret_manager_secret.chatwoot_mysql_password.secret_id
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:${local.chatgpt_deployer_sa}"
+  depends_on = [google_project_iam_member.deployer_secret_admin]
 }
