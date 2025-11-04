@@ -1,8 +1,0 @@
-# Terraform files
-terraform.tfvars
-.terraform/
-*.tfplan
-*.tfplan.*
-tfplan
-tfplan.*
-plan_*.txt

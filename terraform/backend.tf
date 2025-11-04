@@ -1,6 +1,8 @@
+# Backend configuration for Terraform state
+# State bucket name per PHỤ LỤC D, Điều 3
 terraform {
   backend "gcs" {
-    # bucket and prefix will be specified via -backend-config during init
-    # Example: terraform init -backend-config="bucket=huyen1974-web-test-tfstate" -backend-config="prefix=terraform/state"
+    bucket = "huyen1974-web-test-tfstate"
+    prefix = "terraform/state"
   }
 }
