@@ -41,15 +41,15 @@ output "artifact_registry_id" {
 # Cloud Run services
 output "directus_url" {
   description = "Directus service URL"
-  value       = google_cloud_run_service.directus.status[0].url
+  value       = google_cloud_run_v2_service.directus.uri
 }
 
 output "kestra_url" {
   description = "Kestra service URL"
-  value       = google_cloud_run_service.kestra.status[0].url
+  value       = google_cloud_run_v2_service.kestra.uri
 }
 
 output "chatwoot_url" {
   description = "Chatwoot service URL"
-  value       = google_cloud_run_service.chatwoot.status[0].url
+  value       = google_cloud_run_v2_service.chatwoot.uri
 }
