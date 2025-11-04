@@ -10,7 +10,7 @@ terraform {
       version = "~> 4.57.0"
     }
   }
-  backend "local" {}
+  backend "gcs" {}
 }
 
 variable "project_id" {
