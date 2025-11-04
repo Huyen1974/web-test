@@ -1,43 +1,58 @@
-# SQL Instances per PHỤ LỤC D, Điều 3
-# Configuration per Task #0347 (ALWAYS ON Strategy)
-
-# MySQL instance for Directus, Chatwoot, and other applications
-resource "google_sql_database_instance" "mysql_directus" {
-  name             = "mysql-directus-web-test"
-  database_version = "MYSQL_8_0"
-  region           = var.region
-
-  settings {
-    tier              = "db-g1-small"
-    disk_type         = "PD_SSD"
-    disk_size         = 10
-    activation_policy = "ALWAYS"
-
-    backup_configuration {
-      enabled            = true
-      binary_log_enabled = true
-    }
-  }
-
-  deletion_protection = false
+locals {
+  # MySQL instance for Directus (web-test requirement)
+  # Note: Using standard name for production deployment
+  mysql_directus_instance_name = "mysql-directus-web-test"
 }
 
-# Postgres instance for Kestra workflow engine
-resource "google_sql_database_instance" "postgres_kestra" {
-  name             = "postgres-kestra-web-test"
-  database_version = "POSTGRES_15"
-  region           = var.region
+resource "google_project_service" "sqladmin" {
+  service            = "sqladmin.googleapis.com"
+  disable_on_destroy = false
+}
 
-  settings {
-    tier              = "db-f1-micro"
-    disk_type         = "PD_SSD"
-    disk_size         = 10
-    activation_policy = "ALWAYS"
 
-    backup_configuration {
-      enabled = true
-    }
-  }
+# MySQL instance for Directus using minimum_cost_sql module (local fixed version)
+# Fixed version handles stopped instances (activation_policy = NEVER) without refresh errors
+module "mysql_directus" {
+  source = "./modules/minimum_cost_sql_fixed"
 
-  deletion_protection = false
+  project_id       = var.project_id
+  region           = var.sql_region
+  instance_name    = local.mysql_directus_instance_name
+  database_version = "MYSQL_8_0"
+  database_name    = "directus"
+
+  # Cost optimization settings - upgraded to SSD for faster startup (13+ min → ~2-3 min)
+  disk_type             = "PD_SSD"
+  disk_size             = 10
+  disk_autoresize       = true
+  disk_autoresize_limit = 50
+
+  # Activation policy: NEVER for cost optimization (manual start/stop by admin)
+  activation_policy = "NEVER"
+
+  # Backup configuration
+  backup_start_time              = var.sql_backup_start_time
+  backup_retained_backups        = 7
+  transaction_log_retention_days = 7
+
+  # Network configuration
+  ipv4_enabled = true
+
+  # Database flags
+  max_connections = "100"
+
+  # Maintenance window
+  maintenance_window_day          = 7
+  maintenance_window_hour         = 3
+  maintenance_window_update_track = "stable"
+
+  # Create database user
+  # NOTE: User already created. Disabled to avoid "instance not running" errors during terraform plan
+  # The user exists and is managed manually or via Cloud Console when instance is running
+  create_user   = false
+  user_name     = "directus"
+  user_password = random_password.directus_db_password.result
+
+  # Database creation is managed manually to avoid Terraform drift when the instance is stopped.
+  manage_database = false
 }

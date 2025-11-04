@@ -1,146 +1,30 @@
-# Secrets for Cloud Run services per PHỤ LỤC D
-# All random_password must have lifecycle { ignore_changes = [result] } per Hiến pháp
-# All secrets must use replication in asia-southeast1 per Hiến pháp
+# Secret Manager resources for web-test
 
-# ============================================================================
-# DIRECTUS SECRETS
-# ============================================================================
+# Qdrant API key secret
+resource "google_secret_manager_secret" "qdrant_api" {
+  secret_id = "Qdrant_${var.project_id}_${var.qdrant_cluster_id}"
+  project   = var.project_id
 
+  replication {
+    user_managed {
+      replicas {
+        location = "asia-southeast1"
+      }
+    }
+  }
+
+  labels = {
+    environment = var.env
+    project     = "web-test"
+    managed_by  = "terraform"
+  }
+}
+
+# Note: qdrant_api_v1 secret version is defined in qdrant.tf
+
+# Directus KEY secret (for signing tokens)
+# Fix for Report #0327 CRITICAL-002: Prevent accidental password rotation
 resource "random_password" "directus_key" {
-  length  = 32
-  special = false
-
-  lifecycle {
-    ignore_changes = [result]
-  }
-}
-
-resource "google_secret_manager_secret" "directus_key" {
-  secret_id = "directus-key-test"
-
-  replication {
-    user_managed {
-      replicas {
-        location = "asia-southeast1"
-      }
-    }
-  }
-}
-
-resource "random_password" "directus_secret" {
-  length  = 32
-  special = false
-
-  lifecycle {
-    ignore_changes = [result]
-  }
-}
-
-resource "google_secret_manager_secret" "directus_secret" {
-  secret_id = "directus-secret-test"
-
-  replication {
-    user_managed {
-      replicas {
-        location = "asia-southeast1"
-      }
-    }
-  }
-}
-
-resource "random_password" "directus_admin_password" {
-  length  = 32
-  special = true
-
-  lifecycle {
-    ignore_changes = [result]
-  }
-}
-
-resource "google_secret_manager_secret" "directus_admin_password" {
-  secret_id = "directus-admin-password-test"
-
-  replication {
-    user_managed {
-      replicas {
-        location = "asia-southeast1"
-      }
-    }
-  }
-}
-
-resource "random_password" "directus_mysql_password" {
-  length  = 32
-  special = true
-
-  lifecycle {
-    ignore_changes = [result]
-  }
-}
-
-resource "google_secret_manager_secret" "directus_mysql_password" {
-  secret_id = "directus-mysql-password-test"
-
-  replication {
-    user_managed {
-      replicas {
-        location = "asia-southeast1"
-      }
-    }
-  }
-}
-
-# ============================================================================
-# KESTRA SECRETS
-# ============================================================================
-
-resource "random_password" "kestra_encryption_key" {
-  length  = 32
-  special = false
-
-  lifecycle {
-    ignore_changes = [result]
-  }
-}
-
-resource "google_secret_manager_secret" "kestra_encryption_key" {
-  secret_id = "kestra-encryption-key-test"
-
-  replication {
-    user_managed {
-      replicas {
-        location = "asia-southeast1"
-      }
-    }
-  }
-}
-
-resource "random_password" "kestra_postgres_password" {
-  length  = 32
-  special = true
-
-  lifecycle {
-    ignore_changes = [result]
-  }
-}
-
-resource "google_secret_manager_secret" "kestra_postgres_password" {
-  secret_id = "kestra-postgres-password-test"
-
-  replication {
-    user_managed {
-      replicas {
-        location = "asia-southeast1"
-      }
-    }
-  }
-}
-
-# ============================================================================
-# CHATWOOT SECRETS
-# ============================================================================
-
-resource "random_password" "chatwoot_secret_key_base" {
   length  = 64
   special = false
 
@@ -149,8 +33,9 @@ resource "random_password" "chatwoot_secret_key_base" {
   }
 }
 
-resource "google_secret_manager_secret" "chatwoot_secret_key_base" {
-  secret_id = "chatwoot-secret-key-base-test"
+resource "google_secret_manager_secret" "directus_key" {
+  secret_id = "DIRECTUS_KEY_${var.env}"
+  project   = var.project_id
 
   replication {
     user_managed {
@@ -159,9 +44,57 @@ resource "google_secret_manager_secret" "chatwoot_secret_key_base" {
       }
     }
   }
+
+  labels = {
+    environment = var.env
+    project     = "web-test"
+    managed_by  = "terraform"
+  }
 }
 
-resource "random_password" "chatwoot_mysql_password" {
+resource "google_secret_manager_secret_version" "directus_key" {
+  secret      = google_secret_manager_secret.directus_key.id
+  secret_data = random_password.directus_key.result
+}
+
+# Directus SECRET secret (for signing sessions)
+# Fix for Report #0327 CRITICAL-002: Prevent accidental password rotation
+resource "random_password" "directus_secret" {
+  length  = 64
+  special = false
+
+  lifecycle {
+    ignore_changes = [result]
+  }
+}
+
+resource "google_secret_manager_secret" "directus_secret" {
+  secret_id = "DIRECTUS_SECRET_${var.env}"
+  project   = var.project_id
+
+  replication {
+    user_managed {
+      replicas {
+        location = "asia-southeast1"
+      }
+    }
+  }
+
+  labels = {
+    environment = var.env
+    project     = "web-test"
+    managed_by  = "terraform"
+  }
+}
+
+resource "google_secret_manager_secret_version" "directus_secret" {
+  secret      = google_secret_manager_secret.directus_secret.id
+  secret_data = random_password.directus_secret.result
+}
+
+# Directus database password
+# Fix for Report #0327 CRITICAL-002: Prevent accidental password rotation
+resource "random_password" "directus_db_password" {
   length  = 32
   special = true
 
@@ -170,8 +103,9 @@ resource "random_password" "chatwoot_mysql_password" {
   }
 }
 
-resource "google_secret_manager_secret" "chatwoot_mysql_password" {
-  secret_id = "chatwoot-mysql-password-test"
+resource "google_secret_manager_secret" "directus_db_password" {
+  secret_id = "DIRECTUS_DB_PASSWORD_${var.env}"
+  project   = var.project_id
 
   replication {
     user_managed {
@@ -180,4 +114,40 @@ resource "google_secret_manager_secret" "chatwoot_mysql_password" {
       }
     }
   }
+
+  labels = {
+    environment = var.env
+    project     = "web-test"
+    managed_by  = "terraform"
+  }
+}
+
+resource "google_secret_manager_secret_version" "directus_db_password" {
+  secret      = google_secret_manager_secret.directus_db_password.id
+  secret_data = random_password.directus_db_password.result
+}
+
+# IAM bindings for chatgpt-deployer SA to access Directus secrets
+resource "google_secret_manager_secret_iam_member" "directus_key_accessor" {
+  secret_id  = google_secret_manager_secret.directus_key.secret_id
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com"
+  project    = var.project_id
+  depends_on = [google_project_iam_member.deployer_secret_admin]
+}
+
+resource "google_secret_manager_secret_iam_member" "directus_secret_accessor" {
+  secret_id  = google_secret_manager_secret.directus_secret.secret_id
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com"
+  project    = var.project_id
+  depends_on = [google_project_iam_member.deployer_secret_admin]
+}
+
+resource "google_secret_manager_secret_iam_member" "directus_db_password_accessor" {
+  secret_id  = google_secret_manager_secret.directus_db_password.secret_id
+  role       = "roles/secretmanager.secretAccessor"
+  member     = "serviceAccount:chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com"
+  project    = var.project_id
+  depends_on = [google_project_iam_member.deployer_secret_admin]
 }

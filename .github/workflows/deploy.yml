@@ -72,6 +72,7 @@ jobs:
 
       - name: Run ESLint (if configured)
         run: |
+          # Check if lint script exists in package.json
           if grep -q '"lint"' package.json; then
             echo "Lint script found, running..."
             npm run lint
@@ -86,6 +87,7 @@ jobs:
 
       - name: Check for common issues
         run: |
+          # Check for .env files that shouldn't be committed
           if [ -f ".env" ] || [ -f ".env.local" ]; then
             echo "Warning: .env files found in repository"
           fi
@@ -126,7 +128,7 @@ jobs:
           fi
 
   deploy:
-    name: Super Fast Deploy
+    name: deploy.yml
     runs-on: ubuntu-latest
     needs:
       - pass_gate
@@ -158,6 +160,9 @@ jobs:
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
 
+      - name: Install gcloud beta components
+        run: gcloud components install beta --quiet
+
       - name: Get GitHub PAT from Secret Manager
         id: get-pat
         uses: google-github-actions/get-secretmanager-secrets@v2
@@ -175,27 +180,8 @@ jobs:
         with:
           terraform_version: 1.9.0
 
-      - name: Create GCS Backend Bucket (if not exists)
-        run: |
-          # Fix for chicken-egg problem: Create backend bucket before terraform init
-          BUCKET_NAME="huyen1974-web-test-tfstate"
-
-          if ! gcloud storage buckets describe gs://$BUCKET_NAME --project=${{ secrets.GCP_PROJECT_ID }} >/dev/null 2>&1; then
-            echo "Creating backend bucket: $BUCKET_NAME"
-            gcloud storage buckets create gs://$BUCKET_NAME \
-              --project=${{ secrets.GCP_PROJECT_ID }} \
-              --location=asia-southeast1 \
-              --uniform-bucket-level-access \
-              --public-access-prevention
-
-            # Enable versioning
-            gcloud storage buckets update gs://$BUCKET_NAME --versioning
-
-            echo "✓ Backend bucket created successfully"
-          else
-            echo "✓ Backend bucket already exists"
-          fi
-        working-directory: .
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
 
       - name: Terraform Init
         env:
@@ -210,52 +196,642 @@ jobs:
       - name: Terraform Validate
         run: terraform validate -no-color
 
+      - name: Ensure Secret Admin Binding (main)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          echo "Ensuring deployer service account can administer Secret Manager IAM..."
+          terraform apply -auto-approve -target=google_project_iam_member.deployer_secret_admin
+
+      - name: Ensure MySQL Instance Running for Plan
+        run: |
+          # Smart Workflow 3 Logic (Report #0321) - saves 18+ minutes when instance already running
+
+          # Logic 1: Check if already RUNNABLE
+          # Fix for Report #0323 VULN-002: Proper error handling without masking
+          if ! state=$(gcloud sql instances describe mysql-directus-web-test \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --format="value(state)" 2>&1); then
+            if echo "$state" | grep -qi "NOT_FOUND\|does not exist"; then
+              echo "✗ mysql-directus-web-test instance not found"
+              exit 1
+            else
+              echo "✗ gcloud error: $state"
+              exit 1
+            fi
+          fi
+
+          if [ "$state" = "RUNNABLE" ]; then
+            echo "✓ mysql-directus-web-test already RUNNABLE - verifying API readiness..."
+
+            # Fix for Report #0328: Always verify API readiness before Terraform, even if instance already running
+            echo "Waiting 60s for instance stability..."
+            sleep 60
+
+            echo "Verifying SQL Admin API readiness..."
+            api_check_attempts=5
+            api_attempt=0
+            api_ready=false
+
+            while [ $api_attempt -lt $api_check_attempts ]; do
+              api_attempt=$((api_attempt + 1))
+
+              if gcloud sql instances describe mysql-directus-web-test \
+                --project=${{ secrets.GCP_PROJECT_ID }} \
+                --format="value(state)" >/dev/null 2>&1; then
+                echo "✓ API check $api_attempt/$api_check_attempts: Success"
+                api_ready=true
+                break
+              else
+                echo "⚠ API check $api_attempt/$api_check_attempts: Failed, retrying in 10s..."
+                sleep 10
+              fi
+            done
+
+            if [ "$api_ready" = false ]; then
+              echo "✗ SQL Admin API not ready after $api_check_attempts attempts"
+              exit 1
+            fi
+
+            echo "✓ SQL Admin API is ready for Terraform operations"
+            exit 0
+          fi
+
+          # Fix for Report #0323 VULN-003: Handle terminal states
+          if [[ "$state" == "SUSPENDED" || "$state" == "FAILED" ]]; then
+            echo "✗ Instance in terminal state: $state"
+            echo "Manual intervention required"
+            exit 1
+          fi
+
+          # Logic 2: Start instance if STOPPED
+          # Fix for Report #0325 NEW-001: Check for in-progress operations before patching
+          if [ "$state" = "MAINTENANCE" ]; then
+            echo "⚠ Instance in MAINTENANCE - skipping to polling loop"
+          elif [ "$state" = "STOPPED" ]; then
+            echo "Starting mysql-directus-web-test instance (state: STOPPED)..."
+
+            # Check for pending operations to avoid 409 conflicts
+            echo "Checking for in-progress operations..."
+            pending_ops=$(gcloud sql operations list \
+              --instance=mysql-directus-web-test \
+              --project=${{ secrets.GCP_PROJECT_ID }} \
+              --filter="status!=DONE" \
+              --format="value(name)" \
+              --limit=1 2>/dev/null || echo "")
+
+            if [ -n "$pending_ops" ]; then
+              echo "⚠ Operations in progress detected: $pending_ops"
+              echo "Waiting for operations to complete before issuing new patch command..."
+
+              # Wait for operations to complete (max 5 minutes)
+              op_wait_attempts=30
+              op_attempt=0
+              while [ $op_attempt -lt $op_wait_attempts ]; do
+                sleep 10
+                op_attempt=$((op_attempt + 1))
+
+                pending_ops=$(gcloud sql operations list \
+                  --instance=mysql-directus-web-test \
+                  --project=${{ secrets.GCP_PROJECT_ID }} \
+                  --filter="status!=DONE" \
+                  --format="value(name)" \
+                  --limit=1 2>/dev/null || echo "")
+
+                if [ -z "$pending_ops" ]; then
+                  echo "✓ All operations completed"
+                  break
+                fi
+
+                echo "Attempt $op_attempt/$op_wait_attempts: Still waiting for operations..."
+              done
+
+              if [ -n "$pending_ops" ]; then
+                echo "✗ Timeout: Operations did not complete after 5 minutes"
+                exit 1
+              fi
+            fi
+
+            gcloud sql instances patch mysql-directus-web-test \
+              --project=${{ secrets.GCP_PROJECT_ID }} \
+              --activation-policy=ALWAYS \
+              --async \
+              --quiet
+          elif [[ "$state" == PENDING* ]]; then
+            echo "Instance already starting (state: $state) - will poll for completion"
+          fi
+
+          # Logic 3: Smart polling loop (60s intervals, max 40 minutes)
+          echo "Polling for RUNNABLE state (max 40 minutes)..."
+          max_attempts=40
+          attempt=0
+
+          while [ $attempt -lt $max_attempts ]; do
+            sleep 60
+            attempt=$((attempt + 1))
+
+            if ! state=$(gcloud sql instances describe mysql-directus-web-test \
+              --project=${{ secrets.GCP_PROJECT_ID }} \
+              --format="value(state)" 2>&1); then
+              echo "✗ Error querying instance state: $state"
+              exit 1
+            fi
+
+            echo "Attempt $attempt/$max_attempts: state=$state"
+
+            if [ "$state" = "RUNNABLE" ]; then
+              echo "✓ mysql-directus-web-test is RUNNABLE"
+              echo "Waiting 60s for instance to fully stabilize before Terraform queries..."
+              sleep 60
+
+              # Fix for Report #0325 NEW-002: API Readiness Check
+              echo "Verifying SQL Admin API readiness..."
+              api_check_attempts=5
+              api_attempt=0
+              api_ready=false
+
+              while [ $api_attempt -lt $api_check_attempts ]; do
+                api_attempt=$((api_attempt + 1))
+
+                if gcloud sql instances describe mysql-directus-web-test \
+                  --project=${{ secrets.GCP_PROJECT_ID }} \
+                  --format="value(state)" >/dev/null 2>&1; then
+                  echo "✓ API check $api_attempt/$api_check_attempts: Success"
+                  api_ready=true
+                  break
+                else
+                  echo "⚠ API check $api_attempt/$api_check_attempts: Failed, retrying in 10s..."
+                  sleep 10
+                fi
+              done
+
+              if [ "$api_ready" = false ]; then
+                echo "✗ SQL Admin API not ready after $api_check_attempts attempts"
+                exit 1
+              fi
+
+              echo "✓ SQL Admin API is ready for Terraform operations"
+              exit 0
+            elif [[ "$state" == "SUSPENDED" || "$state" == "FAILED" ]]; then
+              echo "✗ Instance in terminal state: $state"
+              exit 1
+            fi
+          done
+
+          echo "✗ Timeout: Instance did not become RUNNABLE after 40 minutes"
+          exit 1
+        working-directory: .
+
       - name: Terraform Plan
         id: plan
         run: |
+          # Run terraform plan and capture both exit code and output
+          # Lesson #1 from Report #0313: Use grep logic to detect changes
           set +e
           plan_output=$(terraform plan -no-color -detailed-exitcode \
             -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
             -var="env=test" \
+            -var="qdrant_cluster_id=${{ secrets.QDRANT_CLUSTER1_ID }}" \
+            -var="qdrant_api_key=${{ secrets.QDRANT_CLUSTER1_KEY }}" \
             -out=tfplan 2>&1)
           exit_code=$?
           set -e
 
+          # Print the output for debugging
           echo "$plan_output"
 
-          # Exit code 0 = no changes, 1 = error, 2 = changes detected
-          if [ $exit_code -eq 1 ]; then
+          # Check for errors (exit code 1)
+          if [ "$exit_code" = "1" ]; then
             echo "❌ Terraform plan failed"
             exit 1
-          elif [ $exit_code -eq 2 ]; then
-            echo "✓ Terraform plan succeeded with changes detected"
-            exit 0
-          else
-            echo "✓ Terraform plan succeeded with no changes"
-            exit 0
           fi
 
-      - name: Comment PR with Plan
-        if: github.event_name == 'pull_request'
+          # Parse plan output to detect changes (more reliable than exit code)
+          # Look for "Plan: X to add, Y to change, Z to destroy" where X, Y, or Z > 0
+          # Fix for Report #0320: Only match non-zero changes to avoid false positives
+          if echo "$plan_output" | grep -Eq "Plan: [1-9][0-9]* to add|[1-9][0-9]* to change|[1-9][0-9]* to destroy"; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "✓ Changes detected in plan - will apply"
+          elif echo "$plan_output" | grep -q "No changes"; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "✓ No changes detected - nothing to apply"
+          else
+            # If we can't determine from output, use exit code as fallback
+            if [ "$exit_code" = "2" ]; then
+              echo "has_changes=true" >> $GITHUB_OUTPUT
+              echo "✓ Changes detected in plan (via exit code) - will apply"
+            else
+              echo "has_changes=false" >> $GITHUB_OUTPUT
+              echo "✓ No changes detected (via exit code) - nothing to apply"
+            fi
+          fi
+
+      - name: Comment PR with Plan (on pull request)
+        if: github.event_name == 'pull_request' && (success() || failure())
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const fs = require('fs');
-            const plan = fs.readFileSync('terraform/tfplan', 'utf8');
+            const planStatus = '${{ steps.plan.outcome }}';
+            const hasChanges = '${{ steps.plan.outputs.has_changes }}';
+
+            const statusEmoji = planStatus === 'success' ? '✅' : '❌';
+
+            const output = `#### Terraform Plan ${statusEmoji}
+
+            **Status:** ${planStatus}
+            **Changes Detected:** ${hasChanges === 'true' ? 'Yes' : 'No'}
+
+            <details><summary>View Full Plan Output</summary>
+
+            Check the workflow logs for detailed plan output.
+
+            </details>
+
+            *Terraform CI check completed for commit ${context.sha.substring(0, 7)}*`;
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `## Terraform Plan
+              body: output
+            })
 
-              <details>
-              <summary>Show Plan Output</summary>
+      - name: Stop MySQL Instance After Plan (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          # Smart Workflow 3 Logic (Report #0321) for stopping instance
 
-              \`\`\`
-              ${plan.substring(0, 65000)}
-              \`\`\`
+          # Logic 1: Check if already STOPPED
+          # Fix for Report #0323 VULN-002: Proper error handling
+          if ! state=$(gcloud sql instances describe mysql-directus-web-test \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --format="value(state)" 2>&1); then
+            echo "✗ gcloud error: $state"
+            exit 1
+          fi
 
-              </details>`
-            });
+          if [ "$state" = "STOPPED" ]; then
+            echo "✓ mysql-directus-web-test already STOPPED - skipping"
+            exit 0
+          fi
+
+          # Fix for Report #0323 VULN-003: Handle terminal states
+          if [[ "$state" == "SUSPENDED" || "$state" == "FAILED" ]]; then
+            echo "⚠ Instance in terminal state: $state - skipping stop"
+            exit 0
+          fi
+
+          # Logic 2: Stop instance if RUNNABLE
+          if [ "$state" = "RUNNABLE" ]; then
+            echo "Stopping mysql-directus-web-test instance (state: RUNNABLE)..."
+            echo "Checking for in-progress operations before issuing stop command..."
+
+            pending_ops=$(gcloud sql operations list \
+              --instance=mysql-directus-web-test \
+              --project=${{ secrets.GCP_PROJECT_ID }} \
+              --filter="status!=DONE" \
+              --format="value(name)" \
+              --limit=1 2>/dev/null || echo "")
+
+            if [ -n "$pending_ops" ]; then
+              echo "⚠ Operations in progress detected: $pending_ops"
+              echo "Waiting for operations to complete before stopping instance..."
+
+              op_wait_attempts=30
+              op_attempt=0
+              while [ $op_attempt -lt $op_wait_attempts ]; do
+                sleep 10
+                op_attempt=$((op_attempt + 1))
+
+                pending_ops=$(gcloud sql operations list \
+                  --instance=mysql-directus-web-test \
+                  --project=${{ secrets.GCP_PROJECT_ID }} \
+                  --filter="status!=DONE" \
+                  --format="value(name)" \
+                  --limit=1 2>/dev/null || echo "")
+
+                if [ -z "$pending_ops" ]; then
+                  echo "✓ All operations completed"
+                  break
+                fi
+
+                echo "Attempt $op_attempt/$op_wait_attempts: Still waiting for operations..."
+              done
+
+              if [ -n "$pending_ops" ]; then
+                echo "✗ Timeout: Operations did not complete after 5 minutes"
+                exit 1
+              fi
+            fi
+
+            gcloud sql instances patch mysql-directus-web-test \
+              --project=${{ secrets.GCP_PROJECT_ID }} \
+              --activation-policy=NEVER \
+              --async \
+              --quiet
+          elif [[ "$state" == PENDING* ]]; then
+            echo "Instance already stopping (state: $state) - will poll for completion"
+          fi
+
+          # Logic 3: Smart polling loop (60s intervals, max 40 minutes)
+          echo "Polling for STOPPED state (max 40 minutes)..."
+          max_attempts=40
+          attempt=0
+
+          while [ $attempt -lt $max_attempts ]; do
+            sleep 60
+            attempt=$((attempt + 1))
+
+            if ! state=$(gcloud sql instances describe mysql-directus-web-test \
+              --project=${{ secrets.GCP_PROJECT_ID }} \
+              --format="value(state)" 2>&1); then
+              echo "✗ Error querying instance state: $state"
+              exit 1
+            fi
+
+            echo "Attempt $attempt/$max_attempts: state=$state"
+
+            if [ "$state" = "STOPPED" ]; then
+              echo "✓ mysql-directus-web-test is STOPPED"
+              exit 0
+            elif [[ "$state" == "SUSPENDED" || "$state" == "FAILED" ]]; then
+              echo "⚠ Instance in terminal state: $state - skipping stop"
+              exit 0
+            fi
+          done
+
+          echo "⚠ Warning: Instance did not stop after 40 minutes (state: $state)"
+          # Don't fail the build - stopping is best-effort for cost savings
+          exit 0
+        working-directory: .
+
+      # Steps below only run on push to main (actual deployment)
+      # Smart Workflow 3 Logic for SQL instance management (Report #0321)
+      - name: Ensure All SQL Instances Running (Smart Workflow)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          # Function to ensure instance is RUNNABLE using Smart Workflow 3 Logic
+          ensure_instance_running() {
+            instance_name=$1
+            echo "=== Processing $instance_name ==="
+
+            # Logic 1: Check if already RUNNABLE
+            # Fix for Report #0323 VULN-002: Proper error handling
+            if ! state=$(gcloud sql instances describe $instance_name \
+              --project=${{ secrets.GCP_PROJECT_ID }} \
+              --format="value(state)" 2>&1); then
+              if echo "$state" | grep -qi "NOT_FOUND\|does not exist"; then
+                echo "✗ $instance_name instance not found"
+                return 1
+              else
+                echo "✗ gcloud error: $state"
+                return 1
+              fi
+            fi
+
+            if [ "$state" = "RUNNABLE" ]; then
+              echo "✓ $instance_name already RUNNABLE - skipping"
+              return 0
+            fi
+
+            # Fix for Report #0323 VULN-003: Handle terminal states
+            if [[ "$state" == "SUSPENDED" || "$state" == "FAILED" ]]; then
+              echo "✗ $instance_name in terminal state: $state"
+              echo "Manual intervention required"
+              return 1
+            fi
+
+            # Logic 2: Start instance if STOPPED
+            if [ "$state" = "MAINTENANCE" ]; then
+              echo "⚠ $instance_name in MAINTENANCE - skipping to polling loop"
+            elif [ "$state" = "STOPPED" ]; then
+              echo "Starting $instance_name (state: STOPPED)..."
+
+              # Fix for Report #0327 CRITICAL-001: Check for in-progress operations before patching
+              echo "Checking for in-progress operations..."
+              pending_ops=$(gcloud sql operations list \
+                --instance=$instance_name \
+                --project=${{ secrets.GCP_PROJECT_ID }} \
+                --filter="status!=DONE" \
+                --format="value(name)" \
+                --limit=1 2>/dev/null || echo "")
+
+              if [ -n "$pending_ops" ]; then
+                echo "⚠ Operations in progress detected: $pending_ops"
+                echo "Waiting for operations to complete before issuing new patch command..."
+
+                # Wait for operations to complete (max 5 minutes)
+                op_wait_attempts=30
+                op_attempt=0
+                while [ $op_attempt -lt $op_wait_attempts ]; do
+                  sleep 10
+                  op_attempt=$((op_attempt + 1))
+
+                  pending_ops=$(gcloud sql operations list \
+                    --instance=$instance_name \
+                    --project=${{ secrets.GCP_PROJECT_ID }} \
+                    --filter="status!=DONE" \
+                    --format="value(name)" \
+                    --limit=1 2>/dev/null || echo "")
+
+                  if [ -z "$pending_ops" ]; then
+                    echo "✓ All operations completed"
+                    break
+                  fi
+
+                  echo "Attempt $op_attempt/$op_wait_attempts: Still waiting for operations..."
+                done
+
+                if [ -n "$pending_ops" ]; then
+                  echo "✗ Timeout: Operations did not complete after 5 minutes"
+                  return 1
+                fi
+              fi
+
+              gcloud sql instances patch $instance_name \
+                --activation-policy=ALWAYS \
+                --project=${{ secrets.GCP_PROJECT_ID }} \
+                --async \
+                --quiet
+            elif [[ "$state" == PENDING* ]]; then
+              echo "Instance already starting (state: $state) - will poll for completion"
+            fi
+
+            # Logic 3: Smart polling loop (60s intervals, max 40 minutes)
+            echo "Polling for RUNNABLE state (max 40 minutes)..."
+            max_attempts=40
+            attempt=0
+
+            while [ $attempt -lt $max_attempts ]; do
+              sleep 60
+              attempt=$((attempt + 1))
+
+              if ! state=$(gcloud sql instances describe $instance_name \
+                --project=${{ secrets.GCP_PROJECT_ID }} \
+                --format="value(state)" 2>&1); then
+                echo "✗ Error querying instance state: $state"
+                return 1
+              fi
+
+              echo "Attempt $attempt/$max_attempts: state=$state"
+
+              if [ "$state" = "RUNNABLE" ]; then
+                echo "✓ $instance_name is RUNNABLE"
+                echo "Waiting 60s for instance to fully stabilize before Terraform queries..."
+                sleep 60
+
+                # Fix for Report #0327 CRITICAL-001: API Readiness Check
+                echo "Verifying SQL Admin API readiness..."
+                api_check_attempts=5
+                api_attempt=0
+                api_ready=false
+
+                while [ $api_attempt -lt $api_check_attempts ]; do
+                  api_attempt=$((api_attempt + 1))
+
+                  if gcloud sql instances describe $instance_name \
+                    --project=${{ secrets.GCP_PROJECT_ID }} \
+                    --format="value(state)" >/dev/null 2>&1; then
+                    echo "✓ API check $api_attempt/$api_check_attempts: Success"
+                    api_ready=true
+                    break
+                  else
+                    echo "⚠ API check $api_attempt/$api_check_attempts: Failed, retrying in 10s..."
+                    sleep 10
+                  fi
+                done
+
+                if [ "$api_ready" = false ]; then
+                  echo "✗ SQL Admin API not ready after $api_check_attempts attempts"
+                  return 1
+                fi
+
+                echo "✓ SQL Admin API is ready for Terraform operations"
+                return 0
+              elif [[ "$state" == "SUSPENDED" || "$state" == "FAILED" ]]; then
+                echo "✗ Instance in terminal state: $state"
+                return 1
+              fi
+            done
+
+            echo "✗ Timeout: $instance_name did not become RUNNABLE after 40 minutes"
+            return 1
+          }
+
+          # Fix for Report #0325 NEW-003: Process both instances in parallel to save time
+          echo "Starting both instances in parallel..."
+
+          ensure_instance_running "mysql-directus-web-test" &
+          pid_mysql=$!
+
+          ensure_instance_running "postgres-kestra-web-test" &
+          pid_postgres=$!
+
+          # Wait for both to complete
+          echo "Waiting for both instances to become RUNNABLE..."
+
+          mysql_result=0
+          postgres_result=0
+
+          wait $pid_mysql || mysql_result=$?
+          wait $pid_postgres || postgres_result=$?
+
+          if [ $mysql_result -ne 0 ]; then
+            echo "✗ mysql-directus-web-test failed to start (exit code: $mysql_result)"
+            exit 1
+          fi
+
+          if [ $postgres_result -ne 0 ]; then
+            echo "✗ postgres-kestra-web-test failed to start (exit code: $postgres_result)"
+            exit 1
+          fi
+
+          echo "✓ All SQL instances are RUNNABLE"
+        working-directory: .
+
+      # Verify all instances are actually in RUNNABLE state
+      - name: Verify All Instances are RUNNABLE
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          echo "Verifying all SQL instances are RUNNABLE..."
+
+          for instance in mysql-directus-web-test postgres-kestra-web-test; do
+            state=$(gcloud sql instances describe $instance \
+              --project=${{ secrets.GCP_PROJECT_ID }} \
+              --format="value(state)")
+
+            if [ "$state" != "RUNNABLE" ]; then
+              echo "✗ Error: $instance is not RUNNABLE (current state: $state)"
+              exit 1
+            fi
+            echo "✓ $instance is RUNNABLE"
+          done
+
+          echo "All SQL instances verified as RUNNABLE"
+        working-directory: .
+
+      - name: Terraform Apply
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.plan.outputs.has_changes == 'true'
+        run: |
+          echo "Applying Terraform changes..."
+          terraform apply -auto-approve tfplan
+
+      - name: Stop All SQL Instances (Always run on main push)
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          echo "Stopping all SQL instances to save costs..."
+
+          stop_instance() {
+            instance_name=$1
+
+            echo "Stopping ${instance_name}..."
+
+            echo "Checking for in-progress operations before stopping ${instance_name}..."
+            pending_ops=$(gcloud sql operations list \
+              --instance="${instance_name}" \
+              --project=${{ secrets.GCP_PROJECT_ID }} \
+              --filter="status!=DONE" \
+              --format="value(name)" \
+              --limit=1 2>/dev/null || echo "")
+
+            if [ -n "$pending_ops" ]; then
+              echo "⚠ Operations in progress detected for ${instance_name}: $pending_ops"
+              echo "Waiting for operations to complete before stopping..."
+
+              op_wait_attempts=30
+              op_attempt=0
+              while [ $op_attempt -lt $op_wait_attempts ]; do
+                sleep 10
+                op_attempt=$((op_attempt + 1))
+
+                pending_ops=$(gcloud sql operations list \
+                  --instance="${instance_name}" \
+                  --project=${{ secrets.GCP_PROJECT_ID }} \
+                  --filter="status!=DONE" \
+                  --format="value(name)" \
+                  --limit=1 2>/dev/null || echo "")
+
+                if [ -z "$pending_ops" ]; then
+                  echo "✓ All operations completed for ${instance_name}"
+                  break
+                fi
+
+                echo "Attempt $op_attempt/$op_wait_attempts: Still waiting for operations on ${instance_name}..."
+              done
+
+              if [ -n "$pending_ops" ]; then
+                echo "⚠ Warning: Operations did not complete for ${instance_name} after 5 minutes - skipping stop"
+                return
+              fi
+            fi
+
+            gcloud sql instances patch "${instance_name}" \
+              --activation-policy=NEVER \
+              --project=${{ secrets.GCP_PROJECT_ID }} || echo "Failed to stop ${instance_name}"
+          }
+
+          stop_instance "mysql-directus-web-test"
+          stop_instance "postgres-kestra-web-test"
+
+          echo "All SQL instances stopped successfully"
+        working-directory: .

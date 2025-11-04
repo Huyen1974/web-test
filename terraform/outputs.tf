@@ -1,55 +1,76 @@
 # Outputs for web-test infrastructure
 
-# SQL instances
-output "mysql_instance_name" {
-  description = "MySQL instance name"
-  value       = google_sql_database_instance.mysql_directus.name
+output "project_id" {
+  description = "The GCP project ID"
+  value       = var.project_id
 }
 
-output "postgres_instance_name" {
-  description = "Postgres instance name"
-  value       = google_sql_database_instance.postgres_kestra.name
+output "region" {
+  description = "The GCP region"
+  value       = var.region
 }
 
-output "mysql_connection_name" {
-  description = "MySQL instance connection name"
-  value       = google_sql_database_instance.mysql_directus.connection_name
+output "environment" {
+  description = "The environment"
+  value       = var.env
 }
 
-output "postgres_connection_name" {
-  description = "Postgres instance connection name"
-  value       = google_sql_database_instance.postgres_kestra.connection_name
+output "artifact_registry_repository" {
+  description = "Artifact Registry repository for web-test"
+  value = {
+    id       = google_artifact_registry_repository.web_test_docker_repo.repository_id
+    name     = google_artifact_registry_repository.web_test_docker_repo.name
+    location = google_artifact_registry_repository.web_test_docker_repo.location
+  }
 }
 
-# GCS buckets
-output "tfstate_bucket" {
-  description = "Terraform state bucket"
-  value       = google_storage_bucket.tfstate.name
+output "mysql_instance" {
+  description = "MySQL instance details for Directus"
+  value = {
+    name            = module.mysql_directus.instance_name
+    connection_name = module.mysql_directus.instance_connection_name
+    region          = var.sql_region
+    database_name   = module.mysql_directus.database_name
+    tier            = "db-f1-micro"
+  }
+  sensitive = false
 }
 
-output "backup_bucket" {
-  description = "Backup bucket"
-  value       = google_storage_bucket.backup.name
+output "directus_service_url" {
+  description = "Cloud Run service URL for Directus"
+  value       = module.directus_service.service_url
 }
 
-# Artifact Registry
-output "artifact_registry_id" {
-  description = "Artifact Registry repository ID"
-  value       = google_artifact_registry_repository.web_test.repository_id
+output "qdrant_endpoint" {
+  description = "Qdrant cluster endpoint"
+  value       = "https://${var.qdrant_cluster_id}.qdrant.tech"
 }
 
-# Cloud Run services
-output "directus_url" {
-  description = "Directus service URL"
-  value       = google_cloud_run_v2_service.directus.uri
+output "qdrant_secret_name" {
+  description = "Qdrant API key secret name"
+  value       = google_secret_manager_secret.qdrant_api.secret_id
 }
 
-output "kestra_url" {
-  description = "Kestra service URL"
+# Sprint 2: Kestra outputs
+output "postgres_kestra_instance" {
+  description = "PostgreSQL instance details for Kestra"
+  value = {
+    name            = module.postgres_kestra.instance_name
+    connection_name = module.postgres_kestra.instance_connection_name
+    region          = var.sql_region
+    database_name   = module.postgres_kestra.database_name
+    tier            = "db-f1-micro"
+  }
+  sensitive = false
+}
+
+output "kestra_service_url" {
+  description = "Cloud Run service URL for Kestra"
   value       = google_cloud_run_v2_service.kestra.uri
 }
 
-output "chatwoot_url" {
-  description = "Chatwoot service URL"
-  value       = google_cloud_run_v2_service.chatwoot.uri
+output "kestra_db_password_secret" {
+  description = "Secret name for Kestra database password"
+  value       = "kestra-db-password-test"
+  sensitive   = false
 }
