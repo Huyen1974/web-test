@@ -1,8 +1,2 @@
-# Backend configuration for Terraform state
-# State bucket name per PHỤ LỤC D, Điều 3
-terraform {
-  backend "gcs" {
-    bucket = "huyen1974-web-test-tfstate"
-    prefix = "terraform/state"
-  }
-}
+# Backend configuration is defined in main.tf
+# Using local backend for clean state (no GCS bucket needed)
