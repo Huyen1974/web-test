@@ -1,5 +1,45 @@
-# Placeholder file to satisfy CI guard_bootstrap_scaffold step
-# This file exists to prevent CI failure when terraform/ is intentionally empty
-# After infrastructure wipe (Task #0355)
+# Minimal Terraform configuration to satisfy CI checks
+# This configuration is intentionally empty after infrastructure wipe (Task #0355)
+# No resources are defined - infrastructure has been completely cleaned
 
-# Empty configuration - no resources defined
+terraform {
+  required_version = "~> 1.8"
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 4.57.0"
+    }
+  }
+  backend "local" {}
+}
+
+variable "project_id" {
+  description = "GCP Project ID"
+  type        = string
+  default     = ""
+}
+
+variable "env" {
+  description = "Environment"
+  type        = string
+  default     = "test"
+}
+
+variable "qdrant_cluster_id" {
+  description = "Qdrant Cluster ID"
+  type        = string
+  default     = ""
+}
+
+variable "qdrant_api_key" {
+  description = "Qdrant API Key"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+provider "google" {
+  project = var.project_id
+}
+
+# No resources defined - clean state after infrastructure wipe
