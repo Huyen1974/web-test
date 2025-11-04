@@ -1,9 +1,0 @@
-# Project configuration
-project_id  = "your-gcp-project-id"
-region      = "asia-southeast1"
-environment = "test"
-
-# Qdrant configuration
-qdrant_cluster_id = "529a17a6-01b8-4304-bc5c-b936aec8fca9"
-qdrant_region     = "us-east4"
-qdrant_api_key    = "REPLACE_WITH_ENV"
