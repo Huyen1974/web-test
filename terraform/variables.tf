@@ -18,16 +18,3 @@ variable "env" {
   type        = string
   default     = "test"
 }
-
-variable "qdrant_cluster_id" {
-  description = "Qdrant Cluster ID for vector database"
-  type        = string
-  default     = ""
-}
-
-variable "qdrant_api_key" {
-  description = "Qdrant API Key for authentication"
-  type        = string
-  default     = ""
-  sensitive   = true
-}
