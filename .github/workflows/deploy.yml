@@ -212,14 +212,8 @@ jobs:
       - name: Terraform Validate
         run: terraform validate -no-color
 
-      - name: Ensure Secret Admin Binding (main)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && hashFiles('terraform/secrets.tf') != ''
-        run: |
-          echo "Ensuring deployer service account can administer Secret Manager IAM..."
-          terraform apply -auto-approve -target=google_project_iam_member.deployer_secret_admin
-
       - name: Ensure MySQL Instance Running for Plan
-        if: hashFiles('terraform/sql.tf') != ''
+        if: hashFiles('terraform/sql_instances.tf') != ''
         run: |
           # Smart Workflow 3 Logic (Report #0321) - saves 18+ minutes when instance already running
 
@@ -474,7 +468,7 @@ jobs:
             })
 
       - name: Stop MySQL Instance After Plan (PR only)
-        if: github.event_name == 'pull_request' && hashFiles('terraform/sql.tf') != ''
+        if: github.event_name == 'pull_request' && hashFiles('terraform/sql_instances.tf') != ''
         run: |
           # Smart Workflow 3 Logic (Report #0321) for stopping instance
 
@@ -585,7 +579,7 @@ jobs:
       # Steps below only run on push to main (actual deployment)
       # Smart Workflow 3 Logic for SQL instance management (Report #0321)
       - name: Ensure All SQL Instances Running (Smart Workflow)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && hashFiles('terraform/sql.tf') != ''
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && hashFiles('terraform/sql_instances.tf') != ''
         run: |
           # Function to ensure instance is RUNNABLE using Smart Workflow 3 Logic
           ensure_instance_running() {
@@ -768,7 +762,7 @@ jobs:
 
       # Verify all instances are actually in RUNNABLE state
       - name: Verify All Instances are RUNNABLE
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && hashFiles('terraform/sql.tf') != ''
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && hashFiles('terraform/sql_instances.tf') != ''
         run: |
           echo "Verifying all SQL instances are RUNNABLE..."
 
@@ -794,7 +788,7 @@ jobs:
           terraform apply -auto-approve tfplan
 
       - name: Stop All SQL Instances (Always run on main push)
-        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && hashFiles('terraform/sql.tf') != ''
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && hashFiles('terraform/sql_instances.tf') != ''
         run: |
           echo "Stopping all SQL instances to save costs..."
 

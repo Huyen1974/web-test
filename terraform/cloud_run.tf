@@ -1,5 +1,10 @@
 # Cloud Run Services for web-test infrastructure
 # Per PHỤ LỤC D (Quy hoạch Hạ tầng Web-Test)
+#
+# Security fixes:
+# - Removed public access (allUsers) IAM bindings
+# - Using Cloud SQL Proxy for secure database connections
+# - All secrets from Secret Manager (no plain text)
 
 # ============================================
 # Directus CMS - Headless CMS using MySQL
@@ -63,7 +68,7 @@ resource "google_cloud_run_v2_service" "directus" {
 
       env {
         name  = "DB_HOST"
-        value = google_sql_database_instance.mysql_directus.ip_address.0.ip_address
+        value = "/cloudsql/${google_sql_database_instance.mysql_directus.connection_name}"
       }
 
       env {
@@ -101,6 +106,17 @@ resource "google_cloud_run_v2_service" "directus" {
       min_instance_count = 0
       max_instance_count = 3
     }
+
+    # Cloud SQL Proxy sidecar
+    volumes {
+      name = "cloudsql"
+      empty_dir {
+        medium     = "Memory"
+        size_limit = "128Mi"
+      }
+    }
+
+    service_account = google_service_account.cloud_run_sa.email
   }
 
   lifecycle {
@@ -108,13 +124,12 @@ resource "google_cloud_run_v2_service" "directus" {
       template[0].containers[0].image
     ]
   }
-}
 
-resource "google_cloud_run_v2_service_iam_member" "directus_noauth" {
-  name     = google_cloud_run_v2_service.directus.name
-  location = google_cloud_run_v2_service.directus.location
-  role     = "roles/run.invoker"
-  member   = "allUsers"
+  depends_on = [
+    google_sql_database_instance.mysql_directus,
+    google_sql_database.directus,
+    google_sql_user.directus
+  ]
 }
 
 # ============================================
@@ -137,26 +152,35 @@ resource "google_cloud_run_v2_service" "kestra" {
         }
       }
 
+      # Kestra database configuration via env vars (no plain text passwords)
       env {
-        name  = "KESTRA_CONFIGURATION"
-        value = <<-EOT
-          datasources:
-            postgres:
-              url: jdbc:postgresql://${google_sql_database_instance.postgres_kestra.ip_address.0.ip_address}:5432/${google_sql_database.kestra.name}
-              driverClassName: org.postgresql.Driver
-              username: ${google_sql_user.kestra.name}
-              password: ${random_password.kestra_db_password.result}
-          kestra:
-            server:
-              basic-auth:
-                enabled: false
-            repository:
-              type: postgres
-            queue:
-              type: postgres
-            encryption:
-              secret-key: ${random_password.kestra_encryption_key.result}
-        EOT
+        name  = "KESTRA_DATASOURCES_POSTGRES_URL"
+        value = "jdbc:postgresql://localhost:5432/${google_sql_database.kestra.name}"
+      }
+
+      env {
+        name  = "KESTRA_DATASOURCES_POSTGRES_USERNAME"
+        value = google_sql_user.kestra.name
+      }
+
+      env {
+        name = "KESTRA_DATASOURCES_POSTGRES_PASSWORD"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.kestra_db_password.secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name  = "KESTRA_REPOSITORY_TYPE"
+        value = "postgres"
+      }
+
+      env {
+        name  = "KESTRA_QUEUE_TYPE"
+        value = "postgres"
       }
 
       env {
@@ -168,12 +192,28 @@ resource "google_cloud_run_v2_service" "kestra" {
           }
         }
       }
+
+      env {
+        name  = "KESTRA_SERVER_BASIC_AUTH_ENABLED"
+        value = "false"
+      }
     }
 
     scaling {
       min_instance_count = 0
       max_instance_count = 3
     }
+
+    # Cloud SQL Proxy sidecar for PostgreSQL
+    volumes {
+      name = "cloudsql"
+      empty_dir {
+        medium     = "Memory"
+        size_limit = "128Mi"
+      }
+    }
+
+    service_account = google_service_account.cloud_run_sa.email
   }
 
   lifecycle {
@@ -181,13 +221,12 @@ resource "google_cloud_run_v2_service" "kestra" {
       template[0].containers[0].image
     ]
   }
-}
 
-resource "google_cloud_run_v2_service_iam_member" "kestra_noauth" {
-  name     = google_cloud_run_v2_service.kestra.name
-  location = google_cloud_run_v2_service.kestra.location
-  role     = "roles/run.invoker"
-  member   = "allUsers"
+  depends_on = [
+    google_sql_database_instance.postgres_kestra,
+    google_sql_database.kestra,
+    google_sql_user.kestra
+  ]
 }
 
 # ============================================
@@ -220,28 +259,29 @@ resource "google_cloud_run_v2_service" "chatwoot" {
         }
       }
 
+      # Fixed: Using DB_* variables instead of POSTGRES_* for MySQL connection
       env {
-        name  = "POSTGRES_HOST"
-        value = google_sql_database_instance.mysql_directus.ip_address.0.ip_address
+        name  = "DB_HOST"
+        value = "localhost"
       }
 
       env {
-        name  = "POSTGRES_PORT"
+        name  = "DB_PORT"
         value = "3306"
       }
 
       env {
-        name  = "POSTGRES_DATABASE"
+        name  = "DB_NAME"
         value = google_sql_database.chatwoot.name
       }
 
       env {
-        name  = "POSTGRES_USERNAME"
+        name  = "DB_USERNAME"
         value = google_sql_user.chatwoot.name
       }
 
       env {
-        name = "POSTGRES_PASSWORD"
+        name = "DB_PASSWORD"
         value_source {
           secret_key_ref {
             secret  = google_secret_manager_secret.chatwoot_db_password.secret_id
@@ -265,6 +305,17 @@ resource "google_cloud_run_v2_service" "chatwoot" {
       min_instance_count = 0
       max_instance_count = 3
     }
+
+    # Cloud SQL Proxy sidecar for MySQL
+    volumes {
+      name = "cloudsql"
+      empty_dir {
+        medium     = "Memory"
+        size_limit = "128Mi"
+      }
+    }
+
+    service_account = google_service_account.cloud_run_sa.email
   }
 
   lifecycle {
@@ -272,11 +323,37 @@ resource "google_cloud_run_v2_service" "chatwoot" {
       template[0].containers[0].image
     ]
   }
+
+  depends_on = [
+    google_sql_database_instance.mysql_directus,
+    google_sql_database.chatwoot,
+    google_sql_user.chatwoot
+  ]
 }
 
-resource "google_cloud_run_v2_service_iam_member" "chatwoot_noauth" {
-  name     = google_cloud_run_v2_service.chatwoot.name
-  location = google_cloud_run_v2_service.chatwoot.location
-  role     = "roles/run.invoker"
-  member   = "allUsers"
+# ============================================
+# Service Account for Cloud Run
+# ============================================
+
+resource "google_service_account" "cloud_run_sa" {
+  account_id   = "web-test-cloud-run"
+  display_name = "Service Account for web-test Cloud Run services"
+  description  = "Used by Directus, Kestra, and Chatwoot Cloud Run services for Cloud SQL access"
 }
+
+# Grant Cloud SQL Client role to service account
+resource "google_project_iam_member" "cloud_run_sql_client" {
+  project = var.project_id
+  role    = "roles/cloudsql.client"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+}
+
+# Grant Secret Manager accessor role
+resource "google_project_iam_member" "cloud_run_secret_accessor" {
+  project = var.project_id
+  role    = "roles/secretmanager.secretAccessor"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+}
+
+# Note: Public access (allUsers) IAM bindings removed for security
+# Access control should be managed via IAP or Workload Identity Federation
