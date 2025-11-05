@@ -209,16 +209,18 @@ jobs:
             const hasChanges = '${{ steps.plan.outputs.has_changes }}';
             const statusEmoji = planStatus === 'success' ? '✅' : '❌';
 
+            const output = `#### Terraform Plan ${statusEmoji}
+
+            **Status:** ${planStatus}
+            **Changes Detected:** ${hasChanges === 'true' ? 'Yes' : 'No'}
+
+            See workflow logs for detailed plan output.`;
+
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `#### Terraform Plan ${statusEmoji}
-
-**Status:** ${planStatus}
-**Changes:** ${hasChanges === 'true' ? 'Yes' : 'No'}
-
-See workflow logs for details.`
+              body: output
             })
 
       - name: Terraform Apply
