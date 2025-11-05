@@ -183,6 +183,24 @@ jobs:
       - name: Terraform Format Check
         run: terraform fmt -check -recursive
 
+      - name: Ensure GCS State Bucket Exists
+        run: |
+          # Fix for chicken-and-egg problem: Create state bucket if it doesn't exist
+          # This allows terraform init to succeed on first run
+          BUCKET_NAME="huyen1974-web-test-tfstate"
+
+          if ! gcloud storage buckets describe gs://${BUCKET_NAME} --project=${{ secrets.GCP_PROJECT_ID }} >/dev/null 2>&1; then
+            echo "Creating GCS state bucket ${BUCKET_NAME}..."
+            gcloud storage buckets create gs://${BUCKET_NAME} \
+              --project=${{ secrets.GCP_PROJECT_ID }} \
+              --location=asia-southeast1 \
+              --uniform-bucket-level-access
+            echo "✓ Bucket created successfully"
+          else
+            echo "✓ Bucket ${BUCKET_NAME} already exists"
+          fi
+        working-directory: .
+
       - name: Terraform Init
         env:
           GIT_CONFIG_COUNT: 1
