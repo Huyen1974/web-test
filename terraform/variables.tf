@@ -1,5 +1,5 @@
-# Minimal variables for Terraform configuration
-# Required by deploy.yml workflow
+# Input variables for web-test infrastructure
+# Per TF-LAW §8 and PHỤ LỤC D
 
 variable "project_id" {
   description = "GCP Project ID"
@@ -7,7 +7,7 @@ variable "project_id" {
 }
 
 variable "region" {
-  description = "GCP region"
+  description = "GCP region for resources"
   type        = string
   default     = "asia-southeast1"
 }
