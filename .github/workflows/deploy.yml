@@ -223,8 +223,8 @@ jobs:
             --project=${{ secrets.GCP_PROJECT_ID }} \
             --format="value(state)" 2>&1); then
             if echo "$state" | grep -qi "NOT_FOUND\|does not exist"; then
-              echo "✗ mysql-directus-web-test instance not found"
-              exit 1
+              echo "ℹ mysql-directus-web-test instance not found (clean install - will be created by Terraform)"
+              exit 0
             else
               echo "✗ gcloud error: $state"
               exit 1
