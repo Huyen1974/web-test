@@ -401,8 +401,6 @@ jobs:
           plan_output=$(terraform plan -no-color -detailed-exitcode \
             -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
             -var="env=test" \
-            -var="qdrant_cluster_id=${{ secrets.QDRANT_CLUSTER1_ID }}" \
-            -var="qdrant_api_key=${{ secrets.QDRANT_CLUSTER1_KEY }}" \
             -out=tfplan 2>&1)
           exit_code=$?
           set -e
