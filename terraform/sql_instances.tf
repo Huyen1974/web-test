@@ -4,9 +4,9 @@
 
 # MySQL instance for Directus CMS and Chatwoot
 resource "google_sql_database_instance" "mysql_directus" {
-  name             = "mysql-directus-web-test"
-  database_version = "MYSQL_8_0"
-  region           = var.region
+  name                = "mysql-directus-web-test"
+  database_version    = "MYSQL_8_0"
+  region              = var.region
   deletion_protection = false
 
   settings {
@@ -28,9 +28,9 @@ resource "google_sql_database_instance" "mysql_directus" {
 
 # PostgreSQL instance for Kestra workflow engine
 resource "google_sql_database_instance" "postgres_kestra" {
-  name             = "postgres-kestra-web-test"
-  database_version = "POSTGRES_15"
-  region           = var.region
+  name                = "postgres-kestra-web-test"
+  database_version    = "POSTGRES_15"
+  region              = var.region
   deletion_protection = false
 
   settings {
