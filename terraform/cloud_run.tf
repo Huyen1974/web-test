@@ -3,7 +3,7 @@
 #
 # Security fixes:
 # - Removed public access (allUsers) IAM bindings
-# - Using Cloud SQL Proxy for secure database connections
+# - Using Cloud SQL Proxy via annotations for secure database connections
 # - All secrets from Secret Manager (no plain text)
 
 # ============================================
@@ -16,6 +16,13 @@ resource "google_cloud_run_v2_service" "directus" {
   ingress  = "INGRESS_TRAFFIC_ALL"
 
   template {
+    service_account = google_service_account.cloud_run_sa.email
+
+    # Cloud SQL connection annotation
+    annotations = {
+      "run.googleapis.com/cloudsql-instances" = google_sql_database_instance.mysql_directus.connection_name
+    }
+
     containers {
       image = "directus/directus:latest"
 
@@ -106,17 +113,6 @@ resource "google_cloud_run_v2_service" "directus" {
       min_instance_count = 0
       max_instance_count = 3
     }
-
-    # Cloud SQL Proxy sidecar
-    volumes {
-      name = "cloudsql"
-      empty_dir {
-        medium     = "Memory"
-        size_limit = "128Mi"
-      }
-    }
-
-    service_account = google_service_account.cloud_run_sa.email
   }
 
   lifecycle {
@@ -142,6 +138,13 @@ resource "google_cloud_run_v2_service" "kestra" {
   ingress  = "INGRESS_TRAFFIC_ALL"
 
   template {
+    service_account = google_service_account.cloud_run_sa.email
+
+    # Cloud SQL connection annotation for PostgreSQL
+    annotations = {
+      "run.googleapis.com/cloudsql-instances" = google_sql_database_instance.postgres_kestra.connection_name
+    }
+
     containers {
       image = "kestra/kestra:latest"
 
@@ -155,7 +158,7 @@ resource "google_cloud_run_v2_service" "kestra" {
       # Kestra database configuration via env vars (no plain text passwords)
       env {
         name  = "KESTRA_DATASOURCES_POSTGRES_URL"
-        value = "jdbc:postgresql://localhost:5432/${google_sql_database.kestra.name}"
+        value = "jdbc:postgresql://localhost:5432/${google_sql_database.kestra.name}?socketFactory=com.google.cloud.sql.postgres.SocketFactory&cloudSqlInstance=${google_sql_database_instance.postgres_kestra.connection_name}"
       }
 
       env {
@@ -203,17 +206,6 @@ resource "google_cloud_run_v2_service" "kestra" {
       min_instance_count = 0
       max_instance_count = 3
     }
-
-    # Cloud SQL Proxy sidecar for PostgreSQL
-    volumes {
-      name = "cloudsql"
-      empty_dir {
-        medium     = "Memory"
-        size_limit = "128Mi"
-      }
-    }
-
-    service_account = google_service_account.cloud_run_sa.email
   }
 
   lifecycle {
@@ -239,6 +231,13 @@ resource "google_cloud_run_v2_service" "chatwoot" {
   ingress  = "INGRESS_TRAFFIC_ALL"
 
   template {
+    service_account = google_service_account.cloud_run_sa.email
+
+    # Cloud SQL connection annotation for MySQL
+    annotations = {
+      "run.googleapis.com/cloudsql-instances" = google_sql_database_instance.mysql_directus.connection_name
+    }
+
     containers {
       image = "chatwoot/chatwoot:latest"
 
@@ -262,7 +261,7 @@ resource "google_cloud_run_v2_service" "chatwoot" {
       # Fixed: Using DB_* variables instead of POSTGRES_* for MySQL connection
       env {
         name  = "DB_HOST"
-        value = "localhost"
+        value = "/cloudsql/${google_sql_database_instance.mysql_directus.connection_name}"
       }
 
       env {
@@ -305,17 +304,6 @@ resource "google_cloud_run_v2_service" "chatwoot" {
       min_instance_count = 0
       max_instance_count = 3
     }
-
-    # Cloud SQL Proxy sidecar for MySQL
-    volumes {
-      name = "cloudsql"
-      empty_dir {
-        medium     = "Memory"
-        size_limit = "128Mi"
-      }
-    }
-
-    service_account = google_service_account.cloud_run_sa.email
   }
 
   lifecycle {
