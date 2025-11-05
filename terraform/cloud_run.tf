@@ -26,6 +26,11 @@ resource "google_cloud_run_v2_service" "directus" {
     containers {
       image = "directus/directus:10.10"
 
+      ports {
+        name           = "http1"
+        container_port = 8055
+      }
+
       resources {
         limits = {
           cpu    = "1"
@@ -148,6 +153,11 @@ resource "google_cloud_run_v2_service" "kestra" {
     containers {
       image = "kestra/kestra:v0.17.0"
 
+      ports {
+        name           = "http1"
+        container_port = 8080
+      }
+
       resources {
         limits = {
           cpu    = "1"
@@ -241,6 +251,11 @@ resource "google_cloud_run_v2_service" "chatwoot" {
     containers {
       image = "chatwoot/chatwoot:v3.7.0"
 
+      ports {
+        name           = "http1"
+        container_port = 3000
+      }
+
       resources {
         limits = {
           cpu    = "1"
@@ -256,6 +271,11 @@ resource "google_cloud_run_v2_service" "chatwoot" {
             version = "latest"
           }
         }
+      }
+
+      env {
+        name  = "PORT"
+        value = "3000"
       }
 
       # Fixed: Using DB_* variables instead of POSTGRES_* for MySQL connection
