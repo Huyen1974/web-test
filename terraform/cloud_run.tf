@@ -273,11 +273,6 @@ resource "google_cloud_run_v2_service" "chatwoot" {
         }
       }
 
-      env {
-        name  = "PORT"
-        value = "3000"
-      }
-
       # Fixed: Using DB_* variables instead of POSTGRES_* for MySQL connection
       env {
         name  = "DB_HOST"
