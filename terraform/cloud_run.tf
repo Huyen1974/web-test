@@ -80,6 +80,11 @@ resource "google_cloud_run_v2_service" "directus" {
 
       env {
         name  = "DB_HOST"
+        value = "127.0.0.1"
+      }
+
+      env {
+        name  = "DB_SOCKET_PATH"
         value = "/cloudsql/${google_sql_database_instance.mysql_directus.connection_name}"
       }
 
@@ -276,6 +281,11 @@ resource "google_cloud_run_v2_service" "chatwoot" {
       # Fixed: Using DB_* variables instead of POSTGRES_* for MySQL connection
       env {
         name  = "DB_HOST"
+        value = "127.0.0.1"
+      }
+
+      env {
+        name  = "DB_SOCKET"
         value = "/cloudsql/${google_sql_database_instance.mysql_directus.connection_name}"
       }
 
