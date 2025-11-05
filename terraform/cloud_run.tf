@@ -24,7 +24,7 @@ resource "google_cloud_run_v2_service" "directus" {
     }
 
     containers {
-      image = "directus/directus:latest"
+      image = "directus/directus:10.10"
 
       resources {
         limits = {
@@ -55,7 +55,7 @@ resource "google_cloud_run_v2_service" "directus" {
 
       env {
         name  = "ADMIN_EMAIL"
-        value = "admin@example.com"
+        value = "admin@huyen1974.com"
       }
 
       env {
@@ -146,7 +146,7 @@ resource "google_cloud_run_v2_service" "kestra" {
     }
 
     containers {
-      image = "kestra/kestra:latest"
+      image = "kestra/kestra:v0.17.0"
 
       resources {
         limits = {
@@ -239,7 +239,7 @@ resource "google_cloud_run_v2_service" "chatwoot" {
     }
 
     containers {
-      image = "chatwoot/chatwoot:latest"
+      image = "chatwoot/chatwoot:v3.7.0"
 
       resources {
         limits = {
