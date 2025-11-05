@@ -477,8 +477,13 @@ jobs:
           if ! state=$(gcloud sql instances describe mysql-directus-web-test \
             --project=${{ secrets.GCP_PROJECT_ID }} \
             --format="value(state)" 2>&1); then
-            echo "✗ gcloud error: $state"
-            exit 1
+            if echo "$state" | grep -qi "NOT_FOUND\|does not exist"; then
+              echo "ℹ mysql-directus-web-test instance not found (clean install - will be created by Terraform)"
+              exit 0  # Nothing to stop, exit gracefully
+            else
+              echo "✗ gcloud error: $state"
+              exit 1
+            fi
           fi
 
           if [ "$state" = "STOPPED" ]; then
