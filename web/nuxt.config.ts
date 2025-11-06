@@ -3,6 +3,12 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
 
+  runtimeConfig: {
+    public: {
+      directusUrl: process.env.NUXT_PUBLIC_DIRECTUS_URL || 'https://directus-test-812872501910.asia-southeast1.run.app'
+    }
+  },
+
   modules: [
     '@nuxt/ui',
     '@nuxtjs/i18n'
