@@ -58,7 +58,7 @@
           </div>
 
           <div>
-            <h3 class="text-lg font-semibold mb-2">Test Connection</h3>
+            <h3 class="text-lg font-semibold mb-2">Test Authenticated Connection</h3>
             <div class="space-y-3">
               <UButton
                 block
@@ -66,16 +66,31 @@
                 :loading="testing"
                 @click="testConnection"
               >
-                Test API Connection
+                Test Server-Side Auth
               </UButton>
 
               <UAlert
                 v-if="testResult"
-                :color="testResult.success ? 'green' : 'orange'"
+                :color="testResult.success ? 'green' : 'red'"
                 :icon="testResult.success ? 'i-heroicons-check-circle' : 'i-heroicons-exclamation-triangle'"
                 :title="testResult.title"
                 :description="testResult.message"
               />
+
+              <UCard v-if="testResult && testResult.details" class="mt-2">
+                <div class="space-y-2 text-sm">
+                  <div class="flex justify-between">
+                    <span class="text-gray-600 dark:text-gray-400">Status Code:</span>
+                    <span class="font-mono">{{ testResult.details.status }}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-gray-600 dark:text-gray-400">Authenticated:</span>
+                    <UBadge :color="testResult.details.authenticated ? 'green' : 'red'">
+                      {{ testResult.details.authenticated ? 'Yes' : 'No' }}
+                    </UBadge>
+                  </div>
+                </div>
+              </UCard>
             </div>
           </div>
 
@@ -88,10 +103,10 @@
             >
               <template #description>
                 <ul class="list-disc list-inside space-y-1 text-sm">
-                  <li>SDK is configured and ready to use</li>
-                  <li>Connection requires authentication for actual API calls</li>
-                  <li>403 errors are expected without auth token</li>
-                  <li>Use <code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">$directus</code> in components to access the client</li>
+                  <li>Server-side authentication is configured via NUXT_DIRECTUS_TOKEN</li>
+                  <li>Admin token is kept server-side and never exposed to client</li>
+                  <li>API calls go through <code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">/api/*</code> routes for security</li>
+                  <li>Use <code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">$fetch('/api/...')</code> to call authenticated endpoints</li>
                 </ul>
               </template>
             </UAlert>
@@ -101,7 +116,7 @@
 
       <template #footer>
         <div class="text-center text-sm text-gray-500 dark:text-gray-400">
-          Task #0389: Connect Directus SDK
+          Task #0391: Server-Side Authentication
         </div>
       </template>
     </UCard>
@@ -126,27 +141,39 @@ const testConnection = async () => {
   testResult.value = null
 
   try {
-    // Try to fetch server info (this will likely return 403 without auth)
-    const response = await fetch(`${directusUrl.value}/server/info`)
+    // Call our server-side API route which handles authentication
+    const response = await $fetch('/api/ping')
 
-    if (response.ok) {
+    if (response.success) {
       testResult.value = {
         success: true,
-        title: 'Connection Successful',
-        message: `Server responded with status ${response.status}`
+        title: 'Authentication Successful',
+        message: response.message,
+        details: {
+          status: response.status,
+          authenticated: response.authenticated
+        }
       }
     } else {
       testResult.value = {
         success: false,
-        title: 'Authentication Required',
-        message: `Server responded with ${response.status} - This is expected without authentication. SDK is configured correctly.`
+        title: 'Authentication Failed',
+        message: response.message,
+        details: {
+          status: response.status,
+          authenticated: response.authenticated
+        }
       }
     }
   } catch (error) {
     testResult.value = {
       success: false,
       title: 'Connection Error',
-      message: error.message
+      message: error.message || 'Failed to connect to API',
+      details: {
+        status: 500,
+        authenticated: false
+      }
     }
   } finally {
     testing.value = false
