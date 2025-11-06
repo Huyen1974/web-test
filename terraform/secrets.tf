@@ -115,112 +115,114 @@ resource "google_secret_manager_secret_version" "directus_db_password" {
 
 # ============================================
 # Kestra Secrets (2)
+# DISABLED: Phase 1 focuses on MySQL + Directus only
 # ============================================
 
-resource "random_password" "kestra_db_password" {
-  length  = 32
-  special = false
-
-  lifecycle {
-    ignore_changes = [result]
-  }
-}
-
-resource "google_secret_manager_secret" "kestra_db_password" {
-  secret_id = "kestra-db-password"
-
-  replication {
-    user_managed {
-      replicas {
-        location = var.region
-      }
-    }
-  }
-}
-
-resource "google_secret_manager_secret_version" "kestra_db_password" {
-  secret      = google_secret_manager_secret.kestra_db_password.id
-  secret_data = random_password.kestra_db_password.result
-}
-
-resource "random_password" "kestra_encryption_key" {
-  length  = 32
-  special = true
-
-  lifecycle {
-    ignore_changes = [result]
-  }
-}
-
-resource "google_secret_manager_secret" "kestra_encryption_key" {
-  secret_id = "kestra-encryption-key"
-
-  replication {
-    user_managed {
-      replicas {
-        location = var.region
-      }
-    }
-  }
-}
-
-resource "google_secret_manager_secret_version" "kestra_encryption_key" {
-  secret      = google_secret_manager_secret.kestra_encryption_key.id
-  secret_data = random_password.kestra_encryption_key.result
-}
+# resource "random_password" "kestra_db_password" {
+#   length  = 32
+#   special = false
+#
+#   lifecycle {
+#     ignore_changes = [result]
+#   }
+# }
+#
+# resource "google_secret_manager_secret" "kestra_db_password" {
+#   secret_id = "kestra-db-password"
+#
+#   replication {
+#     user_managed {
+#       replicas {
+#         location = var.region
+#       }
+#     }
+#   }
+# }
+#
+# resource "google_secret_manager_secret_version" "kestra_db_password" {
+#   secret      = google_secret_manager_secret.kestra_db_password.id
+#   secret_data = random_password.kestra_db_password.result
+# }
+#
+# resource "random_password" "kestra_encryption_key" {
+#   length  = 32
+#   special = true
+#
+#   lifecycle {
+#     ignore_changes = [result]
+#   }
+# }
+#
+# resource "google_secret_manager_secret" "kestra_encryption_key" {
+#   secret_id = "kestra-encryption-key"
+#
+#   replication {
+#     user_managed {
+#       replicas {
+#         location = var.region
+#       }
+#     }
+#   }
+# }
+#
+# resource "google_secret_manager_secret_version" "kestra_encryption_key" {
+#   secret      = google_secret_manager_secret.kestra_encryption_key.id
+#   secret_data = random_password.kestra_encryption_key.result
+# }
 
 # ============================================
 # Chatwoot Secrets (2)
+# DISABLED: Phase 1 focuses on MySQL + Directus only
 # ============================================
 
-resource "random_password" "chatwoot_secret_key_base" {
-  length  = 64
-  special = true
-
-  lifecycle {
-    ignore_changes = [result]
-  }
-}
-
-resource "google_secret_manager_secret" "chatwoot_secret_key_base" {
-  secret_id = "chatwoot-secret-key-base"
-
-  replication {
-    user_managed {
-      replicas {
-        location = var.region
-      }
-    }
-  }
-}
-
-resource "google_secret_manager_secret_version" "chatwoot_secret_key_base" {
-  secret      = google_secret_manager_secret.chatwoot_secret_key_base.id
-  secret_data = random_password.chatwoot_secret_key_base.result
-}
-
-resource "random_password" "chatwoot_db_password" {
-  length  = 32
-  special = false
-
-  lifecycle {
-    ignore_changes = [result]
-  }
-}
-
-resource "google_secret_manager_secret" "chatwoot_db_password" {
-  secret_id = "chatwoot-db-password"
-
-  replication {
-    user_managed {
-      replicas {
-        location = var.region
-      }
-    }
-  }
-}
-
-resource "google_secret_manager_secret_version" "chatwoot_db_password" {
-  secret      = google_secret_manager_secret.chatwoot_db_password.id
-  secret_data = random_password.chatwoot_db_password.result
-}
+# resource "random_password" "chatwoot_secret_key_base" {
+#   length  = 64
+#   special = true
+#
+#   lifecycle {
+#     ignore_changes = [result]
+#   }
+# }
+#
+# resource "google_secret_manager_secret" "chatwoot_secret_key_base" {
+#   secret_id = "chatwoot-secret-key-base"
+#
+#   replication {
+#     user_managed {
+#       replicas {
+#         location = var.region
+#       }
+#     }
+#   }
+# }
+#
+# resource "google_secret_manager_secret_version" "chatwoot_secret_key_base" {
+#   secret      = google_secret_manager_secret.chatwoot_secret_key_base.id
+#   secret_data = random_password.chatwoot_secret_key_base.result
+# }
+#
+# resource "random_password" "chatwoot_db_password" {
+#   length  = 32
+#   special = false
+#
+#   lifecycle {
+#     ignore_changes = [result]
+#   }
+# }
+#
+# resource "google_secret_manager_secret" "chatwoot_db_password" {
+#   secret_id = "chatwoot-db-password"
+#
+#   replication {
+#     user_managed {
+#       replicas {
+#         location = var.region
+#       }
+#     }
+#   }
+# }
+#
+# resource "google_secret_manager_secret_version" "chatwoot_db_password" {
+#   secret      = google_secret_manager_secret.chatwoot_db_password.id
+#   secret_data = random_password.chatwoot_db_password.result
+# }
