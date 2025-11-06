@@ -1,12 +1,10 @@
-import { readItems } from '@directus/sdk'
-
 /**
  * API Route: /api/ping
  *
  * Tests authenticated connection to Directus server.
  *
  * This endpoint:
- * - Uses server-side Directus client with static token
+ * - Uses server-side authentication with static token
  * - Calls Directus /server/ping endpoint
  * - Returns connection status to frontend
  *
@@ -14,14 +12,13 @@ import { readItems } from '@directus/sdk'
  */
 export default defineEventHandler(async (event) => {
   try {
-    const directus = useServerDirectus()
     const config = useRuntimeConfig()
 
     // Test authentication by attempting to read from server/ping
     // Note: /server/ping requires authentication
     const response = await fetch(`${config.public.directusUrl}/server/ping`, {
       headers: {
-        Authorization: `Bearer ${config.directusToken}`
+        Authorization: `Bearer ${config.directusToken as string}`
       }
     })
 

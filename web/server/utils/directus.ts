@@ -14,9 +14,9 @@ import { createDirectus, rest, staticToken } from '@directus/sdk'
 export const useServerDirectus = () => {
   const config = useRuntimeConfig()
 
-  const client = createDirectus(config.public.directusUrl)
+  const client = createDirectus(config.public.directusUrl as string)
     .with(rest())
-    .with(staticToken(config.directusToken))
+    .with(staticToken(config.directusToken as string))
 
   return client
 }
