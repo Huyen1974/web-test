@@ -228,18 +228,3 @@ jobs:
         run: |
           echo "Applying Terraform changes..."
           terraform apply -auto-approve tfplan
-
-      - name: Stop SQL Instances (Cost Saving)
-        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          echo "Stopping SQL instances to save costs..."
-
-          for instance in "mysql-directus-web-test" "postgres-kestra-web-test"; do
-            echo "Stopping ${instance}..."
-            gcloud sql instances patch "${instance}" \
-              --activation-policy=NEVER \
-              --project=${{ secrets.GCP_PROJECT_ID }} 2>/dev/null || echo "Skip ${instance}"
-          done
-
-          echo "✓ Instances stopped"
-        working-directory: .
