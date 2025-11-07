@@ -1,0 +1,18 @@
+{
+  "hosting": {
+    "site": "web-test-huyen1974",
+    "public": "web/.output/public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "cleanUrls": true,
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}
