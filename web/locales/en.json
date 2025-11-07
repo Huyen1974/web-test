@@ -1,4 +1,19 @@
 {
   "welcome": "Welcome to Web Test (Nuxt 3)",
-  "description": "This is the home page of the web-test project built with Nuxt 3, Nuxt UI, and multilingual support (Vi/Ja/En)"
+  "description": "This is the home page of the web-test project built with Nuxt 3, Nuxt UI, and multilingual support (Vi/Ja/En)",
+  "login": {
+    "title": "Sign In",
+    "subtitle": "Sign in to access the admin portal",
+    "google": "Sign in with Google",
+    "error": "Login Error",
+    "signingIn": "Signing in...",
+    "backHome": "Back to Home",
+    "secure": "Secured by Firebase Authentication"
+  },
+  "portal": {
+    "title": "Admin Portal",
+    "welcome": "Welcome, {email}!",
+    "logout": "Sign Out",
+    "description": "This is the admin portal. Only authenticated users can access this area."
+  }
 }
