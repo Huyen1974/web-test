@@ -2,7 +2,7 @@
 # Per TF-LAW §8 (Version pinning requirements)
 
 terraform {
-  required_version = "~> 1.8"
+  required_version = "~> 1.5"
 
   required_providers {
     google = {
