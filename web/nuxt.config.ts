@@ -27,6 +27,7 @@ export default defineNuxtConfig({
     'nuxt-vuefire'
   ],
 
+  // @ts-expect-error - vuefire module extends NuxtConfig
   vuefire: {
     auth: {
       enabled: true,
