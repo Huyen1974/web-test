@@ -1,4 +1,19 @@
 {
   "welcome": "Chào mừng đến với Web Test (Nuxt 3)",
-  "description": "Đây là trang chủ của dự án web-test được xây dựng với Nuxt 3, Nuxt UI và hỗ trợ đa ngôn ngữ (Vi/Ja/En)"
+  "description": "Đây là trang chủ của dự án web-test được xây dựng với Nuxt 3, Nuxt UI và hỗ trợ đa ngôn ngữ (Vi/Ja/En)",
+  "login": {
+    "title": "Đăng nhập",
+    "subtitle": "Đăng nhập để truy cập vào khu vực quản trị",
+    "google": "Đăng nhập với Google",
+    "error": "Lỗi đăng nhập",
+    "signingIn": "Đang đăng nhập...",
+    "backHome": "Quay về trang chủ",
+    "secure": "Kết nối bảo mật bởi Firebase Authentication"
+  },
+  "portal": {
+    "title": "Khu vực quản trị",
+    "welcome": "Xin chào, {email}!",
+    "logout": "Đăng xuất",
+    "description": "Đây là khu vực quản trị. Chỉ người dùng đã đăng nhập mới có thể truy cập."
+  }
 }
