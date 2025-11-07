@@ -1,3 +1,5 @@
+import { useCurrentUser } from 'nuxt-vuefire'
+
 export default defineNuxtRouteMiddleware((to) => {
   const user = useCurrentUser()
 
