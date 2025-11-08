@@ -15,7 +15,9 @@
     "@nuxtjs/i18n": "^10.1.2",
     "firebase": "^12.4.0",
     "nuxt": "^3.13.0",
-    "vue": "latest"
+    "nuxt-vuefire": "^1.0.4",
+    "vue": "latest",
+    "vuefire": "^3.2.1"
   },
   "devDependencies": {
     "@nuxt/devtools": "latest"
