@@ -23,28 +23,11 @@ export default defineNuxtConfig({
 
   modules: [
     '@nuxt/ui',
-    '@nuxtjs/i18n',
-    'nuxt-vuefire'
+    '@nuxtjs/i18n'
   ],
 
   i18n: {
     defaultLocale: 'vi'
-  },
-
-  // @ts-expect-error - vuefire module extends NuxtConfig
-  vuefire: {
-    auth: {
-      enabled: process.client, // Only enable auth on client-side to avoid SSR/prerender crash
-      sessionCookie: false
-    },
-    config: {
-      apiKey: process.env.NUXT_PUBLIC_FIREBASE_API_KEY || '',
-      authDomain: process.env.NUXT_PUBLIC_FIREBASE_AUTH_DOMAIN || '',
-      projectId: process.env.NUXT_PUBLIC_FIREBASE_PROJECT_ID || '',
-      storageBucket: process.env.NUXT_PUBLIC_FIREBASE_STORAGE_BUCKET || '',
-      messagingSenderId: process.env.NUXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '',
-      appId: process.env.NUXT_PUBLIC_FIREBASE_APP_ID || ''
-    }
   },
 
   ssr: true
