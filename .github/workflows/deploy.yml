@@ -114,8 +114,6 @@ jobs:
   deploy:
     name: Terraform Deploy
     runs-on: ubuntu-latest
-    # Only run on main branch pushes, not on PRs
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [pass_gate, guard_bootstrap_scaffold, quality_gate, e2e_smoke_test]
     defaults:
       run:
