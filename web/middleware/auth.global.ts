@@ -1,6 +1,9 @@
 import { useCurrentUser } from 'vuefire'
 
 export default defineNuxtRouteMiddleware((to) => {
+  // Skip middleware during server-side rendering and prerendering
+  if (import.meta.server) return
+
   const user = useCurrentUser()
 
   // Routes that require authentication
