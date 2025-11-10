@@ -27,6 +27,10 @@ export default defineNuxtConfig({
     'nuxt-vuefire'
   ],
 
+  i18n: {
+    defaultLocale: 'vi'
+  },
+
   // @ts-expect-error - vuefire module extends NuxtConfig
   vuefire: {
     auth: {
