@@ -34,7 +34,7 @@ export default defineNuxtConfig({
   // @ts-expect-error - vuefire module extends NuxtConfig
   vuefire: {
     auth: {
-      enabled: true,
+      enabled: process.client, // Only enable auth on client-side to avoid SSR/prerender crash
       sessionCookie: false
     },
     config: {
