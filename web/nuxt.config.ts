@@ -21,14 +21,5 @@ export default defineNuxtConfig({
     }
   },
 
-  modules: [
-    '@nuxt/ui',
-    '@nuxtjs/i18n'
-  ],
-
-  i18n: {
-    defaultLocale: 'vi'
-  },
-
   ssr: true
 })
