@@ -1,41 +1,20 @@
-# Web Application V7 (Stack A+)
+## Hello World Web
 
-This repository contains the new web application built with Nuxt, Directus, Kestra, and Chatwoot.
+This repository now contains a single Nuxt 4 application located in `web/`.
 
-## Technology Stack
-
-- **Frontend**: Nuxt 3 (Vue.js framework)
-- **Backend CMS**: Directus
-- **Workflow Orchestration**: Kestra
-- **Customer Support**: Chatwoot
-
-## Getting Started
+### Local development
 
 ```bash
-# Install dependencies
+cd web
 npm install
-
-# Development server
 npm run dev
-
-# Build for production
-npm run build
-
-# Preview production build
-npm run preview
 ```
 
-## Infrastructure
+### Production build
 
-The infrastructure is managed with Terraform in the `terraform/` directory.
+```bash
+cd web
+npm run generate
+```
 
-**Status**: ✅ Production Ready (v0.1.0-infra-ready)
-
-### Deployed Services
-- **Directus** (CMS) - Cloud Run + Cloud SQL MySQL
-- **Kestra** (Workflow Orchestration) - Cloud Run + Cloud SQL PostgreSQL
-- **Chatwoot** (Customer Support) - Cloud Run + Cloud SQL PostgreSQL + Redis
-
-All services are deployed, verified, and ready for application development.
-
-For complete infrastructure documentation, see [docs/infrastructure.md](./docs/infrastructure.md).
+The generated static site can be deployed to any static host or CDN.
