@@ -148,23 +148,6 @@ jobs:
       - name: Terraform Format Check
         run: terraform fmt -check -recursive
 
-      - name: Ensure GCS State Bucket Exists
-        run: |
-          # Fix #5: CI manages tfstate bucket (not Terraform)
-          BUCKET_NAME="huyen1974-web-test-tfstate"
-
-          if ! gcloud storage buckets describe gs://${BUCKET_NAME} --project=${{ secrets.GCP_PROJECT_ID }} >/dev/null 2>&1; then
-            echo "Creating GCS state bucket ${BUCKET_NAME}..."
-            gcloud storage buckets create gs://${BUCKET_NAME} \
-              --project=${{ secrets.GCP_PROJECT_ID }} \
-              --location=asia-southeast1 \
-              --uniform-bucket-level-access
-            echo "✓ Bucket created"
-          else
-            echo "✓ Bucket already exists"
-          fi
-        working-directory: .
-
       - name: Terraform Init
         run: terraform init
 
@@ -228,51 +211,3 @@ jobs:
         run: |
           echo "Applying Terraform changes..."
           terraform apply -auto-approve tfplan
-
-  deploy_web:
-    name: Deploy (Web)
-    runs-on: ubuntu-latest
-    needs: [deploy]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        working-directory: ./web
-        run: npm install
-
-      - name: Build Nuxt application
-        working-directory: ./web
-        env:
-          NUXT_DIRECTUS_TOKEN: ${{ secrets.NUXT_DIRECTUS_TOKEN }}
-          NUXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NUXT_PUBLIC_FIREBASE_API_KEY }}
-          NUXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NUXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
-          NUXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NUXT_PUBLIC_FIREBASE_PROJECT_ID }}
-          NUXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NUXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
-          NUXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NUXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
-          NUXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NUXT_PUBLIC_FIREBASE_APP_ID }}
-        run: npm run generate
-
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-
-      - name: Deploy to Firebase Hosting
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
-          projectId: ${{ secrets.GCP_PROJECT_ID }}
-          channelId: live
