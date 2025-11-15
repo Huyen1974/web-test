@@ -1,0 +1,16 @@
+# Example Terraform variables for web-test infrastructure
+# Copy this file to terraform.tfvars and customize as needed
+
+project_id = "github-chatgpt-ggcloud"
+region     = "asia-southeast1"
+env        = "test"
+
+# MySQL Configuration (Appendix F: MySQL First)
+sql_instance_name     = "mysql-directus-web-test"
+sql_tier              = "db-g1-small"     # Appendix F: cost-optimized production tier
+sql_disk_size         = 10                # Appendix F: 10GB SSD
+sql_backup_start_time = "01:00"
+
+# Directus Configuration
+directus_admin_email = "admin@example.com"
+directus_image       = "directus/directus:11.2.2"
