@@ -22,6 +22,10 @@ on:
 jobs:
   terraform:
     name: Terraform Plan/Apply
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
     uses: ./.github/workflows/terraform-apply.yml
     with:
       project_id: github-chatgpt-ggcloud
