@@ -1,25 +1,25 @@
-# ==============================================================================
-# Secret Manager Resources for web-test (Appendix F: Minimal Secrets)
-# ==============================================================================
+# =============================================================================
+# Secret Manager Resources for web-test
+# Follows: HP-05, HP-CS-05 (metadata only, NO values), HP-SEC-02 (rotation)
+# CRITICAL: Terraform manages metadata ONLY, values from chatgpt-githubnew
+# =============================================================================
 
 # Enable Secret Manager API
 resource "google_project_service" "secretmanager" {
-  service            = "secretmanager.googleapis.com"
+  project = var.project_id
+  service = "secretmanager.googleapis.com"
+
   disable_on_destroy = false
 }
 
-# ------------------------------------------------------------------------------
-# Directus Secrets
-# ------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Secret Metadata for Directus MySQL Password
+# HP-SEC-02: Rotation schedule - test: 120 days, prod: 90 days
+# HP-CS-05: Values managed by central secrets system (chatgpt-githubnew)
+# -----------------------------------------------------------------------------
 
-# Directus KEY secret (for signing tokens)
-resource "random_password" "directus_key" {
-  length  = 64
-  special = false
-}
-
-resource "google_secret_manager_secret" "directus_key" {
-  secret_id = "DIRECTUS_KEY_${var.env}"
+resource "google_secret_manager_secret" "directus_mysql_password" {
+  secret_id = "web-test-directus-mysql-password"
   project   = var.project_id
 
   replication {
@@ -30,28 +30,31 @@ resource "google_secret_manager_secret" "directus_key" {
     }
   }
 
-  labels = {
-    environment = var.env
-    project     = "web-test"
-    managed_by  = "terraform"
-  }
+  labels = merge(
+    var.common_labels,
+    {
+      purpose          = "database-password"
+      rotation_days    = var.environment == "production" ? "90" : "120"
+      managed_by_saas  = "chatgpt-githubnew"
+      secret_type      = "mysql-password"
+    }
+  )
+
+  # HP-SEC-02: Rotation reminder
+  # Test environment: rotate every 120 days
+  # Production environment: rotate every 90 days
+  # TODO: Integrate with automated rotation job from chatgpt-githubnew (HP-05)
 
   depends_on = [google_project_service.secretmanager]
 }
 
-resource "google_secret_manager_secret_version" "directus_key" {
-  secret      = google_secret_manager_secret.directus_key.id
-  secret_data = random_password.directus_key.result
-}
+# -----------------------------------------------------------------------------
+# Secret Metadata for Directus Admin Key
+# HP-SEC-02: Rotation schedule - test: 120 days, prod: 90 days
+# -----------------------------------------------------------------------------
 
-# Directus SECRET secret (for signing sessions)
-resource "random_password" "directus_secret" {
-  length  = 64
-  special = false
-}
-
-resource "google_secret_manager_secret" "directus_secret" {
-  secret_id = "DIRECTUS_SECRET_${var.env}"
+resource "google_secret_manager_secret" "directus_admin_key" {
+  secret_id = "web-test-directus-admin-key"
   project   = var.project_id
 
   replication {
@@ -62,28 +65,29 @@ resource "google_secret_manager_secret" "directus_secret" {
     }
   }
 
-  labels = {
-    environment = var.env
-    project     = "web-test"
-    managed_by  = "terraform"
-  }
+  labels = merge(
+    var.common_labels,
+    {
+      purpose          = "admin-key"
+      rotation_days    = var.environment == "production" ? "90" : "120"
+      managed_by_saas  = "chatgpt-githubnew"
+      secret_type      = "directus-key"
+    }
+  )
+
+  # HP-SEC-02: Rotation reminder
+  # TODO: Integrate with automated rotation job from chatgpt-githubnew
 
   depends_on = [google_project_service.secretmanager]
 }
 
-resource "google_secret_manager_secret_version" "directus_secret" {
-  secret      = google_secret_manager_secret.directus_secret.id
-  secret_data = random_password.directus_secret.result
-}
+# -----------------------------------------------------------------------------
+# Secret Metadata for Directus Secret Key
+# HP-SEC-02: Rotation schedule - test: 120 days, prod: 90 days
+# -----------------------------------------------------------------------------
 
-# Directus database password
-resource "random_password" "directus_db_password" {
-  length  = 32
-  special = true
-}
-
-resource "google_secret_manager_secret" "directus_db_password" {
-  secret_id = "DIRECTUS_DB_PASSWORD_${var.env}"
+resource "google_secret_manager_secret" "directus_secret_key" {
+  secret_id = "web-test-directus-secret-key"
   project   = var.project_id
 
   replication {
@@ -94,61 +98,73 @@ resource "google_secret_manager_secret" "directus_db_password" {
     }
   }
 
-  labels = {
-    environment = var.env
-    project     = "web-test"
-    managed_by  = "terraform"
-  }
+  labels = merge(
+    var.common_labels,
+    {
+      purpose          = "secret-key"
+      rotation_days    = var.environment == "production" ? "90" : "120"
+      managed_by_saas  = "chatgpt-githubnew"
+      secret_type      = "directus-secret"
+    }
+  )
+
+  # HP-SEC-02: Rotation reminder
+  # TODO: Integrate with automated rotation job from chatgpt-githubnew
 
   depends_on = [google_project_service.secretmanager]
 }
 
-resource "google_secret_manager_secret_version" "directus_db_password" {
-  secret      = google_secret_manager_secret.directus_db_password.id
-  secret_data = random_password.directus_db_password.result
-}
+# -----------------------------------------------------------------------------
+# IAM Bindings for Service Account Access
+# HP-SEC-01: Least Privilege - secretAccessor role (read-only)
+# -----------------------------------------------------------------------------
 
-# ------------------------------------------------------------------------------
-# IAM Bindings for chatgpt-deployer Service Account
-# ------------------------------------------------------------------------------
-
-locals {
-  chatgpt_deployer_sa = "serviceAccount:chatgpt-deployer@${var.project_id}.iam.gserviceaccount.com"
-}
-
-resource "google_secret_manager_secret_iam_member" "directus_key_accessor" {
-  secret_id = google_secret_manager_secret.directus_key.secret_id
+# Grant chatgpt-deployer read access to MySQL password secret
+resource "google_secret_manager_secret_iam_member" "mysql_password_accessor" {
+  secret_id = google_secret_manager_secret.directus_mysql_password.secret_id
   role      = "roles/secretmanager.secretAccessor"
-  member    = local.chatgpt_deployer_sa
+  member    = "serviceAccount:chatgpt-deployer@${var.project_id}.iam.gserviceaccount.com"
   project   = var.project_id
 }
 
-resource "google_secret_manager_secret_iam_member" "directus_secret_accessor" {
-  secret_id = google_secret_manager_secret.directus_secret.secret_id
+# Grant chatgpt-deployer read access to Directus admin key
+resource "google_secret_manager_secret_iam_member" "admin_key_accessor" {
+  secret_id = google_secret_manager_secret.directus_admin_key.secret_id
   role      = "roles/secretmanager.secretAccessor"
-  member    = local.chatgpt_deployer_sa
+  member    = "serviceAccount:chatgpt-deployer@${var.project_id}.iam.gserviceaccount.com"
   project   = var.project_id
 }
 
-resource "google_secret_manager_secret_iam_member" "directus_db_password_accessor" {
-  secret_id = google_secret_manager_secret.directus_db_password.secret_id
+# Grant chatgpt-deployer read access to Directus secret key
+resource "google_secret_manager_secret_iam_member" "secret_key_accessor" {
+  secret_id = google_secret_manager_secret.directus_secret_key.secret_id
   role      = "roles/secretmanager.secretAccessor"
-  member    = local.chatgpt_deployer_sa
+  member    = "serviceAccount:chatgpt-deployer@${var.project_id}.iam.gserviceaccount.com"
   project   = var.project_id
 }
 
-# ------------------------------------------------------------------------------
-# Chatwoot Secrets (Postponed - Phase 2)
-# ------------------------------------------------------------------------------
-
-# TODO: Uncomment when ready for Chatwoot deployment
-# resource "random_password" "chatwoot_secret_key_base" {
-#   length  = 64
-#   special = false
-# }
+# -----------------------------------------------------------------------------
+# IMPORTANT NOTES FOR SECRET MANAGEMENT
+# -----------------------------------------------------------------------------
+# 1. HP-05: Secret VALUES are NOT managed by Terraform
+#    - Values are provided by central system (chatgpt-githubnew)
+#    - Terraform manages metadata (secret_id, labels, replication) ONLY
 #
-# resource "google_secret_manager_secret" "chatwoot_secret_key_base" {
-#   secret_id = "CHATWOOT_SECRET_KEY_BASE_${var.env}"
-#   project   = var.project_id
-#   ...
-# }
+# 2. HP-SEC-02: Secret rotation schedule
+#    - Test environment: rotate every 120 days
+#    - Production environment: rotate every 90 days
+#    - TODO: Automated rotation job integration with chatgpt-githubnew
+#
+# 3. HP-SEC-04: Secret scanning
+#    - This file contains NO actual secret values
+#    - Safe for TruffleHog and other secret scanning tools
+#    - All values injected at runtime from central secrets system
+#
+# 4. HP-CS-05: Runner CI/CD permissions
+#    - CI/CD runner typically has NO secretmanager.versions.access permission
+#    - Secret values populated via separate secure channel
+#    - Terraform apply does NOT require secret values access
+#
+# 5. NO secret version resources
+#    - ❌ NO: google_secret_manager_secret_version
+#    - ✅ YES: google_secret_manager_secret (metadata only)
