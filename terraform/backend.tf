@@ -1,10 +1,8 @@
-# Terraform backend configuration
-# Stores state in GCS bucket: huyen1974-web-test-tfstate
-# Per TF-LAW §8 (Infrastructure as Code Standards)
-
 terraform {
   backend "gcs" {
-    bucket = "huyen1974-web-test-tfstate"
-    prefix = "terraform/state"
+    # bucket and prefix will be specified via -backend-config during init
+    # Example: terraform init \
+    #   -backend-config="bucket=huyen1974-web-test-tfstate" \
+    #   -backend-config="prefix=terraform/state"
   }
 }

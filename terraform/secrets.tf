@@ -1,25 +1,26 @@
-# Secret Manager for web-test infrastructure
-# Per PHỤ LỤC D (Quy hoạch Hạ tầng Web-Test)
-# All secrets follow:
-# - lifecycle { ignore_changes = [result] } for rotation support
-# - replication in asia-southeast1 region
-# - Fix #2: No plain text passwords (using random_password + secret manager)
+# ==============================================================================
+# Secret Manager Resources for web-test (Appendix F: Minimal Secrets)
+# ==============================================================================
 
-# ============================================
-# Directus Secrets (4)
-# ============================================
+# Enable Secret Manager API
+resource "google_project_service" "secretmanager" {
+  service            = "secretmanager.googleapis.com"
+  disable_on_destroy = false
+}
 
+# ------------------------------------------------------------------------------
+# Directus Secrets
+# ------------------------------------------------------------------------------
+
+# Directus KEY secret (for signing tokens)
 resource "random_password" "directus_key" {
-  length  = 32
-  special = true
-
-  lifecycle {
-    ignore_changes = [result]
-  }
+  length  = 64
+  special = false
 }
 
 resource "google_secret_manager_secret" "directus_key" {
-  secret_id = "directus-key"
+  secret_id = "DIRECTUS_KEY_${var.env}"
+  project   = var.project_id
 
   replication {
     user_managed {
@@ -28,6 +29,14 @@ resource "google_secret_manager_secret" "directus_key" {
       }
     }
   }
+
+  labels = {
+    environment = var.env
+    project     = "web-test"
+    managed_by  = "terraform"
+  }
+
+  depends_on = [google_project_service.secretmanager]
 }
 
 resource "google_secret_manager_secret_version" "directus_key" {
@@ -35,17 +44,15 @@ resource "google_secret_manager_secret_version" "directus_key" {
   secret_data = random_password.directus_key.result
 }
 
+# Directus SECRET secret (for signing sessions)
 resource "random_password" "directus_secret" {
-  length  = 32
-  special = true
-
-  lifecycle {
-    ignore_changes = [result]
-  }
+  length  = 64
+  special = false
 }
 
 resource "google_secret_manager_secret" "directus_secret" {
-  secret_id = "directus-secret"
+  secret_id = "DIRECTUS_SECRET_${var.env}"
+  project   = var.project_id
 
   replication {
     user_managed {
@@ -54,6 +61,14 @@ resource "google_secret_manager_secret" "directus_secret" {
       }
     }
   }
+
+  labels = {
+    environment = var.env
+    project     = "web-test"
+    managed_by  = "terraform"
+  }
+
+  depends_on = [google_project_service.secretmanager]
 }
 
 resource "google_secret_manager_secret_version" "directus_secret" {
@@ -61,43 +76,15 @@ resource "google_secret_manager_secret_version" "directus_secret" {
   secret_data = random_password.directus_secret.result
 }
 
-resource "random_password" "directus_admin_password" {
-  length  = 32
-  special = true
-
-  lifecycle {
-    ignore_changes = [result]
-  }
-}
-
-resource "google_secret_manager_secret" "directus_admin_password" {
-  secret_id = "directus-admin-password"
-
-  replication {
-    user_managed {
-      replicas {
-        location = var.region
-      }
-    }
-  }
-}
-
-resource "google_secret_manager_secret_version" "directus_admin_password" {
-  secret      = google_secret_manager_secret.directus_admin_password.id
-  secret_data = random_password.directus_admin_password.result
-}
-
+# Directus database password
 resource "random_password" "directus_db_password" {
   length  = 32
-  special = false
-
-  lifecycle {
-    ignore_changes = [result]
-  }
+  special = true
 }
 
 resource "google_secret_manager_secret" "directus_db_password" {
-  secret_id = "directus-db-password"
+  secret_id = "DIRECTUS_DB_PASSWORD_${var.env}"
+  project   = var.project_id
 
   replication {
     user_managed {
@@ -106,6 +93,14 @@ resource "google_secret_manager_secret" "directus_db_password" {
       }
     }
   }
+
+  labels = {
+    environment = var.env
+    project     = "web-test"
+    managed_by  = "terraform"
+  }
+
+  depends_on = [google_project_service.secretmanager]
 }
 
 resource "google_secret_manager_secret_version" "directus_db_password" {
@@ -113,116 +108,47 @@ resource "google_secret_manager_secret_version" "directus_db_password" {
   secret_data = random_password.directus_db_password.result
 }
 
-# ============================================
-# Kestra Secrets (2)
-# DISABLED: Phase 1 focuses on MySQL + Directus only
-# ============================================
+# ------------------------------------------------------------------------------
+# IAM Bindings for chatgpt-deployer Service Account
+# ------------------------------------------------------------------------------
 
-# resource "random_password" "kestra_db_password" {
-#   length  = 32
-#   special = false
-#
-#   lifecycle {
-#     ignore_changes = [result]
-#   }
-# }
-#
-# resource "google_secret_manager_secret" "kestra_db_password" {
-#   secret_id = "kestra-db-password"
-#
-#   replication {
-#     user_managed {
-#       replicas {
-#         location = var.region
-#       }
-#     }
-#   }
-# }
-#
-# resource "google_secret_manager_secret_version" "kestra_db_password" {
-#   secret      = google_secret_manager_secret.kestra_db_password.id
-#   secret_data = random_password.kestra_db_password.result
-# }
-#
-# resource "random_password" "kestra_encryption_key" {
-#   length  = 32
-#   special = true
-#
-#   lifecycle {
-#     ignore_changes = [result]
-#   }
-# }
-#
-# resource "google_secret_manager_secret" "kestra_encryption_key" {
-#   secret_id = "kestra-encryption-key"
-#
-#   replication {
-#     user_managed {
-#       replicas {
-#         location = var.region
-#       }
-#     }
-#   }
-# }
-#
-# resource "google_secret_manager_secret_version" "kestra_encryption_key" {
-#   secret      = google_secret_manager_secret.kestra_encryption_key.id
-#   secret_data = random_password.kestra_encryption_key.result
-# }
+locals {
+  chatgpt_deployer_sa = "serviceAccount:chatgpt-deployer@${var.project_id}.iam.gserviceaccount.com"
+}
 
-# ============================================
-# Chatwoot Secrets (2)
-# DISABLED: Phase 1 focuses on MySQL + Directus only
-# ============================================
+resource "google_secret_manager_secret_iam_member" "directus_key_accessor" {
+  secret_id = google_secret_manager_secret.directus_key.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = local.chatgpt_deployer_sa
+  project   = var.project_id
+}
 
+resource "google_secret_manager_secret_iam_member" "directus_secret_accessor" {
+  secret_id = google_secret_manager_secret.directus_secret.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = local.chatgpt_deployer_sa
+  project   = var.project_id
+}
+
+resource "google_secret_manager_secret_iam_member" "directus_db_password_accessor" {
+  secret_id = google_secret_manager_secret.directus_db_password.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = local.chatgpt_deployer_sa
+  project   = var.project_id
+}
+
+# ------------------------------------------------------------------------------
+# Chatwoot Secrets (Postponed - Phase 2)
+# ------------------------------------------------------------------------------
+
+# TODO: Uncomment when ready for Chatwoot deployment
 # resource "random_password" "chatwoot_secret_key_base" {
 #   length  = 64
-#   special = true
-#
-#   lifecycle {
-#     ignore_changes = [result]
-#   }
+#   special = false
 # }
 #
 # resource "google_secret_manager_secret" "chatwoot_secret_key_base" {
-#   secret_id = "chatwoot-secret-key-base"
-#
-#   replication {
-#     user_managed {
-#       replicas {
-#         location = var.region
-#       }
-#     }
-#   }
-# }
-#
-# resource "google_secret_manager_secret_version" "chatwoot_secret_key_base" {
-#   secret      = google_secret_manager_secret.chatwoot_secret_key_base.id
-#   secret_data = random_password.chatwoot_secret_key_base.result
-# }
-#
-# resource "random_password" "chatwoot_db_password" {
-#   length  = 32
-#   special = false
-#
-#   lifecycle {
-#     ignore_changes = [result]
-#   }
-# }
-#
-# resource "google_secret_manager_secret" "chatwoot_db_password" {
-#   secret_id = "chatwoot-db-password"
-#
-#   replication {
-#     user_managed {
-#       replicas {
-#         location = var.region
-#       }
-#     }
-#   }
-# }
-#
-# resource "google_secret_manager_secret_version" "chatwoot_db_password" {
-#   secret      = google_secret_manager_secret.chatwoot_db_password.id
-#   secret_data = random_password.chatwoot_db_password.result
+#   secret_id = "CHATWOOT_SECRET_KEY_BASE_${var.env}"
+#   project   = var.project_id
+#   ...
 # }
