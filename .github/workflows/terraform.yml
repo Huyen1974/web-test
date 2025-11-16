@@ -1,0 +1,338 @@
+# =============================================================================
+# Terraform CI/CD Workflow for web-test Infrastructure
+# Task 0021A: Basic CI/CD for Terraform MySQL-only stack
+# =============================================================================
+#
+# This workflow manages Terraform infrastructure for web-test project:
+# - Runs terraform plan on pull requests (terraform/** changes)
+# - Allows manual terraform apply via workflow_dispatch
+# - Uses Workload Identity Federation (agent-data-pool/github-provider)
+# - Stores state in GCS bucket: huyen1974-web-test-tfstate
+
+name: Terraform CI/CD
+
+on:
+  # Run plan on pull requests that modify terraform files
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform.yml'
+
+  # Allow manual trigger for terraform apply
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Terraform action to perform'
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+        default: 'plan'
+
+# Environment variables
+env:
+  TF_WORKING_DIR: terraform
+  TF_VERSION: '1.9.0'
+  GCP_PROJECT_ID: github-chatgpt-ggcloud
+  GCP_REGION: asia-southeast1
+  BACKEND_BUCKET: huyen1974-web-test-tfstate
+  BACKEND_PREFIX: terraform/state
+
+jobs:
+  # ============================================================================
+  # Job: terraform-plan
+  # Runs on pull_request and workflow_dispatch (when action=plan)
+  # Validates and plans infrastructure changes
+  # ============================================================================
+  terraform-plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'plan')
+
+    # Permissions for OIDC authentication and PR comments
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+
+    steps:
+      # -----------------------------------------------------------------------
+      # Step 1: Checkout code
+      # -----------------------------------------------------------------------
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # Step 2: Authenticate to GCP via Workload Identity Federation
+      # HP-VIII, HP-SEC-01: Use WIF, NOT service account keys
+      # -----------------------------------------------------------------------
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: projects/812872501910/locations/global/workloadIdentityPools/agent-data-pool/providers/github-provider
+          service_account: chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com
+          token_format: 'access_token'
+          create_credentials_file: true
+
+      # -----------------------------------------------------------------------
+      # Step 3: Set up Cloud SDK
+      # -----------------------------------------------------------------------
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      # -----------------------------------------------------------------------
+      # Step 4: Setup Terraform
+      # -----------------------------------------------------------------------
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      # -----------------------------------------------------------------------
+      # Step 5: Terraform Format Check
+      # Ensures code follows standard formatting
+      # -----------------------------------------------------------------------
+      - name: Terraform Format Check
+        id: fmt
+        run: |
+          cd ${{ env.TF_WORKING_DIR }}
+          terraform fmt -check -recursive
+        continue-on-error: true
+
+      # -----------------------------------------------------------------------
+      # Step 6: Terraform Init
+      # Initialize with GCS backend: huyen1974-web-test-tfstate
+      # -----------------------------------------------------------------------
+      - name: Terraform Init
+        id: init
+        run: |
+          cd ${{ env.TF_WORKING_DIR }}
+          terraform init \
+            -backend-config="bucket=${{ env.BACKEND_BUCKET }}" \
+            -backend-config="prefix=${{ env.BACKEND_PREFIX }}"
+
+      # -----------------------------------------------------------------------
+      # Step 7: Terraform Validate
+      # Validates configuration syntax and internal consistency
+      # -----------------------------------------------------------------------
+      - name: Terraform Validate
+        id: validate
+        run: |
+          cd ${{ env.TF_WORKING_DIR }}
+          terraform validate -no-color
+
+      # -----------------------------------------------------------------------
+      # Step 8: Terraform Plan
+      # Generate execution plan and save to file
+      # HP-SEC-03: Full logging for audit purposes
+      # -----------------------------------------------------------------------
+      - name: Terraform Plan
+        id: plan
+        run: |
+          cd ${{ env.TF_WORKING_DIR }}
+          terraform plan -no-color -out=tfplan
+
+          # Show plan output and save to artifact
+          terraform show -no-color tfplan > tfplan.txt
+
+          echo "Plan generated successfully"
+
+      # -----------------------------------------------------------------------
+      # Step 9: Upload Plan Artifact
+      # Save plan for review and potential apply
+      # -----------------------------------------------------------------------
+      - name: Upload Plan Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-${{ github.sha }}
+          path: ${{ env.TF_WORKING_DIR }}/tfplan.txt
+          retention-days: 30
+
+      # -----------------------------------------------------------------------
+      # Step 10: Comment PR with Plan Results
+      # Only runs on pull_request events
+      # -----------------------------------------------------------------------
+      - name: Comment PR with Plan
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const planOutput = fs.readFileSync('${{ env.TF_WORKING_DIR }}/tfplan.txt', 'utf8');
+
+            const output = `#### Terraform CI/CD Results
+
+            - **Format Check**: \`${{ steps.fmt.outcome }}\`
+            - **Initialization**: \`${{ steps.init.outcome }}\`
+            - **Validation**: \`${{ steps.validate.outcome }}\`
+            - **Plan**: \`${{ steps.plan.outcome }}\`
+
+            <details><summary>📋 Show Terraform Plan</summary>
+
+            \`\`\`terraform
+            ${planOutput}
+            \`\`\`
+
+            </details>
+
+            ---
+            **Directory**: \`${{ env.TF_WORKING_DIR }}\`
+            **Pushed by**: @${{ github.actor }}
+            **Commit**: ${{ github.sha }}
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+
+  # ============================================================================
+  # Job: terraform-apply
+  # Runs ONLY on workflow_dispatch with action=apply
+  # Applies infrastructure changes to GCP
+  # ============================================================================
+  terraform-apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply'
+
+    # Prevent concurrent applies
+    concurrency:
+      group: terraform-apply-${{ github.ref }}
+      cancel-in-progress: false
+
+    # Permissions for OIDC authentication
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      # -----------------------------------------------------------------------
+      # Step 1: Checkout code
+      # -----------------------------------------------------------------------
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # Step 2: Authenticate to GCP via Workload Identity Federation
+      # HP-VIII, HP-SEC-01: Use WIF, NOT service account keys
+      # -----------------------------------------------------------------------
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: projects/812872501910/locations/global/workloadIdentityPools/agent-data-pool/providers/github-provider
+          service_account: chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com
+          token_format: 'access_token'
+          create_credentials_file: true
+
+      # -----------------------------------------------------------------------
+      # Step 3: Set up Cloud SDK
+      # -----------------------------------------------------------------------
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      # -----------------------------------------------------------------------
+      # Step 4: Setup Terraform
+      # -----------------------------------------------------------------------
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      # -----------------------------------------------------------------------
+      # Step 5: Terraform Init
+      # Initialize with GCS backend
+      # -----------------------------------------------------------------------
+      - name: Terraform Init
+        id: init
+        run: |
+          cd ${{ env.TF_WORKING_DIR }}
+          terraform init \
+            -backend-config="bucket=${{ env.BACKEND_BUCKET }}" \
+            -backend-config="prefix=${{ env.BACKEND_PREFIX }}"
+
+      # -----------------------------------------------------------------------
+      # Step 6: Terraform Validate
+      # -----------------------------------------------------------------------
+      - name: Terraform Validate
+        id: validate
+        run: |
+          cd ${{ env.TF_WORKING_DIR }}
+          terraform validate -no-color
+
+      # -----------------------------------------------------------------------
+      # Step 7: Terraform Plan (pre-apply validation)
+      # -----------------------------------------------------------------------
+      - name: Terraform Plan
+        id: plan
+        run: |
+          cd ${{ env.TF_WORKING_DIR }}
+          terraform plan -no-color -out=tfplan
+
+      # -----------------------------------------------------------------------
+      # Step 8: Terraform Apply
+      # Apply changes with auto-approve (manual workflow trigger required)
+      # HP-SEC-03: Full logging for audit purposes
+      # -----------------------------------------------------------------------
+      - name: Terraform Apply
+        id: apply
+        run: |
+          cd ${{ env.TF_WORKING_DIR }}
+          terraform apply -auto-approve tfplan
+
+          echo "Apply completed successfully"
+
+      # -----------------------------------------------------------------------
+      # Step 9: Upload Apply Log
+      # Save apply output for audit
+      # -----------------------------------------------------------------------
+      - name: Upload Apply Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-apply-${{ github.sha }}
+          path: ${{ env.TF_WORKING_DIR }}/*.txt
+          retention-days: 90
+
+# =============================================================================
+# WORKFLOW NOTES
+# =============================================================================
+#
+# Triggers:
+# - pull_request: Runs terraform plan for review (NO apply)
+# - workflow_dispatch: Manual trigger for plan OR apply
+#
+# Jobs:
+# - terraform-plan: Validates and plans changes (PR + manual)
+# - terraform-apply: Applies changes (manual ONLY, workflow_dispatch)
+#
+# Authentication:
+# - Uses Workload Identity Federation (WIF)
+# - Pool: agent-data-pool
+# - Provider: github-provider
+# - Service Account: chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com
+#
+# State Management:
+# - Backend: GCS bucket huyen1974-web-test-tfstate
+# - Prefix: terraform/state
+# - Region: asia-southeast1
+#
+# Compliance:
+# - HP-02, HP-05, HP-CS-05: No secrets in code
+# - HP-VIII: WIF authentication, no SA keys
+# - HP-SEC-01: Least privilege via SA roles
+# - HP-SEC-03: Full audit logging
+# - Appendix F Anti-Stupid: MySQL-only, no Postgres/Kestra/Chatwoot
