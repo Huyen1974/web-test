@@ -73,15 +73,17 @@ resource "google_cloud_run_v2_service" "directus" {
       }
 
       # Health check endpoint
+      # Fix: Increased initial_delay_seconds from 10 to 30 for Directus CMS startup
+      # Directus needs time to initialize, connect to DB, and start web server
       startup_probe {
         http_get {
           path = "/server/health"
           port = 8055
         }
-        initial_delay_seconds = 10
+        initial_delay_seconds = 30
         timeout_seconds       = 3
         period_seconds        = 10
-        failure_threshold     = 10
+        failure_threshold     = 15
       }
 
       liveness_probe {
@@ -188,11 +190,14 @@ resource "google_cloud_run_v2_service" "directus" {
   depends_on = [
     google_project_service.run,
     module.mysql_directus,
-    google_secret_manager_secret_version.directus_key,
-    google_secret_manager_secret_version.directus_secret,
-    google_secret_manager_secret_version.directus_db_password
+    google_secret_manager_secret.directus_key,
+    google_secret_manager_secret.directus_secret,
+    google_secret_manager_secret.directus_db_password
   ]
 }
+
+# NOTE: Cloud Run service will fail to start until secret versions are injected
+# After terraform apply, run the injection commands documented in secrets.tf
 
 # Allow unauthenticated access to Directus
 resource "google_cloud_run_v2_service_iam_member" "directus_public_access" {
