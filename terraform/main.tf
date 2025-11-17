@@ -144,10 +144,9 @@ resource "google_cloud_run_v2_service" "directus" {
         value = "true"
       }
 
-      env {
-        name  = "PORT"
-        value = "8080"
-      }
+      # NOTE: PORT env is automatically set by Cloud Run (default: 8080)
+      # Do NOT explicitly set PORT - it's a reserved environment variable
+      # Cloud Run will inject PORT=8080, and Directus will respect it
 
       # Secret environment variables
       env {
