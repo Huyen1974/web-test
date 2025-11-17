@@ -73,12 +73,13 @@ resource "google_cloud_run_v2_service" "directus" {
       }
 
       # Health check endpoint
-      # Fix: Increased initial_delay_seconds from 10 to 30 for Directus CMS startup
+      # Fix (0022B): Increased initial_delay_seconds from 10 to 30 for Directus CMS startup
+      # Fix (0022J): Changed port from 8055 to 8080 (Cloud Run default PORT)
       # Directus needs time to initialize, connect to DB, and start web server
       startup_probe {
         http_get {
           path = "/server/health"
-          port = 8055
+          port = 8080
         }
         initial_delay_seconds = 30
         timeout_seconds       = 3
@@ -89,7 +90,7 @@ resource "google_cloud_run_v2_service" "directus" {
       liveness_probe {
         http_get {
           path = "/server/health"
-          port = 8055
+          port = 8080
         }
         initial_delay_seconds = 10
         timeout_seconds       = 3
@@ -141,6 +142,11 @@ resource "google_cloud_run_v2_service" "directus" {
       env {
         name  = "WEBSOCKETS_ENABLED"
         value = "true"
+      }
+
+      env {
+        name  = "PORT"
+        value = "8080"
       }
 
       # Secret environment variables
