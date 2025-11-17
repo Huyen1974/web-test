@@ -67,15 +67,35 @@ output "directus_service" {
 }
 
 # ------------------------------------------------------------------------------
-# Secrets
+# Secrets (Metadata Only - HP-05 Compliance)
 # ------------------------------------------------------------------------------
 
 output "secrets" {
-  description = "Secret Manager secrets for web-test"
+  description = "Secret Manager secret IDs (metadata only per HP-05)"
   value = {
     directus_key         = google_secret_manager_secret.directus_key.secret_id
     directus_secret      = google_secret_manager_secret.directus_secret.secret_id
     directus_db_password = google_secret_manager_secret.directus_db_password.secret_id
   }
   sensitive = false
+}
+
+# HP-05 COMPLIANCE: Secret values for external injection
+# These outputs allow external systems to inject secret values after terraform apply
+output "directus_key_value" {
+  description = "Directus KEY value for external injection into Secret Manager"
+  value       = random_password.directus_key.result
+  sensitive   = true
+}
+
+output "directus_secret_value" {
+  description = "Directus SECRET value for external injection into Secret Manager"
+  value       = random_password.directus_secret.result
+  sensitive   = true
+}
+
+output "directus_db_password_value" {
+  description = "Directus DB password value for external injection into Secret Manager"
+  value       = random_password.directus_db_password.result
+  sensitive   = true
 }

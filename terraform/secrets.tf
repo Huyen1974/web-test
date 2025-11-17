@@ -13,6 +13,8 @@ resource "google_project_service" "secretmanager" {
 # ------------------------------------------------------------------------------
 
 # Directus KEY secret (for signing tokens)
+# Note: random_password is kept for reference but value must be injected externally
+# HP-05 Compliance: Terraform manages metadata only, not secret values
 resource "random_password" "directus_key" {
   length  = 64
   special = false
@@ -39,12 +41,14 @@ resource "google_secret_manager_secret" "directus_key" {
   depends_on = [google_project_service.secretmanager]
 }
 
-resource "google_secret_manager_secret_version" "directus_key" {
-  secret      = google_secret_manager_secret.directus_key.id
-  secret_data = random_password.directus_key.result
-}
+# HP-05 COMPLIANCE: Secret version removed - values must be injected externally
+# After terraform apply, run:
+# echo -n "$(terraform output -raw directus_key_value)" | \
+#   gcloud secrets versions add DIRECTUS_KEY_test --data-file=-
 
 # Directus SECRET secret (for signing sessions)
+# Note: random_password is kept for reference but value must be injected externally
+# HP-05 Compliance: Terraform manages metadata only, not secret values
 resource "random_password" "directus_secret" {
   length  = 64
   special = false
@@ -71,12 +75,14 @@ resource "google_secret_manager_secret" "directus_secret" {
   depends_on = [google_project_service.secretmanager]
 }
 
-resource "google_secret_manager_secret_version" "directus_secret" {
-  secret      = google_secret_manager_secret.directus_secret.id
-  secret_data = random_password.directus_secret.result
-}
+# HP-05 COMPLIANCE: Secret version removed - values must be injected externally
+# After terraform apply, run:
+# echo -n "$(terraform output -raw directus_secret_value)" | \
+#   gcloud secrets versions add DIRECTUS_SECRET_test --data-file=-
 
 # Directus database password
+# Note: random_password is kept because it's used by sql.tf for MySQL user creation
+# HP-05 Compliance: Terraform manages metadata only, not secret values
 resource "random_password" "directus_db_password" {
   length  = 32
   special = true
@@ -103,10 +109,10 @@ resource "google_secret_manager_secret" "directus_db_password" {
   depends_on = [google_project_service.secretmanager]
 }
 
-resource "google_secret_manager_secret_version" "directus_db_password" {
-  secret      = google_secret_manager_secret.directus_db_password.id
-  secret_data = random_password.directus_db_password.result
-}
+# HP-05 COMPLIANCE: Secret version removed - values must be injected externally
+# After terraform apply, run:
+# echo -n "$(terraform output -raw directus_db_password_value)" | \
+#   gcloud secrets versions add DIRECTUS_DB_PASSWORD_test --data-file=-
 
 # ------------------------------------------------------------------------------
 # IAM Bindings for chatgpt-deployer Service Account
