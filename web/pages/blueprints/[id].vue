@@ -5,12 +5,13 @@ const route = useRoute();
 const identifier = route.params.id as string;
 
 // Fetch blueprint document
-const { data: document, pending, error } = await useAsyncData(
-	`blueprint-${identifier}`,
-	async () => {
-		return await useBlueprintDetail(identifier);
-	},
-);
+const {
+	data: document,
+	pending,
+	error,
+} = await useAsyncData(`blueprint-${identifier}`, async () => {
+	return await useBlueprintDetail(identifier);
+});
 
 // Build breadcrumb
 const breadcrumb = computed<BreadcrumbItem[]>(() => {
@@ -87,11 +88,7 @@ useServerSeoMeta({
 								{{ item.label }}
 							</NuxtLink>
 							<span v-else class="text-gray-600 dark:text-gray-400">{{ item.label }}</span>
-							<Icon
-								v-if="index < breadcrumb.length - 1"
-								name="heroicons:chevron-right"
-								class="w-4 h-4 text-gray-400"
-							/>
+							<Icon v-if="index < breadcrumb.length - 1" name="heroicons:chevron-right" class="w-4 h-4 text-gray-400" />
 						</li>
 					</ol>
 				</nav>
@@ -161,28 +158,20 @@ useServerSeoMeta({
 							<Icon name="heroicons:information-circle" class="inline-block w-5 h-5 mr-1" />
 							Content rendering will be implemented with the actual document content from Directus.
 						</p>
-						<p class="mt-2 text-sm text-gray-500 dark:text-gray-500">
-							Blueprint ID: {{ document.id }}
-						</p>
+						<p class="mt-2 text-sm text-gray-500 dark:text-gray-500">Blueprint ID: {{ document.id }}</p>
 					</div>
 				</div>
 
 				<!-- Footer -->
 				<footer class="pt-6 mt-8 border-t border-gray-300 dark:border-gray-700">
 					<div class="flex items-center justify-between">
-						<NuxtLink
-							to="/blueprints"
-							class="inline-flex items-center gap-2 text-primary-600 hover:text-primary-700"
-						>
+						<NuxtLink to="/blueprints" class="inline-flex items-center gap-2 text-primary-600 hover:text-primary-700">
 							<Icon name="heroicons:arrow-left" class="w-4 h-4" />
 							Back to Blueprints
 						</NuxtLink>
 
 						<!-- Related Link -->
-						<NuxtLink
-							to="/knowledge"
-							class="text-sm text-gray-600 hover:text-primary-600 dark:text-gray-400"
-						>
+						<NuxtLink to="/knowledge" class="text-sm text-gray-600 hover:text-primary-600 dark:text-gray-400">
 							Browse Knowledge Hub
 							<Icon name="heroicons:arrow-right" class="inline-block w-3 h-3 ml-1" />
 						</NuxtLink>

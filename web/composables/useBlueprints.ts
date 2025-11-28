@@ -1,10 +1,5 @@
 import { readItems } from '@directus/sdk';
-import type {
-	KnowledgeCard,
-	KnowledgeListEntry,
-	Language,
-	ZONE_MAPPING,
-} from '~/types/view-model-0032';
+import type { KnowledgeCard, KnowledgeListEntry, Language, ZONE_MAPPING } from '~/types/view-model-0032';
 import type { Category } from '~/types/view-model-0032';
 
 /**
@@ -71,9 +66,7 @@ export interface BlueprintList {
  * Fetch list of blueprint/design documents
  * Blueprints are knowledge documents with category 'reference' or tagged as 'blueprint'
  */
-export async function useBlueprintList(
-	options: BlueprintListOptions = {},
-): Promise<BlueprintList> {
+export async function useBlueprintList(options: BlueprintListOptions = {}): Promise<BlueprintList> {
 	const { page = 1, pageSize = 20, language = 'vn' } = options;
 
 	// Build filter - blueprints are reference documents or those tagged with 'blueprint'
@@ -105,7 +98,6 @@ export async function useBlueprintList(
 			language,
 		};
 	} catch (error) {
-		console.error('Error fetching blueprint list:', error);
 		return {
 			items: [],
 			total: 0,
@@ -122,8 +114,7 @@ export async function useBlueprintList(
 export async function useBlueprintDetail(identifier: string): Promise<KnowledgeCard | null> {
 	try {
 		// Determine if identifier is UUID or slug
-		const isUuid =
-			/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
+		const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
 
 		const filter: any = {
 			status: { _eq: 'published' },
@@ -150,7 +141,6 @@ export async function useBlueprintDetail(identifier: string): Promise<KnowledgeC
 
 		return mapToCard(items[0]);
 	} catch (error) {
-		console.error('Error fetching blueprint detail:', error);
 		return null;
 	}
 }

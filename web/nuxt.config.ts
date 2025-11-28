@@ -44,10 +44,14 @@ export default defineNuxtConfig({
 	runtimeConfig: {
 		public: {
 			siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
+			directus: {
+				url: process.env.DIRECTUS_URL || 'http://localhost:8055',
+				nuxtBaseUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
+			},
 		},
 	},
 
-	// Directus Configuration
+	// Directus module configuration
 	directus: {
 		rest: {
 			baseUrl: process.env.DIRECTUS_URL || 'http://localhost:8055',
@@ -55,16 +59,20 @@ export default defineNuxtConfig({
 		},
 		auth: {
 			enabled: true,
-			enableGlobalAuthMiddleware: false, // Enable auth middleware on every page
-			userFields: ['*', { contacts: ['*'] }], // Select user fields
+			enableGlobalAuthMiddleware: false,
+			userFields: ['*', { contacts: ['*'] }],
 			redirect: {
-				login: '/auth/signin', // Path to redirect when login is required
-				logout: '/', // Path to redirect after logout
-				home: '/portal', // Path to redirect after successful login
-				resetPassword: '/auth/reset-password', // Path to redirect for password reset
-				callback: '/auth/callback', // Path to redirect after login with provider
+				login: '/auth/signin',
+				logout: '/',
+				home: '/portal',
+				resetPassword: '/auth/reset-password',
+				callback: '/auth/callback',
 			},
 		},
+	},
+
+	typescript: {
+		strict: false,
 	},
 
 	// Nuxt DevTools - https://devtools.nuxtjs.org/

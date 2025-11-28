@@ -67,9 +67,7 @@ interface KnowledgeListOptions {
 /**
  * Fetch list of knowledge documents with filtering
  */
-export async function useKnowledgeList(
-	options: KnowledgeListOptions = {},
-): Promise<KnowledgeList> {
+export async function useKnowledgeList(options: KnowledgeListOptions = {}): Promise<KnowledgeList> {
 	const { page = 1, pageSize = 20, zone, subZone, topic, language = 'vn' } = options;
 
 	// Build filter
@@ -82,6 +80,7 @@ export async function useKnowledgeList(
 	// Add zone filter (maps to category)
 	if (zone) {
 		const categoryKey = Object.keys(ZONE_MAPPING).find((key) => ZONE_MAPPING[key as Category] === zone);
+
 		if (categoryKey) {
 			filter.category = { _eq: categoryKey };
 		}
@@ -103,6 +102,7 @@ export async function useKnowledgeList(
 
 		// Client-side filtering for subZone and topic if needed
 		let filteredItems = items || [];
+
 		if (subZone || topic) {
 			filteredItems = filteredItems.filter((doc: any) => {
 				if (subZone && doc.tags?.[0] !== subZone) return false;
@@ -124,7 +124,6 @@ export async function useKnowledgeList(
 			language,
 		};
 	} catch (error) {
-		console.error('Error fetching knowledge list:', error);
 		return {
 			items: [],
 			total: 0,
@@ -144,8 +143,7 @@ export async function useKnowledgeList(
 export async function useKnowledgeDetail(identifier: string): Promise<KnowledgeCard | null> {
 	try {
 		// Determine if identifier is UUID or slug
-		const isUuid =
-			/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
+		const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
 
 		const filter: any = {
 			status: { _eq: 'published' },
@@ -172,7 +170,6 @@ export async function useKnowledgeDetail(identifier: string): Promise<KnowledgeC
 
 		return mapToCard(items[0]);
 	} catch (error) {
-		console.error('Error fetching knowledge detail:', error);
 		return null;
 	}
 }

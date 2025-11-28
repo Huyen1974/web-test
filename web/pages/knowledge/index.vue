@@ -49,9 +49,7 @@ useServerSeoMeta({
 			<!-- Header -->
 			<header class="pb-6 border-b border-gray-300 dark:border-gray-700">
 				<TypographyTitle>Knowledge Hub</TypographyTitle>
-				<p class="mt-2 text-gray-600 dark:text-gray-400">
-					Browse our knowledge base, guides, and documentation
-				</p>
+				<p class="mt-2 text-gray-600 dark:text-gray-400">Browse our knowledge base, guides, and documentation</p>
 			</header>
 
 			<!-- Loading State -->
@@ -68,9 +66,7 @@ useServerSeoMeta({
 			<div v-else-if="error" class="py-12">
 				<div class="p-6 text-center border border-red-200 rounded-lg bg-red-50 dark:bg-red-900/20">
 					<Icon name="heroicons:exclamation-triangle" class="w-12 h-12 mx-auto text-red-600" />
-					<h3 class="mt-4 text-lg font-semibold text-red-900 dark:text-red-200">
-						Failed to load knowledge base
-					</h3>
+					<h3 class="mt-4 text-lg font-semibold text-red-900 dark:text-red-200">Failed to load knowledge base</h3>
 					<p class="mt-2 text-red-700 dark:text-red-300">
 						There was an error loading the knowledge documents. Please try again later.
 					</p>
@@ -82,9 +78,7 @@ useServerSeoMeta({
 				<div class="p-8 text-center border border-gray-200 rounded-lg bg-gray-50 dark:bg-gray-800">
 					<Icon name="heroicons:document-text" class="w-16 h-16 mx-auto text-gray-400" />
 					<h3 class="mt-4 text-lg font-semibold text-gray-900 dark:text-gray-100">No documents found</h3>
-					<p class="mt-2 text-gray-600 dark:text-gray-400">
-						There are no knowledge documents available at this time.
-					</p>
+					<p class="mt-2 text-gray-600 dark:text-gray-400">There are no knowledge documents available at this time.</p>
 				</div>
 			</div>
 
@@ -97,10 +91,7 @@ useServerSeoMeta({
 						<span v-if="data.zone" class="px-3 py-1 text-sm rounded-full bg-primary-100 text-primary-800">
 							Zone: {{ data.zone }}
 						</span>
-						<span
-							v-if="data.subZone"
-							class="px-3 py-1 text-sm rounded-full bg-primary-100 text-primary-800"
-						>
+						<span v-if="data.subZone" class="px-3 py-1 text-sm rounded-full bg-primary-100 text-primary-800">
 							SubZone: {{ data.subZone }}
 						</span>
 						<span v-if="data.topic" class="px-3 py-1 text-sm rounded-full bg-primary-100 text-primary-800">

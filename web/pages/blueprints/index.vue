@@ -61,9 +61,7 @@ useServerSeoMeta({
 			<div v-else-if="error" class="py-12">
 				<div class="p-6 text-center border border-red-200 rounded-lg bg-red-50 dark:bg-red-900/20">
 					<Icon name="heroicons:exclamation-triangle" class="w-12 h-12 mx-auto text-red-600" />
-					<h3 class="mt-4 text-lg font-semibold text-red-900 dark:text-red-200">
-						Failed to load blueprints
-					</h3>
+					<h3 class="mt-4 text-lg font-semibold text-red-900 dark:text-red-200">Failed to load blueprints</h3>
 					<p class="mt-2 text-red-700 dark:text-red-300">
 						There was an error loading the blueprint documents. Please try again later.
 					</p>
@@ -75,9 +73,7 @@ useServerSeoMeta({
 				<div class="p-8 text-center border border-gray-200 rounded-lg bg-gray-50 dark:bg-gray-800">
 					<Icon name="heroicons:document-chart-bar" class="w-16 h-16 mx-auto text-gray-400" />
 					<h3 class="mt-4 text-lg font-semibold text-gray-900 dark:text-gray-100">No blueprints found</h3>
-					<p class="mt-2 text-gray-600 dark:text-gray-400">
-						There are no blueprint documents available at this time.
-					</p>
+					<p class="mt-2 text-gray-600 dark:text-gray-400">There are no blueprint documents available at this time.</p>
 				</div>
 			</div>
 
