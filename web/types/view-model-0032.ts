@@ -1,0 +1,150 @@
+// Nuxt View Model Types - Task 0032
+// Configuration and type definitions for Directus-based content display
+
+export type Language = 'vn' | 'ja' | 'en';
+
+export type ContentStatus = 'draft' | 'published' | 'archived';
+
+export type Visibility = 'public' | 'internal' | 'restricted';
+
+export type Category = 'guide' | 'faq' | 'reference' | 'article' | 'other';
+
+// View Model Interfaces
+
+export interface KnowledgeCard {
+	id: string;
+	title: string;
+	slug: string;
+	summary?: string;
+	language: Language;
+	publishedAt: string;
+	version: number;
+	zone: string;
+	subZone: string;
+	topics: string[];
+	readTime: number;
+}
+
+export interface KnowledgeListEntry {
+	id: string;
+	title: string;
+	slug: string;
+	summary?: string;
+	language: Language;
+	publishedAt: string;
+	zone: string;
+	subZone: string;
+	primaryTopic: string;
+	tags: string[];
+}
+
+export interface KnowledgeList {
+	items: KnowledgeListEntry[];
+	total: number;
+	page: number;
+	pageSize: number;
+	zone?: string;
+	subZone?: string;
+	topic?: string;
+	language?: Language;
+}
+
+export interface BreadcrumbItem {
+	label: string;
+	slug: string;
+	type: 'zone' | 'subzone' | 'topic' | 'document';
+}
+
+export interface ZoneView {
+	zone: string;
+	title: string;
+	description: string;
+	subZones: {
+		name: string;
+		documentCount: number;
+		topics: string[];
+	}[];
+	featuredDocuments: KnowledgeCard[];
+}
+
+export interface TopicView {
+	zone: string;
+	subZone: string;
+	topic: string;
+	documents: KnowledgeCard[];
+	relatedTopics: string[];
+	breadcrumb: BreadcrumbItem[];
+}
+
+// Field Mapping Configuration
+
+export const ZONE_MAPPING: Record<Category, string> = {
+	guide: 'Guide',
+	faq: 'FAQ',
+	reference: 'Reference',
+	article: 'Article',
+	other: 'Other',
+};
+
+export const DIRECTUS_TO_VIEW_MODEL_MAPPING = {
+	knowledgeCard: {
+		id: 'id',
+		title: 'title',
+		slug: 'slug',
+		summary: 'summary',
+		language: 'language',
+		publishedAt: 'published_at',
+		version: 'version',
+		zone: (doc: any) => ZONE_MAPPING[doc.category as Category] || 'Other',
+		subZone: (doc: any) => doc.tags?.[0] || 'General',
+		topics: (doc: any) => doc.tags?.slice(1) || [],
+		readTime: (doc: any) => Math.ceil((doc.content?.length || 0) / 200), // Rough estimate
+	},
+
+	knowledgeListEntry: {
+		id: 'id',
+		title: 'title',
+		slug: 'slug',
+		summary: 'summary',
+		language: 'language',
+		publishedAt: 'published_at',
+		zone: (doc: any) => ZONE_MAPPING[doc.category as Category] || 'Other',
+		subZone: (doc: any) => doc.tags?.[0] || 'General',
+		primaryTopic: (doc: any) => doc.tags?.[1] || '',
+		tags: 'tags',
+	},
+} as const;
+
+// Query Configuration
+
+export const QUERY_CONFIG = {
+	baseFilter: {
+		status: { _eq: 'published' as ContentStatus },
+		visibility: { _eq: 'public' as Visibility },
+	},
+
+	fields: {
+		list: ['id', 'title', 'slug', 'summary', 'category', 'tags', 'published_at', 'language'],
+		detail: ['*'], // All fields for full content
+	},
+
+	sorting: {
+		default: ['-published_at'],
+		menu: ['menu_order', 'sort'],
+	},
+
+	pagination: {
+		defaultPageSize: 20,
+		maxPageSize: 100,
+	},
+} as const;
+
+// Type guards
+
+export function isKnowledgeCard(obj: any): obj is KnowledgeCard {
+	return obj && typeof obj.id === 'string' && typeof obj.title === 'string';
+}
+
+export function isKnowledgeList(obj: any): obj is KnowledgeList {
+	return obj && Array.isArray(obj.items) && typeof obj.total === 'number';
+}
