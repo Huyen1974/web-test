@@ -13,6 +13,24 @@ const {
 	return await useKnowledgeDetail(identifier);
 });
 
+// Log page view when document is loaded
+watch(
+	document,
+	(doc) => {
+		if (doc) {
+			useAgentDataLogPageView({
+				documentId: doc.id,
+				zone: doc.zone,
+				subZone: doc.subZone,
+				topic: doc.topics?.[0],
+				route: route.fullPath,
+				language: doc.language,
+			});
+		}
+	},
+	{ immediate: true },
+);
+
 // Build breadcrumb
 const breadcrumb = computed<BreadcrumbItem[]>(() => {
 	if (!document.value) return [];
