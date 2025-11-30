@@ -118,6 +118,7 @@ export async function useAgentDataSearch(
 			query,
 		};
 	} catch (error) {
+		// eslint-disable-next-line no-console
 		console.error('[AgentData] Failed to fetch documents from Directus:', error);
 		return {
 			items: [],
