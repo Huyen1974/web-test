@@ -42,11 +42,20 @@ export default defineNuxtConfig({
 	},
 
 	runtimeConfig: {
+		// Private runtime config (server-side only)
+		agentData: {
+			apiKey: process.env.AGENT_DATA_API_KEY || '',
+		},
+		// Public runtime config (exposed to client)
 		public: {
 			siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
 			directus: {
 				url: process.env.DIRECTUS_URL || 'http://localhost:8055',
 				nuxtBaseUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
+			},
+			agentData: {
+				baseUrl: process.env.NUXT_PUBLIC_AGENT_DATA_BASE_URL || '',
+				enabled: process.env.NUXT_PUBLIC_AGENT_DATA_ENABLED === 'true',
 			},
 		},
 	},

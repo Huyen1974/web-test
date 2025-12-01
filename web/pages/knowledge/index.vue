@@ -2,15 +2,58 @@
 import type { KnowledgeList } from '~/types/view-model-0032';
 
 const route = useRoute();
+const router = useRouter();
+const config = useRuntimeConfig();
+
+// Check if Agent Data is enabled
+const agentDataEnabled = computed(() => !!config.public.agentData?.enabled && !!config.public.agentData?.baseUrl);
+
+// Search state
+const searchQuery = ref((route.query.q as string) || '');
+const isSearching = ref(false);
 
 // Fetch knowledge documents
-const { data, pending, error } = await useAsyncData(
+const { data, pending, error, refresh } = await useAsyncData(
 	'knowledge-list',
 	async () => {
 		const zone = route.query.zone as string | undefined;
 		const subZone = route.query.subZone as string | undefined;
 		const topic = route.query.topic as string | undefined;
+		const query = route.query.q as string | undefined;
+		const trimmedQuery = (query || '').trim();
 
+		// Case 3: Agent Data enabled AND search query exists → Use Agent Data search
+		if (agentDataEnabled.value && trimmedQuery) {
+			const results = await useAgentDataSearch(trimmedQuery, {
+				zone,
+				subZone,
+				topic,
+				language: 'vn',
+			});
+
+			// Log search event
+			useAgentDataLogSearch({
+				query: trimmedQuery,
+				zone,
+				subZone,
+				topic,
+				resultCount: results.total,
+				language: 'vn',
+			});
+
+			return {
+				items: results.items,
+				total: results.total,
+				page: 1,
+				pageSize: 20,
+				zone,
+				subZone,
+				topic,
+				language: 'vn' as const,
+			};
+		}
+
+		// Case 1 & 2: Agent Data disabled OR no search query → Use Directus list
 		return await useKnowledgeList({
 			zone,
 			subZone,
@@ -22,6 +65,34 @@ const { data, pending, error } = await useAsyncData(
 		watch: [() => route.query],
 	},
 );
+
+// Search handler
+const handleSearch = async () => {
+	if (!searchQuery.value.trim()) {
+		// Clear search
+		await router.push({ query: { ...route.query, q: undefined } });
+		return;
+	}
+
+	isSearching.value = true;
+
+	try {
+		await router.push({
+			query: {
+				...route.query,
+				q: searchQuery.value.trim(),
+			},
+		});
+	} finally {
+		isSearching.value = false;
+	}
+};
+
+// Clear search handler
+const clearSearch = async () => {
+	searchQuery.value = '';
+	await router.push({ query: { ...route.query, q: undefined } });
+};
 
 // Compute metadata
 const metadata = computed(() => ({
@@ -50,6 +121,46 @@ useServerSeoMeta({
 			<header class="pb-6 border-b border-gray-300 dark:border-gray-700">
 				<TypographyTitle>Knowledge Hub</TypographyTitle>
 				<p class="mt-2 text-gray-600 dark:text-gray-400">Browse our knowledge base, guides, and documentation</p>
+
+				<!-- Search Box -->
+				<div class="mt-6">
+					<form class="flex gap-2" @submit.prevent="handleSearch">
+						<div class="relative flex-1">
+							<input
+								v-model="searchQuery"
+								type="text"
+								placeholder="Search knowledge base..."
+								class="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent dark:bg-gray-800 dark:border-gray-600"
+								:disabled="isSearching"
+							/>
+							<button
+								v-if="searchQuery"
+								type="button"
+								class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+								@click="clearSearch"
+							>
+								<Icon name="heroicons:x-mark" class="w-5 h-5" />
+							</button>
+						</div>
+						<button
+							type="submit"
+							:disabled="isSearching || !searchQuery.trim()"
+							class="px-6 py-2 font-medium text-white rounded-lg bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+						>
+							<Icon v-if="isSearching" name="heroicons:arrow-path" class="w-5 h-5 animate-spin" />
+							<Icon v-else name="heroicons:magnifying-glass" class="w-5 h-5" />
+						</button>
+					</form>
+
+					<!-- Search Results Info -->
+					<div v-if="route.query.q && data" class="mt-3">
+						<p class="text-sm text-gray-600 dark:text-gray-400">
+							<span class="font-medium">{{ data.total }}</span>
+							results for
+							<span class="font-medium">"{{ route.query.q }}"</span>
+						</p>
+					</div>
+				</div>
 			</header>
 
 			<!-- Loading State -->
