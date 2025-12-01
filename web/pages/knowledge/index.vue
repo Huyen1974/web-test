@@ -3,6 +3,10 @@ import type { KnowledgeList } from '~/types/view-model-0032';
 
 const route = useRoute();
 const router = useRouter();
+const config = useRuntimeConfig();
+
+// Check if Agent Data is enabled
+const agentDataEnabled = computed(() => !!config.public.agentData?.enabled && !!config.public.agentData?.baseUrl);
 
 // Search state
 const searchQuery = ref((route.query.q as string) || '');
@@ -16,10 +20,11 @@ const { data, pending, error, refresh } = await useAsyncData(
 		const subZone = route.query.subZone as string | undefined;
 		const topic = route.query.topic as string | undefined;
 		const query = route.query.q as string | undefined;
+		const trimmedQuery = (query || '').trim();
 
-		// If search query exists, use Agent Data search
-		if (query && query.trim()) {
-			const results = await useAgentDataSearch(query, {
+		// Case 3: Agent Data enabled AND search query exists → Use Agent Data search
+		if (agentDataEnabled.value && trimmedQuery) {
+			const results = await useAgentDataSearch(trimmedQuery, {
 				zone,
 				subZone,
 				topic,
@@ -28,7 +33,7 @@ const { data, pending, error, refresh } = await useAsyncData(
 
 			// Log search event
 			useAgentDataLogSearch({
-				query,
+				query: trimmedQuery,
 				zone,
 				subZone,
 				topic,
@@ -48,7 +53,7 @@ const { data, pending, error, refresh } = await useAsyncData(
 			};
 		}
 
-		// Otherwise, use regular Directus list
+		// Case 1 & 2: Agent Data disabled OR no search query → Use Directus list
 		return await useKnowledgeList({
 			zone,
 			subZone,
