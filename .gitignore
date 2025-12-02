@@ -17,11 +17,11 @@ logs
 .DS_Store
 .fleet
 .idea
-.cursor
+.cursor/
 
 # Local env files
 .env
 .env.*
 !.env.example
-.claude
-.gemini
+.claude/
+.gemini/
