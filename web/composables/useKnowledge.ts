@@ -28,6 +28,9 @@ function mapToListEntry(doc: any): KnowledgeListEntry {
 		subZone,
 		primaryTopic,
 		tags: doc.tags || [],
+		// Approval metadata (Task 0035)
+		status: doc.status || 'draft',
+		updatedAt: doc.date_updated || null,
 	};
 }
 
@@ -52,6 +55,10 @@ function mapToCard(doc: any): KnowledgeCard {
 		subZone,
 		topics,
 		readTime,
+		// Approval metadata (Task 0035)
+		status: doc.status || 'draft',
+		updatedBy: doc.user_updated || null,
+		updatedAt: doc.date_updated || null,
 	};
 }
 
@@ -96,7 +103,18 @@ export async function useKnowledgeList(options: KnowledgeListOptions = {}): Prom
 				sort: ['-published_at'],
 				limit: pageSize,
 				offset: (page - 1) * pageSize,
-				fields: ['id', 'title', 'slug', 'summary', 'category', 'tags', 'published_at', 'language'],
+				fields: [
+					'id',
+					'title',
+					'slug',
+					'summary',
+					'category',
+					'tags',
+					'published_at',
+					'language',
+					'status',
+					'date_updated',
+				],
 			}),
 		);
 
