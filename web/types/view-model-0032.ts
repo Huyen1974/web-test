@@ -23,6 +23,10 @@ export interface KnowledgeCard {
 	subZone: string;
 	topics: string[];
 	readTime: number;
+	// Approval metadata (Task 0035)
+	status: ContentStatus;
+	updatedBy?: string | null;
+	updatedAt?: string | null;
 }
 
 export interface KnowledgeListEntry {
@@ -36,6 +40,9 @@ export interface KnowledgeListEntry {
 	subZone: string;
 	primaryTopic: string;
 	tags: string[];
+	// Approval metadata (Task 0035)
+	status: ContentStatus;
+	updatedAt?: string | null;
 }
 
 export interface KnowledgeList {
@@ -99,6 +106,10 @@ export const DIRECTUS_TO_VIEW_MODEL_MAPPING = {
 		subZone: (doc: any) => doc.tags?.[0] || 'General',
 		topics: (doc: any) => doc.tags?.slice(1) || [],
 		readTime: (doc: any) => Math.ceil((doc.content?.length || 0) / 200), // Rough estimate
+		// Approval metadata (Task 0035)
+		status: 'status',
+		updatedBy: 'user_updated',
+		updatedAt: 'date_updated',
 	},
 
 	knowledgeListEntry: {
@@ -112,6 +123,9 @@ export const DIRECTUS_TO_VIEW_MODEL_MAPPING = {
 		subZone: (doc: any) => doc.tags?.[0] || 'General',
 		primaryTopic: (doc: any) => doc.tags?.[1] || '',
 		tags: 'tags',
+		// Approval metadata (Task 0035)
+		status: 'status',
+		updatedAt: 'date_updated',
 	},
 } as const;
 
@@ -124,7 +138,7 @@ export const QUERY_CONFIG = {
 	},
 
 	fields: {
-		list: ['id', 'title', 'slug', 'summary', 'category', 'tags', 'published_at', 'language'],
+		list: ['id', 'title', 'slug', 'summary', 'category', 'tags', 'published_at', 'language', 'status', 'date_updated'],
 		detail: ['*'], // All fields for full content
 	},
 

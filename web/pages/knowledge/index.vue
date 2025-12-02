@@ -219,10 +219,21 @@ useServerSeoMeta({
 						:to="`/knowledge/${item.slug || item.id}`"
 						class="block p-6 transition-shadow border border-gray-200 rounded-lg hover:shadow-lg dark:border-gray-700"
 					>
-						<!-- Zone Badge -->
-						<div class="mb-3">
+						<!-- Zone & Status Badges -->
+						<div class="flex items-center justify-between mb-3">
 							<span class="px-2 py-1 text-xs font-semibold rounded bg-primary-100 text-primary-800">
 								{{ item.zone }}
+							</span>
+							<!-- Approval Status Badge (Task 0035) -->
+							<span
+								:class="{
+									'px-2 py-1 text-xs font-semibold rounded': true,
+									'bg-green-100 text-green-800': item.status === 'published',
+									'bg-yellow-100 text-yellow-800': item.status === 'draft',
+									'bg-gray-100 text-gray-800': item.status === 'archived',
+								}"
+							>
+								{{ item.status === 'published' ? 'Published' : item.status === 'draft' ? 'Draft' : 'Archived' }}
 							</span>
 						</div>
 
