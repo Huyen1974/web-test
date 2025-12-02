@@ -3,7 +3,7 @@
 **Date:** 2025-12-02  
 **Repo:** /Users/nmhuyen/Documents/Manual Deploy/web-test  
 **Start state:** Branch `feat/0036-knowledge-taxonomy`, HEAD `af88f93` (PR #97); main `4aa446b`; git status showed one modified file `reports/0036a_taxonomy_design.md` (unstaged).  
-**End state:** Branch `main`, HEAD `d7a48de` (origin/main), git status clean.
+**End state:** Branch `main`, HEAD == origin/main (post-report metadata commit on top of tested tree), git status clean.
 
 ---
 
@@ -32,7 +32,7 @@
 - Post-merge on main (ece9ff1) and post-report commits (through `d7a48de`):
   - `npm run build` (web): **PASS** for all main builds; same warnings as above.
 - CI for PR #97: **ALL GREEN** (build 1m35s, Pass Gate 32s, Quality Gate 36s, E2E Smoke Test 1m25s).
-- CI on latest main commit `d7a48de`: Nuxt 3 CI **PASS** (build 1m35s), Terraform Deploy **PASS**.
+- CI on tested main commit `a2e5088f0a5f65aa42cdb4821e3efed0b9709353`: Nuxt 3 CI **PASS** (build ~1m27s), Terraform Deploy **PASS**. (Final metadata commit for this report sits on top; rerun `git rev-parse HEAD` to confirm current hash.)
 
 ## Merge execution
 - Kept local 0036a doc edits; committed `docs(0036): finalize taxonomy design report`.
@@ -42,7 +42,7 @@
 
 ## Final state
 - Branch: `main`
-- HEAD == origin/main: `d7a48de7589e4191dd874a4949ef2dbacc80705c`
+- HEAD == origin/main (verify with `git rev-parse HEAD` in this workspace; tested tree hash: `a2e5088f0a5f65aa42cdb4821e3efed0b9709353`)
 - Git status: clean
 - Local build on main: **PASS** (warnings noted above)
 - CI: PR #97 green prior to merge; required contexts set on final commit
