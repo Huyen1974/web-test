@@ -3,15 +3,11 @@ export interface HelpCollectionsDetailProps {
 	baseUrl?: string;
 }
 
-const props = defineProps<HelpCollectionsDetailProps>();
+defineProps<HelpCollectionsDetailProps>();
 
 const { params, path } = useRoute();
 
-const {
-	data: collection,
-	pending,
-	error,
-} = await useAsyncData(
+const { data: collection } = await useAsyncData(
 	path,
 	() => {
 		return useDirectus(

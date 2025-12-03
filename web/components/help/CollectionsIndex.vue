@@ -3,15 +3,11 @@ export interface HelpCollectionsProps {
 	baseUrl?: string | null;
 }
 
-const props = withDefaults(defineProps<HelpCollectionsProps>(), {
+withDefaults(defineProps<HelpCollectionsProps>(), {
 	baseUrl: '',
 });
 
-const {
-	data: collections,
-	pending,
-	error,
-} = await useAsyncData(
+const { data: collections } = await useAsyncData(
 	'help-collections-index',
 	() => {
 		return useDirectus(

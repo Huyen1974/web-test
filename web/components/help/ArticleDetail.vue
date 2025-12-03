@@ -3,17 +3,13 @@ export interface HelpCollectionsProps {
 	baseUrl?: string;
 }
 
-const props = defineProps<HelpCollectionsProps>();
+defineProps<HelpCollectionsProps>();
 
 import { markdownToHtml } from '~/utils/markdown';
 
 const { path, params } = useRoute();
 
-const {
-	data: article,
-	pending,
-	error,
-} = await useAsyncData(
+const { data: article } = await useAsyncData(
 	path as string,
 	() => {
 		return useDirectus(
