@@ -8,7 +8,7 @@ export interface DateDisplayProps {
 	color?: 'primary' | 'gray' | 'amber';
 }
 
-const props = withDefaults(defineProps<DateDisplayProps>(), {
+withDefaults(defineProps<DateDisplayProps>(), {
 	size: 'md',
 	color: 'primary',
 });

@@ -4,8 +4,6 @@ import type { BlockLogocloud, BlockLogocloudFile, File } from '~/types';
 defineProps<{
 	data: BlockLogocloud;
 }>();
-
-const { fileUrl } = useFiles();
 </script>
 <template>
 	<BlockContainer>

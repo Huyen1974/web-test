@@ -9,7 +9,7 @@ withDefaults(defineProps<AuthorProps>(), {
 	size: 'sm',
 });
 
-const { fileUrl } = useFiles();
+const { fileUrl: _fileUrl } = useFiles();
 </script>
 <template>
 	<div class="flex items-center flex-none group dark:text-gray-100">

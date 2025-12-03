@@ -81,9 +81,9 @@ function onSelect(option: any) {
 	}
 }
 
-const query = ref('');
-const results = ref([]);
-const selected = ref(null);
+const _query = ref('');
+const _results = ref([]);
+const _selected = ref(null);
 const loading = ref(false);
 
 const ui = {
