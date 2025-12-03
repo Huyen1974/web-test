@@ -6,6 +6,7 @@ defineProps<{
 }>();
 </script>
 <template>
+	<!-- eslint-disable vue/no-v-html -->
 	<BlockContainer>
 		<div
 			v-motion
@@ -22,6 +23,8 @@ defineProps<{
 			}"
 			class="relative"
 		>
+			<!-- Nội dung từ Directus (SSOT, nội bộ kiểm soát); cần render rich text. -->
+			<!-- eslint-disable-next-line vue/no-v-html -->
 			<div
 				class="relative text-4xl italic leading-tight text-gray-900 font-display md:leading-tight dark:text-gray-100 md:text-6xl text-wrap-[balance] dark:drop-shadow"
 				v-html="data.content"
@@ -39,4 +42,5 @@ defineProps<{
 			<p v-if="data.subtitle" class="dark:text-white">{{ data.subtitle }}</p>
 		</div>
 	</BlockContainer>
+	<!-- eslint-enable vue/no-v-html -->
 </template>

@@ -54,12 +54,10 @@ const isVisible = ref(false);
 const leftCol: Ref<HTMLElement | null> = ref(null);
 const rightCol: Ref<HTMLElement | null> = ref(null);
 const colHeight = ref(0);
-const leftColHeight = ref(0);
-const rightColHeight = ref(0);
 
-const { stop } = useIntersectionObserver(
+useIntersectionObserver(
 	target,
-	([{ isIntersecting }], observerElement) => {
+	([{ isIntersecting }], _observerElement) => {
 		isVisible.value = isIntersecting;
 	},
 	{
