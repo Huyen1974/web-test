@@ -15,7 +15,7 @@ Successfully created the comprehensive Content Versioning & Approval Workflow de
 **Deliverables**:
 1. **Design Document**: `reports/0047a_versioning_design.md` (15,523 lines, 100KB+)
 2. **Execution Report**: `reports/0047a_versioning_design_exec_CLAUDE.md` (this file)
-3. **Pull Request**: #[TBD - will be filled after PR creation]
+3. **Pull Request**: #106 - https://github.com/Huyen1974/web-test/pull/106
 
 **Testing Results**:
 - Lint: ✅ PASS (0 errors, 95 warnings baseline)
@@ -264,8 +264,8 @@ nothing added to commit but untracked files present (use "git add" to track)
 ### 6.1 PR Information
 
 **Branch**: feat/0047-versioning-design-doc → main
-**PR Number**: #[TBD - will be updated after PR creation]
-**PR Link**: https://github.com/Huyen1974/web-test/pull/[TBD]
+**PR Number**: #106
+**PR Link**: https://github.com/Huyen1974/web-test/pull/106
 
 **PR Title**: `docs(0047): add Directus content versioning design`
 
