@@ -10,7 +10,7 @@ withDefaults(defineProps<AvatarProps>(), {
 	size: 'md',
 });
 
-const { fileUrl } = useFiles();
+const { fileUrl: _fileUrl } = useFiles();
 </script>
 <template>
 	<div class="flex items-center flex-none group dark:text-gray-100">

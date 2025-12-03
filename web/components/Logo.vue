@@ -5,7 +5,7 @@ const logo = computed(() => {
 	return appConfig.globals?.logo_on_dark_bg;
 });
 
-const props = defineProps({
+defineProps({
 	color: {
 		type: String,
 		default: 'currentColor',

@@ -8,7 +8,7 @@ export interface GalleryProps {
 
 const props = defineProps<GalleryProps>();
 
-const { fileUrl } = useFiles();
+const { fileUrl: _fileUrl } = useFiles();
 
 const isOpen = ref(false);
 const currentItemIdx = ref(0);

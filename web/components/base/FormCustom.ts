@@ -54,7 +54,7 @@ export default defineComponent({
 	},
 	setup(props) {
 		const groups = props?.schema?.map((item) => {
-			const { name, label, placeholder, width, description } = item as { [key: string]: any };
+			const { name, label, description } = item as { [key: string]: any };
 
 			// @ts-ignore
 			const cssClass = widthClassMap[item.width] || 'md:col-span-6';
