@@ -218,6 +218,78 @@ Published ──(Rollback)──> Approved (previous version)
   4. Previous Approved version: set `is_current_version=TRUE`, `workflow_status='published'`
 - Rollback is logged with Admin ID and timestamp
 
+### 3.5 Parent-Child Hierarchies & State Rules
+
+**Purpose**: Enable long documents to be split into parent + children sections while maintaining version control and workflow consistency.
+
+**Model**: Option A (Minimal)
+- Use `parent_document_id` (self-FK) and `child_order` fields in same `knowledge_documents` collection
+- No separate collection needed
+- Simpler queries, easier migration
+
+**Hierarchy Structure**:
+- **Parent documents**: `parent_document_id = NULL`, represent the main/root document
+- **Child documents**: `parent_document_id = {parent_id}`, represent sections/chapters
+- **Depth limit**: Only 1 level (parent → children). No grandchildren allowed to keep structure simple.
+
+**Version Grouping & Inheritance**:
+- **Rule 1**: Children MUST inherit `version_group_id` from parent at creation time
+- **Rule 2**: When a parent creates a new version:
+  - New parent version gets `version_group_id` (inherited or newly generated)
+  - ALL children must be duplicated with same `version_group_id`
+  - Each child's `version_number` increments in sync with parent
+- **Rule 3**: Standalone child versions NOT allowed - children always version together with parent
+
+**Workflow State Rules**:
+
+**Rule W1: State Inheritance (Simple & Safe)**
+- Children automatically inherit workflow state from parent
+- When parent transitions Draft → Under Review, all children transition too
+- When parent is Approved, all children become Approved
+- When parent is Published, all children become Published
+- **Rationale**: Prevents inconsistent states (e.g., Published child with Draft parent)
+
+**Rule W2: No Independent Child Publishing**
+- Children CANNOT be published individually
+- Only the parent can be published (which publishes all children atomically)
+- **Rationale**: Ensures complete document always shows together
+
+**Rule W3: Child Editing & Rejection**
+- Agents/Editors CAN edit individual child Draft documents
+- If any child has issues, Editor rejects THE ENTIRE parent-children group back to Draft
+- `rejection_reason` can mention specific child sections that need fixes
+- **Rationale**: Simpler review process, clearer accountability
+
+**Rule W4: Orphan Prevention**
+- If parent is deleted (or archived), children are cascade deleted (or archived)
+- NO orphaned children allowed (constraint enforced by FK cascade)
+- **Rationale**: Prevents broken hierarchies
+
+**Rule W5: Current Version Consistency**
+- `is_current_version=TRUE` must apply to ENTIRE family (parent + all children) or none
+- When new version is published, ALL family members (parent + children) get `is_current_version=TRUE`
+- Previous family members ALL get `is_current_version=FALSE`
+- **Rationale**: Ensures Nuxt always fetches complete, consistent document set
+
+**Publishing Example Workflow**:
+
+1. Agent creates parent Draft (doc A) + 3 children Drafts (sections A1, A2, A3)
+2. All 4 documents: `version_group_id = UUID-X`, `version_number = 1`, `workflow_status = draft`
+3. Agent submits parent A for review → ALL 4 transition to `under_review`
+4. Editor reviews, finds issue in A2, rejects entire group → ALL 4 back to `draft` with `rejection_reason = "Section A2 needs clarification on XYZ"`
+5. Agent fixes A2, re-submits parent A → ALL 4 to `under_review` again
+6. Editor approves → ALL 4 to `approved`
+7. Admin publishes parent A → ALL 4 to `published`, `is_current_version = TRUE`
+8. Later, Agent creates new version of parent (A v2) → system auto-creates A1 v2, A2 v2, A3 v2 all as `draft`, `version_group_id = UUID-X`, `version_number = 2`
+
+**Constraints Summary**:
+- `parent_document_id` must reference valid document in same collection (self-FK)
+- No cycles allowed (doc cannot be ancestor of itself)
+- Children inherit `version_group_id` from parent
+- Children inherit `workflow_status` from parent (enforced via application logic or triggers)
+- Unique constraint: `UNIQUE(parent_document_id, child_order)` where parent_document_id IS NOT NULL
+- Cascade delete: when parent deleted, children auto-delete
+
 ---
 
 ## 4. Directus Data Model (Collections & Fields)
@@ -234,7 +306,7 @@ Published ──(Rollback)──> Approved (previous version)
 - `version` (Integer) – **NOTE**: This is the legacy simple version counter. Will be replaced by `version_number` and `version_group_id` in new design.
 - `notes`
 
-**New Fields to Add** (11 fields for workflow & versioning):
+**New Fields to Add** (13 fields for workflow, versioning & parent-child):
 
 | Field Name | Type | Nullable | Default | Description |
 |------------|------|----------|---------|-------------|
@@ -250,6 +322,8 @@ Published ──(Rollback)──> Approved (previous version)
 | **`publisher_id`** | UUID (FK to directus_users) | Yes | NULL | Admin who published the document (set when transitioning to Published). |
 | **`rejection_reason`** | Text | Yes | NULL | Reason for rejection (populated when Editor rejects from Under Review to Draft). Max 500 chars. |
 | **`purge_after`** | Timestamp | Yes | NULL | Scheduled purge timestamp for old revisions. NULL means never purge (e.g., Published/Archived with is_current_version=TRUE). |
+| **`parent_document_id`** | UUID (FK to self) | Yes | NULL | For hierarchical documents: points to the parent document. NULL for standalone/root documents. Enables long documents to be split into parent + children sections. |
+| **`child_order`** | Integer | Yes | NULL | For child documents: display order among siblings (1, 2, 3...). NULL for standalone/root documents. Used by Nuxt to render children in stable sequence. |
 
 ### 4.2 Field Constraints & Validation
 
@@ -284,6 +358,18 @@ Published ──(Rollback)──> Approved (previous version)
   - Set `purge_after = NULL` (never purge)
 - For `workflow_status IN ('published', 'archived')` with `is_current_version=FALSE`:
   - Set `purge_after = date_updated + 30 days` (long retention for audit)
+
+**parent_document_id constraints**:
+- Must reference a valid document ID in same collection (self-FK)
+- MUST NOT create cycles: a document cannot be ancestor of itself (enforce via check before insert/update)
+- Children must inherit `version_group_id` from parent at creation time
+- Orphaned children (parent deleted) should either: (A) auto-delete cascade OR (B) set parent_document_id=NULL and promote to standalone (decision: use A for safety)
+
+**child_order constraints**:
+- Required (NOT NULL) if `parent_document_id IS NOT NULL`
+- Must be NULL if `parent_document_id IS NULL` (standalone documents)
+- Unique per parent: no two children of same parent can have same child_order
+- Enforce via unique constraint: `UNIQUE(parent_document_id, child_order)` where parent_document_id IS NOT NULL
 
 ### 4.3 Index Recommendations
 
@@ -322,6 +408,14 @@ CREATE INDEX idx_approval_tracking
 ON knowledge_documents (approved_by, approved_at DESC);
 ```
 **Purpose**: Enable queries like "show all documents approved by Editor X"
+
+**Index 6**: Parent-Child hierarchy navigation
+```sql
+CREATE INDEX idx_parent_child_hierarchy
+ON knowledge_documents (parent_document_id, child_order)
+WHERE parent_document_id IS NOT NULL;
+```
+**Purpose**: Efficiently fetch all children of a parent document, sorted by display order
 
 ---
 
@@ -465,6 +559,8 @@ filter: {
 
 ### 6.2 Nuxt Read-Path Query
 
+#### 6.2.1 Standard Query (Standalone Documents)
+
 **Standard read query** for displaying published documents:
 ```typescript
 // web/composables/usePublishedKnowledge.ts
@@ -490,6 +586,125 @@ export const usePublishedKnowledge = (filters: KnowledgeFilters) => {
 ```
 
 **Performance**: With `idx_current_published` index, this query should complete in <100ms for typical result sets (10-50 documents).
+
+#### 6.2.2 Hierarchical Document Query (Parent + Children)
+
+**Purpose**: Fetch a complete hierarchical document (parent + children sections) for display on Nuxt.
+
+**Strategy**:
+1. Fetch parent document by slug/ID with published + current filter
+2. Fetch all children of that parent, also published + current, ordered by `child_order`
+3. Combine in UI: render parent at top, children below in order
+
+**Implementation**:
+```typescript
+// web/composables/useHierarchicalDocument.ts
+export const useHierarchicalDocument = (slug: string) => {
+  const baseFilter = {
+    workflow_status: { _eq: 'published' },
+    is_current_version: { _eq: true },
+    visibility: { _eq: 'public' },
+  };
+
+  // Query 1: Fetch parent document
+  const { data: parent } = await useAsyncData(
+    `document-${slug}`,
+    () => useDirectus(
+      readItems('knowledge_documents', {
+        filter: {
+          ...baseFilter,
+          slug: { _eq: slug },
+          parent_document_id: { _null: true }, // Only root/parent documents
+        },
+        fields: ['id', 'title', 'slug', 'content', 'summary', 'category', 'language', 'tags'],
+        limit: 1,
+      })
+    ),
+    { transform: (data) => data[0] }
+  );
+
+  // Query 2: Fetch children (if parent exists)
+  const { data: children } = await useAsyncData(
+    `document-${slug}-children`,
+    () => {
+      if (!parent.value?.id) return [];
+
+      return useDirectus(
+        readItems('knowledge_documents', {
+          filter: {
+            ...baseFilter,
+            parent_document_id: { _eq: parent.value.id },
+          },
+          fields: ['id', 'title', 'slug', 'content', 'summary', 'child_order'],
+          sort: ['child_order'], // Order by child_order ASC
+        })
+      );
+    },
+    { watch: [parent] }
+  );
+
+  return {
+    parent,
+    children,
+    isHierarchical: computed(() => (children.value?.length ?? 0) > 0),
+  };
+};
+```
+
+**Display Pattern** (Nuxt page):
+```vue
+<template>
+  <div v-if="parent" class="document-container">
+    <!-- Parent document -->
+    <article class="parent-doc">
+      <h1>{{ parent.title }}</h1>
+      <div v-html="parent.content"></div>
+    </article>
+
+    <!-- Children sections (if any) -->
+    <nav v-if="isHierarchical" class="child-nav">
+      <h2>Sections</h2>
+      <ul>
+        <li v-for="child in children" :key="child.id">
+          <a :href="`#section-${child.slug}`">{{ child.title }}</a>
+        </li>
+      </ul>
+    </nav>
+
+    <div v-if="isHierarchical" class="children-sections">
+      <article
+        v-for="child in children"
+        :key="child.id"
+        :id="`section-${child.slug}`"
+        class="child-section"
+      >
+        <h2>{{ child.title }}</h2>
+        <div v-html="child.content"></div>
+      </article>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+const route = useRoute();
+const { parent, children, isHierarchical } = await useHierarchicalDocument(route.params.slug as string);
+</script>
+```
+
+**Query Performance**:
+- **Query 1** (parent): Uses `idx_current_published` + slug lookup → <50ms
+- **Query 2** (children): Uses `idx_parent_child_hierarchy` + published filter → <50ms
+- **Total**: ~100ms for parent + children (acceptable for SSR/ISR)
+
+**Filter Combination with Taxonomy** (Tasks 0036/0037):
+- Add taxonomy filters (`category`, `tags`, `language`) to baseFilter as needed
+- Parent and children will both respect same taxonomy constraints
+- Example: fetch parent + children where `category='Law'` AND `language='vn'`
+
+**URL Strategy**:
+- **Option A (Flat)**: `/knowledge/:slug` - fetch parent, check for children, render both
+- **Option B (Explicit child)**: `/knowledge/:parent_slug/:child_slug` - direct child navigation
+- **Recommendation**: Use Option A for simplicity; anchor links `#section-{child_slug}` for navigation within page
 
 ### 6.3 Agent Data Integration (Task 0048)
 
@@ -541,25 +756,159 @@ if (payload.workflow_status === 'published' && payload.is_current_version === tr
 ### 0047C: Directus Schema Migration + RBAC
 
 **Deliverables**:
-1. SQL migration script to add 11 new fields to `knowledge_documents`
+1. SQL migration script to add 13 new fields to `knowledge_documents` (11 workflow/versioning + 2 parent-child)
 2. Data migration script to populate `version_group_id`, `version_number` from existing `id`, `version`
 3. Default values: Set `workflow_status` based on old `status`, `is_current_version=TRUE` for all (assume all existing docs are "current")
-4. Directus RBAC configuration:
+4. **Parent-Child migration** (see subsection below)
+5. Directus RBAC configuration:
    - Create 3 roles: `agent`, `editor`, `admin`
    - Set permissions per role matrix (Section 3.3)
    - Deny Agents from UPDATE/DELETE on `knowledge_documents`
-5. Create indexes (Section 4.3)
-6. Enable Content Versioning on `knowledge_documents` collection in Directus settings
-7. Testing: Verify role permissions, query performance
+6. Create indexes (Section 4.3, including new `idx_parent_child_hierarchy`)
+7. Enable Content Versioning on `knowledge_documents` collection in Directus settings
+8. Testing: Verify role permissions, query performance, parent-child hierarchy queries
 
 **Risks**:
 - Data migration may fail if existing data has integrity issues (duplicate `id`, missing `version`)
 - RBAC misconfiguration could block legitimate users or allow unauthorized actions
+- Legacy documents may need manual review to identify parent-child relationships
 
 **Mitigation**:
 - Dry-run migration on staging environment first
 - Backup database before migration
 - Test RBAC with all 3 roles before deploying to prod
+
+#### 0047C.1 Parent-Child Migration Strategy
+
+**Goal**: Onboard existing documents without data loss, assigning parent-child relationships where applicable.
+
+**Approach**: Semi-automated with manual review option.
+
+**Step 1: Identify Legacy Parent-Child Candidates**
+
+**Heuristics** to detect potential parent-child groups in legacy data:
+1. **Naming convention**: Documents with titles like "Policy ABC - Part 1", "Policy ABC - Part 2" → likely children of "Policy ABC"
+2. **Metadata tags**: Documents with same `category` + similar `tags` + sequential suffixes → potential siblings
+3. **Content ref**: If legacy schema has `content_ref` or `parent_ref` field → direct indicator
+4. **Manual curation list**: Admin provides CSV/JSON mapping: `{parent_id: [child_id_1, child_id_2, ...]}`
+
+**Implementation** (SQL + script):
+```sql
+-- Example: detect documents with pattern "XXX - Part N"
+SELECT
+  id,
+  title,
+  REGEXP_REPLACE(title, ' - Part [0-9]+$', '') AS potential_parent_title
+FROM knowledge_documents
+WHERE title LIKE '% - Part %'
+  AND workflow_status = 'published';
+```
+
+**Step 2: Assign parent_document_id & child_order**
+
+**Manual Review Required**:
+- Generate candidate report (CSV/JSON) from Step 1
+- Admin reviews and confirms/edits parent-child mappings
+- Import validated mappings into staging table: `parent_child_migration_mapping`
+
+**Automated Assignment**:
+```sql
+-- For each confirmed parent-child group in migration mapping:
+-- 1. Identify/create parent document (if title-based, find or create parent)
+-- 2. Update children with parent_document_id and child_order
+
+UPDATE knowledge_documents
+SET
+  parent_document_id = (SELECT parent_id FROM parent_child_migration_mapping WHERE child_id = knowledge_documents.id),
+  child_order = (SELECT child_order FROM parent_child_migration_mapping WHERE child_id = knowledge_documents.id)
+WHERE id IN (SELECT child_id FROM parent_child_migration_mapping);
+```
+
+**Step 3: Version Group Synchronization**
+
+**Rule**: Children must inherit `version_group_id` from parent.
+
+**Process**:
+```sql
+-- For each child document with parent_document_id set:
+-- Copy parent's version_group_id to child
+
+UPDATE knowledge_documents AS child
+SET version_group_id = (
+  SELECT parent.version_group_id
+  FROM knowledge_documents AS parent
+  WHERE parent.id = child.parent_document_id
+)
+WHERE child.parent_document_id IS NOT NULL;
+```
+
+**Step 4: Validate Integrity**
+
+**Validation Checks**:
+1. **No cycles**: Ensure no document is its own ancestor
+   ```sql
+   -- Check for cycles (should return 0 rows)
+   WITH RECURSIVE ancestry AS (
+     SELECT id, parent_document_id, 1 AS depth
+     FROM knowledge_documents
+     WHERE parent_document_id IS NOT NULL
+     UNION ALL
+     SELECT a.id, k.parent_document_id, a.depth + 1
+     FROM ancestry a
+     JOIN knowledge_documents k ON k.id = a.parent_document_id
+     WHERE a.depth < 10  -- Safety limit
+   )
+   SELECT id FROM ancestry WHERE id = parent_document_id;
+   ```
+
+2. **Unique child_order per parent**: Verify uniqueness constraint
+   ```sql
+   -- Check for duplicate child_order (should return 0 rows)
+   SELECT parent_document_id, child_order, COUNT(*)
+   FROM knowledge_documents
+   WHERE parent_document_id IS NOT NULL
+   GROUP BY parent_document_id, child_order
+   HAVING COUNT(*) > 1;
+   ```
+
+3. **Consistent version_group_id**: Children match parent
+   ```sql
+   -- Check version_group_id mismatch (should return 0 rows)
+   SELECT child.id, child.version_group_id, parent.version_group_id
+   FROM knowledge_documents child
+   JOIN knowledge_documents parent ON parent.id = child.parent_document_id
+   WHERE child.version_group_id != parent.version_group_id;
+   ```
+
+4. **No orphans**: All children have valid parent
+   ```sql
+   -- Check for orphaned children (should return 0 rows after cleanup)
+   SELECT id, parent_document_id
+   FROM knowledge_documents
+   WHERE parent_document_id IS NOT NULL
+     AND parent_document_id NOT IN (SELECT id FROM knowledge_documents);
+   ```
+
+**Step 5: Handle Edge Cases**
+
+**Edge Case 1**: Documents that can't be assigned parent-child
+- **Action**: Leave `parent_document_id = NULL`, `child_order = NULL` (treat as standalone)
+- **Rationale**: Better to have standalone docs than incorrect hierarchies
+
+**Edge Case 2**: Legacy multi-level hierarchies (grandchildren)
+- **Action**: Flatten to 1 level - promote grandchildren to be direct children of root parent
+- **Rationale**: Design limits depth to 1 level (Section 3.5)
+
+**Edge Case 3**: Documents with multiple potential parents
+- **Action**: Manual decision required; default to standalone if ambiguous
+- **Rationale**: Avoid duplicate/conflicting hierarchies
+
+**Deliverable**: Migration report documenting:
+- Total documents migrated
+- Number of parent-child groups created
+- Number of standalone documents
+- List of ambiguous cases requiring manual review
+- Validation check results (should all pass)
 
 ### 0047D: Nuxt UI Updates
 
@@ -651,21 +1000,25 @@ if (payload.workflow_status === 'published' && payload.is_current_version === tr
 - ✅ `knowledge_documents` is in Core Zone (SSOT for knowledge content)
 - ✅ Agents CANNOT UPDATE/DELETE Core Zone collections (enforced via RBAC in Task 0047C)
 - Agents can only CREATE new versions in Draft state; Editors/Admins handle approval/publishing
+- **Parent-Child Impact**: Adding `parent_document_id` and `child_order` fields to Core Zone collection is schema evolution, not violation. Agents still cannot write directly to Core; all parent-child assignments follow same Draft → Review → Publish workflow.
 
 **Điều 4: Directus as SSOT**
 - ✅ Directus `knowledge_documents` collection remains the SSOT for all knowledge content
 - Agent Data is a derived index (Growth Zone), not authoritative
 - Nuxt is a read-only consumer, not a data source
+- **Parent-Child Impact**: Hierarchical relationships (`parent_document_id`, `child_order`) are stored in Directus (SSOT), not Agent Data. Nuxt reads hierarchy from Directus API only (Section 6.2.2). No change to SSOT principle.
 
 **Điều 20: Versioning & Purge**
 - ✅ Max 10 revisions OR 7 days retention for unpublished (Section 5.1, Rule 1)
 - ✅ Auto-purge job implemented via Directus Flow or Cloud Function (Section 5.3)
 - ✅ Published/Archived current versions NEVER purged (Section 5.1, Rule 2)
+- **Parent-Child Impact**: Purge rules apply to entire family (parent + children) as a unit. When purging old versions, check `is_current_version` for BOTH parent and children. Purge logic must handle parent-child cascade (if parent version is purged, corresponding children versions are also purged to maintain consistency). No change to retention policy limits.
 
 **Điều 2: Assemble > Build**
 - ✅ Design leverages Directus native Content Versioning (not a custom system)
 - ✅ Purge job uses Directus Flows or Cloud Functions (standard GCP service)
 - No custom versioning engine or diff algorithm is built
+- **Parent-Child Impact**: Parent-child relationships use standard Directus foreign keys (self-FK) and native field types (UUID, Integer). No custom relationship engine required. Hierarchy queries use standard Directus API filters (`parent_document_id`, `child_order`). Fully aligned with "Assemble > Build" principle.
 
 ### 8.3 Task 0047 Requirements Compliance
 
@@ -691,6 +1044,10 @@ From `docs/Web_List_to_do_01.md`, Task 0047-VERSIONING-STRATEGY:
 | **R-004** | Query performance degrades with 10K+ documents | Medium | Medium | Load testing in Task 0047G; add more indexes if needed |
 | **R-005** | Rollback logic could fail if previous version is missing | Medium | Low | Enforce referential integrity for `previous_version_id`; add validation before rollback |
 | **R-006** | Agent Data indexing gets out of sync with Directus | Medium | Medium | Implement webhook retry logic; periodic sync job to reconcile mismatches |
+| **R-007** | Parent-child migration may create incorrect hierarchies from legacy data | Medium | Medium | Require manual review of auto-detected parent-child candidates (Section 7.0047C.1); validation checks before finalization |
+| **R-008** | Purge job may orphan children if parent is purged but children are not | High | Low | Implement cascade purge logic: when purging parent version, automatically purge all children versions with same `version_group_id` + `version_number` |
+| **R-009** | Performance degradation with deep queries (parent + many children) | Low | Medium | Limit children count per parent (recommend max 20); use `idx_parent_child_hierarchy` index; implement pagination for very large hierarchies |
+| **R-010** | Inconsistent state if parent Published but child fails validation | Medium | Low | Enforce atomic state transitions for entire family (parent + children) via DB transaction; rollback all if any member fails |
 
 ### 9.2 Open Questions
 
