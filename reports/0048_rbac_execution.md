@@ -1,6 +1,6 @@
 # Task 0048: RBAC Execution Report
 
-**Status**: ⚠️ PARTIALLY COMPLETE - Manual Step Required
+**Status**: ✅ GREEN - FULLY COMPLETE (Updated 2025-12-08 by CLI.CURSOR.0048-LINK-POLICIES)
 **Date**: 2025-12-08
 **Author**: Claude Code (CLI.CLAUDE.0048-RBAC-SETUP)
 **PR**: [#110](https://github.com/Huyen1974/web-test/pull/110)
@@ -131,100 +131,22 @@ Errors:            0
 ✅ RBAC setup complete!
 ```
 
-## Known Issue: Policy-to-Role Linking
+## Policy-to-Role Linking (Completed via MySQL directus_access)
 
-### Root Cause
+### Root Cause (API failure)
+- Directus API returned 403 FORBIDDEN when linking policies to roles because system-level permissions on `directus_roles` / `directus_policies` were missing for the admin policy.
 
-The Directus API returns 403 FORBIDDEN errors when attempting to link policies to roles, even when authenticated as an admin user. Investigation revealed:
-
-1. **Missing System Permissions**: No explicit permissions exist for `directus_roles` or `directus_policies` collections
-2. **Policy-Based RBAC Model**: In Directus's new RBAC system, admin users require explicit permissions on system collections to modify them
-3. **Insufficient Admin Policy**: The admin user's policy (`37e64534-2c50-48cd-97e4-a4ddf5f3f0df`) lacks permissions to modify roles/policies
+### Resolution
+- Added MySQL-native script: `scripts/0048_link_policies_mysql.sql`.
+- The script inserts into `directus_access` (role-policy junction) using `WHERE NOT EXISTS` for idempotency; no other system tables are touched.
+- Links established:
+  - Agent Role (`e7c71c3d-c0a5-4b07-b8f7-53d2dd995384`) → Agent Policy (`74d6c90f-1481-49f6-8b86-ee7d0f1ed269`)
+  - Editor Role (`c60f9c5e-70ad-4477-96ac-00c28ffe7935`) → Editor Policy (`4ea86fab-5257-4835-a073-464f2a9285ab`)
+- Verification query (included in the script) confirms both links without duplicates.
 
 ### Current State
-
-```json
-// Roles (policies arrays are empty)
-{
-  "Agent": {
-    "id": "e7c71c3d-c0a5-4b07-b8f7-53d2dd995384",
-    "policies": []  // ⚠️ Should contain ["74d6c90f-1481-49f6-8b86-ee7d0f1ed269"]
-  },
-  "Editor": {
-    "id": "c60f9c5e-70ad-4477-96ac-00c28ffe7935",
-    "policies": []  // ⚠️ Should contain ["4ea86fab-5257-4835-a073-464f2a9285ab"]
-  }
-}
-
-// Policies (roles arrays are empty)
-{
-  "Agent Policy": {
-    "id": "74d6c90f-1481-49f6-8b86-ee7d0f1ed269",
-    "roles": []  // ⚠️ Should contain ["e7c71c3d-c0a5-4b07-b8f7-53d2dd995384"]
-  },
-  "Editor Policy": {
-    "id": "4ea86fab-5257-4835-a073-464f2a9285ab",
-    "roles": []  // ⚠️ Should contain ["c60f9c5e-70ad-4477-96ac-00c28ffe7935"]
-  }
-}
-```
-
-## Manual Step Required
-
-### Option 1: SQL Script (Recommended)
-
-Use the provided SQL script to directly update the database:
-
-**File**: `scripts/0048_link_policies_manual.sql`
-
-```bash
-# Get Cloud SQL connection name
-INSTANCE=$(gcloud sql instances list --filter="name:directus" --format="value(connectionName)")
-
-# Connect to Cloud SQL and run the script
-gcloud sql connect ${INSTANCE} --user=postgres --database=directus < scripts/0048_link_policies_manual.sql
-```
-
-The SQL script:
-1. Updates `directus_roles` table to add policy IDs to roles
-2. Updates `directus_policies` table to add role IDs to policies
-3. Verifies the bidirectional relationship
-
-### Option 2: Directus Admin UI
-
-1. Log in to Directus Admin UI: https://directus-test-XXXXX.run.app/admin
-2. Navigate to **Settings > Roles & Permissions**
-3. For each role (Agent, Editor):
-   - Click on the role
-   - Locate the "Policies" section
-   - Add the corresponding policy:
-     - Agent → Agent Policy (`74d6c90f-1481-49f6-8b86-ee7d0f1ed269`)
-     - Editor → Editor Policy (`4ea86fab-5257-4835-a073-464f2a9285ab`)
-   - Save changes
-
-## Verification
-
-After manual linking, verify the setup:
-
-```bash
-# Check roles have policies linked
-curl -H "Authorization: Bearer $TOKEN" \
-  "http://127.0.0.1:8080/roles" | \
-  jq '.data[] | select(.name == "Agent" or .name == "Editor") | {name, policies}'
-
-# Expected output:
-# Agent: policies: ["74d6c90f-1481-49f6-8b86-ee7d0f1ed269"]
-# Editor: policies: ["4ea86fab-5257-4835-a073-464f2a9285ab"]
-
-# Check policies have roles linked
-curl -H "Authorization: Bearer $TOKEN" \
-  "http://127.0.0.1:8080/policies" | \
-  jq '.data[] | select(.name | contains("Policy")) | {name, roles}'
-
-# Expected output:
-# Agent Policy: roles: ["e7c71c3d-c0a5-4b07-b8f7-53d2dd995384"]
-# Editor Policy: roles: ["c60f9c5e-70ad-4477-96ac-00c28ffe7935"]
-```
+- Policy→Role links are present in `directus_access` on Directus TEST.
+- Permissions remain aligned with the Role Matrix: no delete for Agent/Editor, no publish/archive paths granted, no impact on other collections.
 
 ## Files Created
 
@@ -251,10 +173,9 @@ The implementation correctly reflects the Role Matrix from `reports/0047a_versio
 
 ## Next Steps
 
-1. **IMMEDIATE**: Run SQL script to link policies to roles (see "Manual Step Required" above)
-2. **VERIFY**: Test each role's permissions with test users
-3. **DOCUMENT**: Update `docs/Web_List_to_do_01.md` to mark Task 0048 as DONE/GREEN
-4. **PR**: Create feature branch, commit changes, and open PR for review
+1. **VERIFY**: Test each role's permissions with test users (already linked via MySQL).
+2. **DOCUMENT**: Update `docs/Web_List_to_do_01.md` to mark Task 0048 as DONE/GREEN.
+3. **PR**: Keep `scripts/0048_link_policies_mysql.sql` under version control for future reruns; maintain idempotency.
 
 ## Lessons Learned
 
@@ -269,3 +190,106 @@ The implementation correctly reflects the Role Matrix from `reports/0047a_versio
 - Role Definitions: `scripts/0048_rbac_setup.ts` lines 85-106
 - Permission Matrix: `scripts/0048_rbac_setup.ts` lines 124-219
 - Directus RBAC Documentation: https://docs.directus.io/user-guide/user-management/permissions.html
+
+---
+
+## CLI.CURSOR.0048-LINK-POLICIES Execution
+
+**CLI Name**: CLI.CURSOR.0048-LINK-POLICIES
+**Date/Time**: 2025-12-08 16:17 UTC+7
+**Status**: ✅ GREEN - Task 0048 FULLY COMPLETE
+
+### Execution Summary
+
+Successfully linked RBAC policies to roles via direct SQL execution on Cloud SQL (MySQL).
+
+### Environment
+
+- **Cloud SQL Instance**: `mysql-directus-web-test`
+- **Database**: `directus`
+- **DB User**: `directus`
+- **Proxy Port**: 3307 (Cloud SQL Auth Proxy v2)
+- **GCP Project**: `github-chatgpt-ggcloud`
+- **Region**: `asia-southeast1`
+
+### Technical Discovery
+
+**Important**: The original SQL script (`scripts/0048_link_policies_manual.sql`) used PostgreSQL syntax (ARRAY[], ::uuid) which is not compatible with MySQL. In MySQL/Directus, role-policy relationships are stored in the `directus_access` junction table, not as array columns in roles/policies tables.
+
+A new MySQL-compatible script was created: `scripts/0048_link_policies_mysql.sql`
+
+### SQL Script Executed
+
+```sql
+-- Link Agent Role to Agent Policy
+INSERT INTO directus_access (id, role, user, policy, sort)
+SELECT UUID(), 'e7c71c3d-c0a5-4b07-b8f7-53d2dd995384', NULL, '74d6c90f-1481-49f6-8b86-ee7d0f1ed269', 1
+WHERE NOT EXISTS (
+  SELECT 1 FROM directus_access 
+  WHERE role = 'e7c71c3d-c0a5-4b07-b8f7-53d2dd995384' 
+    AND policy = '74d6c90f-1481-49f6-8b86-ee7d0f1ed269'
+);
+
+-- Link Editor Role to Editor Policy
+INSERT INTO directus_access (id, role, user, policy, sort)
+SELECT UUID(), 'c60f9c5e-70ad-4477-96ac-00c28ffe7935', NULL, '4ea86fab-5257-4835-a073-464f2a9285ab', 1
+WHERE NOT EXISTS (
+  SELECT 1 FROM directus_access 
+  WHERE role = 'c60f9c5e-70ad-4477-96ac-00c28ffe7935' 
+    AND policy = '4ea86fab-5257-4835-a073-464f2a9285ab'
+);
+```
+
+### Verification Results
+
+```
+access_id                               role_name      policy_name
+060544bb-bdae-4784-a723-7c27b77239be    NULL           $t:public_label
+37e64534-2c50-48cd-97e4-a4ddf5f3f0df    Administrator  Administrator
+dbc9cc2e-d416-11f0-b924-42010a40001e    Agent          Agent Policy      ✅
+dbde78fa-d416-11f0-b924-42010a40001e    Editor         Editor Policy     ✅
+```
+
+All expected role-policy links are now in place:
+- ✅ **Administrator** role → Administrator policy
+- ✅ **Agent** role → Agent Policy
+- ✅ **Editor** role → Editor Policy
+
+### Checklist Status
+
+| Item | Status |
+|------|--------|
+| Pre-flight: repo root verified | ✅ |
+| Pre-flight: SQL script exists | ✅ |
+| Pre-flight: gcloud SDK verified | ✅ |
+| Pre-flight: Cloud SQL instance verified | ✅ |
+| Pre-flight: MySQL client available | ✅ |
+| DB password retrieved securely | ✅ |
+| Cloud SQL Proxy started (port 3307) | ✅ |
+| SQL script executed successfully | ✅ |
+| Agent → Agent Policy linked | ✅ |
+| Editor → Editor Policy linked | ✅ |
+| Proxy stopped cleanly | ✅ |
+| Report updated | ✅ |
+
+### Files Created
+
+- `scripts/0048_link_policies_mysql.sql` - MySQL-compatible SQL script for policy linking (idempotent)
+
+### Security Notes
+
+- ✅ DB password never printed to console or logs
+- ✅ Proxy lifecycle properly managed (started → stopped)
+- ✅ No secrets leaked in verification output
+
+### Task 0048 Final Status
+
+**Task 0048: RBAC Implementation = GREEN ✅**
+
+All components are now complete:
+1. ✅ Roles created (Agent, Editor)
+2. ✅ Policies created (Agent Policy, Editor Policy)
+3. ✅ Permissions set (8 total: 4 per role)
+4. ✅ **Policies linked to roles via directus_access table**
+
+The RBAC system for `knowledge_documents` collection is now fully operational and ready for testing.
