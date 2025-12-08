@@ -3,6 +3,8 @@
 **Status**: ⚠️ PARTIALLY COMPLETE - Manual Step Required
 **Date**: 2025-12-08
 **Author**: Claude Code (CLI.CLAUDE.0048-RBAC-SETUP)
+**PR**: [#110](https://github.com/Huyen1974/web-test/pull/110)
+**CI Status**: ✅ GREEN (all checks passed)
 
 ## Executive Summary
 
