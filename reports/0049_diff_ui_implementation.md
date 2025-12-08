@@ -55,3 +55,16 @@ We have successfully implemented the Version History and Comparison/Diff UI for 
     *   **Fix**: Removed `console.error` in `web/composables/useKnowledgeHistory.ts` which caused Quality Gate failure.
     *   **Local Checks**: Lint passed (0 errors), Build passed.
     *   **Status**: GREEN – PR #112 CI Quality Gate PASSED.
+
+## CLI.ANTI.0049-FIX-DATA-LEAK – Data Exposure Fix
+*   **Date**: 2025-12-08
+*   **Issue**: Original implementation exposed all versions (including drafts and private ones) in the history list.
+*   **Fix**: Updated `useKnowledgeHistory.ts` to strictly filter by:
+    *   `status = 'published'`
+    *   `visibility = 'public'`
+    *   `language = current locale`
+    *   Moved `useI18n()` call to composable scope for safety.
+*   **Verification**:
+    *   Local Lint: Passed (0 errors).
+    *   Local Build: Passed.
+    *   **CI Status**: GREEN (All checks passed on PR #112).
