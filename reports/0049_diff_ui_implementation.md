@@ -47,3 +47,11 @@ We have successfully implemented the Version History and Comparison/Diff UI for 
 ## Next Steps
 *   Codex to review and merge PR.
 *   Future: Implement "Restore Version" (out of scope for 0049) using this UI foundation.
+
+## CLI.ANTI.0049-FIX-CI – CI correction summary
+*   **Date**: 2025-12-08
+*   **Rounds**: 1
+*   **Round 1**:
+    *   **Fix**: Removed `console.error` in `web/composables/useKnowledgeHistory.ts` which caused Quality Gate failure.
+    *   **Local Checks**: Lint passed (0 errors), Build passed.
+    *   **Status**: GREEN – PR #112 CI Quality Gate PASSED.
