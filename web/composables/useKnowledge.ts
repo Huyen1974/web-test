@@ -1,12 +1,6 @@
 import { readItems } from '@directus/sdk';
-import type {
-	KnowledgeCard,
-	KnowledgeListEntry,
-	KnowledgeList,
-	Language,
-	DIRECTUS_TO_VIEW_MODEL_MAPPING,
-	ZONE_MAPPING,
-} from '~/types/view-model-0032';
+import type { KnowledgeCard, KnowledgeListEntry, KnowledgeList, Language } from '~/types/view-model-0032';
+import { DIRECTUS_TO_VIEW_MODEL_MAPPING, ZONE_MAPPING } from '~/types/view-model-0032';
 import type { Category } from '~/types/view-model-0032';
 
 /**
@@ -42,7 +36,7 @@ function mapToListEntry(doc: any): KnowledgeListEntry {
 /**
  * Map raw Directus document to KnowledgeCard
  */
-function mapToCard(doc: any): KnowledgeCard {
+export function mapToCard(doc: any): KnowledgeCard {
 	const zone = ZONE_MAPPING[doc.category as Category] || 'Other';
 	const subZone = doc.tags?.[0] || 'General';
 	const topics = doc.tags?.slice(1) || [];
@@ -60,6 +54,7 @@ function mapToCard(doc: any): KnowledgeCard {
 		subZone,
 		topics,
 		readTime,
+		content: doc.content,
 		// Approval metadata (Task 0035)
 		status: doc.status || 'draft',
 		updatedBy: doc.user_updated || null,
