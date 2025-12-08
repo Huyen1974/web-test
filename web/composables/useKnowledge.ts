@@ -31,6 +31,11 @@ function mapToListEntry(doc: any): KnowledgeListEntry {
 		// Approval metadata (Task 0035)
 		status: doc.status || 'draft',
 		updatedAt: doc.date_updated || null,
+		// Workflow & Versioning fields (Task 0047C)
+		workflowStatus: doc.workflow_status,
+		versionNumber: doc.version_number,
+		isCurrentVersion: doc.is_current_version,
+		childOrder: doc.child_order || null,
 	};
 }
 
@@ -59,6 +64,21 @@ function mapToCard(doc: any): KnowledgeCard {
 		status: doc.status || 'draft',
 		updatedBy: doc.user_updated || null,
 		updatedAt: doc.date_updated || null,
+		// Workflow & Versioning fields (Task 0047C)
+		workflowStatus: doc.workflow_status,
+		versionGroupId: doc.version_group_id,
+		versionNumber: doc.version_number,
+		isCurrentVersion: doc.is_current_version,
+		previousVersionId: doc.previous_version_id || null,
+		reviewedBy: doc.reviewed_by || null,
+		reviewedAt: doc.reviewed_at || null,
+		approvedBy: doc.approved_by || null,
+		approvedAt: doc.approved_at || null,
+		publisherId: doc.publisher_id || null,
+		rejectionReason: doc.rejection_reason || null,
+		purgeAfter: doc.purge_after || null,
+		parentDocumentId: doc.parent_document_id || null,
+		childOrder: doc.child_order || null,
 	};
 }
 
@@ -82,6 +102,7 @@ export async function useKnowledgeList(options: KnowledgeListOptions = {}): Prom
 		status: { _eq: 'published' },
 		visibility: { _eq: 'public' },
 		language: { _eq: language },
+		is_current_version: { _eq: true }, // Task 0047C: Only show current versions
 	};
 
 	// Add zone filter (maps to category)
@@ -114,6 +135,11 @@ export async function useKnowledgeList(options: KnowledgeListOptions = {}): Prom
 					'language',
 					'status',
 					'date_updated',
+					// Task 0047C: Workflow & Versioning fields
+					'workflow_status',
+					'version_number',
+					'is_current_version',
+					'child_order',
 				],
 			}),
 		);
@@ -166,6 +192,7 @@ export async function useKnowledgeDetail(identifier: string): Promise<KnowledgeC
 		const filter: any = {
 			status: { _eq: 'published' },
 			visibility: { _eq: 'public' },
+			is_current_version: { _eq: true }, // Task 0047C: Only show current versions
 		};
 
 		if (isUuid) {

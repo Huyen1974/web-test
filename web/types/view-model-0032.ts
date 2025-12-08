@@ -27,6 +27,21 @@ export interface KnowledgeCard {
 	status: ContentStatus;
 	updatedBy?: string | null;
 	updatedAt?: string | null;
+	// Workflow & Versioning fields (Task 0047C)
+	workflowStatus?: string;
+	versionGroupId?: string;
+	versionNumber?: number;
+	isCurrentVersion?: boolean;
+	previousVersionId?: string | null;
+	reviewedBy?: string | null;
+	reviewedAt?: string | null;
+	approvedBy?: string | null;
+	approvedAt?: string | null;
+	publisherId?: string | null;
+	rejectionReason?: string | null;
+	purgeAfter?: string | null;
+	parentDocumentId?: string | null;
+	childOrder?: number | null;
 }
 
 export interface KnowledgeListEntry {
@@ -43,6 +58,11 @@ export interface KnowledgeListEntry {
 	// Approval metadata (Task 0035)
 	status: ContentStatus;
 	updatedAt?: string | null;
+	// Workflow & Versioning fields (Task 0047C)
+	workflowStatus?: string;
+	versionNumber?: number;
+	isCurrentVersion?: boolean;
+	childOrder?: number | null;
 }
 
 export interface KnowledgeList {
@@ -110,6 +130,21 @@ export const DIRECTUS_TO_VIEW_MODEL_MAPPING = {
 		status: 'status',
 		updatedBy: 'user_updated',
 		updatedAt: 'date_updated',
+		// Workflow & Versioning fields (Task 0047C)
+		workflowStatus: 'workflow_status',
+		versionGroupId: 'version_group_id',
+		versionNumber: 'version_number',
+		isCurrentVersion: 'is_current_version',
+		previousVersionId: 'previous_version_id',
+		reviewedBy: 'reviewed_by',
+		reviewedAt: 'reviewed_at',
+		approvedBy: 'approved_by',
+		approvedAt: 'approved_at',
+		publisherId: 'publisher_id',
+		rejectionReason: 'rejection_reason',
+		purgeAfter: 'purge_after',
+		parentDocumentId: 'parent_document_id',
+		childOrder: 'child_order',
 	},
 
 	knowledgeListEntry: {
@@ -126,6 +161,11 @@ export const DIRECTUS_TO_VIEW_MODEL_MAPPING = {
 		// Approval metadata (Task 0035)
 		status: 'status',
 		updatedAt: 'date_updated',
+		// Workflow & Versioning fields (Task 0047C)
+		workflowStatus: 'workflow_status',
+		versionNumber: 'version_number',
+		isCurrentVersion: 'is_current_version',
+		childOrder: 'child_order',
 	},
 } as const;
 

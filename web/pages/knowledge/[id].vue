@@ -118,10 +118,24 @@ useServerSeoMeta({
 
 				<!-- Header -->
 				<header class="pb-6 mb-6 border-b border-gray-300 dark:border-gray-700">
-					<!-- Zone Badge -->
-					<div class="mb-3">
+					<!-- Zone & Status Badges -->
+					<div class="flex items-center gap-2 mb-3">
 						<span class="px-3 py-1 text-sm font-semibold rounded bg-primary-100 text-primary-800">
 							{{ document.zone }}
+						</span>
+						<!-- Workflow Status Badge (Task 0047C) -->
+						<span
+							v-if="document.workflowStatus"
+							:class="{
+								'px-3 py-1 text-sm font-semibold rounded': true,
+								'bg-green-100 text-green-800': document.workflowStatus === 'published',
+								'bg-blue-100 text-blue-800': document.workflowStatus === 'approved',
+								'bg-yellow-100 text-yellow-800': document.workflowStatus === 'under_review',
+								'bg-gray-100 text-gray-800':
+									document.workflowStatus === 'draft' || document.workflowStatus === 'archived',
+							}"
+						>
+							{{ document.workflowStatus.replace('_', ' ') }}
 						</span>
 					</div>
 
@@ -147,9 +161,16 @@ useServerSeoMeta({
 							<Icon name="heroicons:language" class="w-4 h-4" />
 							{{ document.language.toUpperCase() }}
 						</span>
-						<span v-if="document.version" class="flex items-center gap-1">
+						<!-- Version Number (Task 0047C) -->
+						<span v-if="document.versionNumber" class="flex items-center gap-1">
 							<Icon name="heroicons:document-duplicate" class="w-4 h-4" />
-							v{{ document.version }}
+							v{{ document.versionNumber }}
+							<span
+								v-if="document.isCurrentVersion"
+								class="px-1.5 py-0.5 text-xs font-semibold rounded bg-green-100 text-green-800"
+							>
+								current
+							</span>
 						</span>
 					</div>
 
