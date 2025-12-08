@@ -6,6 +6,7 @@ import type { KnowledgeCard } from '~/types/view-model-0032';
  * Fetch all versions of a document by version group ID
  */
 export async function useKnowledgeHistory(versionGroupId: string) {
+	const { locale } = useI18n();
 	return await useAsyncData(`history-${versionGroupId}`, async () => {
 		try {
 			if (!versionGroupId) return [];
@@ -14,8 +15,9 @@ export async function useKnowledgeHistory(versionGroupId: string) {
 				readItems('knowledge_documents', {
 					filter: {
 						version_group_id: { _eq: versionGroupId },
-						// We don't filter by is_current_version=true because we want ALL versions
-						status: { _neq: 'archived' }, // Optional: hide archived if desired, but requirements say "See all versions"
+						status: { _eq: 'published' },
+						visibility: { _eq: 'public' },
+						language: { _eq: locale.value },
 					},
 					sort: ['-version_number'], // Newest first
 					limit: 50, // Reasonable limit
