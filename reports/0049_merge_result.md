@@ -28,7 +28,7 @@
 - PR #112 checks: GREEN (build, Pass Gate, Quality Gate, E2E).
 
 ## Merge
-- Merged via `scripts/auto_merge_pr.sh 112`; merge commit: (see main log after merge).
+- Merged via `scripts/auto_merge_pr.sh 112`; merge commit on main: `9eed6d3`.
 - Task 0049 marked DONE in docs.
 
 ## Status
