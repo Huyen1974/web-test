@@ -256,17 +256,29 @@ useServerSeoMeta({
 									<span class="px-2 py-1 text-xs font-semibold rounded bg-primary-100 text-primary-800">
 										{{ item.zone }}
 									</span>
-									<!-- Approval Status Badge (Task 0035) -->
-									<span
-										:class="{
-											'px-2 py-1 text-xs font-semibold rounded': true,
-											'bg-green-100 text-green-800': item.status === 'published',
-											'bg-yellow-100 text-yellow-800': item.status === 'draft',
-											'bg-gray-100 text-gray-800': item.status === 'archived',
-										}"
-									>
-										{{ item.status === 'published' ? 'Published' : item.status === 'draft' ? 'Draft' : 'Archived' }}
-									</span>
+									<div class="flex items-center gap-2">
+										<!-- Workflow Status Badge (Task 0047C) -->
+										<span
+											v-if="item.workflowStatus"
+											:class="{
+												'px-2 py-1 text-xs font-semibold rounded': true,
+												'bg-green-100 text-green-800': item.workflowStatus === 'published',
+												'bg-blue-100 text-blue-800': item.workflowStatus === 'approved',
+												'bg-yellow-100 text-yellow-800': item.workflowStatus === 'under_review',
+												'bg-gray-100 text-gray-800':
+													item.workflowStatus === 'draft' || item.workflowStatus === 'archived',
+											}"
+										>
+											{{ item.workflowStatus.replace('_', ' ') }}
+										</span>
+										<!-- Version Number (Task 0047C) -->
+										<span
+											v-if="item.versionNumber"
+											class="px-2 py-1 text-xs font-semibold rounded bg-purple-100 text-purple-800"
+										>
+											v{{ item.versionNumber }}
+										</span>
+									</div>
 								</div>
 
 								<!-- Title -->
