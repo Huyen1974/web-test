@@ -23,6 +23,7 @@ export interface KnowledgeCard {
 	subZone: string;
 	topics: string[];
 	readTime: number;
+	content?: string;
 	// Approval metadata (Task 0035)
 	status: ContentStatus;
 	updatedBy?: string | null;

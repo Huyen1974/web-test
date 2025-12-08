@@ -1,8 +1,14 @@
 <script setup lang="ts">
-import type { KnowledgeCard, BreadcrumbItem } from '~/types/view-model-0032';
+import type { BreadcrumbItem } from '~/types/view-model-0032';
 
 const route = useRoute();
 const identifier = route.params.id as string;
+
+// State
+const viewMode = ref<'details' | 'history'>('details');
+const compareMode = ref(false);
+const selectedBaseVersionId = ref<string>('');
+const selectedTargetVersionId = ref<string>('');
 
 // Fetch knowledge document
 const {
@@ -12,6 +18,10 @@ const {
 } = await useAsyncData(`knowledge-${identifier}`, async () => {
 	return await useKnowledgeDetail(identifier);
 });
+
+// Fetch history when document is available
+const versionGroupId = computed(() => document.value?.versionGroupId);
+const { data: historyData, pending: historyPending } = await useKnowledgeHistory(versionGroupId.value || '');
 
 // Log page view when document is loaded
 watch(
@@ -30,6 +40,22 @@ watch(
 	},
 	{ immediate: true },
 );
+
+// Watch for history data to set default comparison values
+watch(historyData, (versions) => {
+	if (versions && versions.length >= 2) {
+		// Default: Compare current (first) with previous (second)
+		selectedTargetVersionId.value = versions[0].id;
+		selectedBaseVersionId.value = versions[1].id;
+	} else if (versions && versions.length === 1) {
+		selectedTargetVersionId.value = versions[0].id;
+		selectedBaseVersionId.value = versions[0].id;
+	}
+});
+
+// Comparison Content
+const baseVersion = computed(() => historyData.value?.find((v) => v.id === selectedBaseVersionId.value));
+const targetVersion = computed(() => historyData.value?.find((v) => v.id === selectedTargetVersionId.value));
 
 // Build breadcrumb
 const breadcrumb = computed<BreadcrumbItem[]>(() => {
@@ -184,10 +210,38 @@ useServerSeoMeta({
 							{{ topic }}
 						</span>
 					</div>
+
+					<!-- View Mode Tabs -->
+					<div class="flex items-center gap-4 mt-8 border-b border-gray-200 dark:border-gray-700">
+						<button
+							class="px-4 py-2 text-sm font-medium border-b-2 transition-colors duration-200"
+							:class="
+								viewMode === 'details'
+									? 'border-primary-600 text-primary-600'
+									: 'border-transparent text-gray-500 hover:text-gray-700'
+							"
+							@click="viewMode = 'details'"
+						>
+							<Icon name="heroicons:document-text" class="w-4 h-4 inline mr-1" />
+							Details
+						</button>
+						<button
+							class="px-4 py-2 text-sm font-medium border-b-2 transition-colors duration-200"
+							:class="
+								viewMode === 'history'
+									? 'border-primary-600 text-primary-600'
+									: 'border-transparent text-gray-500 hover:text-gray-700'
+							"
+							@click="viewMode = 'history'"
+						>
+							<Icon name="heroicons:clock" class="w-4 h-4 inline mr-1" />
+							Version History
+						</button>
+					</div>
 				</header>
 
 				<!-- Content Body -->
-				<div class="prose prose-gray dark:prose-invert max-w-none">
+				<div v-if="viewMode === 'details'" class="prose prose-gray dark:prose-invert max-w-none">
 					<!-- Note: In a real implementation, you would render the markdown/HTML content here -->
 					<!-- For now, showing a placeholder since we don't have content rendering setup -->
 					<div class="p-6 border border-gray-200 rounded-lg bg-gray-50 dark:bg-gray-800">
@@ -196,6 +250,151 @@ useServerSeoMeta({
 							Content rendering will be implemented with the actual document content from Directus.
 						</p>
 						<p class="mt-2 text-sm text-gray-500 dark:text-gray-500">Document ID: {{ document.id }}</p>
+						<!-- Added content specific logic placeholder from original file -->
+					</div>
+				</div>
+
+				<!-- History Body -->
+				<div v-else class="space-y-8">
+					<div v-if="historyPending" class="text-center py-8">
+						<div
+							class="inline-block w-8 h-8 border-4 border-gray-300 rounded-full border-t-primary-600 animate-spin"
+						></div>
+						<p class="mt-2 text-sm text-gray-500">Loading history...</p>
+					</div>
+					<div v-else-if="!historyData || historyData.length === 0" class="text-center py-8 text-gray-500">
+						No version history available.
+					</div>
+					<div v-else>
+						<!-- Comparison Controls -->
+						<div class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 mb-6">
+							<h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center justify-between">
+								<span>Compare Versions</span>
+								<button
+									class="text-xs text-primary-600 hover:text-primary-700 underline"
+									@click="compareMode = !compareMode"
+								>
+									{{ compareMode ? 'Hide Comparison' : 'Show Diff' }}
+								</button>
+							</h3>
+							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+								<div>
+									<label class="block text-xs text-gray-500 mb-1">Base Version (Older)</label>
+									<select
+										v-model="selectedBaseVersionId"
+										class="w-full text-sm border-gray-300 rounded-md shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600"
+									>
+										<option v-for="ver in historyData" :key="ver.id" :value="ver.id">
+											v{{ ver.versionNumber }} - {{ new Date(ver.publishedAt).toLocaleDateString() }} ({{
+												ver.workflowStatus
+											}})
+										</option>
+									</select>
+								</div>
+								<div>
+									<label class="block text-xs text-gray-500 mb-1">Target Version (Newer)</label>
+									<select
+										v-model="selectedTargetVersionId"
+										class="w-full text-sm border-gray-300 rounded-md shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600"
+									>
+										<option v-for="ver in historyData" :key="ver.id" :value="ver.id">
+											v{{ ver.versionNumber }} - {{ new Date(ver.publishedAt).toLocaleDateString() }} ({{
+												ver.workflowStatus
+											}})
+										</option>
+									</select>
+								</div>
+							</div>
+
+							<!-- Diff Component -->
+							<div v-if="compareMode && baseVersion && targetVersion" class="mt-6">
+								<h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Difference</h4>
+								<KnowledgeDiff
+									v-if="baseVersion.summary !== targetVersion.summary"
+									:old-text="baseVersion.summary || ''"
+									:new-text="targetVersion.summary || ''"
+									old-label="Base (Summary)"
+									new-label="Target (Summary)"
+									class="mb-4"
+								/>
+
+								<KnowledgeDiff
+									v-if="baseVersion.content !== targetVersion.content"
+									:old-text="baseVersion.content || ''"
+									:new-text="targetVersion.content || ''"
+									old-label="Base (Content)"
+									new-label="Target (Content)"
+									class="mb-4"
+								/>
+
+								<div
+									v-if="baseVersion.summary === targetVersion.summary && baseVersion.content === targetVersion.content"
+									class="text-sm text-gray-500 italic"
+								>
+									No textual differences detected in Summary or Content.
+								</div>
+							</div>
+						</div>
+
+						<!-- Version List -->
+						<div class="overflow-hidden border border-gray-200 dark:border-gray-700 rounded-lg">
+							<table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+								<thead class="bg-gray-50 dark:bg-gray-800">
+									<tr>
+										<th
+											scope="col"
+											class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+										>
+											Version
+										</th>
+										<th
+											scope="col"
+											class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+										>
+											Workflow
+										</th>
+										<th
+											scope="col"
+											class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+										>
+											Date
+										</th>
+										<th
+											scope="col"
+											class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+										>
+											Status
+										</th>
+									</tr>
+								</thead>
+								<tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
+									<tr
+										v-for="ver in historyData"
+										:key="ver.id"
+										class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+									>
+										<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+											v{{ ver.versionNumber }}
+										</td>
+										<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+											{{ ver.workflowStatus }}
+										</td>
+										<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+											{{ new Date(ver.publishedAt).toLocaleDateString() }}
+										</td>
+										<td class="px-6 py-4 whitespace-nowrap text-sm">
+											<span
+												v-if="ver.isCurrentVersion"
+												class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800"
+											>
+												Current
+											</span>
+											<span v-else class="text-gray-400 text-xs">History</span>
+										</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
 					</div>
 				</div>
 
