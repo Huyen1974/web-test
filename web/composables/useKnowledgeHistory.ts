@@ -27,7 +27,7 @@ export async function useKnowledgeHistory(versionGroupId: string) {
 
 			return items.map(mapToCard);
 		} catch (error) {
-			console.error('Error fetching history:', error);
+			// console.error('Error fetching history:', error);
 			return [];
 		}
 	});
