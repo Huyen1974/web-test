@@ -1,5 +1,7 @@
 # KẾ HOẠCH BỔ SUNG – TODO LIST
 
+Current Stable Version: v1.2.0 (Content Engine)
+
 Trục Nuxt ↔ Directus ↔ Agent Data ↔ Lark – Dùng Directus hiện tại làm Sandbox V0 (Theo ID bắt đầu từ 0026, kế thừa đề xuất Gemini, đã hiệu chỉnh theo vai trò “Cổng Tri Thức” và góp ý của Giám sát)
 
 I. Nguyên tắc chung
