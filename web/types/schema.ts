@@ -28,6 +28,7 @@ import type {
 import type { Page, PageBlock, Category, Form, Post, Team, Testimonial, PagesProjects, PagesBlog } from './content';
 import type { Inbox, HelpArticle, HelpCollection, HelpFeedback } from './help';
 import type { File, User } from './system';
+import type { ContentRequest, KnowledgeDocument } from './content-requests';
 import type {
 	Conversation,
 	Message,
@@ -144,6 +145,10 @@ export interface Schema {
 	// Data
 	metrics: Metric[];
 	events: Event[];
+
+	// E1: Content Operations (Growth Zone)
+	content_requests: ContentRequest[];
+	knowledge_documents: KnowledgeDocument[];
 
 	// System
 	directus_files: File[];
