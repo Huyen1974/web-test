@@ -174,6 +174,9 @@ async function updateField(token: string, collection: string, fieldDef: Directus
 			'Content-Type': 'application/json',
 		},
 		body: JSON.stringify({
+			// Explicitly set type and schema to ensure column matches PK type
+			type: fieldDef.type,
+			schema: fieldDef.schema,
 			meta: fieldDef.meta,
 		}),
 	});
@@ -280,18 +283,25 @@ async function runMigration(dryRun: boolean): Promise<MigrationResult> {
 		// Check if it's already configured as M2O
 		const isM2O = existingField.meta?.special?.includes('m2o');
 		const isCorrectInterface = existingField.meta?.interface === 'select-dropdown-m2o-tree-view';
+		const isTypeAligned =
+			existingField.type === 'integer' ||
+			existingField.schema?.data_type?.toLowerCase().includes('int');
 
-		if (isM2O && isCorrectInterface) {
-			console.log(`   ✓ Field is already configured as M2O with tree view`);
+		if (isM2O && isCorrectInterface && isTypeAligned) {
+			console.log(`   ✓ Field is already configured as M2O with tree view and integer type`);
 		} else {
-			console.log(`   ⚠ Field needs to be updated to M2O with tree view interface`);
+			console.log(`   ⚠ Field needs to be updated to M2O with tree view interface and integer type`);
 
 			if (dryRun) {
-				console.log(`   [DRY-RUN] Would update field ${M2O_FIELD_NAME} to M2O`);
+				console.log(`   [DRY-RUN] Would update field ${M2O_FIELD_NAME} to integer M2O`);
 			} else {
 				const updatedField: DirectusField = {
 					field: M2O_FIELD_NAME,
-					type: 'uuid',
+					// Align type with PK (int unsigned) to avoid FK incompatibility
+					type: 'integer',
+					schema: {
+						is_nullable: true,
+					},
 					meta: {
 						interface: 'select-dropdown-m2o-tree-view',
 						special: ['m2o'],

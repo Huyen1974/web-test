@@ -153,7 +153,7 @@ Full requirements: xem [docs/E1_Plan.md](docs/E1_Plan.md)
 
 | ID | Giai đoạn | Tên Task | Mục tiêu | Nội dung chính | Trạng thái |
 | --- | --- | --- | --- | --- | --- |
-| E1-01-SCHEMA-GROWTH | E1 | Config `content_requests` (Growth Zone) | SSOT vòng đời yêu cầu, tuân 3 Zones | Tạo collection `content_requests` (title, requirements, status enum, current_holder, created_at), liên kết `knowledge_documents` self-ref `parent_id`, permissions User edit/Agent qua system-bot token. | TODO |
+| E1-01-SCHEMA-GROWTH | E1 | Config `content_requests` (Growth Zone) | SSOT vòng đời yêu cầu, tuân 3 Zones | DONE (GREEN) – Collection `content_requests` + status enum + current_holder; self-ref folder tree on `knowledge_documents.parent_document_id` + children; RBAC Agent draft-only, Editor review-only, Admin full. Evidence: reports/E1-01_schema_growth_execution.md, PR #117/#118, migrations executed on Directus TEST. | DONE |
 | E1-02-FLOWS-BASIC | E1 | Setup Directus Flows Closed Loop | Trigger async Agent + log Revisions | Flow status=new → Webhook → Workflows → Pub/Sub (MCP v5.0) → Agent `/search` + draft; comment create → log Revisions; approve → publish/update status; idempotent retry. | TODO |
 | E1-03-DASHBOARD-QUEUES | E1 | Dashboard nhắc việc & SLA | Hiển thị “ai giữ bóng”, badge overdue | Directus Dashboards filter `current_holder` & status; metrics badge >24h; weekly CSV via Flow + Scheduler; reminder email trên threshold; no-code panels. | TODO |
 | E1-04-UI-NUXT-1TOUCH | E1 | Nuxt Approval Desk 1-chạm (read-only) | UX phê duyệt nhanh, trigger Flow | Page `/approval-desk`: embed Diff Revisions, inline comment form, nút `[Approve]/[Request Change]` gọi Flow/PubSub; My Tasks view; define view models + config map Directus/Agent Data. | TODO |
