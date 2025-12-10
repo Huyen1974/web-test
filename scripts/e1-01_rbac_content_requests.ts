@@ -594,7 +594,7 @@ async function main(): Promise<void> {
 
 		if (dryRun) {
 			console.log('\n✅ Dry-run complete. Run with --execute to apply changes.');
-			console.exit(0);
+			process.exit(0);
 		} else {
 			console.log('\n✅ RBAC setup complete!');
 			process.exit(0);
