@@ -164,6 +164,8 @@ Full requirements: xem [docs/E1_Plan.md](docs/E1_Plan.md)
 | E1-09-PROTOCOL-DOC | E1 | Chuẩn hoá envelope & conventions | Hợp đồng giao tiếp Directus ↔ Agents | Định nghĩa JSON envelope (request_id, content_request_id, correlation_id, idempotency_key, current_holder…); chữ ký comment `[Agent_Name]`; checklist bắt buộc trước draft; lưu docs. | TODO |
 | E1-10-DOCS-SYNC | E1 | (Post-E1) Google Docs Sync | Đồng bộ bản thảo → Google Docs | Khôi phục driveMiddleware + Flow trigger; field `google_doc_id` trong `knowledge_documents`; chỉ triển khai sau E1-01..09. | PENDING |
 
+Ghi chú: E1-07+ được giữ lại backlog, sẽ chuyển sang phase tiếp theo (không khóa trong phạm vi đóng E1 hiện tại).
+
 Giai đoạn F – Hạ tầng dài hạn (Định hướng, chưa làm ngay)
 
 ****       ****       ****       ****       ****       ****
