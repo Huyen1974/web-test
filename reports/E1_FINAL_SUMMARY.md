@@ -3,6 +3,7 @@
 - Ngày: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 - Main commit: $(git rev-parse HEAD)
 - Repo liên quan: web-test, agent-data-test
+- Correction (deploy): Cloud Run web-test live URL https://web-test-pfne2mqwja-as.a.run.app (root 302 → /approval-desk; key routes 200)
 
 ## 1. Phạm vi & Mục tiêu
 - E1 biến Content Engine thành Content Operations Floor: Directus làm SSOT, Agent Data xử lý draft, Nuxt là cổng đọc/duyệt.
