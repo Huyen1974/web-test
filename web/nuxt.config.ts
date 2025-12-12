@@ -25,6 +25,7 @@ export default defineNuxtConfig({
 	css: ['~/assets/css/tailwind.css', '~/assets/css/main.css'],
 
 	modules: [
+		'./modules/directus',
 		'@nuxt/image',
 		'@nuxt/ui', // https://ui.nuxt.com
 		'@nuxtjs/color-mode', // https://color-mode.nuxtjs.org
