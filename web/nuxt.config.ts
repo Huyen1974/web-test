@@ -64,7 +64,7 @@ export default defineNuxtConfig({
 	// Directus Configuration
 	directus: {
 		rest: {
-			baseUrl: process.env.DIRECTUS_URL || 'http://localhost:8055',
+			baseUrl: process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus-test-812872501910.asia-southeast1.run.app',
 			nuxtBaseUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
 		},
 		auth: {
@@ -93,7 +93,7 @@ export default defineNuxtConfig({
 	image: {
 		provider: 'directus',
 		directus: {
-			baseURL: `${process.env.DIRECTUS_URL}/assets/`,
+			baseURL: `${process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus-test-812872501910.asia-southeast1.run.app'}/assets/`,
 		},
 	},
 
