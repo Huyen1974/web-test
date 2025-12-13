@@ -22,8 +22,15 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
       - name: Install dependencies
-        run: npm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build project
-        run: npm run build
+        env:
+          NUXT_PUBLIC_DIRECTUS_URL: "https://directus-test-812872501910.asia-southeast1.run.app"
+        run: pnpm run build
