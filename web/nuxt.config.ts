@@ -3,6 +3,11 @@ import { theme } from './theme';
 
 export default defineNuxtConfig({
 	// https://nuxt.com/docs/api/configuration/nuxt-config
+	ssr: false,
+
+	nitro: {
+		preset: 'static',
+	},
 
 	routeRules: {
 		// '/**': {
@@ -35,7 +40,26 @@ export default defineNuxtConfig({
 		'@vueuse/motion/nuxt', // https://motion.vueuse.org/nuxt.html
 		'@vueuse/nuxt', // https://vueuse.org/
 		'@nuxt/icon', // https://github.com/nuxt-modules/icon
+		'@nuxtjs/i18n',
 	],
+
+	i18n: {
+		locales: [
+			{ code: 'vi', file: 'vi.json' },
+			{ code: 'en', file: 'en.json' },
+			{ code: 'ja', file: 'ja.json' },
+		],
+		lazy: true,
+		langDir: 'locales',
+		defaultLocale: 'vi',
+		strategy: 'no_prefix', // Or 'prefix_except_default' as per preference. 'no_prefix' for SPA is often simpler if language is state-based, but URL-based is better for SEO. Let's use 'no_prefix' effectively for this internal tool or 'prefix_except_default'. Plan says 'VN default'. Let's stick to simple first.
+		// Actually, plan says "switch lang /vi -> VN text", imply URL prefix? 
+		// "VN default, JA/EN ready". "switch lang /vi". 
+		// strategy: 'prefix_except_default' is best.
+		strategy: 'prefix_except_default',
+		detectBrowserLanguage: false,
+		vueI18n: './i18n.config.ts' // Optional, or inline. Let's start with basic.
+	},
 
 	experimental: {
 		componentIslands: true,
@@ -50,8 +74,18 @@ export default defineNuxtConfig({
 		// Public runtime config (exposed to client)
 		public: {
 			siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
+			directusUrl: process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'http://localhost:8055', // Added directusUrl
+			firebase: {
+				apiKey: process.env.NUXT_PUBLIC_FIREBASE_API_KEY,
+				authDomain: process.env.NUXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+				projectId: process.env.NUXT_PUBLIC_FIREBASE_PROJECT_ID,
+				storageBucket: process.env.NUXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+				messagingSenderId: process.env.NUXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+				appId: process.env.NUXT_PUBLIC_FIREBASE_APP_ID,
+				measurementId: process.env.NUXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+			},
 			directus: {
-				url: process.env.DIRECTUS_URL || 'http://localhost:8055',
+				url: process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'http://localhost:8055',
 				nuxtBaseUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
 			},
 			agentData: {
@@ -64,7 +98,7 @@ export default defineNuxtConfig({
 	// Directus module configuration
 	directus: {
 		rest: {
-			baseUrl: process.env.DIRECTUS_URL || 'http://localhost:8055',
+			baseUrl: process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'http://localhost:8055',
 			nuxtBaseUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
 		},
 		auth: {
@@ -97,7 +131,7 @@ export default defineNuxtConfig({
 	image: {
 		provider: 'directus',
 		directus: {
-			baseURL: `${process.env.DIRECTUS_URL}/assets/`,
+			baseURL: `${process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL}/assets/`,
 		},
 	},
 
@@ -110,6 +144,7 @@ export default defineNuxtConfig({
 
 	// OG Image Configuration - https://nuxtseo.com/og-image/getting-started/installation
 	ogImage: {
+		enabled: false,
 		defaults: {
 			component: 'OgImageTemplate',
 			width: 1200,
