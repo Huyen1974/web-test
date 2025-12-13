@@ -1,0 +1,26 @@
+{
+    "login": {
+        "title": "Đăng nhập",
+        "email": "Email",
+        "password": "Mật khẩu",
+        "submit": "Đăng nhập",
+        "forgot_password": "Quên mật khẩu?",
+        "google": "Đăng nhập bằng Google",
+        "no_account": "Chưa có tài khoản?"
+    },
+    "register": {
+        "title": "Đăng ký",
+        "submit": "Đăng ký",
+        "have_account": "Đã có tài khoản?"
+    },
+    "common": {
+        "loading": "Đang tải...",
+        "error": "Đã có lỗi xảy ra",
+        "success": "Thành công"
+    },
+    "admin": {
+        "users": {
+            "title": "Quản lý người dùng"
+        }
+    }
+}
