@@ -158,58 +158,66 @@ export default defineNuxtModule({
 		addImportsDir(composables);
 
 		// ** Build Logic **
-		const directus = createDirectus<Schema>(joinURL(nuxt.options.runtimeConfig.public.directus.rest.baseUrl)).with(
-			rest(),
-		);
+		// Skip Directus initialization during build/prerender for SPA mode
+		// All Directus calls will be handled client-side via plugins
+		if (!nuxt.options.ssr) {
+			log.info('Skipping Directus build-time initialization (SPA mode)');
+			// Set default title template
+			nuxt.options.app.head.titleTemplate = '%s - Agency OS';
+		} else if (moduleOptions.rest.baseUrl) {
+			const directus = createDirectus<Schema>(joinURL(nuxt.options.runtimeConfig.public.directus.rest.baseUrl)).with(
+				rest(),
+			);
 
-		// Handle Redirects
-		try {
-			const redirects = await directus.request(readItems('redirects'));
+			// Handle Redirects
+			try {
+				const redirects = await directus.request(readItems('redirects'));
 
-			if (redirects.length > 0) {
-				for (const redirect of redirects) {
-					let responseCode = redirect.response_code ? parseInt(redirect.response_code as any) : 301;
+				if (redirects.length > 0) {
+					for (const redirect of redirects) {
+						let responseCode = redirect.response_code ? parseInt(redirect.response_code as any) : 301;
 
-					if (responseCode !== 301 && responseCode !== 302) {
-						responseCode = 301;
+						if (responseCode !== 301 && responseCode !== 302) {
+							responseCode = 301;
+						}
+
+						// Add the redirect to the route rules
+						// https://nuxt.com/docs/guide/concepts/rendering#route-rules
+						extendRouteRules(redirect.url_old as string, {
+							redirect: {
+								to: redirect.url_new,
+								statusCode: responseCode as 301 | 302,
+							},
+						});
 					}
 
-					// Add the redirect to the route rules
-					// https://nuxt.com/docs/guide/concepts/rendering#route-rules
-					extendRouteRules(redirect.url_old as string, {
-						redirect: {
-							to: redirect.url_new,
-							statusCode: responseCode as 301 | 302,
-						},
-					});
-				}
+					log.success(`${redirects.length} Redirects loaded`);
 
-				log.success(`${redirects.length} Redirects loaded`);
-
-				for (const redirect of redirects) {
-					log.info(`  • ${redirect.response_code}`, `From: ${redirect.url_old}`, `To: ${redirect.url_new}`);
+					for (const redirect of redirects) {
+						log.info(`  • ${redirect.response_code}`, `From: ${redirect.url_old}`, `To: ${redirect.url_new}`);
+					}
 				}
+			} catch (error) {
+				log.warn('Unable to load redirects due to the following error');
+				log.error(error);
+				log.warn(`Please ensure the directus instance is reachable at ${moduleOptions.rest.baseUrl}.`);
 			}
-		} catch (error) {
-			log.warn('Unable to load redirects due to the following error');
-			log.error(error);
-			log.warn(`Please ensure the directus instance is reachable at ${moduleOptions.rest.baseUrl}.`);
-		}
 
-		try {
-			// Add Globals
-			const globals = await directus.request<Omit<Globals, 'id' | 'url'>>(readSingleton('globals'));
-			nuxt.options.appConfig.globals = defu(nuxt.options.appConfig.globals, globals);
-			log.success('Globals loaded into appConfig');
+			try {
+				// Add Globals
+				const globals = await directus.request<Omit<Globals, 'id' | 'url'>>(readSingleton('globals'));
+				nuxt.options.appConfig.globals = defu(nuxt.options.appConfig.globals, globals);
+				log.success('Globals loaded into appConfig');
 
-			// Add title template to the app head for use with useHead composable
-			nuxt.options.app.head.titleTemplate = `%s - ${globals?.title ?? 'Agency OS'}`;
-		} catch (error) {
-			nuxt.options.app.head.titleTemplate = '%s - Agency OS';
+				// Add title template to the app head for use with useHead composable
+				nuxt.options.app.head.titleTemplate = `%s - ${globals?.title ?? 'Agency OS'}`;
+			} catch (error) {
+				nuxt.options.app.head.titleTemplate = '%s - Agency OS';
 
-			log.warn('Unable to load redirects due to the following error');
-			log.error(error);
-			log.warn(`Please ensure the directus instance is reachable at ${moduleOptions.rest.baseUrl}.`);
+				log.warn('Unable to load globals due to the following error');
+				log.error(error);
+				log.warn(`Please ensure the directus instance is reachable at ${moduleOptions.rest.baseUrl}.`);
+			}
 		}
 
 		log.success(`Directus Module Loaded`);

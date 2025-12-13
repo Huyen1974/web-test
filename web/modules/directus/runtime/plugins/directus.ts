@@ -5,6 +5,9 @@ import type { Schema } from '~/types/schema';
 import { defineNuxtPlugin, useRoute, useRuntimeConfig } from '#imports';
 
 export default defineNuxtPlugin((nuxtApp) => {
+	// Skip on server during prerender/build
+	if (import.meta.server) return;
+
 	const route = useRoute();
 	const config = useRuntimeConfig();
 

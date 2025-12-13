@@ -5,6 +5,9 @@ import guest from '../middleware/guest';
 import { addRouteMiddleware, defineNuxtPlugin, useDirectusAuth, useRuntimeConfig, useState } from '#imports';
 
 export default defineNuxtPlugin(async () => {
+	// Skip on server during prerender/build
+	if (import.meta.server) return;
+
 	try {
 		const config = useRuntimeConfig().public.directus;
 
