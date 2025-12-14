@@ -4,6 +4,12 @@ Current Stable Version: v1.2.0 (Content Engine)
 
 Trục Nuxt ↔ Directus ↔ Agent Data ↔ Lark – Dùng Directus hiện tại làm Sandbox V0 (Theo ID bắt đầu từ 0026, kế thừa đề xuất Gemini, đã hiệu chỉnh theo vai trò “Cổng Tri Thức” và góp ý của Giám sát)
 
+## Cloud Run web-test status (2025-12-12)
+
+- URL: https://web-test-pfne2mqwja-as.a.run.app
+- Deployed: 2025-12-12 05:52 UTC (revision web-test-00004-7cl)
+- Health: `/` 302 → `/approval-desk`; `/approval-desk` 200; `/knowledge-tree` 200
+
 I. Nguyên tắc chung
 
 Chiến lược 3 Vùng Schema (Schema Zones) – NGUYÊN TẮC BẮT BUỘC

@@ -203,3 +203,4 @@ export function isKnowledgeCard(obj: any): obj is KnowledgeCard {
 export function isKnowledgeList(obj: any): obj is KnowledgeList {
 	return obj && Array.isArray(obj.items) && typeof obj.total === 'number';
 }
+

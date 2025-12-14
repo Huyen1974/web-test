@@ -3,11 +3,25 @@ import { theme } from './theme';
 
 export default defineNuxtConfig({
 	// https://nuxt.com/docs/api/configuration/nuxt-config
+	ssr: false,
+
+	nitro: {
+		prerender: {
+			crawlLinks: false,
+			routes: ['/'],
+		},
+	},
 
 	routeRules: {
-		// '/**': {
-		// 	prerender: true,
-		// },
+		'/admin/**': { prerender: false },
+		'/approval-desk': { prerender: false },
+		'/approval-desk/**': { prerender: false },
+		'/knowledge-tree': { prerender: false },
+		'/knowledge-tree/**': { prerender: false },
+		'/knowledge/**': { prerender: false },
+		'/profile': { prerender: false },
+		'/portal': { prerender: false },
+		'/portal/**': { prerender: false },
 	},
 
 	extends: [
@@ -42,46 +56,29 @@ export default defineNuxtConfig({
 	},
 
 	runtimeConfig: {
-		// Private runtime config (server-side only)
-		agentData: {
-			apiKey: process.env.AGENT_DATA_API_KEY || '',
-		},
-		// Public runtime config (exposed to client)
 		public: {
 			siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
-			directus: {
-				url: process.env.DIRECTUS_URL || 'http://localhost:8055',
-				nuxtBaseUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
-			},
-			agentData: {
-				baseUrl: process.env.NUXT_PUBLIC_AGENT_DATA_BASE_URL || '',
-				enabled: process.env.NUXT_PUBLIC_AGENT_DATA_ENABLED === 'true',
-			},
 		},
 	},
 
-	// Directus module configuration
+	// Directus Configuration
 	directus: {
 		rest: {
-			baseUrl: process.env.DIRECTUS_URL || 'http://localhost:8055',
+			baseUrl: process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus-test-812872501910.asia-southeast1.run.app',
 			nuxtBaseUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
 		},
 		auth: {
 			enabled: true,
-			enableGlobalAuthMiddleware: false,
-			userFields: ['*', { contacts: ['*'] }],
+			enableGlobalAuthMiddleware: false, // Enable auth middleware on every page
+			userFields: ['*', { contacts: ['*'] }], // Select user fields
 			redirect: {
-				login: '/auth/signin',
-				logout: '/',
-				home: '/portal',
-				resetPassword: '/auth/reset-password',
-				callback: '/auth/callback',
+				login: '/auth/signin', // Path to redirect when login is required
+				logout: '/', // Path to redirect after logout
+				home: '/portal', // Path to redirect after successful login
+				resetPassword: '/auth/reset-password', // Path to redirect for password reset
+				callback: '/auth/callback', // Path to redirect after login with provider
 			},
 		},
-	},
-
-	typescript: {
-		strict: false,
 	},
 
 	// Nuxt DevTools - https://devtools.nuxtjs.org/
@@ -96,7 +93,7 @@ export default defineNuxtConfig({
 	image: {
 		provider: 'directus',
 		directus: {
-			baseURL: `${process.env.DIRECTUS_URL}/assets/`,
+			baseURL: `${process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus-test-812872501910.asia-southeast1.run.app'}/assets/`,
 		},
 	},
 
@@ -119,9 +116,10 @@ export default defineNuxtConfig({
 	},
 
 	// Sitemap Configuration - https://nuxtseo.com/sitemap/getting-started/how-it-works
-	sitemap: {
-		sources: ['/api/_sitemap-urls'],
-	},
+	// Disabled: server API route removed for SPA build
+	// sitemap: {
+	// 	sources: ['/api/_sitemap-urls'],
+	// },
 
 	postcss: {
 		plugins: {

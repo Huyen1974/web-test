@@ -1,0 +1,26 @@
+{
+    "login": {
+        "title": "Login",
+        "email": "Email",
+        "password": "Password",
+        "submit": "Sign In",
+        "forgot_password": "Forgot Password?",
+        "google": "Sign in with Google",
+        "no_account": "No account?"
+    },
+    "register": {
+        "title": "Register",
+        "submit": "Sign Up",
+        "have_account": "Already have an account?"
+    },
+    "common": {
+        "loading": "Loading...",
+        "error": "An error occurred",
+        "success": "Success"
+    },
+    "admin": {
+        "users": {
+            "title": "User Management"
+        }
+    }
+}
