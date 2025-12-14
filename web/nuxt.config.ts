@@ -56,8 +56,15 @@ export default defineNuxtConfig({
 	},
 
 	runtimeConfig: {
+		agentData: {
+			apiKey: process.env.AGENT_DATA_API_KEY || '',
+		},
 		public: {
-			siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
+			siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://github-chatgpt-ggcloud.web.app',
+			agentData: {
+				baseUrl: process.env.NUXT_PUBLIC_AGENT_DATA_BASE_URL || '',
+				enabled: process.env.NUXT_PUBLIC_AGENT_DATA_ENABLED === 'true',
+			},
 		},
 	},
 

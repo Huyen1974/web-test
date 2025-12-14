@@ -1,0 +1,7 @@
+ web/components/GlobalSearch.vue                  | 46 +++++++++++++++++++----
+ web/components/help/HelpFeedback.vue             | 16 ++------
+ web/layers/portal/components/PortalSearch.vue    | 47 ++++++++++++++++++++----
+ web/layers/portal/composables/useStripe.ts       | 23 +++---------
+ web/modules/directus/runtime/plugins/directus.ts | 13 ++++++-
+ web/nuxt.config.ts                               |  9 ++++-
+ 6 files changed, 107 insertions(+), 47 deletions(-)

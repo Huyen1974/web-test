@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { GlobalSearchResult } from '~/types/api/global-search';
+import { joinURL } from 'ufo';
 
 const props = defineProps({
 	collections: {
@@ -29,6 +30,12 @@ defineShortcuts({
 const isOpen = ref(false);
 
 const { fileUrl } = useFiles();
+const runtimeConfig = useRuntimeConfig();
+const directusBase =
+	runtimeConfig.public.directus?.rest?.baseUrl ||
+	runtimeConfig.public.directus?.url ||
+	runtimeConfig.public.directusUrl ||
+	'';
 
 const groups = computed(() => {
 	return [
@@ -45,14 +52,39 @@ const groups = computed(() => {
 				}
 
 				try {
-					const { data }: { data: GlobalSearchResult[] } = await $fetch('/api/search', {
-						params: {
-							search: q,
-							collections: props.collections, // Use the collections prop to filter the search
-						},
-					});
+					if (!directusBase) {
+						return [];
+					}
 
-					return data.map((hit: any) => {
+					const hits: GlobalSearchResult[] = [];
+
+					for (const collection of props.collections) {
+						try {
+							const url = joinURL(directusBase, `/items/${collection}`);
+							const { data } = await $fetch<{ data: any[] }>(url, {
+								query: {
+									search: q,
+									limit: 5,
+									fields: 'id,title,slug,image,cover_image',
+								},
+							});
+
+							(data || []).forEach((item: any) => {
+								const image = item.image || item.cover_image;
+								hits.push({
+									id: item.id,
+									title: item.title,
+									type: collection,
+									image,
+									url: item.slug ? `/${collection}/${item.slug}` : `/${collection}/${item.id}`,
+								});
+							});
+						} catch (error) {
+							// ignore collection-level failures to keep search resilient
+						}
+					}
+
+					return hits.map((hit: any) => {
 						return {
 							id: hit.id,
 							label: hit.title,

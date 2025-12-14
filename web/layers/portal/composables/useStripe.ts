@@ -20,18 +20,16 @@ export default function useStripe() {
 	const { stripePublishableKey } = runtimeConfig.public;
 
 	const loading = ref<boolean>(false);
+	const backendUnavailable = !stripePublishableKey;
 
 	// Create a Checkout Session and redirect to the Checkout page
 	const handleCheckout = async (invoiceId: string) => {
 		loading.value = true;
 
 		try {
-			const session = await $fetch('/api/stripe/create-checkout-session', {
-				method: 'POST',
-				body: {
-					invoiceId,
-				},
-			});
+			if (backendUnavailable) {
+				throw createError('Payments are disabled in this SPA build.');
+			}
 
 			const stripe = await getStripe(stripePublishableKey);
 
@@ -39,9 +37,7 @@ export default function useStripe() {
 				throw createError('Problem loading payment processor');
 			}
 
-			const { error } = await stripe.redirectToCheckout({
-				sessionId: session.id,
-			});
+			throw createError('Checkout session endpoint is unavailable.');
 		} catch (error) {
 			toast.add({
 				id: 'stripe-checkout-error',
@@ -60,14 +56,7 @@ export default function useStripe() {
 		loading.value = true;
 
 		try {
-			const portalSession = await $fetch('/api/stripe/create-portal-link', {
-				method: 'POST',
-				body: {
-					customerId,
-				},
-			});
-
-			window.location.href = portalSession.url;
+			throw createError('Customer portal is disabled in this SPA build.');
 		} catch (error) {
 			toast.add({
 				id: 'stripe-portal-error',

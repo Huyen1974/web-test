@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { GlobalSearchResult } from '~/types/api/global-search';
+import { joinURL } from 'ufo';
 
 const props = defineProps({
 	placeholder: {
@@ -12,6 +13,12 @@ const emit = defineEmits(['close']);
 
 // Pass the cookies to the server call so we can authenticate the request
 const headers = useRequestHeaders(['cookie']);
+const runtimeConfig = useRuntimeConfig();
+const directusBase =
+	runtimeConfig.public.directus?.rest?.baseUrl ||
+	runtimeConfig.public.directus?.url ||
+	runtimeConfig.public.directusUrl ||
+	'';
 
 const actions = [
 	{
@@ -51,15 +58,39 @@ const groups = computed(() => {
 				}
 
 				try {
-					const { data }: { data: GlobalSearchResult[] } = await $fetch('/api/portal/search', {
-						params: {
-							search: q,
-							collections: ['os_projects', 'os_tasks', 'os_invoices', 'help_articles'],
-						},
-						headers,
-					});
+					if (!directusBase) {
+						return [];
+					}
 
-					return data.map((hit) => {
+					const collections = ['os_projects', 'os_tasks', 'os_invoices', 'help_articles'];
+					const hits: GlobalSearchResult[] = [];
+
+					for (const collection of collections) {
+						try {
+							const url = joinURL(directusBase, `/items/${collection}`);
+							const { data } = await $fetch<{ data: any[] }>(url, {
+								query: {
+									search: q,
+									limit: 5,
+									fields: 'id,title,slug',
+								},
+								headers,
+							});
+
+							(data || []).forEach((item: any) => {
+								hits.push({
+									id: item.id,
+									title: item.title,
+									type: collection,
+									url: item.slug ? `/portal/${collection}/${item.slug}` : `/portal/${collection}/${item.id}`,
+								});
+							});
+						} catch (error) {
+							// ignore collection errors
+						}
+					}
+
+					return hits.map((hit) => {
 						return {
 							id: hit.id,
 							label: hit.title,
