@@ -116,9 +116,10 @@ export default defineNuxtConfig({
 	},
 
 	// Sitemap Configuration - https://nuxtseo.com/sitemap/getting-started/how-it-works
-	sitemap: {
-		sources: ['/api/_sitemap-urls'],
-	},
+	// Disabled: server API route removed for SPA build
+	// sitemap: {
+	// 	sources: ['/api/_sitemap-urls'],
+	// },
 
 	postcss: {
 		plugins: {
