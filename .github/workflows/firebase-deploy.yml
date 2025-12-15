@@ -44,6 +44,13 @@ jobs:
           NUXT_PUBLIC_SITE_URL: "https://github-chatgpt-ggcloud.web.app"
           NUXT_PUBLIC_DIRECTUS_URL: "https://directus-test-812872501910.asia-southeast1.run.app"
           NUXT_PUBLIC_AGENT_DATA_ENABLED: "false"
+          NUXT_PUBLIC_FIREBASE_API_KEY: "AIzaSyA3nEhCqAl7XsOljcDY_z9_7g02NG8SAwY"
+          NUXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "github-chatgpt-ggcloud.firebaseapp.com"
+          NUXT_PUBLIC_FIREBASE_PROJECT_ID: "github-chatgpt-ggcloud"
+          NUXT_PUBLIC_FIREBASE_STORAGE_BUCKET: "github-chatgpt-ggcloud.firebasestorage.app"
+          NUXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "812872501910"
+          NUXT_PUBLIC_FIREBASE_APP_ID: "1:812872501910:web:71a92d4200a187c55250b7"
+          NUXT_PUBLIC_FIREBASE_MEASUREMENT_ID: "G-MVYG2LN378"
         run: pnpm run generate
 
       - name: Verify no localhost in bundle
@@ -54,6 +61,15 @@ jobs:
             exit 1
           fi
           echo "✓ No localhost URLs found in bundle"
+
+      - name: Verify Firebase config in bundle
+        run: |
+          if ! grep -r "AIzaSyA3nEhCqAl7XsOljcDY_z9_7g02NG8SAwY" .output/public; then
+            echo "ERROR: Firebase API key not found in generated bundle!"
+            echo "This indicates Firebase config was not properly baked into runtimeConfig."
+            exit 1
+          fi
+          echo "✓ Firebase config found in bundle"
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
