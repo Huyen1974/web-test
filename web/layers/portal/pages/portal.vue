@@ -15,7 +15,7 @@ onMounted(async () => {
 	if (!user.value) {
 		const route = useRoute();
 		await navigateTo({
-			path: '/auth/login',
+			path: '/auth/signin',
 			query: { redirect: route.fullPath },
 		});
 	}
