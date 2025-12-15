@@ -10,6 +10,13 @@ Trục Nuxt ↔ Directus ↔ Agent Data ↔ Lark – Dùng Directus hiện tại
 - Deployed: 2025-12-12 05:52 UTC (revision web-test-00004-7cl)
 - Health: `/` 302 → `/approval-desk`; `/approval-desk` 200; `/knowledge-tree` 200
 
+## Firebase SPA baseline status (2025-12-15)
+
+- SPA + Firebase Hosting baseline deployed (PR #132).
+- Client-side datafix: removed internal `/api/*` and server API routes; Directus/Agent Data calls now client-side only (PR #133).
+- Runtime smoke test on https://github-chatgpt-ggcloud.web.app: PASS.
+- TODO (next): Decide safe path to enable Agent Data in production (auth/cors/proxy); currently `NUXT_PUBLIC_AGENT_DATA_ENABLED=false`.
+
 I. Nguyên tắc chung
 
 Chiến lược 3 Vùng Schema (Schema Zones) – NGUYÊN TẮC BẮT BUỘC
