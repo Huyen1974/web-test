@@ -79,8 +79,8 @@ async function attemptLogin() {
 		await login(email, password);
 	} catch (err) {
 		error.value = err.message;
+	} finally {
+		loading.value = false;
 	}
-
-	loading.value = false;
 }
 </script>

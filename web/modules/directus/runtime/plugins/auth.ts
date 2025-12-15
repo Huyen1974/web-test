@@ -39,6 +39,6 @@ export default defineNuxtPlugin(async () => {
 			_loggedIn.set(false);
 		}
 	} catch (err: any) {
-		// console.error(e)
+		console.error('[Directus Auth] Init Error:', err);
 	}
 });
