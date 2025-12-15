@@ -61,6 +61,7 @@ export default defineNuxtConfig({
 		},
 		public: {
 			siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://github-chatgpt-ggcloud.web.app',
+			directusUrl: process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus-test-812872501910.asia-southeast1.run.app',
 			agentData: {
 				baseUrl: process.env.NUXT_PUBLIC_AGENT_DATA_BASE_URL || '',
 				enabled: process.env.NUXT_PUBLIC_AGENT_DATA_ENABLED === 'true',

@@ -53,14 +53,19 @@ jobs:
           NUXT_PUBLIC_FIREBASE_MEASUREMENT_ID: "G-MVYG2LN378"
         run: pnpm run generate
 
-      - name: Verify no localhost in bundle
+      - name: Verify no localhost or legacy proxy in bundle
         run: |
           if grep -r "localhost:3000" .output/public; then
             echo "ERROR: localhost:3000 found in generated bundle!"
             echo "This indicates env vars were not properly baked into the build."
             exit 1
           fi
-          echo "✓ No localhost URLs found in bundle"
+          if grep -r '"/api/proxy' .output/public; then
+            echo "ERROR: /api/proxy found in generated bundle!"
+            echo "This indicates legacy proxy code is still present (should use Directus SDK)."
+            exit 1
+          fi
+          echo "✓ No localhost URLs or legacy proxy paths found in bundle"
 
       - name: Verify Firebase config in bundle
         run: |
