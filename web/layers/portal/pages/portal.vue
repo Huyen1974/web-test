@@ -3,10 +3,23 @@ import { Dialog, DialogPanel, TransitionChild, TransitionRoot } from '@headlessu
 
 definePageMeta({
 	layout: 'blank',
-	middleware: ['auth'],
 });
 
 const { logout, user } = useDirectusAuth();
+
+// Client-side Directus auth guard
+onMounted(async () => {
+	// Check if user is authenticated via Directus
+	// The auth plugin should have already attempted to fetch user on init
+	// If no user after mount, redirect to login
+	if (!user.value) {
+		const route = useRoute();
+		await navigateTo({
+			path: '/auth/login',
+			query: { redirect: route.fullPath },
+		});
+	}
+});
 
 const NuxtLink = resolveComponent('NuxtLink');
 
