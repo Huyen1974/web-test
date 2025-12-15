@@ -39,7 +39,7 @@ export class AgentDataClient {
 		}
 
 		try {
-			const url = new URL('/api/search', this.config.baseUrl);
+			const url = new URL('search', this.config.baseUrl);
 
 			const params = new URLSearchParams({
 				q: request.query,
@@ -110,7 +110,7 @@ export class AgentDataClient {
 		}
 
 		try {
-			const url = new URL('/api/log/page-view', this.config.baseUrl);
+			const url = new URL('log/page-view', this.config.baseUrl);
 
 			await fetch(url.toString(), {
 				method: 'POST',
@@ -143,7 +143,7 @@ export class AgentDataClient {
 		}
 
 		try {
-			const url = new URL('/api/log/search', this.config.baseUrl);
+			const url = new URL('log/search', this.config.baseUrl);
 
 			await fetch(url.toString(), {
 				method: 'POST',
