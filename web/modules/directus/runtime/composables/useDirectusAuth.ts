@@ -29,8 +29,15 @@ export default function useDirectusAuth<DirectusSchema extends object>() {
 		_loggedIn.set(true);
 
 		setTimeout(async () => {
-			await fetchUser({ fields: ['*', { contacts: ['*'] }] });
-			await navigateTo(redirect);
+			try {
+				await fetchUser({ fields: ['*', { contacts: ['*'] }] });
+				await navigateTo(redirect);
+			} catch (err: any) {
+				console.error('[Directus Auth] Post-login fetchUser failed:', err);
+				_loggedIn.set(false);
+				user.value = null;
+				await navigateTo('/auth/login?error=fetch_user_failed');
+			}
 		}, 100);
 	}
 
