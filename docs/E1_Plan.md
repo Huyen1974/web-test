@@ -593,7 +593,27 @@ Các blog dưới đây implement trực tiếp các phần 3.5 (UI/UX vận hà
 * **Deliverable**: E2E test closed loop (new request → published, no lost, SLA badges <24h).
 
 
-## IV. PHỤ LỤC MỞ RỘNG (TRIỂN KHAI SAU)
+## IV. PHỤ LỤC F: CHIẾN DỊCH "ANTI-STUPID" – CLEAN & BUILD WEB APP (THỰC HIỆN NGAY TRONG E1)
+
+**Mã văn bản:** TECH-ADDENDUM-F1  
+**Ngày lập:** 13/12/2025  
+**Trạng thái:** APPROVED (Thống nhất Grok/Gemini/ChatGPT).  
+**Phân loại:** Nợ kỹ thuật / Anti-Stupid Correction (Tuân thủ Hiến pháp v1.11e HP-02 IaC Minimalism; Luật Data & Connect v1.1 Điều 2 Assemble > Build; Kế hoạch (FINAL).docx Stack A+).  
+
+**Bối cảnh:** Hiện tại E1-06 hoàn tất (Agent Data wired), nhưng UI lệch (Cloud Run/SSR/proxy) → Lỗi fetch localhost, cold start, chi phí thừa. Sửa để: Đơn giản (SPA Firebase), Hoàn chỉnh (Essentials + i18n), Ready-to-Use (Admin + Core). Thời gian: <3 ngày. Chi phí: $0.
+
+> DEPRECATED (Web hosting only): Cloud Run approach for Nuxt web is replaced by SPA + Firebase Hosting (see Appendix F).
+
+| Task ID | Tên Task | Mô Tả Chính (Reuse-First) | Definition of Done (DoD) | Thời Gian Ước Tính | Trạng Thái |
+|---------|----------|---------------------------|--------------------------|---------------------|------------|
+| **E1-F1: Infrastructure Reset** | Di dời hạ tầng + i18n Foundation | - Chuyển Nuxt sang SPA (ssr: false, nitro preset: 'static').<br>- Deploy Firebase Hosting (Blaze tier, CDN).<br>- Cài @nuxtjs/i18n (VN default, JA/EN ready; locales/*.json).<br>- Env: NUXT_PUBLIC_DIRECTUS_URL (bake-in build).<br>- Directus: CORS_ENABLED=true, CORS_ORIGIN=web.app; CSP_FRAME_ANCESTORS=web.app (cho iframe). | - Build: `npm run generate` → .output/public tĩnh.<br>- Deploy: `firebase deploy --only hosting` → URL web-test.web.app load <2s, no cold start.<br>- i18n: Text UI dùng $t('key') (e.g., $t('login.title')); switch lang /vi → VN text.<br>- No proxy: Grep code → 0 match '/api/proxy'.<br>- Cost Guard: CI script gcloud billing query (alert >$5/tháng). Artifact: GCS retention min 30 ngày (tag/release). | 1 ngày | TODO |
+| **E1-F2: Web Essentials** | Lắp ráp trang cơ bản + Auth | - Pages (Nuxt UI components): /login (form + Google sign-in), /register (email verify Firebase native), /forgot-password (reset email), /profile (read-only info), /logout (clear session → /home).<br>- System: error.vue (404/403), NuxtLoadingIndicator.<br>- Guard: Nuxt middleware (if !auth → /login cho /portal/*). | - Luồng E2E: Khách → Register → Verify email (Firebase) → Login → /profile → Logout → Home.<br>- Responsive: Mobile OK (Nuxt UI auto).<br>- i18n: Tất cả text $t() (VN/JA).<br>- Auth: Firebase SDK + guards (no server-side check). | 1 ngày | TODO |
+| **E1-F3: User Admin & Automation** | Quản trị user + Bulk import | - Page: /admin/users (list/invite/role assign, gọi Directus API RBAC).<br>- Automation: Directus Flow (CSV upload → Create users → Firebase email invite).<br>- Reuse: Nuxt UI Table/Card cho list; webhook → Agent Data log. | - Admin login → /admin/users: View/edit roles (editor/viewer).<br>- Bulk: Upload CSV → 5 users created + emails sent (test log).<br>- i18n: Labels $t('admin.users.title').<br>- Secure: RBAC hide /admin nếu non-admin. | 0.5 ngày | TODO |
+| **E1-F4: Core Features** | Nghiệp vụ E1 gốc + Cleanup | - Approval Desk: 1-chạm (Diff iframe Revisions read-only + inline comment + nút Approve/Change via Directus Flow).<br>- Knowledge Tree: Folder view (fetch Directus, filter zone/user_visible).<br>- Cleanup: Xóa Cloud Run service web-test (sau Firebase stable). | - Desk: Load doc → Side-by-side Diff → Click Approve → Status published (Directus).<br>- Tree: Filter /zone → Display published only (Nuxt read-only).<br>- i18n/Responsive: Full.<br>- Cleanup: `gcloud run services delete web-test` → Confirm no cost. STD: Lighthouse ≥90%. | 0.5 ngày | TODO |
+
+**Next Steps:** Sau E1-F4, UAT full luồng (VN lang). Commit all to GitHub. Nếu lỗi (e.g., CSP block iframe), trace log + fix (no guess – check Directus env).
+
+## V. PHỤ LỤC MỞ RỘNG (TRIỂN KHAI SAU)
 
 Các task dưới đây là tính năng nâng cao, giúp tăng tốc độ làm việc nhưng **không bắt buộc** phải hoàn thành để đóng gói Giai đoạn E1. Có thể thực hiện ở Sprint 4 hoặc sau khi hệ thống ổn định.
 
