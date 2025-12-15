@@ -36,7 +36,7 @@ export default function useDirectusAuth<DirectusSchema extends object>() {
 				console.error('[Directus Auth] Post-login fetchUser failed:', err);
 				_loggedIn.set(false);
 				user.value = null;
-				await navigateTo('/auth/login?error=fetch_user_failed');
+				await navigateTo('/auth/signin?error=fetch_user_failed');
 			}
 		}, 100);
 	}
@@ -49,7 +49,7 @@ export default function useDirectusAuth<DirectusSchema extends object>() {
 		user.value = null;
 
 		await clearNuxtData();
-		await navigateTo(config.public?.directus?.auth?.redirect?.login || '/auth/login');
+		await navigateTo(config.public?.directus?.auth?.redirect?.login || '/auth/signin');
 	}
 
 	async function fetchUser(params?: object) {
