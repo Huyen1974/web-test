@@ -11,7 +11,18 @@ export default defineNuxtPlugin((nuxtApp) => {
 	const route = useRoute();
 	const config = useRuntimeConfig();
 
-	const directus = createDirectus<Schema>(joinURL(config.public.siteUrl, '/api/proxy'), { globals: { fetch: $fetch } })
+	const directusBaseUrl =
+		config.public.directus?.rest?.baseUrl ||
+		config.public.directus?.url ||
+		config.public.directusUrl ||
+		config.public.siteUrl;
+
+	if (!directusBaseUrl) {
+		console.warn('[Directus] Missing base URL – skipping client initialization');
+		return;
+	}
+
+	const directus = createDirectus<Schema>(joinURL(directusBaseUrl), { globals: { fetch: $fetch } })
 		.with(authentication('session'))
 		.with(rest());
 

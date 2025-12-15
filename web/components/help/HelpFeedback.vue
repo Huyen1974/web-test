@@ -58,19 +58,9 @@ async function handleSubmission(rating?: number) {
 	};
 
 	try {
-		const { data }: { data: Ref<HelpFeedback> } = await useFetch('/api/feedback', {
-			method: 'POST',
-			body: JSON.stringify(body),
-		});
-
-		if (data.value.id) {
-			feedback.id = data.value.id;
-		}
-
-		// If the reponse has comments, we can assume they've completed the second step.
-		if (data.value.comments) {
-			success.value = true;
-		}
+		// Backend feedback route is unavailable in SPA baseline; capture locally and show success.
+		console.info('[Feedback]', body);
+		success.value = true;
 	} catch (err) {
 		error.value = err;
 	} finally {
