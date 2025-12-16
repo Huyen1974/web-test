@@ -1,0 +1,89 @@
+name: Firebase Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Prevent concurrent deployments
+concurrency:
+  group: firebase-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy to Firebase
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./web
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate static site
+        env:
+          NUXT_PUBLIC_SITE_URL: "https://github-chatgpt-ggcloud.web.app"
+          NUXT_PUBLIC_DIRECTUS_URL: "https://directus-test-812872501910.asia-southeast1.run.app"
+          NUXT_PUBLIC_AGENT_DATA_ENABLED: "false"
+          NUXT_PUBLIC_FIREBASE_API_KEY: "AIzaSyA3nEhCqAl7XsOljcDY_z9_7g02NG8SAwY"
+          NUXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "github-chatgpt-ggcloud.firebaseapp.com"
+          NUXT_PUBLIC_FIREBASE_PROJECT_ID: "github-chatgpt-ggcloud"
+          NUXT_PUBLIC_FIREBASE_STORAGE_BUCKET: "github-chatgpt-ggcloud.firebasestorage.app"
+          NUXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "812872501910"
+          NUXT_PUBLIC_FIREBASE_APP_ID: "1:812872501910:web:71a92d4200a187c55250b7"
+          NUXT_PUBLIC_FIREBASE_MEASUREMENT_ID: "G-MVYG2LN378"
+        run: pnpm run generate
+
+      - name: Verify no localhost or legacy proxy in bundle
+        run: |
+          if grep -r "localhost:3000" .output/public; then
+            echo "ERROR: localhost:3000 found in generated bundle!"
+            echo "This indicates env vars were not properly baked into the build."
+            exit 1
+          fi
+          if grep -r '"/api/proxy' .output/public; then
+            echo "ERROR: /api/proxy found in generated bundle!"
+            echo "This indicates legacy proxy code is still present (should use Directus SDK)."
+            exit 1
+          fi
+          echo "✓ No localhost URLs or legacy proxy paths found in bundle"
+
+      - name: Verify Firebase config in bundle
+        run: |
+          if ! grep -r "AIzaSyA3nEhCqAl7XsOljcDY_z9_7g02NG8SAwY" .output/public; then
+            echo "ERROR: Firebase API key not found in generated bundle!"
+            echo "This indicates Firebase config was not properly baked into runtimeConfig."
+            exit 1
+          fi
+          echo "✓ Firebase config found in bundle"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: github-chatgpt-ggcloud
+          workload_identity_provider: projects/812872501910/locations/global/workloadIdentityPools/agent-data-pool/providers/github-provider
+          service_account: chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com
+
+      - name: Deploy to Firebase Hosting
+        run: |
+          npm install -g firebase-tools
+          firebase deploy --only hosting --project github-chatgpt-ggcloud --non-interactive

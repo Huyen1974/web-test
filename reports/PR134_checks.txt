@@ -1,0 +1,4 @@
+E2E Smoke Test	pass	1m28s	https://github.com/Huyen1974/web-test/actions/runs/20221672996/job/58044688437	
+Pass Gate	pass	25s	https://github.com/Huyen1974/web-test/actions/runs/20221672996/job/58044688442	
+Quality Gate	pass	19s	https://github.com/Huyen1974/web-test/actions/runs/20221672996/job/58044688434	
+build	pass	1m25s	https://github.com/Huyen1974/web-test/actions/runs/20221673021/job/58044688366	

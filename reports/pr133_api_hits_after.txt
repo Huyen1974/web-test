@@ -1,0 +1,3 @@
+web/nuxt.config.ts:5:	// https://nuxt.com/docs/api/configuration/nuxt-config
+web/layers/portal/components/PortalSearch.vue:2:import type { GlobalSearchResult } from '~/types/api/global-search';
+web/components/GlobalSearch.vue:2:import type { GlobalSearchResult } from '~/types/api/global-search';

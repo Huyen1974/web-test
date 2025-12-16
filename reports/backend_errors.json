@@ -1,0 +1,1054 @@
+[
+  {
+    "httpRequest": {
+      "latency": "0.008818290s",
+      "protocol": "HTTP/1.1",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "301",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/users/me",
+      "responseSize": "824",
+      "serverIp": "2600:1900:4244:200::",
+      "status": 401,
+      "userAgent": "curl/8.7.1"
+    },
+    "insertId": "6940c6a500072e80f23bd24a",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:40:37.609689643Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "d97579c3a3209e5b",
+    "timestamp": "2025-12-16T02:40:37.460286Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/bb81fed6ae916609c0994262d6903726"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.010633099s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "896",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/items/forms?filter=%7B%22key%22%3A%7B%22_eq%22%3A%22newsletter%22%7D%7D",
+      "responseSize": "896",
+      "serverIp": "2600:1900:4243:200::",
+      "status": 403,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c54c0004845f7e28ee58",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:34:52.396313536Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "78125fc53b596d42",
+    "timestamp": "2025-12-16T02:34:52.283655Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/ec40eca5e031ffb24d514ff29971ffd0"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.013146349s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "5285",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/items/pages?fields=*%2Cseo.*%2Cblocks.id%2Cblocks.collection%2Cblocks.hide_block%2Cblocks.item%3Ablock_hero.id%2Cblocks.item%3Ablock_hero.title%2Cblocks.item%3Ablock_hero.headline%2Cblocks.item%3Ablock_hero.content%2Cblocks.item%3Ablock_hero.image%2Cblocks.item%3Ablock_hero.image_position%2Cblocks.item%3Ablock_hero.button_group.*%2Cblocks.item%3Ablock_hero.button_group.buttons.*%2Cblocks.item%3Ablock_hero.button_group.buttons.page.permalink%2Cblocks.item%3Ablock_hero.button_group.buttons.post.slug%2Cblocks.item%3Ablock_faqs.id%2Cblocks.item%3Ablock_faqs.title%2Cblocks.item%3Ablock_faqs.faqs%2Cblocks.item%3Ablock_faqs.headline%2Cblocks.item%3Ablock_faqs.alignment%2Cblocks.item%3Ablock_richtext.id%2Cblocks.item%3Ablock_richtext.title%2Cblocks.item%3Ablock_richtext.headline%2Cblocks.item%3Ablock_richtext.content%2Cblocks.item%3Ablock_richtext.alignment%2Cblocks.item%3Ablock_testimonials.id%2Cblocks.item%3Ablock_testimonials.title%2Cblocks.item%3Ablock_testimonials.headline%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.id%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.title%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.subtitle%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.content%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.company%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.company_logo%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.image.id%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.image.title%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.image.description%2Cblocks.item%3Ablock_quote.id%2Cblocks.item%3Ablock_quote.title%2Cblocks.item%3Ablock_quote.subtitle%2Cblocks.item%3Ablock_quote.content%2Cblocks.item%3Ablock_cta.id%2Cblocks.item%3Ablock_cta.title%2Cblocks.item%3Ablock_cta.headline%2Cblocks.item%3Ablock_cta.content%2Cblocks.item%3Ablock_cta.button_group.*%2Cblocks.item%3Ablock_cta.button_group.buttons.*%2Cblocks.item%3Ablock_cta.button_group.buttons.page.permalink%2Cblocks.item%3Ablock_cta.button_group.buttons.post.slug%2Cblocks.item%3Ablock_form.id%2Cblocks.item%3Ablock_form.title%2Cblocks.item%3Ablock_form.headline%2Cblocks.item%3Ablock_form.form.*%2Cblocks.item%3Ablock_logocloud.id%2Cblocks.item%3Ablock_logocloud.title%2Cblocks.item%3Ablock_logocloud.headline%2Cblocks.item%3Ablock_logocloud.logos.id%2Cblocks.item%3Ablock_logocloud.logos.directus_files_id.id%2Cblocks.item%3Ablock_logocloud.logos.directus_files_id.title%2Cblocks.item%3Ablock_logocloud.logos.directus_files_id.description%2Cblocks.item%3Ablock_gallery.id%2Cblocks.item%3Ablock_gallery.title%2Cblocks.item%3Ablock_gallery.headline%2Cblocks.item%3Ablock_gallery.gallery_items.directus_files_id.id%2Cblocks.item%3Ablock_gallery.gallery_items.directus_files_id.title%2Cblocks.item%3Ablock_gallery.gallery_items.directus_files_id.description%2Cblocks.item%3Ablock_steps.id%2Cblocks.item%3Ablock_steps.title%2Cblocks.item%3Ablock_steps.headline%2Cblocks.item%3Ablock_steps.show_step_numbers%2Cblocks.item%3Ablock_steps.alternate_image_position%2Cblocks.item%3Ablock_steps.steps.id%2Cblocks.item%3Ablock_steps.steps.title%2Cblocks.item%3Ablock_steps.steps.content%2Cblocks.item%3Ablock_steps.steps.image%2Cblocks.item%3Ablock_steps.steps.button_group.*%2Cblocks.item%3Ablock_steps.steps.button_group.buttons.*%2Cblocks.item%3Ablock_steps.steps.button_group.buttons.page.permalink%2Cblocks.item%3Ablock_steps.steps.button_group.buttons.post.slug%2Cblocks.item%3Ablock_columns.id%2Cblocks.item%3Ablock_columns.title%2Cblocks.item%3Ablock_columns.headline%2Cblocks.item%3Ablock_columns.rows.title%2Cblocks.item%3Ablock_columns.rows.headline%2Cblocks.item%3Ablock_columns.rows.content%2Cblocks.item%3Ablock_columns.rows.image_position%2Cblocks.item%3Ablock_columns.rows.image.id%2Cblocks.item%3Ablock_columns.rows.image.title%2Cblocks.item%3Ablock_columns.rows.image.description%2Cblocks.item%3Ablock_columns.rows.button_group.*%2Cblocks.item%3Ablock_columns.rows.button_group.buttons.*%2Cblocks.item%3Ablock_columns.rows.button_group.buttons.page.permalink%2Cblocks.item%3Ablock_columns.rows.button_group.buttons.post.slug%2Cblocks.item%3Ablock_divider.id%2Cblocks.item%3Ablock_divider.title%2Cblocks.item%3Ablock_team.*%2Cblocks.item%3Ablock_html.*%2Cblocks.item%3Ablock_video.*%2Cblocks.item%3Ablock_cardgroup.*&filter=%7B%22permalink%22%3A%7B%22_eq%22%3A%22%2Fauth%2Flogin%22%7D%7D&limit=1",
+      "responseSize": "896",
+      "serverIp": "2600:1900:4243:200::",
+      "status": 403,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c54c0003f7c4e1a1f838",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:34:52.396313536Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "70216a03015154d1",
+    "timestamp": "2025-12-16T02:34:52.245149Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/c580c43e040c9f6e4d514ff29971f22e"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.016037278s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "1184",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/items/navigation/footer?fields=items.id%2Citems.title%2Citems.icon%2Citems.label%2Citems.type%2Citems.url%2Citems.has_children%2Citems.page.permalink%2Citems.page.title%2Citems.children.id%2Citems.children.title%2Citems.children.icon%2Citems.children.label%2Citems.children.type%2Citems.children.url%2Citems.children.page.permalink%2Citems.children.page.title",
+      "responseSize": "896",
+      "serverIp": "2600:1900:4243:200::",
+      "status": 403,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c54c0002d31abf632149",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:34:52.396313536Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "f20b16664b5f56ef",
+    "timestamp": "2025-12-16T02:34:52.167354Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/d49fc52f42ab37184d514ff29971f1a9"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.011457569s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "1211",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/items/navigation/main?fields=items.id%2Citems.has_children%2Citems.title%2Citems.icon%2Citems.label%2Citems.type%2Citems.url%2Citems.page.permalink%2Citems.page.title%2Citems.children.id%2Citems.children.title%2Citems.children.has_children%2Citems.children.icon%2Citems.children.label%2Citems.children.type%2Citems.children.url%2Citems.children.page.permalink%2Citems.children.page.title",
+      "responseSize": "896",
+      "serverIp": "2600:1900:4243:200::",
+      "status": 403,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c54c00022148d9892e62",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:34:52.396313536Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "064128d0b0637ea4",
+    "timestamp": "2025-12-16T02:34:52.126495Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/dfe9bff396946f434d514ff29971f474"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.008696770s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "855",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/users/me?fields=*%2Ccontacts.*",
+      "responseSize": "889",
+      "serverIp": "2600:1900:4243:200::",
+      "status": 401,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c54c0000ad772c7a074f",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:34:52.058817975Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "733560c0d3d86772",
+    "timestamp": "2025-12-16T02:34:52.033938Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/6d6a821b4aa9debc4d514ff29971fd97"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.008874479s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "895",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/items/forms?filter=%7B%22key%22%3A%7B%22_eq%22%3A%22newsletter%22%7D%7D",
+      "responseSize": "896",
+      "serverIp": "2600:1900:4243:200::",
+      "status": 403,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c549000f139a2b48e4b8",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:34:50.064448200Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "636ee0621908ac49",
+    "timestamp": "2025-12-16T02:34:49.977621Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/75fec98b927ba8f14d514ff29971fdcb"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.015594498s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "5286",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/items/pages?fields=*%2Cseo.*%2Cblocks.id%2Cblocks.collection%2Cblocks.hide_block%2Cblocks.item%3Ablock_hero.id%2Cblocks.item%3Ablock_hero.title%2Cblocks.item%3Ablock_hero.headline%2Cblocks.item%3Ablock_hero.content%2Cblocks.item%3Ablock_hero.image%2Cblocks.item%3Ablock_hero.image_position%2Cblocks.item%3Ablock_hero.button_group.*%2Cblocks.item%3Ablock_hero.button_group.buttons.*%2Cblocks.item%3Ablock_hero.button_group.buttons.page.permalink%2Cblocks.item%3Ablock_hero.button_group.buttons.post.slug%2Cblocks.item%3Ablock_faqs.id%2Cblocks.item%3Ablock_faqs.title%2Cblocks.item%3Ablock_faqs.faqs%2Cblocks.item%3Ablock_faqs.headline%2Cblocks.item%3Ablock_faqs.alignment%2Cblocks.item%3Ablock_richtext.id%2Cblocks.item%3Ablock_richtext.title%2Cblocks.item%3Ablock_richtext.headline%2Cblocks.item%3Ablock_richtext.content%2Cblocks.item%3Ablock_richtext.alignment%2Cblocks.item%3Ablock_testimonials.id%2Cblocks.item%3Ablock_testimonials.title%2Cblocks.item%3Ablock_testimonials.headline%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.id%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.title%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.subtitle%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.content%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.company%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.company_logo%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.image.id%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.image.title%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.image.description%2Cblocks.item%3Ablock_quote.id%2Cblocks.item%3Ablock_quote.title%2Cblocks.item%3Ablock_quote.subtitle%2Cblocks.item%3Ablock_quote.content%2Cblocks.item%3Ablock_cta.id%2Cblocks.item%3Ablock_cta.title%2Cblocks.item%3Ablock_cta.headline%2Cblocks.item%3Ablock_cta.content%2Cblocks.item%3Ablock_cta.button_group.*%2Cblocks.item%3Ablock_cta.button_group.buttons.*%2Cblocks.item%3Ablock_cta.button_group.buttons.page.permalink%2Cblocks.item%3Ablock_cta.button_group.buttons.post.slug%2Cblocks.item%3Ablock_form.id%2Cblocks.item%3Ablock_form.title%2Cblocks.item%3Ablock_form.headline%2Cblocks.item%3Ablock_form.form.*%2Cblocks.item%3Ablock_logocloud.id%2Cblocks.item%3Ablock_logocloud.title%2Cblocks.item%3Ablock_logocloud.headline%2Cblocks.item%3Ablock_logocloud.logos.id%2Cblocks.item%3Ablock_logocloud.logos.directus_files_id.id%2Cblocks.item%3Ablock_logocloud.logos.directus_files_id.title%2Cblocks.item%3Ablock_logocloud.logos.directus_files_id.description%2Cblocks.item%3Ablock_gallery.id%2Cblocks.item%3Ablock_gallery.title%2Cblocks.item%3Ablock_gallery.headline%2Cblocks.item%3Ablock_gallery.gallery_items.directus_files_id.id%2Cblocks.item%3Ablock_gallery.gallery_items.directus_files_id.title%2Cblocks.item%3Ablock_gallery.gallery_items.directus_files_id.description%2Cblocks.item%3Ablock_steps.id%2Cblocks.item%3Ablock_steps.title%2Cblocks.item%3Ablock_steps.headline%2Cblocks.item%3Ablock_steps.show_step_numbers%2Cblocks.item%3Ablock_steps.alternate_image_position%2Cblocks.item%3Ablock_steps.steps.id%2Cblocks.item%3Ablock_steps.steps.title%2Cblocks.item%3Ablock_steps.steps.content%2Cblocks.item%3Ablock_steps.steps.image%2Cblocks.item%3Ablock_steps.steps.button_group.*%2Cblocks.item%3Ablock_steps.steps.button_group.buttons.*%2Cblocks.item%3Ablock_steps.steps.button_group.buttons.page.permalink%2Cblocks.item%3Ablock_steps.steps.button_group.buttons.post.slug%2Cblocks.item%3Ablock_columns.id%2Cblocks.item%3Ablock_columns.title%2Cblocks.item%3Ablock_columns.headline%2Cblocks.item%3Ablock_columns.rows.title%2Cblocks.item%3Ablock_columns.rows.headline%2Cblocks.item%3Ablock_columns.rows.content%2Cblocks.item%3Ablock_columns.rows.image_position%2Cblocks.item%3Ablock_columns.rows.image.id%2Cblocks.item%3Ablock_columns.rows.image.title%2Cblocks.item%3Ablock_columns.rows.image.description%2Cblocks.item%3Ablock_columns.rows.button_group.*%2Cblocks.item%3Ablock_columns.rows.button_group.buttons.*%2Cblocks.item%3Ablock_columns.rows.button_group.buttons.page.permalink%2Cblocks.item%3Ablock_columns.rows.button_group.buttons.post.slug%2Cblocks.item%3Ablock_divider.id%2Cblocks.item%3Ablock_divider.title%2Cblocks.item%3Ablock_team.*%2Cblocks.item%3Ablock_html.*%2Cblocks.item%3Ablock_video.*%2Cblocks.item%3Ablock_cardgroup.*&filter=%7B%22permalink%22%3A%7B%22_eq%22%3A%22%2Fauth%2Flogin%22%7D%7D&limit=1",
+      "responseSize": "896",
+      "serverIp": "2600:1900:4243:200::",
+      "status": 403,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c549000ea3c32d9d0179",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:34:50.064448200Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "74066f06da8d5430",
+    "timestamp": "2025-12-16T02:34:49.941710Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/694e90f949607e8a4d514ff29971f7c8"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.012108518s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "1183",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/items/navigation/footer?fields=items.id%2Citems.title%2Citems.icon%2Citems.label%2Citems.type%2Citems.url%2Citems.has_children%2Citems.page.permalink%2Citems.page.title%2Citems.children.id%2Citems.children.title%2Citems.children.icon%2Citems.children.label%2Citems.children.type%2Citems.children.url%2Citems.children.page.permalink%2Citems.children.page.title",
+      "responseSize": "896",
+      "serverIp": "2600:1900:4243:200::",
+      "status": 403,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c549000d65b261a709e0",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:34:50.064448200Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "e0a816c6aaf7548f",
+    "timestamp": "2025-12-16T02:34:49.864127Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/e04c9c17697579e64d514ff29971f287"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.009356470s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "1212",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/items/navigation/main?fields=items.id%2Citems.has_children%2Citems.title%2Citems.icon%2Citems.label%2Citems.type%2Citems.url%2Citems.page.permalink%2Citems.page.title%2Citems.children.id%2Citems.children.title%2Citems.children.has_children%2Citems.children.icon%2Citems.children.label%2Citems.children.type%2Citems.children.url%2Citems.children.page.permalink%2Citems.children.page.title",
+      "responseSize": "896",
+      "serverIp": "2600:1900:4243:200::",
+      "status": 403,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c549000cbd332d320497",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:34:50.064448200Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "b7af3346d85e345f",
+    "timestamp": "2025-12-16T02:34:49.823675Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/9f8e924b6eb1f0714d514ff29971f552"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.011429289s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "870",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/users/me?fields=*%2Ccontacts.*",
+      "responseSize": "889",
+      "serverIp": "2600:1900:4243:200::",
+      "status": 401,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c549000b12b725185549",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:34:49.731546941Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "6f8d5bfb1e4dd9ff",
+    "timestamp": "2025-12-16T02:34:49.705771Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/90be3c2c64e631e84d514ff29971f2dc",
+    "traceSampled": true
+  },
+  {
+    "httpRequest": {
+      "latency": "0.008682759s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://ai.incomexsaigoncorp.vn/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "841",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/users/me?fields=*%2Ccontacts.*",
+      "responseSize": "882",
+      "serverIp": "2600:1901:81d4:200::",
+      "status": 401,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c3f8000e689d7d02a3ac",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:29:13.073457695Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "9e1ae40ed1ab99c8",
+    "timestamp": "2025-12-16T02:29:12.934213Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/d6d189f6cf0fb6bd31ec55e32ac458cb"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.008835779s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://ai.incomexsaigoncorp.vn/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "841",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/users/me?fields=*%2Ccontacts.*",
+      "responseSize": "882",
+      "serverIp": "2600:1901:81d4:200::",
+      "status": 401,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c3f10009b34749dee314",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:29:05.747296462Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "58f138b1cc60ff4d",
+    "timestamp": "2025-12-16T02:29:05.625425Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/3798f6264b10961531ec55e32ac45f81"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.020121659s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "5285",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/items/pages?fields=*%2Cseo.*%2Cblocks.id%2Cblocks.collection%2Cblocks.hide_block%2Cblocks.item%3Ablock_hero.id%2Cblocks.item%3Ablock_hero.title%2Cblocks.item%3Ablock_hero.headline%2Cblocks.item%3Ablock_hero.content%2Cblocks.item%3Ablock_hero.image%2Cblocks.item%3Ablock_hero.image_position%2Cblocks.item%3Ablock_hero.button_group.*%2Cblocks.item%3Ablock_hero.button_group.buttons.*%2Cblocks.item%3Ablock_hero.button_group.buttons.page.permalink%2Cblocks.item%3Ablock_hero.button_group.buttons.post.slug%2Cblocks.item%3Ablock_faqs.id%2Cblocks.item%3Ablock_faqs.title%2Cblocks.item%3Ablock_faqs.faqs%2Cblocks.item%3Ablock_faqs.headline%2Cblocks.item%3Ablock_faqs.alignment%2Cblocks.item%3Ablock_richtext.id%2Cblocks.item%3Ablock_richtext.title%2Cblocks.item%3Ablock_richtext.headline%2Cblocks.item%3Ablock_richtext.content%2Cblocks.item%3Ablock_richtext.alignment%2Cblocks.item%3Ablock_testimonials.id%2Cblocks.item%3Ablock_testimonials.title%2Cblocks.item%3Ablock_testimonials.headline%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.id%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.title%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.subtitle%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.content%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.company%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.company_logo%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.image.id%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.image.title%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.image.description%2Cblocks.item%3Ablock_quote.id%2Cblocks.item%3Ablock_quote.title%2Cblocks.item%3Ablock_quote.subtitle%2Cblocks.item%3Ablock_quote.content%2Cblocks.item%3Ablock_cta.id%2Cblocks.item%3Ablock_cta.title%2Cblocks.item%3Ablock_cta.headline%2Cblocks.item%3Ablock_cta.content%2Cblocks.item%3Ablock_cta.button_group.*%2Cblocks.item%3Ablock_cta.button_group.buttons.*%2Cblocks.item%3Ablock_cta.button_group.buttons.page.permalink%2Cblocks.item%3Ablock_cta.button_group.buttons.post.slug%2Cblocks.item%3Ablock_form.id%2Cblocks.item%3Ablock_form.title%2Cblocks.item%3Ablock_form.headline%2Cblocks.item%3Ablock_form.form.*%2Cblocks.item%3Ablock_logocloud.id%2Cblocks.item%3Ablock_logocloud.title%2Cblocks.item%3Ablock_logocloud.headline%2Cblocks.item%3Ablock_logocloud.logos.id%2Cblocks.item%3Ablock_logocloud.logos.directus_files_id.id%2Cblocks.item%3Ablock_logocloud.logos.directus_files_id.title%2Cblocks.item%3Ablock_logocloud.logos.directus_files_id.description%2Cblocks.item%3Ablock_gallery.id%2Cblocks.item%3Ablock_gallery.title%2Cblocks.item%3Ablock_gallery.headline%2Cblocks.item%3Ablock_gallery.gallery_items.directus_files_id.id%2Cblocks.item%3Ablock_gallery.gallery_items.directus_files_id.title%2Cblocks.item%3Ablock_gallery.gallery_items.directus_files_id.description%2Cblocks.item%3Ablock_steps.id%2Cblocks.item%3Ablock_steps.title%2Cblocks.item%3Ablock_steps.headline%2Cblocks.item%3Ablock_steps.show_step_numbers%2Cblocks.item%3Ablock_steps.alternate_image_position%2Cblocks.item%3Ablock_steps.steps.id%2Cblocks.item%3Ablock_steps.steps.title%2Cblocks.item%3Ablock_steps.steps.content%2Cblocks.item%3Ablock_steps.steps.image%2Cblocks.item%3Ablock_steps.steps.button_group.*%2Cblocks.item%3Ablock_steps.steps.button_group.buttons.*%2Cblocks.item%3Ablock_steps.steps.button_group.buttons.page.permalink%2Cblocks.item%3Ablock_steps.steps.button_group.buttons.post.slug%2Cblocks.item%3Ablock_columns.id%2Cblocks.item%3Ablock_columns.title%2Cblocks.item%3Ablock_columns.headline%2Cblocks.item%3Ablock_columns.rows.title%2Cblocks.item%3Ablock_columns.rows.headline%2Cblocks.item%3Ablock_columns.rows.content%2Cblocks.item%3Ablock_columns.rows.image_position%2Cblocks.item%3Ablock_columns.rows.image.id%2Cblocks.item%3Ablock_columns.rows.image.title%2Cblocks.item%3Ablock_columns.rows.image.description%2Cblocks.item%3Ablock_columns.rows.button_group.*%2Cblocks.item%3Ablock_columns.rows.button_group.buttons.*%2Cblocks.item%3Ablock_columns.rows.button_group.buttons.page.permalink%2Cblocks.item%3Ablock_columns.rows.button_group.buttons.post.slug%2Cblocks.item%3Ablock_divider.id%2Cblocks.item%3Ablock_divider.title%2Cblocks.item%3Ablock_team.*%2Cblocks.item%3Ablock_html.*%2Cblocks.item%3Ablock_video.*%2Cblocks.item%3Ablock_cardgroup.*&filter=%7B%22permalink%22%3A%7B%22_eq%22%3A%22%2Fauth%2Flogin%22%7D%7D&limit=1",
+      "responseSize": "896",
+      "serverIp": "2600:1901:81d5:200::",
+      "status": 403,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c3e9000cc921b594da4d",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:28:58.089751200Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "36af1905bac268ce",
+    "timestamp": "2025-12-16T02:28:57.816226Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/99b48ad3b3e8acb802948ca67ba05179"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.012110309s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "895",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/items/forms?filter=%7B%22key%22%3A%7B%22_eq%22%3A%22newsletter%22%7D%7D",
+      "responseSize": "896",
+      "serverIp": "2600:1901:81d5:200::",
+      "status": 403,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c3e9000c9a9cd8b91f31",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:28:58.089751200Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "645dbcaa1c4ea2e4",
+    "timestamp": "2025-12-16T02:28:57.812584Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/e7af197ad3395f6102948ca67ba059d7"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.018114689s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "1183",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/items/navigation/footer?fields=items.id%2Citems.title%2Citems.icon%2Citems.label%2Citems.type%2Citems.url%2Citems.has_children%2Citems.page.permalink%2Citems.page.title%2Citems.children.id%2Citems.children.title%2Citems.children.icon%2Citems.children.label%2Citems.children.type%2Citems.children.url%2Citems.children.page.permalink%2Citems.children.page.title",
+      "responseSize": "896",
+      "serverIp": "2600:1901:81d5:200::",
+      "status": 403,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c3e9000b3a71bfeb24aa",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:28:57.758985380Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "16b6ee7ff6a933c3",
+    "timestamp": "2025-12-16T02:28:57.716377Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/cd5c55059f5f39bc02948ca67ba05026"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.009335509s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "1211",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/items/navigation/main?fields=items.id%2Citems.has_children%2Citems.title%2Citems.icon%2Citems.label%2Citems.type%2Citems.url%2Citems.page.permalink%2Citems.page.title%2Citems.children.id%2Citems.children.title%2Citems.children.has_children%2Citems.children.icon%2Citems.children.label%2Citems.children.type%2Citems.children.url%2Citems.children.page.permalink%2Citems.children.page.title",
+      "responseSize": "896",
+      "serverIp": "2600:1901:81d5:200::",
+      "status": 403,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c3e9000b15319bd08058",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:28:57.758985380Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "e1b45a8f06c1f86f",
+    "timestamp": "2025-12-16T02:28:57.715196Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/f0038ef3686f0d8602948ca67ba057c8"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.011411129s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "854",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/users/me?fields=*%2Ccontacts.*",
+      "responseSize": "889",
+      "serverIp": "2600:1901:81d5:200::",
+      "status": 401,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c3e90009b1fd4cb75477",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:28:57.758985380Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "271a02e3f80af73d",
+    "timestamp": "2025-12-16T02:28:57.622696Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/cb365ac57aa6f3df02948ca67ba05675"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.013768698s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "895",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/items/forms?filter=%7B%22key%22%3A%7B%22_eq%22%3A%22newsletter%22%7D%7D",
+      "responseSize": "896",
+      "serverIp": "2600:1901:81d5:200::",
+      "status": 403,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c3e1000efd3b94ce9e8c",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:28:50.095654157Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "ddf962d877c3ac1e",
+    "timestamp": "2025-12-16T02:28:49.966784Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/63530e91a07d72124465aa2bfcc54213"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.008862339s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "1184",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/items/navigation/footer?fields=items.id%2Citems.title%2Citems.icon%2Citems.label%2Citems.type%2Citems.url%2Citems.has_children%2Citems.page.permalink%2Citems.page.title%2Citems.children.id%2Citems.children.title%2Citems.children.icon%2Citems.children.label%2Citems.children.type%2Citems.children.url%2Citems.children.page.permalink%2Citems.children.page.title",
+      "responseSize": "896",
+      "serverIp": "2600:1901:81d5:200::",
+      "status": 403,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c3e1000c438e470cae87",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:28:50.095654157Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "0c72984ab6ad2e41",
+    "timestamp": "2025-12-16T02:28:49.793189Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/fd66f10f5325fd154465aa2bfcc547fc"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.009735259s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "5286",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/items/pages?fields=*%2Cseo.*%2Cblocks.id%2Cblocks.collection%2Cblocks.hide_block%2Cblocks.item%3Ablock_hero.id%2Cblocks.item%3Ablock_hero.title%2Cblocks.item%3Ablock_hero.headline%2Cblocks.item%3Ablock_hero.content%2Cblocks.item%3Ablock_hero.image%2Cblocks.item%3Ablock_hero.image_position%2Cblocks.item%3Ablock_hero.button_group.*%2Cblocks.item%3Ablock_hero.button_group.buttons.*%2Cblocks.item%3Ablock_hero.button_group.buttons.page.permalink%2Cblocks.item%3Ablock_hero.button_group.buttons.post.slug%2Cblocks.item%3Ablock_faqs.id%2Cblocks.item%3Ablock_faqs.title%2Cblocks.item%3Ablock_faqs.faqs%2Cblocks.item%3Ablock_faqs.headline%2Cblocks.item%3Ablock_faqs.alignment%2Cblocks.item%3Ablock_richtext.id%2Cblocks.item%3Ablock_richtext.title%2Cblocks.item%3Ablock_richtext.headline%2Cblocks.item%3Ablock_richtext.content%2Cblocks.item%3Ablock_richtext.alignment%2Cblocks.item%3Ablock_testimonials.id%2Cblocks.item%3Ablock_testimonials.title%2Cblocks.item%3Ablock_testimonials.headline%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.id%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.title%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.subtitle%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.content%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.company%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.company_logo%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.image.id%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.image.title%2Cblocks.item%3Ablock_testimonials.testimonials.testimonials_id.image.description%2Cblocks.item%3Ablock_quote.id%2Cblocks.item%3Ablock_quote.title%2Cblocks.item%3Ablock_quote.subtitle%2Cblocks.item%3Ablock_quote.content%2Cblocks.item%3Ablock_cta.id%2Cblocks.item%3Ablock_cta.title%2Cblocks.item%3Ablock_cta.headline%2Cblocks.item%3Ablock_cta.content%2Cblocks.item%3Ablock_cta.button_group.*%2Cblocks.item%3Ablock_cta.button_group.buttons.*%2Cblocks.item%3Ablock_cta.button_group.buttons.page.permalink%2Cblocks.item%3Ablock_cta.button_group.buttons.post.slug%2Cblocks.item%3Ablock_form.id%2Cblocks.item%3Ablock_form.title%2Cblocks.item%3Ablock_form.headline%2Cblocks.item%3Ablock_form.form.*%2Cblocks.item%3Ablock_logocloud.id%2Cblocks.item%3Ablock_logocloud.title%2Cblocks.item%3Ablock_logocloud.headline%2Cblocks.item%3Ablock_logocloud.logos.id%2Cblocks.item%3Ablock_logocloud.logos.directus_files_id.id%2Cblocks.item%3Ablock_logocloud.logos.directus_files_id.title%2Cblocks.item%3Ablock_logocloud.logos.directus_files_id.description%2Cblocks.item%3Ablock_gallery.id%2Cblocks.item%3Ablock_gallery.title%2Cblocks.item%3Ablock_gallery.headline%2Cblocks.item%3Ablock_gallery.gallery_items.directus_files_id.id%2Cblocks.item%3Ablock_gallery.gallery_items.directus_files_id.title%2Cblocks.item%3Ablock_gallery.gallery_items.directus_files_id.description%2Cblocks.item%3Ablock_steps.id%2Cblocks.item%3Ablock_steps.title%2Cblocks.item%3Ablock_steps.headline%2Cblocks.item%3Ablock_steps.show_step_numbers%2Cblocks.item%3Ablock_steps.alternate_image_position%2Cblocks.item%3Ablock_steps.steps.id%2Cblocks.item%3Ablock_steps.steps.title%2Cblocks.item%3Ablock_steps.steps.content%2Cblocks.item%3Ablock_steps.steps.image%2Cblocks.item%3Ablock_steps.steps.button_group.*%2Cblocks.item%3Ablock_steps.steps.button_group.buttons.*%2Cblocks.item%3Ablock_steps.steps.button_group.buttons.page.permalink%2Cblocks.item%3Ablock_steps.steps.button_group.buttons.post.slug%2Cblocks.item%3Ablock_columns.id%2Cblocks.item%3Ablock_columns.title%2Cblocks.item%3Ablock_columns.headline%2Cblocks.item%3Ablock_columns.rows.title%2Cblocks.item%3Ablock_columns.rows.headline%2Cblocks.item%3Ablock_columns.rows.content%2Cblocks.item%3Ablock_columns.rows.image_position%2Cblocks.item%3Ablock_columns.rows.image.id%2Cblocks.item%3Ablock_columns.rows.image.title%2Cblocks.item%3Ablock_columns.rows.image.description%2Cblocks.item%3Ablock_columns.rows.button_group.*%2Cblocks.item%3Ablock_columns.rows.button_group.buttons.*%2Cblocks.item%3Ablock_columns.rows.button_group.buttons.page.permalink%2Cblocks.item%3Ablock_columns.rows.button_group.buttons.post.slug%2Cblocks.item%3Ablock_divider.id%2Cblocks.item%3Ablock_divider.title%2Cblocks.item%3Ablock_team.*%2Cblocks.item%3Ablock_html.*%2Cblocks.item%3Ablock_video.*%2Cblocks.item%3Ablock_cardgroup.*&filter=%7B%22permalink%22%3A%7B%22_eq%22%3A%22%2Fauth%2Flogin%22%7D%7D&limit=1",
+      "responseSize": "896",
+      "serverIp": "2600:1901:81d5:200::",
+      "status": 403,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c3e1000bb6032c499fc1",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:28:50.095654157Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "37dc291f359c7e80",
+    "timestamp": "2025-12-16T02:28:49.755739Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/10ca41fc6f8c40a94465aa2bfcc548ae"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.010819619s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "1212",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/items/navigation/main?fields=items.id%2Citems.has_children%2Citems.title%2Citems.icon%2Citems.label%2Citems.type%2Citems.url%2Citems.page.permalink%2Citems.page.title%2Citems.children.id%2Citems.children.title%2Citems.children.has_children%2Citems.children.icon%2Citems.children.label%2Citems.children.type%2Citems.children.url%2Citems.children.page.permalink%2Citems.children.page.title",
+      "responseSize": "896",
+      "serverIp": "2600:1901:81d5:200::",
+      "status": 403,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c3e1000b19ba1de89704",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:28:49.761998400Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "c470a3870c051496",
+    "timestamp": "2025-12-16T02:28:49.715106Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/628fa0b715ce18e54465aa2bfcc54446"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.011431608s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://ai.incomexsaigoncorp.vn/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "881",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/items/forms?filter=%7B%22key%22%3A%7B%22_eq%22%3A%22newsletter%22%7D%7D",
+      "responseSize": "889",
+      "serverIp": "2600:1901:81d4:200::",
+      "status": 403,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c3e10009f656533ddd95",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:28:49.761998400Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "737de175070b4d81",
+    "timestamp": "2025-12-16T02:28:49.640107Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/c244683bdebceb7a96c259f3430522d6"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.008702549s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://ai.incomexsaigoncorp.vn/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "1169",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/items/navigation/footer?fields=items.id%2Citems.title%2Citems.icon%2Citems.label%2Citems.type%2Citems.url%2Citems.has_children%2Citems.page.permalink%2Citems.page.title%2Citems.children.id%2Citems.children.title%2Citems.children.icon%2Citems.children.label%2Citems.children.type%2Citems.children.url%2Citems.children.page.permalink%2Citems.children.page.title",
+      "responseSize": "889",
+      "serverIp": "2600:1901:81d4:200::",
+      "status": 403,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c3e100078ef16b7d3b40",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:28:49.761998400Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "40a288265ce04775",
+    "timestamp": "2025-12-16T02:28:49.484840Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/79d03df2ef15cdc896c259f34305249e"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.012452388s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://ai.incomexsaigoncorp.vn/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "1198",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/items/navigation/main?fields=items.id%2Citems.has_children%2Citems.title%2Citems.icon%2Citems.label%2Citems.type%2Citems.url%2Citems.page.permalink%2Citems.page.title%2Citems.children.id%2Citems.children.title%2Citems.children.has_children%2Citems.children.icon%2Citems.children.label%2Citems.children.type%2Citems.children.url%2Citems.children.page.permalink%2Citems.children.page.title",
+      "responseSize": "889",
+      "serverIp": "2600:1901:81d4:200::",
+      "status": 403,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c3e1000709e01773dfb5",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:28:49.761998400Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "042b6aba6b7f76d2",
+    "timestamp": "2025-12-16T02:28:49.446960Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/cf37b3d0d50917e296c259f343052951"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.011878839s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://ai.incomexsaigoncorp.vn/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "841",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/users/me?fields=*%2Ccontacts.*",
+      "responseSize": "882",
+      "serverIp": "2600:1901:81d4:200::",
+      "status": 401,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c3e0000cef79e5c570f0",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:28:49.097403841Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "007328ac227b2f99",
+    "timestamp": "2025-12-16T02:28:48.834279Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/17ea0fa3c0e3be8396c259f343052cc2"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.009704869s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://ai.incomexsaigoncorp.vn/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "841",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/users/me?fields=*%2Ccontacts.*",
+      "responseSize": "882",
+      "serverIp": "2600:1901:81d4:200::",
+      "status": 401,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c3e00007c38f40440ae6",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:28:48.764553678Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "20da6d01793cc5fd",
+    "timestamp": "2025-12-16T02:28:48.497376Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/9271d2748211deb2728a336d543e7949",
+    "traceSampled": true
+  },
+  {
+    "httpRequest": {
+      "latency": "0.091043988s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "854",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/users/me?fields=*%2Ccontacts.*",
+      "responseSize": "889",
+      "serverIp": "2600:1901:81d5:200::",
+      "status": 401,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c3e000073ff4df0b893a",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:28:48.764553678Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "54a8a47064c581a9",
+    "timestamp": "2025-12-16T02:28:23.879140Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/7c0431feb4af12ecc8e8a080052ba370"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.053734013s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "854",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/users/me?fields=*%2Ccontacts.*",
+      "responseSize": "889",
+      "serverIp": "2600:1901:81d5:200::",
+      "status": 401,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c3e00006add9e7866324",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:28:48.764553678Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "a8cd689b86567fc0",
+    "timestamp": "2025-12-16T02:28:23.840442Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/970ff2c36a022594c8e8a080052ba5a6"
+  },
+  {
+    "httpRequest": {
+      "latency": "30.243676656s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "2001:ee0:4141:687b:ddb9:5293:3a16:1f0",
+      "requestMethod": "GET",
+      "requestSize": "870",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/users/me?fields=*%2Ccontacts.*",
+      "responseSize": "889",
+      "serverIp": "2600:1901:81d5:200::",
+      "status": 401,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "6940c3e000069be97f5be793",
+    "labels": {
+      "instanceId": "0007e26d68510398152815c1d6b3ebe056fd801f973dbd54bfe6693faadb2502ce80a5c74343f6ab6fc5c5b3730d02763b41ea2d28d6fd2b30c6c39eea6da03717a65decbdef5f615157784496df0c2b42"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-16T02:28:48.764553678Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "5a38af78affc8a77",
+    "timestamp": "2025-12-16T02:28:17.926524Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/231cceac01adafbae3f5247cccb0f069",
+    "traceSampled": true
+  }
+]

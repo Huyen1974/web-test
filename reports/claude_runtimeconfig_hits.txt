@@ -1,0 +1,20 @@
+web/pages/approval-desk.vue:11:const directusUrl = $config.public.directusUrl;
+web/pages/approval-desk.vue:17:const iframeUrl = computed(() => `${directusUrl}/admin/content/knowledge_documents/${documentId}`);
+web/nuxt.config.ts:58:	runtimeConfig: {
+web/nuxt.config.ts:64:			directusUrl: process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus-test-812872501910.asia-southeast1.run.app',
+web/nuxt.config.ts:84:			baseUrl: process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus-test-812872501910.asia-southeast1.run.app',
+web/nuxt.config.ts:113:			baseURL: `${process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus-test-812872501910.asia-southeast1.run.app'}/assets/`,
+web/modules/directus/index.ts:148:		nuxt.options.runtimeConfig.public.directus = defu(nuxt.options.runtimeConfig.public.directus, moduleOptions);
+web/modules/directus/index.ts:168:			const directus = createDirectus<Schema>(joinURL(nuxt.options.runtimeConfig.public.directus.rest.baseUrl)).with(
+web/modules/directus/runtime/plugins/directus.ts:17:		config.public.directusUrl ||
+web/components/GlobalSearch.vue:33:const runtimeConfig = useRuntimeConfig();
+web/components/GlobalSearch.vue:35:	runtimeConfig.public.directus?.rest?.baseUrl ||
+web/components/GlobalSearch.vue:36:	runtimeConfig.public.directus?.url ||
+web/components/GlobalSearch.vue:37:	runtimeConfig.public.directusUrl ||
+web/layers/portal/nuxt.config.ts:12:	runtimeConfig: {
+web/layers/portal/components/PortalSearch.vue:16:const runtimeConfig = useRuntimeConfig();
+web/layers/portal/components/PortalSearch.vue:18:	runtimeConfig.public.directus?.rest?.baseUrl ||
+web/layers/portal/components/PortalSearch.vue:19:	runtimeConfig.public.directus?.url ||
+web/layers/portal/components/PortalSearch.vue:20:	runtimeConfig.public.directusUrl ||
+web/layers/portal/composables/useStripe.ts:18:	const runtimeConfig = useRuntimeConfig();
+web/layers/portal/composables/useStripe.ts:20:	const { stripePublishableKey } = runtimeConfig.public;
