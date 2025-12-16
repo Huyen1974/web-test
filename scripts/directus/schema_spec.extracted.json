@@ -1,0 +1,1253 @@
+{
+  "core": {
+    "pages": {
+      "collection": "pages",
+      "type": "collection",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": false,
+          "key": true
+        },
+        "permalink": {
+          "type": "string",
+          "required": true,
+          "unique": true
+        },
+        "title": {
+          "type": "string",
+          "required": false
+        },
+        "summary": {
+          "type": "text",
+          "required": false
+        },
+        "status": {
+          "type": "string",
+          "required": false,
+          "default": "draft"
+        },
+        "sort": {
+          "type": "integer",
+          "required": false
+        },
+        "date_created": {
+          "type": "timestamp",
+          "required": false
+        },
+        "date_updated": {
+          "type": "timestamp",
+          "required": false
+        },
+        "user_created": {
+          "type": "uuid",
+          "required": false
+        },
+        "user_updated": {
+          "type": "uuid",
+          "required": false
+        }
+      },
+      "required_fields": [
+        "permalink"
+      ],
+      "relations": {
+        "seo": {
+          "type": "m2o",
+          "related_collection": "seo",
+          "field": "seo"
+        },
+        "blocks": {
+          "type": "o2m",
+          "related_collection": "pages_blocks",
+          "field": "pages_id"
+        },
+        "user_created": {
+          "type": "m2o",
+          "related_collection": "directus_users"
+        },
+        "user_updated": {
+          "type": "m2o",
+          "related_collection": "directus_users"
+        }
+      },
+      "evidence": [
+        "web/pages/[...permalink].vue:30-170",
+        "web/types/content/page.ts:22-34"
+      ]
+    },
+    "pages_blocks": {
+      "collection": "pages_blocks",
+      "type": "junction",
+      "note": "M2A junction table for page blocks",
+      "fields": {
+        "id": {
+          "type": "integer",
+          "required": false,
+          "key": true
+        },
+        "pages_id": {
+          "type": "uuid",
+          "required": false
+        },
+        "collection": {
+          "type": "string",
+          "required": true
+        },
+        "item": {
+          "type": "string",
+          "required": true
+        },
+        "sort": {
+          "type": "integer",
+          "required": false
+        },
+        "hide_block": {
+          "type": "boolean",
+          "required": false,
+          "default": false
+        }
+      },
+      "required_fields": [
+        "collection",
+        "item"
+      ],
+      "relations": {
+        "pages_id": {
+          "type": "m2o",
+          "related_collection": "pages"
+        },
+        "item": {
+          "type": "m2a",
+          "related_collections": [
+            "block_hero",
+            "block_faqs",
+            "block_richtext",
+            "block_testimonials",
+            "block_quote",
+            "block_cta",
+            "block_form",
+            "block_logocloud",
+            "block_gallery",
+            "block_steps",
+            "block_columns",
+            "block_divider",
+            "block_team",
+            "block_html",
+            "block_video"
+          ]
+        }
+      },
+      "evidence": [
+        "web/pages/[...permalink].vue:36-166",
+        "web/types/content/page.ts:36-61",
+        "web/components/PageBuilder.vue:4-20"
+      ]
+    },
+    "navigation": {
+      "collection": "navigation",
+      "type": "singleton_collection",
+      "note": "Uses string IDs like 'main', 'footer' instead of numeric IDs",
+      "fields": {
+        "id": {
+          "type": "string",
+          "required": true,
+          "key": true
+        },
+        "title": {
+          "type": "string",
+          "required": false
+        },
+        "status": {
+          "type": "string",
+          "required": false,
+          "default": "published"
+        },
+        "date_created": {
+          "type": "timestamp",
+          "required": false
+        },
+        "date_updated": {
+          "type": "timestamp",
+          "required": false
+        },
+        "user_created": {
+          "type": "uuid",
+          "required": false
+        },
+        "user_updated": {
+          "type": "uuid",
+          "required": false
+        }
+      },
+      "required_fields": [
+        "id"
+      ],
+      "relations": {
+        "items": {
+          "type": "o2m",
+          "related_collection": "navigation_items",
+          "field": "navigation"
+        }
+      },
+      "singletons_found": [
+        "main",
+        "footer"
+      ],
+      "evidence": [
+        "web/components/navigation/TheHeader.vue:12",
+        "web/components/navigation/TheFooter.vue:9",
+        "web/types/meta/navigation.ts:4-13"
+      ]
+    },
+    "navigation_items": {
+      "collection": "navigation_items",
+      "type": "collection",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": false,
+          "key": true
+        },
+        "navigation": {
+          "type": "string",
+          "required": false
+        },
+        "title": {
+          "type": "string",
+          "required": true
+        },
+        "icon": {
+          "type": "string",
+          "required": false
+        },
+        "label": {
+          "type": "string",
+          "required": false
+        },
+        "type": {
+          "type": "string",
+          "required": false
+        },
+        "url": {
+          "type": "string",
+          "required": false
+        },
+        "has_children": {
+          "type": "boolean",
+          "required": false
+        },
+        "open_in_new_tab": {
+          "type": "boolean",
+          "required": false
+        },
+        "parent": {
+          "type": "uuid",
+          "required": false
+        },
+        "sort": {
+          "type": "integer",
+          "required": false
+        },
+        "display_details": {
+          "type": "string",
+          "required": false
+        }
+      },
+      "required_fields": [
+        "title"
+      ],
+      "relations": {
+        "navigation": {
+          "type": "m2o",
+          "related_collection": "navigation"
+        },
+        "page": {
+          "type": "m2o",
+          "related_collection": "pages",
+          "field": "page"
+        },
+        "parent": {
+          "type": "m2o",
+          "related_collection": "navigation_items",
+          "self_relation": true
+        },
+        "children": {
+          "type": "o2m",
+          "related_collection": "navigation_items",
+          "field": "parent",
+          "self_relation": true
+        }
+      },
+      "evidence": [
+        "web/components/navigation/TheHeader.vue:15-38",
+        "web/components/navigation/TheFooter.vue:12-34",
+        "web/types/meta/navigation.ts:14-32"
+      ]
+    },
+    "forms": {
+      "collection": "forms",
+      "type": "collection",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": false,
+          "key": true
+        },
+        "key": {
+          "type": "string",
+          "required": false,
+          "unique": true
+        },
+        "title": {
+          "type": "string",
+          "required": false
+        },
+        "schema": {
+          "type": "json",
+          "required": false
+        },
+        "submit_label": {
+          "type": "string",
+          "required": false
+        },
+        "success_message": {
+          "type": "string",
+          "required": false
+        },
+        "on_success": {
+          "type": "string",
+          "required": false
+        },
+        "redirect_url": {
+          "type": "string",
+          "required": false
+        },
+        "status": {
+          "type": "string",
+          "required": false,
+          "default": "draft"
+        },
+        "sort": {
+          "type": "integer",
+          "required": false
+        },
+        "date_created": {
+          "type": "timestamp",
+          "required": false
+        },
+        "date_updated": {
+          "type": "timestamp",
+          "required": false
+        },
+        "user_created": {
+          "type": "uuid",
+          "required": false
+        },
+        "user_updated": {
+          "type": "uuid",
+          "required": false
+        }
+      },
+      "required_fields": [],
+      "note": "Filtered by key field (e.g., key: 'newsletter')",
+      "evidence": [
+        "web/components/navigation/TheFooter.vue:45-52",
+        "web/types/content/form.ts:3-20"
+      ]
+    },
+    "globals": {
+      "collection": "globals",
+      "type": "singleton",
+      "fields": {
+        "id": {
+          "type": "string",
+          "required": false,
+          "key": true
+        },
+        "title": {
+          "type": "string",
+          "required": false
+        },
+        "tagline": {
+          "type": "string",
+          "required": false
+        },
+        "description": {
+          "type": "text",
+          "required": false
+        },
+        "url": {
+          "type": "string",
+          "required": false
+        },
+        "email": {
+          "type": "string",
+          "required": false
+        },
+        "phone": {
+          "type": "string",
+          "required": false
+        },
+        "street_address": {
+          "type": "string",
+          "required": false
+        },
+        "address_locality": {
+          "type": "string",
+          "required": false
+        },
+        "address_region": {
+          "type": "string",
+          "required": false
+        },
+        "postal_code": {
+          "type": "string",
+          "required": false
+        },
+        "address_country": {
+          "type": "string",
+          "required": false
+        },
+        "og_image": {
+          "type": "uuid",
+          "required": false
+        },
+        "logo_on_light_bg": {
+          "type": "uuid",
+          "required": false
+        },
+        "logo_on_dark_bg": {
+          "type": "uuid",
+          "required": false
+        },
+        "social_links": {
+          "type": "json",
+          "required": false
+        },
+        "routes": {
+          "type": "json",
+          "required": false
+        },
+        "build_hook_url": {
+          "type": "string",
+          "required": false
+        },
+        "contact": {
+          "type": "string",
+          "required": false
+        },
+        "deployment": {
+          "type": "string",
+          "required": false
+        },
+        "seo": {
+          "type": "string",
+          "required": false
+        },
+        "social": {
+          "type": "string",
+          "required": false
+        },
+        "notice_deployment": {
+          "type": "string",
+          "required": false
+        }
+      },
+      "required_fields": [],
+      "relations": {
+        "og_image": {
+          "type": "m2o",
+          "related_collection": "directus_files"
+        },
+        "logo_on_light_bg": {
+          "type": "m2o",
+          "related_collection": "directus_files"
+        },
+        "logo_on_dark_bg": {
+          "type": "m2o",
+          "related_collection": "directus_files"
+        }
+      },
+      "evidence": [
+        "web/modules/directus/index.ts:208",
+        "web/types/meta/globals.ts:3-30",
+        "web/app.vue:4-13"
+      ]
+    },
+    "seo": {
+      "collection": "seo",
+      "type": "collection",
+      "note": "SEO metadata collection referenced by pages",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": false,
+          "key": true
+        },
+        "title": {
+          "type": "string",
+          "required": false
+        },
+        "meta_description": {
+          "type": "text",
+          "required": false
+        },
+        "canonical_url": {
+          "type": "string",
+          "required": false
+        }
+      },
+      "required_fields": [],
+      "evidence": [
+        "web/pages/[...permalink].vue:35,189-193",
+        "web/types/content/page.ts:27"
+      ]
+    },
+    "pages_blog": {
+      "collection": "pages_blog",
+      "type": "singleton",
+      "fields": {
+        "id": {
+          "type": "string",
+          "required": false,
+          "key": true
+        },
+        "title": {
+          "type": "string",
+          "required": false
+        },
+        "headline": {
+          "type": "string",
+          "required": false
+        },
+        "featured_post": {
+          "type": "uuid",
+          "required": false
+        },
+        "seo": {
+          "type": "string",
+          "required": false
+        }
+      },
+      "required_fields": [],
+      "relations": {
+        "featured_post": {
+          "type": "m2o",
+          "related_collection": "posts"
+        },
+        "seo": {
+          "type": "m2o",
+          "related_collection": "seo"
+        }
+      },
+      "evidence": [
+        "web/pages/posts/index.vue:23",
+        "web/types/content/page.ts:70-76"
+      ]
+    },
+    "pages_projects": {
+      "collection": "pages_projects",
+      "type": "singleton",
+      "fields": {
+        "id": {
+          "type": "string",
+          "required": false,
+          "key": true
+        },
+        "title": {
+          "type": "string",
+          "required": false
+        },
+        "headline": {
+          "type": "string",
+          "required": false
+        },
+        "seo": {
+          "type": "string",
+          "required": false
+        }
+      },
+      "required_fields": [],
+      "relations": {
+        "seo": {
+          "type": "m2o",
+          "related_collection": "seo"
+        }
+      },
+      "evidence": [
+        "web/pages/projects.vue:19",
+        "web/types/content/page.ts:63-68"
+      ]
+    }
+  },
+  "blocks": {
+    "block_hero": {
+      "collection": "block_hero",
+      "type": "collection",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": false,
+          "key": true
+        },
+        "title": {
+          "type": "string",
+          "required": false
+        },
+        "headline": {
+          "type": "string",
+          "required": false
+        },
+        "content": {
+          "type": "text",
+          "required": false
+        },
+        "image": {
+          "type": "uuid",
+          "required": false
+        },
+        "image_position": {
+          "type": "string",
+          "required": false,
+          "options": [
+            "left",
+            "right"
+          ]
+        },
+        "button_group": {
+          "type": "string",
+          "required": false
+        }
+      },
+      "required_fields": [],
+      "relations": {
+        "image": {
+          "type": "m2o",
+          "related_collection": "directus_files"
+        },
+        "button_group": {
+          "type": "m2o",
+          "related_collection": "block_button_groups"
+        }
+      },
+      "evidence": [
+        "web/pages/[...permalink].vue:42-49",
+        "web/types/blocks/block-hero.ts:4-12",
+        "web/components/PageBuilder.vue:5"
+      ]
+    },
+    "block_faqs": {
+      "collection": "block_faqs",
+      "type": "collection",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": false,
+          "key": true
+        },
+        "title": {
+          "type": "string",
+          "required": false
+        },
+        "headline": {
+          "type": "string",
+          "required": false
+        },
+        "faqs": {
+          "type": "json",
+          "required": false
+        },
+        "alignment": {
+          "type": "string",
+          "required": false
+        }
+      },
+      "required_fields": [],
+      "evidence": [
+        "web/pages/[...permalink].vue:51",
+        "web/components/PageBuilder.vue:6"
+      ]
+    },
+    "block_richtext": {
+      "collection": "block_richtext",
+      "type": "collection",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": false,
+          "key": true
+        },
+        "title": {
+          "type": "string",
+          "required": false
+        },
+        "headline": {
+          "type": "string",
+          "required": false
+        },
+        "content": {
+          "type": "text",
+          "required": false
+        },
+        "alignment": {
+          "type": "string",
+          "required": false
+        }
+      },
+      "required_fields": [],
+      "evidence": [
+        "web/pages/[...permalink].vue:52",
+        "web/components/PageBuilder.vue:7"
+      ]
+    },
+    "block_testimonials": {
+      "collection": "block_testimonials",
+      "type": "collection",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": false,
+          "key": true
+        },
+        "title": {
+          "type": "string",
+          "required": false
+        },
+        "headline": {
+          "type": "string",
+          "required": false
+        },
+        "testimonials": {
+          "type": "alias",
+          "required": false
+        }
+      },
+      "required_fields": [],
+      "relations": {
+        "testimonials": {
+          "type": "m2m",
+          "related_collection": "testimonials",
+          "junction_collection": "block_testimonials_testimonials",
+          "junction_field": "testimonials_id"
+        }
+      },
+      "evidence": [
+        "web/pages/[...permalink].vue:53-72",
+        "web/components/PageBuilder.vue:8"
+      ]
+    },
+    "block_quote": {
+      "collection": "block_quote",
+      "type": "collection",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": false,
+          "key": true
+        },
+        "title": {
+          "type": "string",
+          "required": false
+        },
+        "subtitle": {
+          "type": "string",
+          "required": false
+        },
+        "content": {
+          "type": "text",
+          "required": false
+        }
+      },
+      "required_fields": [],
+      "evidence": [
+        "web/pages/[...permalink].vue:73",
+        "web/components/PageBuilder.vue:9"
+      ]
+    },
+    "block_cta": {
+      "collection": "block_cta",
+      "type": "collection",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": false,
+          "key": true
+        },
+        "title": {
+          "type": "string",
+          "required": false
+        },
+        "headline": {
+          "type": "string",
+          "required": false
+        },
+        "content": {
+          "type": "text",
+          "required": false
+        },
+        "buttons": {
+          "type": "json",
+          "required": false
+        },
+        "button_group": {
+          "type": "string",
+          "required": false
+        }
+      },
+      "required_fields": [],
+      "relations": {
+        "button_group": {
+          "type": "m2o",
+          "related_collection": "block_button_groups"
+        }
+      },
+      "evidence": [
+        "web/pages/[...permalink].vue:74-87",
+        "web/types/blocks/block-cta.ts:3-10",
+        "web/components/PageBuilder.vue:10"
+      ]
+    },
+    "block_form": {
+      "collection": "block_form",
+      "type": "collection",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": false,
+          "key": true
+        },
+        "title": {
+          "type": "string",
+          "required": false
+        },
+        "headline": {
+          "type": "string",
+          "required": false
+        },
+        "form": {
+          "type": "uuid",
+          "required": false
+        }
+      },
+      "required_fields": [],
+      "relations": {
+        "form": {
+          "type": "m2o",
+          "related_collection": "forms"
+        }
+      },
+      "evidence": [
+        "web/pages/[...permalink].vue:88",
+        "web/types/blocks/block-form.ts:3-8",
+        "web/components/PageBuilder.vue:11"
+      ]
+    },
+    "block_logocloud": {
+      "collection": "block_logocloud",
+      "type": "collection",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": false,
+          "key": true
+        },
+        "title": {
+          "type": "string",
+          "required": false
+        },
+        "headline": {
+          "type": "string",
+          "required": false
+        },
+        "logos": {
+          "type": "alias",
+          "required": false
+        }
+      },
+      "required_fields": [],
+      "relations": {
+        "logos": {
+          "type": "m2m",
+          "related_collection": "directus_files",
+          "junction_collection": "block_logocloud_files",
+          "junction_field": "directus_files_id"
+        }
+      },
+      "evidence": [
+        "web/pages/[...permalink].vue:89-101",
+        "web/components/PageBuilder.vue:12"
+      ]
+    },
+    "block_gallery": {
+      "collection": "block_gallery",
+      "type": "collection",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": false,
+          "key": true
+        },
+        "title": {
+          "type": "string",
+          "required": false
+        },
+        "headline": {
+          "type": "string",
+          "required": false
+        },
+        "gallery_items": {
+          "type": "alias",
+          "required": false
+        }
+      },
+      "required_fields": [],
+      "relations": {
+        "gallery_items": {
+          "type": "m2m",
+          "related_collection": "directus_files",
+          "junction_collection": "block_gallery_files",
+          "junction_field": "directus_files_id"
+        }
+      },
+      "evidence": [
+        "web/pages/[...permalink].vue:102-113",
+        "web/components/PageBuilder.vue:16"
+      ]
+    },
+    "block_steps": {
+      "collection": "block_steps",
+      "type": "collection",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": false,
+          "key": true
+        },
+        "title": {
+          "type": "string",
+          "required": false
+        },
+        "headline": {
+          "type": "string",
+          "required": false
+        },
+        "show_step_numbers": {
+          "type": "boolean",
+          "required": false
+        },
+        "alternate_image_position": {
+          "type": "boolean",
+          "required": false
+        },
+        "steps": {
+          "type": "json",
+          "required": false
+        }
+      },
+      "required_fields": [],
+      "note": "steps field contains array of step objects with title, content, image, button_group",
+      "evidence": [
+        "web/pages/[...permalink].vue:114-136",
+        "web/components/PageBuilder.vue:17"
+      ]
+    },
+    "block_columns": {
+      "collection": "block_columns",
+      "type": "collection",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": false,
+          "key": true
+        },
+        "title": {
+          "type": "string",
+          "required": false
+        },
+        "headline": {
+          "type": "string",
+          "required": false
+        },
+        "rows": {
+          "type": "json",
+          "required": false
+        }
+      },
+      "required_fields": [],
+      "note": "rows field contains array of row objects with title, headline, content, image_position, image, button_group",
+      "evidence": [
+        "web/pages/[...permalink].vue:137-158",
+        "web/components/PageBuilder.vue:18"
+      ]
+    },
+    "block_divider": {
+      "collection": "block_divider",
+      "type": "collection",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": false,
+          "key": true
+        },
+        "title": {
+          "type": "string",
+          "required": false
+        }
+      },
+      "required_fields": [],
+      "evidence": [
+        "web/pages/[...permalink].vue:159",
+        "web/components/PageBuilder.vue:19"
+      ]
+    },
+    "block_team": {
+      "collection": "block_team",
+      "type": "collection",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": false,
+          "key": true
+        }
+      },
+      "required_fields": [],
+      "note": "Uses wildcard '*' in query - all fields fetched",
+      "evidence": [
+        "web/pages/[...permalink].vue:160",
+        "web/components/PageBuilder.vue:13"
+      ]
+    },
+    "block_html": {
+      "collection": "block_html",
+      "type": "collection",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": false,
+          "key": true
+        }
+      },
+      "required_fields": [],
+      "note": "Uses wildcard '*' in query - all fields fetched",
+      "evidence": [
+        "web/pages/[...permalink].vue:161",
+        "web/components/PageBuilder.vue:14"
+      ]
+    },
+    "block_video": {
+      "collection": "block_video",
+      "type": "collection",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": false,
+          "key": true
+        }
+      },
+      "required_fields": [],
+      "note": "Uses wildcard '*' in query - all fields fetched",
+      "evidence": [
+        "web/pages/[...permalink].vue:162",
+        "web/components/PageBuilder.vue:15"
+      ]
+    }
+  },
+  "supporting_collections": {
+    "block_button_groups": {
+      "collection": "block_button_groups",
+      "type": "collection",
+      "note": "Referenced by block_hero, block_cta, etc.",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": false,
+          "key": true
+        },
+        "buttons": {
+          "type": "alias",
+          "required": false
+        }
+      },
+      "relations": {
+        "buttons": {
+          "type": "o2m",
+          "related_collection": "block_buttons",
+          "field": "button_group"
+        }
+      },
+      "evidence": [
+        "web/pages/[...permalink].vue:49,83",
+        "web/types/blocks/block-button-group.ts"
+      ]
+    },
+    "block_buttons": {
+      "collection": "block_buttons",
+      "type": "collection",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": false,
+          "key": true
+        },
+        "button_group": {
+          "type": "uuid",
+          "required": false
+        },
+        "page": {
+          "type": "uuid",
+          "required": false
+        },
+        "post": {
+          "type": "uuid",
+          "required": false
+        }
+      },
+      "relations": {
+        "button_group": {
+          "type": "m2o",
+          "related_collection": "block_button_groups"
+        },
+        "page": {
+          "type": "m2o",
+          "related_collection": "pages"
+        },
+        "post": {
+          "type": "m2o",
+          "related_collection": "posts"
+        }
+      },
+      "evidence": [
+        "web/pages/[...permalink].vue:49,83,130",
+        "web/types/blocks/block-button.ts"
+      ]
+    },
+    "testimonials": {
+      "collection": "testimonials",
+      "type": "collection",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": false,
+          "key": true
+        },
+        "title": {
+          "type": "string",
+          "required": false
+        },
+        "subtitle": {
+          "type": "string",
+          "required": false
+        },
+        "content": {
+          "type": "text",
+          "required": false
+        },
+        "company": {
+          "type": "string",
+          "required": false
+        },
+        "company_logo": {
+          "type": "uuid",
+          "required": false
+        },
+        "image": {
+          "type": "uuid",
+          "required": false
+        }
+      },
+      "relations": {
+        "image": {
+          "type": "m2o",
+          "related_collection": "directus_files"
+        },
+        "company_logo": {
+          "type": "m2o",
+          "related_collection": "directus_files"
+        }
+      },
+      "evidence": [
+        "web/pages/[...permalink].vue:60-68"
+      ]
+    },
+    "team": {
+      "collection": "team",
+      "type": "collection",
+      "note": "Also has standalone block_team, relationship unclear",
+      "evidence": [
+        "web/components/blocks/Team.vue:12",
+        "web/types/schema.ts:76"
+      ]
+    },
+    "posts": {
+      "collection": "posts",
+      "type": "collection",
+      "note": "Blog posts collection",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": false,
+          "key": true
+        },
+        "slug": {
+          "type": "string",
+          "required": true,
+          "unique": true
+        }
+      },
+      "evidence": [
+        "web/pages/posts/index.vue:10",
+        "web/pages/posts/[slug].vue:17",
+        "web/types/schema.ts:75"
+      ]
+    },
+    "categories": {
+      "collection": "categories",
+      "type": "collection",
+      "note": "Post categories",
+      "evidence": [
+        "web/pages/posts/categories/[category].vue:10",
+        "web/components/Categories.vue:4",
+        "web/types/schema.ts:73"
+      ]
+    }
+  },
+  "m2a": {
+    "pages.blocks": {
+      "field": "blocks",
+      "on_collection": "pages",
+      "junction_collection": "pages_blocks",
+      "shape": "collection+item",
+      "structure": {
+        "id": "integer (junction record ID)",
+        "collection": "string (block collection name)",
+        "item": "object (actual block data)",
+        "hide_block": "boolean (visibility toggle)",
+        "sort": "integer (ordering)"
+      },
+      "links_to": [
+        "block_hero",
+        "block_faqs",
+        "block_richtext",
+        "block_testimonials",
+        "block_quote",
+        "block_cta",
+        "block_form",
+        "block_logocloud",
+        "block_gallery",
+        "block_steps",
+        "block_columns",
+        "block_divider",
+        "block_team",
+        "block_html",
+        "block_video"
+      ],
+      "evidence": {
+        "query_shape": "web/pages/[...permalink].vue:36-166",
+        "type_definition": "web/types/content/page.ts:36-61",
+        "component_map": "web/components/PageBuilder.vue:4-20",
+        "rendering": "web/components/PageBuilder.vue:36"
+      }
+    }
+  }
+}

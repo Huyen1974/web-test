@@ -1,0 +1,80 @@
+{
+  "missing_count": 30,
+  "present_count": 0,
+  "missing_collections": [
+    "pages",
+    "pages_blocks",
+    "navigation",
+    "navigation_items",
+    "forms",
+    "globals",
+    "seo",
+    "pages_blog",
+    "pages_projects",
+    "block_hero",
+    "block_faqs",
+    "block_richtext",
+    "block_testimonials",
+    "block_quote",
+    "block_cta",
+    "block_form",
+    "block_logocloud",
+    "block_gallery",
+    "block_steps",
+    "block_columns",
+    "block_divider",
+    "block_team",
+    "block_html",
+    "block_video",
+    "block_button_groups",
+    "block_buttons",
+    "testimonials",
+    "team",
+    "posts",
+    "categories"
+  ],
+  "execution_phases": [
+    {
+      "phase": 1,
+      "description": "Create Block Collections (Dependencies)",
+      "collections": [
+        "block_hero",
+        "block_faqs",
+        "block_richtext",
+        "block_testimonials",
+        "block_quote",
+        "block_cta",
+        "block_form",
+        "block_logocloud",
+        "block_gallery",
+        "block_steps",
+        "block_columns",
+        "block_divider",
+        "block_team",
+        "block_html",
+        "block_video",
+        "block_button_groups",
+        "block_buttons"
+      ]
+    },
+    {
+      "phase": 2,
+      "description": "Create Core Collections",
+      "collections": [
+        "pages",
+        "pages_blocks",
+        "navigation",
+        "navigation_items",
+        "forms",
+        "globals",
+        "seo",
+        "pages_blog",
+        "pages_projects",
+        "testimonials",
+        "team",
+        "posts",
+        "categories"
+      ]
+    }
+  ]
+}
