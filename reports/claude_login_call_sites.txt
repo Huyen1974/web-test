@@ -1,0 +1,84 @@
+web/pages/[...permalink].vue:29:		return useDirectus(
+web/pages/projects.vue:10:		const postPromise = useDirectus(
+web/pages/projects.vue:18:		const pagePromise = useDirectus(
+web/modules/directus/index.ts:37:					login: '/auth/login',
+web/modules/directus/index.ts:38:					logout: '/auth/login',
+web/pages/posts/categories/[category].vue:9:		const categoryPromise = useDirectus(
+web/pages/posts/categories/[category].vue:30:		const postsPromise = useDirectus(
+web/pages/posts/[slug].vue:16:		return useDirectus(
+web/pages/posts/index.vue:9:		const postPromise = useDirectus(
+web/pages/posts/index.vue:22:		const pagePromise = useDirectus(
+web/layers/proposals/pages/proposals/[id].vue:15:	return useDirectus(
+web/components/Categories.vue:3:	return useDirectus(
+web/modules/directus/runtime/plugins/auth.ts:5:import { addRouteMiddleware, defineNuxtPlugin, useDirectusAuth, useRuntimeConfig, useState } from '#imports';
+web/modules/directus/runtime/plugins/auth.ts:24:		const { _loggedIn } = useDirectusAuth();
+web/modules/directus/runtime/plugins/auth.ts:27:			const { fetchUser } = useDirectusAuth();
+web/modules/directus/runtime/plugins/auth.ts:34:		const { user } = useDirectusAuth();
+web/composables/useKnowledgeHistory.ts:14:			const items = await useDirectus(
+web/layers/proposals/components/blocks/Acceptance.vue:10:	const approver = await useDirectus(
+web/layers/proposals/components/blocks/Acceptance.vue:115:	return useDirectus(uploadFiles(formData));
+web/layers/proposals/components/blocks/Acceptance.vue:140:		await useDirectus(createItem('os_proposal_approvals', approval));
+web/composables/useKnowledge.ts:116:		const items = await useDirectus(
+web/composables/useKnowledge.ts:199:		const items = await useDirectus(
+web/components/help/CollectionsDetail.vue:13:		return useDirectus(
+web/layers/portal/pages/portal.vue:9:const { logout, user } = useDirectusAuth();
+web/modules/directus/runtime/composables/useDirectusAuth.ts:8:export default function useDirectusAuth<DirectusSchema extends object>() {
+web/modules/directus/runtime/composables/useDirectusAuth.ts:21:	async function login(email: string, password: string, otp?: string) {
+web/modules/directus/runtime/composables/useDirectusAuth.ts:24:		const response = await $directus.login(email, password);
+web/modules/directus/runtime/composables/useDirectusAuth.ts:45:		await navigateTo(config.public?.directus?.auth?.redirect?.login || '/auth/login');
+web/composables/useContentRequests.ts:46:	return await useDirectus<ContentRequestView[]>(
+web/composables/useContentRequests.ts:74:	return await useDirectus<ContentRequestView>(
+web/composables/useContentRequests.ts:104:	return await useDirectus<ContentRequest>(updateItem('content_requests', id, updates));
+web/composables/useContentRequests.ts:111:	return await useDirectus<ContentRequest>(updateItem('content_requests', id, updates));
+web/layers/portal/components/InvoiceWidget.vue:9:		return useDirectus(
+web/components/help/CollectionsIndex.vue:13:		return useDirectus(
+web/components/navigation/TheHeader.vue:11:		return useDirectus(
+web/modules/directus/runtime/composables/useDirectus.ts:5:export default async function useDirectus<Output extends object>(
+web/layers/portal/components/MessageList.vue:15:	return useDirectus(
+web/layers/portal/components/MessageList.vue:48:	const data = await useDirectus(
+web/layers/portal/components/MessageList.vue:79:		await useDirectus(updateItem('messages', messageId, message));
+web/layers/portal/components/MessageList.vue:82:		await useDirectus(createItem('messages', message));
+web/layers/portal/components/FilesView.vue:12:		const folderReq = useDirectus(
+web/layers/portal/components/FilesView.vue:24:		const fileReq = useDirectus(
+web/layers/portal/components/TaskWidget.vue:23:		const tasks = useDirectus(
+web/layers/portal/components/TaskWidget.vue:33:		const count = useDirectus(
+web/components/navigation/TheFooter.vue:8:	return useDirectus(
+web/components/navigation/TheFooter.vue:44:		return useDirectus(
+web/composables/useTaxonomyTree.ts:62:		const documents = await useDirectus(
+web/components/help/ArticleDetail.vue:15:		return useDirectus(
+web/layers/portal/components/TaskList.vue:13:	return useDirectus(
+web/modules/directus/runtime/middleware/auth.ts:1:import { defineNuxtRouteMiddleware, useRuntimeConfig, navigateTo, useDirectusAuth } from '#imports';
+web/modules/directus/runtime/middleware/auth.ts:16:	const { user } = useDirectusAuth();
+web/composables/useKnowledgeTree.ts:25:	return await useDirectus<KnowledgeDocument[]>(
+web/composables/useKnowledgeTree.ts:43:	return await useDirectus<KnowledgeDocument[]>(
+web/composables/useKnowledgeTree.ts:88:	return await useDirectus<KnowledgeDocument[]>(
+web/composables/useKnowledgeTree.ts:112:	return await useDirectus<KnowledgeDocumentView>(
+web/composables/useKnowledgeTree.ts:137:	return await useDirectus<KnowledgeDocument>(createItem('knowledge_documents', data));
+web/composables/useKnowledgeTree.ts:148:	return await useDirectus<KnowledgeDocument>(updateItem('knowledge_documents', payload.id, updates));
+web/composables/useKnowledgeTree.ts:158:	return await useDirectus<KnowledgeDocument>(updateItem('knowledge_documents', id, updates));
+web/composables/useKnowledgeTree.ts:175:		const children = await useDirectus<number>(
+web/composables/useKnowledgeTree.ts:202:		const grandchildren = await useDirectus<number>(
+web/layers/portal/pages/portal/files/folders/[id].vue:9:	return useDirectus(readFolder(params.id as string, {}));
+web/modules/directus/runtime/middleware/common.ts:1:import { defineNuxtRouteMiddleware, useRuntimeConfig, navigateTo, useDirectusAuth } from '#imports';
+web/modules/directus/runtime/middleware/common.ts:7:		const { user } = useDirectusAuth();
+web/layers/portal/pages/portal/billing/invoices/[id].vue:13:		return useDirectus(
+web/layers/portal/components/Task.vue:18:		const data = await useDirectus(
+web/layers/portal/components/Task.vue:42:		const data = await useDirectus(updateItem('os_tasks', id, item));
+web/layers/portal/pages/portal/projects/[id]/index.vue:11:	return useDirectus(
+web/layers/portal/pages/portal/projects/[id].vue:9:	return useDirectus(readItem('os_projects', params.id as string));
+web/composables/useBlueprints.ts:88:		const items = await useDirectus(
+web/composables/useBlueprints.ts:148:		const items = await useDirectus(
+web/layers/portal/pages/portal/index.vue:36:const { user } = useDirectusAuth();
+web/layers/portal/pages/portal/billing/invoices/index.vue:34:		const invoices = useDirectus(
+web/layers/portal/pages/portal/billing/invoices/index.vue:47:		const count = useDirectus(
+web/modules/directus/runtime/middleware/guest.ts:1:import { defineNuxtRouteMiddleware, useRuntimeConfig, navigateTo, useDirectusAuth } from '#imports';
+web/modules/directus/runtime/middleware/guest.ts:10:	const { user } = useDirectusAuth();
+web/layers/portal/pages/portal/projects/index.vue:9:		return useDirectus(
+web/components/blocks/Team.vue:12:		return useDirectus(readItems('team', {}));
+web/components/base/UForm.vue:29:		await useDirectus(
+web/composables/useAgentData.ts:79:		const items = await useDirectus(
+web/components/base/LoginForm.vue:62:const { login } = useDirectusAuth();
+web/components/base/LoginForm.vue:79:		await login(email, password);
+web/components/base/VUpload.vue:122:			const uploadedFile = await useDirectus(uploadFiles(form));
+web/types/directus-shim.d.ts:1:declare function useDirectus(request?: any): any;
+web/types/directus-shim.d.ts:2:declare function useDirectusAuth(): any;

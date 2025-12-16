@@ -1,0 +1,8 @@
+web/lib/agentDataClient.ts:42:			const url = new URL('/api/search', this.config.baseUrl);
+web/lib/agentDataClient.ts:113:			const url = new URL('/api/log/page-view', this.config.baseUrl);
+web/lib/agentDataClient.ts:146:			const url = new URL('/api/log/search', this.config.baseUrl);
+web/nuxt.config.ts:5:	// https://nuxt.com/docs/api/configuration/nuxt-config
+web/nuxt.config.ts:128:	// 	sources: ['/api/_sitemap-urls'],
+web/components/GlobalSearch.vue:2:import type { GlobalSearchResult } from '~/types/api/global-search';
+web/layers/portal/components/PortalSearch.vue:2:import type { GlobalSearchResult } from '~/types/api/global-search';
+web/layers/portal/server/api/portal/search.get.ts:1:import type { GlobalSearchResult } from '~/types/api/global-search';

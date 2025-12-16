@@ -1,0 +1,1267 @@
+[
+  {
+    "insertId": "693fd92f000a5ff31bb72e1a",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2025-12-15T09:47:27.997494023Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "textPayload": "[09:47:27] POST /auth/login 200 506ms",
+    "timestamp": "2025-12-15T09:47:27.679923Z"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.508628723s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "14.231.154.72",
+      "requestMethod": "POST",
+      "requestSize": "943",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/auth/login",
+      "responseSize": "1401",
+      "serverIp": "34.143.77.2",
+      "status": 200,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "693fd92f000a5b2c526057e6",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-15T09:47:27.990739279Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "INFO",
+    "spanId": "d24afe5ae1ed8e78",
+    "timestamp": "2025-12-15T09:47:27.168574Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/038fbe2c5d9968330cb694c65588975a",
+    "traceSampled": true
+  },
+  {
+    "insertId": "693fd8e90005b321ad518af9",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2025-12-15T09:46:17.399388790Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "textPayload": "[09:46:17] POST /auth/login 200 506ms",
+    "timestamp": "2025-12-15T09:46:17.373537Z"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.508918644s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://ai.incomexsaigoncorp.vn/",
+      "remoteIp": "14.231.154.72",
+      "requestMethod": "POST",
+      "requestSize": "928",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/auth/login",
+      "responseSize": "1394",
+      "serverIp": "34.143.74.2",
+      "status": 200,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "693fd8e90005a7f8ca7f5b50",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-15T09:46:17.436266333Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "INFO",
+    "spanId": "6a4fe719ecfb9718",
+    "timestamp": "2025-12-15T09:46:16.859939Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/09efce5fab55796fc101aa9a84a362f9"
+  },
+  {
+    "insertId": "693fd8da0003bea85552746f",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2025-12-15T09:46:02.414335545Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "textPayload": "[09:46:02] POST /auth/login 200 506ms",
+    "timestamp": "2025-12-15T09:46:02.245416Z"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.510115907s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://ai.incomexsaigoncorp.vn/",
+      "remoteIp": "14.231.154.72",
+      "requestMethod": "POST",
+      "requestSize": "928",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/auth/login",
+      "responseSize": "1394",
+      "serverIp": "34.143.74.2",
+      "status": 200,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "693fd8da0003bbec46b60b9c",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-15T09:46:02.448789350Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "INFO",
+    "spanId": "ca4946e343d350e5",
+    "timestamp": "2025-12-15T09:46:01.733049Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/2e140860501f1a6ffd7f51dd9ffe5b50"
+  },
+  {
+    "insertId": "693fd8d5000bf14e47ab857b",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2025-12-15T09:45:58.082391071Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "textPayload": "[09:45:57] POST /auth/login 200 508ms",
+    "timestamp": "2025-12-15T09:45:57.782670Z"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.511050766s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://ai.incomexsaigoncorp.vn/",
+      "remoteIp": "14.231.154.72",
+      "requestMethod": "POST",
+      "requestSize": "929",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/auth/login",
+      "responseSize": "1394",
+      "serverIp": "34.143.74.2",
+      "status": 200,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "693fd8d5000bea4d030c28ed",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-15T09:45:57.785099248Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "INFO",
+    "spanId": "05fcac94fc9dd4fc",
+    "timestamp": "2025-12-15T09:45:57.260415Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/463bb3618400760ffd7f51dd9ffe5da7",
+    "traceSampled": true
+  },
+  {
+    "insertId": "693fd890000ee453094b502c",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2025-12-15T09:44:49.149078938Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "textPayload": "[09:44:48] POST /auth/login 401 507ms",
+    "timestamp": "2025-12-15T09:44:48.975955Z"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.510128079s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "14.231.154.72",
+      "requestMethod": "POST",
+      "requestSize": "938",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/auth/login",
+      "responseSize": "889",
+      "serverIp": "34.143.73.2",
+      "status": 401,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "693fd890000ee0d0804bf81a",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-15T09:44:49.259328072Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "2b78e43b9535abcb",
+    "timestamp": "2025-12-15T09:44:48.462953Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/22b0a1ffc6adaf6a8b797dec1d052306"
+  },
+  {
+    "insertId": "693fd88c0006b12b3b7fd4e1",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2025-12-15T09:44:44.487656244Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "textPayload": "[09:44:44] POST /auth/login 200 507ms",
+    "timestamp": "2025-12-15T09:44:44.438571Z"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.509437205s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "14.231.154.72",
+      "requestMethod": "POST",
+      "requestSize": "942",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/auth/login",
+      "responseSize": "1401",
+      "serverIp": "34.143.73.2",
+      "status": 200,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "693fd88c0006acabab04c382",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-15T09:44:44.595220809Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "INFO",
+    "spanId": "c572d78be63c55f7",
+    "timestamp": "2025-12-15T09:44:43.926219Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/1ef846f8d6163b128b797dec1d0520ea"
+  },
+  {
+    "insertId": "693fd8880003b09560e70d88",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2025-12-15T09:44:40.491665922Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "textPayload": "[09:44:40] POST /auth/login 200 506ms",
+    "timestamp": "2025-12-15T09:44:40.241813Z"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.508908454s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://ai.incomexsaigoncorp.vn/",
+      "remoteIp": "14.231.154.72",
+      "requestMethod": "POST",
+      "requestSize": "928",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/auth/login",
+      "responseSize": "1394",
+      "serverIp": "34.143.77.2",
+      "status": 200,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "693fd8880003ab65add41f51",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-15T09:44:40.270747037Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "INFO",
+    "spanId": "e90e763be1844e6e",
+    "timestamp": "2025-12-15T09:44:39.729625Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/4dd40e419757a02763e8f79a85c593c9",
+    "traceSampled": true
+  },
+  {
+    "insertId": "693fd884000db7b70f86a09b",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2025-12-15T09:44:37.161517042Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "textPayload": "[09:44:36] POST /auth/login 200 532ms",
+    "timestamp": "2025-12-15T09:44:36.898999Z"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.534459895s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://ai.incomexsaigoncorp.vn/",
+      "remoteIp": "14.231.154.72",
+      "requestMethod": "POST",
+      "requestSize": "929",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/auth/login",
+      "responseSize": "1394",
+      "serverIp": "34.143.77.2",
+      "status": 200,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "693fd884000db3d0d2b785a7",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-15T09:44:36.936161616Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "INFO",
+    "spanId": "2ca4bb7c019e633c",
+    "timestamp": "2025-12-15T09:44:36.361830Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/fedd6df9d2b1502763e8f79a85c5947b"
+  },
+  {
+    "insertId": "693fd884000446242bda5414",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2025-12-15T09:44:36.497243316Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "textPayload": "[09:44:36] OPTIONS /auth/login 204 1ms",
+    "timestamp": "2025-12-15T09:44:36.280100Z"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.003283300s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://ai.incomexsaigoncorp.vn/",
+      "remoteIp": "14.231.154.72",
+      "requestMethod": "OPTIONS",
+      "requestSize": "766",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/auth/login",
+      "responseSize": "827",
+      "serverIp": "34.143.77.2",
+      "status": 204,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "693fd8840004414a6dd1733b",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-15T09:44:36.606812014Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "INFO",
+    "spanId": "40edeafe8710c9c9",
+    "timestamp": "2025-12-15T09:44:36.274108Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/8174eb658c0b565c63e8f79a85c59a21"
+  },
+  {
+    "insertId": "693fd7d6000b3b9d2598beea",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2025-12-15T09:41:42.994570518Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "textPayload": "[09:41:42] OPTIONS /auth/login 204 1ms",
+    "timestamp": "2025-12-15T09:41:42.736157Z"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.004044189s",
+      "protocol": "HTTP/1.1",
+      "remoteIp": "2001:ee0:4141:687b:e802:f9c5:8fbc:eca9",
+      "requestMethod": "OPTIONS",
+      "requestSize": "449",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/auth/login",
+      "responseSize": "827",
+      "serverIp": "2600:1900:4244:200::",
+      "status": 204,
+      "userAgent": "curl/8.7.1"
+    },
+    "insertId": "693fd7d6000b36443f0b5b66",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-15T09:41:43.055663011Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "INFO",
+    "spanId": "f88128af6debde27",
+    "timestamp": "2025-12-15T09:41:42.729248Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/95443e07c9995c89f0bf4a6af7ac0a42"
+  },
+  {
+    "insertId": "693fd7d60008a35b5f6d162d",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2025-12-15T09:41:42.657196004Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "textPayload": "[09:41:42] OPTIONS /auth/login 204 1ms",
+    "timestamp": "2025-12-15T09:41:42.566107Z"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.005373520s",
+      "protocol": "HTTP/1.1",
+      "remoteIp": "2001:ee0:4141:687b:e802:f9c5:8fbc:eca9",
+      "requestMethod": "OPTIONS",
+      "requestSize": "464",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/auth/login",
+      "responseSize": "842",
+      "serverIp": "2600:1900:4244:200::",
+      "status": 204,
+      "userAgent": "curl/8.7.1"
+    },
+    "insertId": "693fd7d600089cfbb011afc2",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-15T09:41:42.723660272Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "INFO",
+    "spanId": "a8fb072732a492f3",
+    "timestamp": "2025-12-15T09:41:42.557431Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/afad4a0c79f9ea076196560cb8828176"
+  },
+  {
+    "insertId": "693fd7d60005ea323afd00ad",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2025-12-15T09:41:42.657196004Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "textPayload": "[09:41:42] OPTIONS /auth/login 204 1ms",
+    "timestamp": "2025-12-15T09:41:42.387634Z"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.005168270s",
+      "protocol": "HTTP/1.1",
+      "remoteIp": "2001:ee0:4141:687b:e802:f9c5:8fbc:eca9",
+      "requestMethod": "OPTIONS",
+      "requestSize": "457",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/auth/login",
+      "responseSize": "834",
+      "serverIp": "2600:1900:4244:200::",
+      "status": 204,
+      "userAgent": "curl/8.7.1"
+    },
+    "insertId": "693fd7d60005e6233dea541f",
+    "labels": {
+      "instanceId": "0007e26d68d3e1666ac9b8d178c45380469f06f0b72d64b7df8a93724b6a4c9f7191621156c8fd9ec49b4d4fe71aeedbc765774265e69107713e6010551af772873a3ec10b8905f917d5ba6e3befcbf3"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-15T09:41:42.388755711Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00007-xxl",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "INFO",
+    "spanId": "ece235ff26ecc574",
+    "timestamp": "2025-12-15T09:41:42.371643Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/9ef015a74154e6a5a8ce9adc2ee20141",
+    "traceSampled": true
+  },
+  {
+    "insertId": "693fd2d2000b3c30bf867dcb",
+    "labels": {
+      "instanceId": "0007e26d68ef43314b50b4facf38b5b2d6bcf9782265d09bbc7bf322969d10fc35ca1e602f5406054dedc1635ec756a2b1f5e19540320014d7c856422efed14e0b22bcfbd4ecd25b2bd9bf157cb9c4f05930"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2025-12-15T09:20:19.060016411Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00006-kwm",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "textPayload": "[09:20:18] POST /auth/login 400 506ms",
+    "timestamp": "2025-12-15T09:20:18.736304Z"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.508560067s",
+      "protocol": "HTTP/1.1",
+      "remoteIp": "2001:ee0:4141:687b:e802:f9c5:8fbc:eca9",
+      "requestMethod": "POST",
+      "requestSize": "439",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/auth/login",
+      "responseSize": "953",
+      "serverIp": "2600:1900:4242:200::",
+      "status": 400,
+      "userAgent": "curl/8.7.1"
+    },
+    "insertId": "693fd2d2000b3895f0fe2742",
+    "labels": {
+      "instanceId": "0007e26d68ef43314b50b4facf38b5b2d6bcf9782265d09bbc7bf322969d10fc35ca1e602f5406054dedc1635ec756a2b1f5e19540320014d7c856422efed14e0b22bcfbd4ecd25b2bd9bf157cb9c4f05930"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-15T09:20:18.915558512Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00006-kwm",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "b71998b1b6ea1d4f",
+    "timestamp": "2025-12-15T09:20:18.225215Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/4bc820064cffd04463d9b89aa4862c12"
+  },
+  {
+    "insertId": "693fd2ce000e2fc666ca44c0",
+    "labels": {
+      "instanceId": "0007e26d68ef43314b50b4facf38b5b2d6bcf9782265d09bbc7bf322969d10fc35ca1e602f5406054dedc1635ec756a2b1f5e19540320014d7c856422efed14e0b22bcfbd4ecd25b2bd9bf157cb9c4f05930"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2025-12-15T09:20:15.066228552Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00006-kwm",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "textPayload": "[09:20:14] OPTIONS /auth/login 204 1ms",
+    "timestamp": "2025-12-15T09:20:14.929734Z"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.003144180s",
+      "protocol": "HTTP/1.1",
+      "remoteIp": "14.231.154.72",
+      "requestMethod": "OPTIONS",
+      "requestSize": "465",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/auth/login",
+      "responseSize": "838",
+      "serverIp": "34.143.76.2",
+      "status": 204,
+      "userAgent": "curl/8.7.1"
+    },
+    "insertId": "693fd2ce000e2b81e7487061",
+    "labels": {
+      "instanceId": "0007e26d68ef43314b50b4facf38b5b2d6bcf9782265d09bbc7bf322969d10fc35ca1e602f5406054dedc1635ec756a2b1f5e19540320014d7c856422efed14e0b22bcfbd4ecd25b2bd9bf157cb9c4f05930"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-15T09:20:15.250151659Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00006-kwm",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "INFO",
+    "spanId": "5f15c9d9489b68e8",
+    "timestamp": "2025-12-15T09:20:14.923770Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/57b934584069bdd06a5b04c731d6bc77",
+    "traceSampled": true
+  },
+  {
+    "insertId": "693fd2ca000b2524f997dd33",
+    "labels": {
+      "instanceId": "0007e26d68ef43314b50b4facf38b5b2d6bcf9782265d09bbc7bf322969d10fc35ca1e602f5406054dedc1635ec756a2b1f5e19540320014d7c856422efed14e0b22bcfbd4ecd25b2bd9bf157cb9c4f05930"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2025-12-15T09:20:10.744125351Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00006-kwm",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "textPayload": "[09:20:10] POST /auth/login 400 507ms",
+    "timestamp": "2025-12-15T09:20:10.730404Z"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.510182108s",
+      "protocol": "HTTP/1.1",
+      "remoteIp": "2001:ee0:4141:687b:e802:f9c5:8fbc:eca9",
+      "requestMethod": "POST",
+      "requestSize": "432",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/auth/login",
+      "responseSize": "953",
+      "serverIp": "2600:1900:4244:200::",
+      "status": 400,
+      "userAgent": "curl/8.7.1"
+    },
+    "insertId": "693fd2ca000b211245f264a1",
+    "labels": {
+      "instanceId": "0007e26d68ef43314b50b4facf38b5b2d6bcf9782265d09bbc7bf322969d10fc35ca1e602f5406054dedc1635ec756a2b1f5e19540320014d7c856422efed14e0b22bcfbd4ecd25b2bd9bf157cb9c4f05930"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-15T09:20:10.922876487Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00006-kwm",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "3216707fed9c9286",
+    "timestamp": "2025-12-15T09:20:10.217399Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/38bae08adb1750440676526c618f07d5"
+  },
+  {
+    "insertId": "693fd2c60007c00c4c0e79ab",
+    "labels": {
+      "instanceId": "0007e26d68ef43314b50b4facf38b5b2d6bcf9782265d09bbc7bf322969d10fc35ca1e602f5406054dedc1635ec756a2b1f5e19540320014d7c856422efed14e0b22bcfbd4ecd25b2bd9bf157cb9c4f05930"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2025-12-15T09:20:06.739008996Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00006-kwm",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "textPayload": "[09:20:06] OPTIONS /auth/login 204 1ms",
+    "timestamp": "2025-12-15T09:20:06.507916Z"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.003977638s",
+      "protocol": "HTTP/1.1",
+      "remoteIp": "2001:ee0:4141:687b:e802:f9c5:8fbc:eca9",
+      "requestMethod": "OPTIONS",
+      "requestSize": "453",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/auth/login",
+      "responseSize": "838",
+      "serverIp": "2600:1900:4243:200::",
+      "status": 204,
+      "userAgent": "curl/8.7.1"
+    },
+    "insertId": "693fd2c60007bb4db19f125f",
+    "labels": {
+      "instanceId": "0007e26d68ef43314b50b4facf38b5b2d6bcf9782265d09bbc7bf322969d10fc35ca1e602f5406054dedc1635ec756a2b1f5e19540320014d7c856422efed14e0b22bcfbd4ecd25b2bd9bf157cb9c4f05930"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-15T09:20:06.593636678Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00006-kwm",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "INFO",
+    "spanId": "9beb6831f0b2ff88",
+    "timestamp": "2025-12-15T09:20:06.501199Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/83e1335168d71efbafdcca96cc112283"
+  },
+  {
+    "insertId": "693fd2c1000402663764a32b",
+    "labels": {
+      "instanceId": "0007e26d68ef43314b50b4facf38b5b2d6bcf9782265d09bbc7bf322969d10fc35ca1e602f5406054dedc1635ec756a2b1f5e19540320014d7c856422efed14e0b22bcfbd4ecd25b2bd9bf157cb9c4f05930"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2025-12-15T09:20:01.410915602Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00006-kwm",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "textPayload": "[09:20:01] POST /auth/login 401 508ms",
+    "timestamp": "2025-12-15T09:20:01.262758Z"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.510592232s",
+      "protocol": "HTTP/1.1",
+      "remoteIp": "2001:ee0:4141:687b:e802:f9c5:8fbc:eca9",
+      "requestMethod": "POST",
+      "requestSize": "450",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/auth/login",
+      "responseSize": "889",
+      "serverIp": "2600:1901:81d5:200::",
+      "status": 401,
+      "userAgent": "curl/8.7.1"
+    },
+    "insertId": "693fd2c10003fc5461ccbaf2",
+    "labels": {
+      "instanceId": "0007e26d68ef43314b50b4facf38b5b2d6bcf9782265d09bbc7bf322969d10fc35ca1e602f5406054dedc1635ec756a2b1f5e19540320014d7c856422efed14e0b22bcfbd4ecd25b2bd9bf157cb9c4f05930"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-15T09:20:01.598128754Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00006-kwm",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "WARNING",
+    "spanId": "de7d3e51dae2c8eb",
+    "timestamp": "2025-12-15T09:20:00.749089Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/f8eb5ab97dd7cca115bfce789f8ef9f1"
+  },
+  {
+    "insertId": "693fd2c00009123203c383e0",
+    "labels": {
+      "instanceId": "0007e26d68ef43314b50b4facf38b5b2d6bcf9782265d09bbc7bf322969d10fc35ca1e602f5406054dedc1635ec756a2b1f5e19540320014d7c856422efed14e0b22bcfbd4ecd25b2bd9bf157cb9c4f05930"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2025-12-15T09:20:00.745395242Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00006-kwm",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "textPayload": "[09:20:00] OPTIONS /auth/login 204 0ms",
+    "timestamp": "2025-12-15T09:20:00.594482Z"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.004544735s",
+      "protocol": "HTTP/1.1",
+      "remoteIp": "2001:ee0:4141:687b:e802:f9c5:8fbc:eca9",
+      "requestMethod": "OPTIONS",
+      "requestSize": "456",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/auth/login",
+      "responseSize": "838",
+      "serverIp": "2600:1901:81d4:200::",
+      "status": 204,
+      "userAgent": "curl/8.7.1"
+    },
+    "insertId": "693fd2c000090bc1b02f21d8",
+    "labels": {
+      "instanceId": "0007e26d68ef43314b50b4facf38b5b2d6bcf9782265d09bbc7bf322969d10fc35ca1e602f5406054dedc1635ec756a2b1f5e19540320014d7c856422efed14e0b22bcfbd4ecd25b2bd9bf157cb9c4f05930"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-15T09:20:00.599823754Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00006-kwm",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "INFO",
+    "spanId": "e557ca74f0ddbb20",
+    "timestamp": "2025-12-15T09:20:00.579392Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/a7fbd7e83687239980fee193b8869b7e",
+    "traceSampled": true
+  },
+  {
+    "insertId": "693fd0300009cb792bdddf30",
+    "labels": {
+      "instanceId": "0007e26d68ef43314b50b4facf38b5b2d6bcf9782265d09bbc7bf322969d10fc35ca1e602f5406054dedc1635ec756a2b1f5e19540320014d7c856422efed14e0b22bcfbd4ecd25b2bd9bf157cb9c4f05930"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2025-12-15T09:09:04.703816249Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00006-kwm",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "textPayload": "[09:09:04] POST /auth/login 200 507ms",
+    "timestamp": "2025-12-15T09:09:04.641913Z"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.509648953s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "14.231.154.72",
+      "requestMethod": "POST",
+      "requestSize": "943",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/auth/login",
+      "responseSize": "1401",
+      "serverIp": "34.143.72.2",
+      "status": 200,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "693fd0300009c6746947baf8",
+    "labels": {
+      "instanceId": "0007e26d68ef43314b50b4facf38b5b2d6bcf9782265d09bbc7bf322969d10fc35ca1e602f5406054dedc1635ec756a2b1f5e19540320014d7c856422efed14e0b22bcfbd4ecd25b2bd9bf157cb9c4f05930"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-15T09:09:04.798578142Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00006-kwm",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "INFO",
+    "spanId": "fab621a4c77b8934",
+    "timestamp": "2025-12-15T09:09:04.129391Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/33cfea16f5acffb76600fd0bc7497504",
+    "traceSampled": true
+  },
+  {
+    "insertId": "693fd027000c181652ad6c0e",
+    "labels": {
+      "instanceId": "0007e26d68ef43314b50b4facf38b5b2d6bcf9782265d09bbc7bf322969d10fc35ca1e602f5406054dedc1635ec756a2b1f5e19540320014d7c856422efed14e0b22bcfbd4ecd25b2bd9bf157cb9c4f05930"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2025-12-15T09:08:56.045929129Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00006-kwm",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "textPayload": "[09:08:55] OPTIONS /auth/login 204 1ms",
+    "timestamp": "2025-12-15T09:08:55.792598Z"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.003706175s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://ai.incomexsaigoncorp.vn/",
+      "remoteIp": "14.231.154.72",
+      "requestMethod": "OPTIONS",
+      "requestSize": "766",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/auth/login",
+      "responseSize": "838",
+      "serverIp": "34.143.75.2",
+      "status": 204,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "693fd027000c12a2e0a098e3",
+    "labels": {
+      "instanceId": "0007e26d68ef43314b50b4facf38b5b2d6bcf9782265d09bbc7bf322969d10fc35ca1e602f5406054dedc1635ec756a2b1f5e19540320014d7c856422efed14e0b22bcfbd4ecd25b2bd9bf157cb9c4f05930"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-15T09:08:55.809675687Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00006-kwm",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "INFO",
+    "spanId": "fc529a4ff6c68703",
+    "timestamp": "2025-12-15T09:08:55.785880Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/911ff01a515af3676004b647cd08a54a"
+  },
+  {
+    "insertId": "693fcfac0003dcb81aadf3c1",
+    "labels": {
+      "instanceId": "0007e26d68ef43314b50b4facf38b5b2d6bcf9782265d09bbc7bf322969d10fc35ca1e602f5406054dedc1635ec756a2b1f5e19540320014d7c856422efed14e0b22bcfbd4ecd25b2bd9bf157cb9c4f05930"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2025-12-15T09:06:52.492506461Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00006-kwm",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "textPayload": "[09:06:52] OPTIONS /auth/login 204 1ms",
+    "timestamp": "2025-12-15T09:06:52.253112Z"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.003791552s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://ai.incomexsaigoncorp.vn/",
+      "remoteIp": "14.231.154.72",
+      "requestMethod": "OPTIONS",
+      "requestSize": "766",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/auth/login",
+      "responseSize": "838",
+      "serverIp": "34.143.75.2",
+      "status": 204,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "693fcfac0003d58df6fe9037",
+    "labels": {
+      "instanceId": "0007e26d68ef43314b50b4facf38b5b2d6bcf9782265d09bbc7bf322969d10fc35ca1e602f5406054dedc1635ec756a2b1f5e19540320014d7c856422efed14e0b22bcfbd4ecd25b2bd9bf157cb9c4f05930"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-15T09:06:52.252688532Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00006-kwm",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "INFO",
+    "spanId": "092529e37ead8bf4",
+    "timestamp": "2025-12-15T09:06:52.241015Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/7efd92946751a5e83967878c097c542c",
+    "traceSampled": true
+  },
+  {
+    "insertId": "693fcf84000754997bf3ae9c",
+    "labels": {
+      "instanceId": "0007e26d68ef43314b50b4facf38b5b2d6bcf9782265d09bbc7bf322969d10fc35ca1e602f5406054dedc1635ec756a2b1f5e19540320014d7c856422efed14e0b22bcfbd4ecd25b2bd9bf157cb9c4f05930"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2025-12-15T09:06:12.531933265Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00006-kwm",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "textPayload": "[09:06:12] POST /auth/login 200 508ms",
+    "timestamp": "2025-12-15T09:06:12.480409Z"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.510551276s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "14.231.154.72",
+      "requestMethod": "POST",
+      "requestSize": "942",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/auth/login",
+      "responseSize": "1401",
+      "serverIp": "34.143.78.2",
+      "status": 200,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "693fcf8400074eeb1f05df35",
+    "labels": {
+      "instanceId": "0007e26d68ef43314b50b4facf38b5b2d6bcf9782265d09bbc7bf322969d10fc35ca1e602f5406054dedc1635ec756a2b1f5e19540320014d7c856422efed14e0b22bcfbd4ecd25b2bd9bf157cb9c4f05930"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-15T09:06:12.526291220Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00006-kwm",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "INFO",
+    "spanId": "e9e25b32df6ffee7",
+    "timestamp": "2025-12-15T09:06:11.967004Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/4ba92d302af8dcd9d7c330ea3fa671b4"
+  },
+  {
+    "insertId": "693fcf810002f7f8b0b71dbc",
+    "labels": {
+      "instanceId": "0007e26d68ef43314b50b4facf38b5b2d6bcf9782265d09bbc7bf322969d10fc35ca1e602f5406054dedc1635ec756a2b1f5e19540320014d7c856422efed14e0b22bcfbd4ecd25b2bd9bf157cb9c4f05930"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Fstdout",
+    "receiveTimestamp": "2025-12-15T09:06:09.203778648Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00006-kwm",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "textPayload": "[09:06:09] POST /auth/login 200 533ms",
+    "timestamp": "2025-12-15T09:06:09.194552Z"
+  },
+  {
+    "httpRequest": {
+      "latency": "0.536299736s",
+      "protocol": "HTTP/1.1",
+      "referer": "https://github-chatgpt-ggcloud.web.app/",
+      "remoteIp": "14.231.154.72",
+      "requestMethod": "POST",
+      "requestSize": "942",
+      "requestUrl": "https://directus-test-812872501910.asia-southeast1.run.app/auth/login",
+      "responseSize": "1401",
+      "serverIp": "34.143.78.2",
+      "status": 200,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    },
+    "insertId": "693fcf810002f21b1282abaf",
+    "labels": {
+      "instanceId": "0007e26d68ef43314b50b4facf38b5b2d6bcf9782265d09bbc7bf322969d10fc35ca1e602f5406054dedc1635ec756a2b1f5e19540320014d7c856422efed14e0b22bcfbd4ecd25b2bd9bf157cb9c4f05930"
+    },
+    "logName": "projects/github-chatgpt-ggcloud/logs/run.googleapis.com%2Frequests",
+    "receiveTimestamp": "2025-12-15T09:06:09.198826768Z",
+    "resource": {
+      "labels": {
+        "configuration_name": "directus-test",
+        "location": "asia-southeast1",
+        "project_id": "github-chatgpt-ggcloud",
+        "revision_name": "directus-test-00006-kwm",
+        "service_name": "directus-test"
+      },
+      "type": "cloud_run_revision"
+    },
+    "severity": "INFO",
+    "spanId": "b17526ec9d80cb93",
+    "timestamp": "2025-12-15T09:06:08.654902Z",
+    "trace": "projects/github-chatgpt-ggcloud/traces/4be48e19a8678bd0d7c330ea3fa67a93",
+    "traceSampled": true
+  }
+]

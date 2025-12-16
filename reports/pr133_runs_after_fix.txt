@@ -1,0 +1,5 @@
+queued		fix: client-side data fetch without /api proxy	Nuxt 3 CI	feat/pr133-client-datafix	pull_request	20222514559	3s	2025-12-15T06:19:00Z
+queued		fix: client-side data fetch without /api proxy	Terraform Deploy	feat/pr133-client-datafix	pull_request	20222514565	3s	2025-12-15T06:19:00Z
+completed	success	fix: client-side data fetch without /api proxy	Nuxt 3 CI	feat/pr133-client-datafix	pull_request	20221957153	1m29s	2025-12-15T05:51:15Z
+completed	success	fix: client-side data fetch without /api proxy	Terraform Deploy	feat/pr133-client-datafix	pull_request	20221957116	1m57s	2025-12-15T05:51:15Z
+completed	success	fix: client-side data fetch without /api proxy	Nuxt 3 CI	feat/pr133-client-datafix	pull_request	20207158764	1m27s	2025-12-14T11:17:30Z

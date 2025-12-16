@@ -1,0 +1,19 @@
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100   144  100    96  100    48    145     72 --:--:-- --:--:-- --:--:--   219
+HTTP/2 401 
+content-security-policy: script-src 'self' 'unsafe-eval';worker-src 'self' blob:;child-src 'self' blob:;img-src 'self' data: blob: https://raw.githubusercontent.com https://avatars.githubusercontent.com;media-src 'self';connect-src 'self' https://* wss://*;default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';object-src 'none';script-src-attr 'none';style-src 'self' https: 'unsafe-inline'
+x-powered-by: Directus
+access-control-allow-origin: https://github-chatgpt-ggcloud.web.app
+vary: Origin
+access-control-allow-credentials: true
+access-control-expose-headers: Content-Range
+content-type: application/json; charset=utf-8
+etag: W/"60-SpvBqFAbsdy4SkXwsevzfPClFZA"
+x-cloud-trace-context: f8eb5ab97dd7cca115bfce789f8ef9f1
+date: Mon, 15 Dec 2025 09:20:01 GMT
+server: Google Frontend
+content-length: 96
+alt-svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+
+{"errors":[{"message":"Invalid user credentials.","extensions":{"code":"INVALID_CREDENTIALS"}}]}

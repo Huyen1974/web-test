@@ -1,0 +1,16 @@
+HTTP/2 204 
+content-security-policy: script-src 'self' 'unsafe-eval';worker-src 'self' blob:;child-src 'self' blob:;img-src 'self' data: blob: https://raw.githubusercontent.com https://avatars.githubusercontent.com;media-src 'self';connect-src 'self' https://* wss://*;default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';object-src 'none';script-src-attr 'none';style-src 'self' https: 'unsafe-inline'
+x-powered-by: Directus
+access-control-allow-origin: https://github-chatgpt-ggcloud.web.app
+vary: Origin
+access-control-allow-credentials: true
+access-control-allow-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
+access-control-allow-headers: Content-Type,Authorization
+access-control-max-age: 18000
+access-control-expose-headers: Content-Range
+x-cloud-trace-context: 83e1335168d71efbafdcca96cc112283
+date: Mon, 15 Dec 2025 09:20:06 GMT
+content-type: text/html
+server: Google Frontend
+alt-svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+

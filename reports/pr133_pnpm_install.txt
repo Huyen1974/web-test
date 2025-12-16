@@ -1,0 +1,49 @@
+Lockfile is up to date, resolution step is skipped
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +142 -48
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++---------------------
+
+   ╭───────────────────────────────────────────────────────────────────╮
+   │                                                                   │
+   │                Update available! 9.6.0 → 10.25.0.                 │
+   │   Changelog: https://github.com/pnpm/pnpm/releases/tag/v10.25.0   │
+   │         Run "corepack install -g pnpm@10.25.0" to update.         │
+   │                                                                   │
+   │         Follow @pnpmjs for updates: https://x.com/pnpmjs          │
+   │                                                                   │
+   ╰───────────────────────────────────────────────────────────────────╯
+
+Progress: resolved 142, reused 142, downloaded 0, added 142, done
+.../node_modules/protobufjs postinstall$ node scripts/postinstall
+.../node_modules/@firebase/util postinstall$ node ./postinstall.js
+.../node_modules/@firebase/util postinstall: Done
+.../node_modules/protobufjs postinstall: Done
+
+dependencies:
++ @nuxtjs/i18n 10.2.1
++ firebase 12.6.0
+
+devDependencies:
++ @types/diff 7.0.2
+- eslint 9.23.0
++ eslint 8.57.1
+- eslint-plugin-vue 10.6.2
++ eslint-plugin-vue 9.33.0
+
+
+> @ postinstall /Users/nmhuyen/Documents/Manual Deploy/web-test/web
+> nuxt prepare
+
+◐ Loading Directus Module
+ℹ Skipping Directus build-time initialization (SPA mode)
+✔ Directus Module Loaded
+[nuxt:tailwindcss] ℹ Using Tailwind CSS from ~/assets/css/tailwind.css
+
+[@nuxtjs/og-image]  WARN  Nuxt OG Image is enabled but SSR is disabled.
+
+You should enable SSR (ssr: true) or disable the module (ogImage: { enabled: false }).
+
+ℹ Nuxt Icon server bundle mode is set to local
+│
+◆  Types generated in .nuxt.
+Done in 3.6s
