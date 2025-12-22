@@ -1,0 +1,50 @@
+name: ops-smoke
+
+on:
+  pull_request:
+    paths:
+      - 'web/**'
+      - 'scripts/**'
+      - '.github/workflows/ops-smoke.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '*/30 * * * *' # Every 30 mins
+
+env:
+  DIRECTUS_GOLDEN_URL: "https://directus-test-pfne2mqwja-as.a.run.app"
+  SMOKE_ASSET_ID: "cf9f9030-bc76-4b9a-86f9-8e87c42febe6"
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Check Directus Server Ping
+        run: |
+          curl -f -s -o /dev/null -w "Directus Ping: %{http_code}\n" "${{ env.DIRECTUS_GOLDEN_URL }}/server/ping"
+
+      - name: Check Public Asset (Anonymous)
+        run: |
+          # Expect 200 or 302 (if redirect, though usually 200 for assets)
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${{ env.DIRECTUS_GOLDEN_URL }}/assets/${{ env.SMOKE_ASSET_ID }}")
+          echo "Asset Status: $HTTP_CODE"
+          if [[ "$HTTP_CODE" != "200" && "$HTTP_CODE" != "302" ]]; then
+            echo "::error::Public Asset Access Failed (Expected 200/302, Got $HTTP_CODE)"
+            exit 1
+          fi
+
+      - name: Check Public Pages (Anonymous)
+        run: |
+          # Use -g globbing off for bracket filters
+          HTTP_CODE=$(curl -g -s -o /dev/null -w "%{http_code}" "${{ env.DIRECTUS_GOLDEN_URL }}/items/pages?filter[permalink][_eq]=/&limit=1")
+          echo "Pages API Status: $HTTP_CODE"
+          if [[ "$HTTP_CODE" != "200" ]]; then
+            echo "::error::Public Pages API Access Failed (Expected 200, Got $HTTP_CODE)"
+            exit 1
+          fi
+
+      - name: Report Success
+        if: success()
+        run: echo "Directus Golden State is Healthy."

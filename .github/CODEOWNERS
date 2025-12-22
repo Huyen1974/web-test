@@ -1,3 +1,4 @@
-# Code owners for spec and docs paths
-docs/** @Huyen1974
-specs/** @Huyen1974
+# Guardrails for Critical Ops Files
+.github/ @Huyen1974
+docs/ops/ @Huyen1974
+scripts/ @Huyen1974
