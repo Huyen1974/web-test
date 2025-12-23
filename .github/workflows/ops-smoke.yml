@@ -11,7 +11,7 @@ on:
     - cron: '*/30 * * * *' # Every 30 mins
 
 env:
-  DIRECTUS_GOLDEN_URL: "https://directus-test-pfne2mqwja-as.a.run.app"
+  DIRECTUS_BASE_URL: "https://directus-test-pfne2mqwja-as.a.run.app"
   SMOKE_ASSET_ID: "cf9f9030-bc76-4b9a-86f9-8e87c42febe6"
 
 jobs:
@@ -23,28 +23,39 @@ jobs:
 
       - name: Check Directus Server Ping
         run: |
-          curl -f -s -o /dev/null -w "Directus Ping: %{http_code}\n" "${{ env.DIRECTUS_GOLDEN_URL }}/server/ping"
-
-      - name: Check Public Asset (Anonymous)
-        run: |
-          # Expect 200 or 302 (if redirect, though usually 200 for assets)
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${{ env.DIRECTUS_GOLDEN_URL }}/assets/${{ env.SMOKE_ASSET_ID }}")
-          echo "Asset Status: $HTTP_CODE"
-          if [[ "$HTTP_CODE" != "200" && "$HTTP_CODE" != "302" ]]; then
-            echo "::error::Public Asset Access Failed (Expected 200/302, Got $HTTP_CODE)"
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            --connect-timeout 10 --max-time 60 \
+            "${{ env.DIRECTUS_BASE_URL }}/server/ping")
+          echo "Directus Ping: $HTTP_CODE"
+          if [[ "$HTTP_CODE" != "200" ]]; then
+            echo "::error::Server Ping Failed (Expected 200, Got $HTTP_CODE)"
             exit 1
           fi
 
-      - name: Check Public Pages (Anonymous)
+      - name: Check Public Pages API (Anonymous)
         run: |
-          # Use -g globbing off for bracket filters
-          HTTP_CODE=$(curl -g -s -o /dev/null -w "%{http_code}" "${{ env.DIRECTUS_GOLDEN_URL }}/items/pages?filter[permalink][_eq]=/&limit=1")
+          # Use --globoff (-g) for bracket filters in query string
+          HTTP_CODE=$(curl --globoff -s -o /dev/null -w "%{http_code}" \
+            --connect-timeout 10 --max-time 60 \
+            "${{ env.DIRECTUS_BASE_URL }}/items/pages?filter[permalink][_eq]=/")
           echo "Pages API Status: $HTTP_CODE"
           if [[ "$HTTP_CODE" != "200" ]]; then
             echo "::error::Public Pages API Access Failed (Expected 200, Got $HTTP_CODE)"
             exit 1
           fi
 
+      - name: Check Public Asset Access (Anonymous)
+        run: |
+          # Strict check: Golden Asset MUST return 200 (fail on 403/404/5xx)
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            --connect-timeout 10 --max-time 60 \
+            "${{ env.DIRECTUS_BASE_URL }}/assets/${{ env.SMOKE_ASSET_ID }}")
+          echo "Asset Status: $HTTP_CODE"
+          if [[ "$HTTP_CODE" != "200" ]]; then
+            echo "::error::Public Asset Access Failed (Expected 200, Got $HTTP_CODE)"
+            exit 1
+          fi
+
       - name: Report Success
         if: success()
-        run: echo "Directus Golden State is Healthy."
+        run: echo "✅ Directus Golden State is Healthy"
