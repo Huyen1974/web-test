@@ -46,25 +46,32 @@ jobs:
 
       - name: Check Public Asset Access (Anonymous)
         run: |
-          # Check asset endpoint accessibility
-          # Pass: 200 (OK) or 404 (not found but endpoint accessible)
-          # Fail: 000 (timeout/network), 401 (auth required), 5xx (server error)
-          # Warn: 403 (permissions issue - needs manual fix)
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+          # Strict check: Golden Asset MUST return 200
+          # Follow redirects (-L) and set User-Agent to avoid bot blocking
+          ASSET_URL="${{ env.DIRECTUS_BASE_URL }}/assets/${{ env.SMOKE_ASSET_ID }}"
+          echo "Testing: $ASSET_URL"
+
+          HTTP_CODE=$(curl -sS -L -A "Mozilla/5.0 (ops-smoke)" \
             --connect-timeout 10 --max-time 60 \
-            "${{ env.DIRECTUS_BASE_URL }}/assets/${{ env.SMOKE_ASSET_ID }}")
+            -D /tmp/asset_headers.txt \
+            -o /tmp/asset_body.txt \
+            -w "%{http_code}" \
+            "$ASSET_URL")
+
           echo "Asset Status: $HTTP_CODE"
 
-          if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "404" ]]; then
-            echo "✅ Asset check passed ($HTTP_CODE)"
-          elif [[ "$HTTP_CODE" == "403" ]]; then
-            echo "::warning::Asset returned 403 Forbidden - directus_files permissions may need configuration"
-            echo "This is a known issue with public file access. Workflow continues."
-          elif [[ "$HTTP_CODE" == "000" || "$HTTP_CODE" == "401" || "$HTTP_CODE" =~ ^5 ]]; then
-            echo "::error::Asset Access Failed (Got $HTTP_CODE - network/auth/server error)"
-            exit 1
+          if [[ "$HTTP_CODE" == "200" ]]; then
+            echo "✅ Public asset check passed"
           else
-            echo "::warning::Asset returned unexpected code $HTTP_CODE"
+            echo "::error::Public Asset Access Failed (Expected 200, Got $HTTP_CODE)"
+            echo ""
+            echo "=== Response Headers ==="
+            cat /tmp/asset_headers.txt || echo "(no headers captured)"
+            echo ""
+            echo "=== Response Body (first 500 chars) ==="
+            head -c 500 /tmp/asset_body.txt || echo "(no body captured)"
+            echo ""
+            exit 1
           fi
 
       - name: Report Success
