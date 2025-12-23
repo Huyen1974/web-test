@@ -61,7 +61,7 @@ export default defineNuxtConfig({
 		},
 		public: {
 			siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://github-chatgpt-ggcloud.web.app',
-			directusUrl: process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus-test-812872501910.asia-southeast1.run.app',
+			directusUrl: process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus-test-pfne2mqwja-as.a.run.app',
 			agentData: {
 				baseUrl: process.env.NUXT_PUBLIC_AGENT_DATA_BASE_URL || '',
 				enabled: process.env.NUXT_PUBLIC_AGENT_DATA_ENABLED === 'true',
@@ -81,7 +81,7 @@ export default defineNuxtConfig({
 	// Directus Configuration
 	directus: {
 		rest: {
-			baseUrl: process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus-test-812872501910.asia-southeast1.run.app',
+			baseUrl: process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus-test-pfne2mqwja-as.a.run.app',
 			nuxtBaseUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
 		},
 		auth: {
@@ -110,7 +110,7 @@ export default defineNuxtConfig({
 	image: {
 		provider: 'directus',
 		directus: {
-			baseURL: `${process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus-test-812872501910.asia-southeast1.run.app'}/assets/`,
+			baseURL: `${process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus-test-pfne2mqwja-as.a.run.app'}/assets/`,
 		},
 	},
 

@@ -1,0 +1,80 @@
+name: ops-smoke
+
+on:
+  pull_request:
+    paths:
+      - 'web/**'
+      - 'scripts/**'
+      - '.github/workflows/ops-smoke.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '*/30 * * * *' # Every 30 mins
+
+env:
+  DIRECTUS_BASE_URL: "https://directus-test-pfne2mqwja-as.a.run.app"
+  # GCS switch 2025-12-23 – persistent public assets
+  SMOKE_ASSET_ID: "53ac26cb-987b-42eb-91a5-9f2f87419ad5"
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Check Directus Server Ping
+        run: |
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            --connect-timeout 10 --max-time 60 \
+            "${{ env.DIRECTUS_BASE_URL }}/server/ping")
+          echo "Directus Ping: $HTTP_CODE"
+          if [[ "$HTTP_CODE" != "200" ]]; then
+            echo "::error::Server Ping Failed (Expected 200, Got $HTTP_CODE)"
+            exit 1
+          fi
+
+      - name: Check Public Pages API (Anonymous)
+        run: |
+          # Use --globoff (-g) for bracket filters in query string
+          HTTP_CODE=$(curl --globoff -s -o /dev/null -w "%{http_code}" \
+            --connect-timeout 10 --max-time 60 \
+            "${{ env.DIRECTUS_BASE_URL }}/items/pages?filter[permalink][_eq]=/")
+          echo "Pages API Status: $HTTP_CODE"
+          if [[ "$HTTP_CODE" != "200" ]]; then
+            echo "::error::Public Pages API Access Failed (Expected 200, Got $HTTP_CODE)"
+            exit 1
+          fi
+
+      - name: Check Public Asset Access (Anonymous)
+        run: |
+          # Strict check: Golden Asset MUST return 200
+          # Follow redirects (-L) and set User-Agent to avoid bot blocking
+          ASSET_URL="${{ env.DIRECTUS_BASE_URL }}/assets/${{ env.SMOKE_ASSET_ID }}"
+          echo "Testing: $ASSET_URL"
+
+          HTTP_CODE=$(curl -sS -L -A "Mozilla/5.0 (ops-smoke)" \
+            --connect-timeout 10 --max-time 60 \
+            -D /tmp/asset_headers.txt \
+            -o /tmp/asset_body.txt \
+            -w "%{http_code}" \
+            "$ASSET_URL")
+
+          echo "Asset Status: $HTTP_CODE"
+
+          if [[ "$HTTP_CODE" == "200" ]]; then
+            echo "✅ Public asset check passed"
+          else
+            echo "::error::Public Asset Access Failed (Expected 200, Got $HTTP_CODE)"
+            echo ""
+            echo "=== Response Headers ==="
+            cat /tmp/asset_headers.txt || echo "(no headers captured)"
+            echo ""
+            echo "=== Response Body (first 500 chars) ==="
+            head -c 500 /tmp/asset_body.txt || echo "(no body captured)"
+            echo ""
+            exit 1
+          fi
+
+      - name: Report Success
+        if: success()
+        run: echo "✅ Directus Golden State is Healthy"
