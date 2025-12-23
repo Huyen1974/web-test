@@ -12,7 +12,8 @@ on:
 
 env:
   DIRECTUS_BASE_URL: "https://directus-test-pfne2mqwja-as.a.run.app"
-  SMOKE_ASSET_ID: "cf9f9030-bc76-4b9a-86f9-8e87c42febe6"
+  # GCS switch 2025-12-23 – persistent public assets
+  SMOKE_ASSET_ID: "53ac26cb-987b-42eb-91a5-9f2f87419ad5"
 
 jobs:
   smoke-test:
