@@ -194,11 +194,14 @@ const metadata = computed(() => {
 });
 
 // Dynamic OG Images
+// HOTFIX 2025-12-23: Commented out to bypass missing/dead defineOgImageComponent
+/*
 defineOgImageComponent('OgImageTemplate', {
 	title: unref(metadata)?.title,
 	summary: unref(metadata)?.description,
 	imageUrl: unref(metadata)?.image,
 });
+*/
 
 // JSON-LD
 useSchemaOrg([
