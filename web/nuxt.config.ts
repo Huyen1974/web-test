@@ -87,7 +87,7 @@ export default defineNuxtConfig({
 		auth: {
 			enabled: true,
 			enableGlobalAuthMiddleware: false, // Enable auth middleware on every page
-			userFields: ['*', { contacts: ['*'] }], // Select user fields
+			userFields: ['*'], // Select user fields (strip manual contacts dependency)
 			redirect: {
 				login: '/auth/signin', // Path to redirect when login is required
 				logout: '/', // Path to redirect after logout
