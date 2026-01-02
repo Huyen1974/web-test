@@ -1,9 +1,13 @@
-// Agent Data Health Check Composable
-// Provides a health check function using the /info endpoint
-
 /**
- * Check Agent Data backend health
- * Returns system info or null if unavailable
+ * Agent Data Health Check Composable
+ *
+ * SECURITY: This composable calls an internal server route (/api/agent/health)
+ * which acts as a secure proxy. The client NEVER has access to the API key.
+ *
+ * Architecture:
+ * Client (Vue) -> Internal API (/api/agent/health) -> Agent Data Backend
+ *
+ * @returns System info from Agent Data backend or null if unavailable
  *
  * @example
  * ```ts
@@ -27,22 +31,14 @@ export async function useAgentDataHealth(): Promise<{
 	const config = useRuntimeConfig();
 
 	// Check if Agent Data is enabled
-	if (!config.public.agentData?.enabled || !config.public.agentData?.baseUrl) {
+	if (!config.public.agentData?.enabled) {
 		return null;
 	}
 
 	try {
-		const baseUrl = config.public.agentData.baseUrl;
-		const apiKey = config.agentData?.apiKey;
-
-		const response = await $fetch(`${baseUrl}/info`, {
+		// Call internal server route (NO API KEY NEEDED - server handles it)
+		const response = await $fetch('/api/agent/health', {
 			method: 'GET',
-			headers: {
-				'Content-Type': 'application/json',
-				...(apiKey && { Authorization: `Bearer ${apiKey}` }),
-			},
-			// Longer timeout for cold starts
-			timeout: 30000,
 		});
 
 		return response as any;

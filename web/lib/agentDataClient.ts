@@ -1,6 +1,7 @@
 // Agent Data Client - Task 0034
 // Minimal client for Agent Data search and logging
 
+import { joinURL } from 'ufo';
 import type {
 	AgentDataConfig,
 	AgentDataSearchRequest,
@@ -35,9 +36,9 @@ export class AgentDataClient {
 		}
 
 		try {
-			const url = new URL('info', this.config.baseUrl);
+			const url = joinURL(this.config.baseUrl, '/info');
 
-			const response = await fetch(url.toString(), {
+			const response = await fetch(url, {
 				method: 'GET',
 				headers: {
 					'Content-Type': 'application/json',
@@ -78,8 +79,6 @@ export class AgentDataClient {
 		}
 
 		try {
-			const url = new URL('search', this.config.baseUrl);
-
 			const params = new URLSearchParams({
 				q: request.query,
 				...(request.zone && { zone: request.zone }),
@@ -89,9 +88,10 @@ export class AgentDataClient {
 				...(request.language && { language: request.language }),
 			});
 
-			url.search = params.toString();
+			const url = joinURL(this.config.baseUrl, '/search');
+			const fullUrl = `${url}?${params.toString()}`;
 
-			const response = await fetch(url.toString(), {
+			const response = await fetch(fullUrl, {
 				method: 'GET',
 				headers: {
 					'Content-Type': 'application/json',
@@ -149,9 +149,9 @@ export class AgentDataClient {
 		}
 
 		try {
-			const url = new URL('log/page-view', this.config.baseUrl);
+			const url = joinURL(this.config.baseUrl, '/log/page-view');
 
-			await fetch(url.toString(), {
+			await fetch(url, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -182,9 +182,9 @@ export class AgentDataClient {
 		}
 
 		try {
-			const url = new URL('log/search', this.config.baseUrl);
+			const url = joinURL(this.config.baseUrl, '/log/search');
 
-			await fetch(url.toString(), {
+			await fetch(url, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
