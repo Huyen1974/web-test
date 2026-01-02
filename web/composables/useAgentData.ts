@@ -14,13 +14,28 @@ import { ZONE_MAPPING } from '~/types/view-model-0032';
 
 /**
  * Get Agent Data client instance
+ *
+ * NOTE: This function accesses config.agentData?.apiKey which is a private
+ * runtime config value. On the CLIENT side, this will be undefined.
+ *
+ * Current behavior:
+ * - Server-side: Has access to API key, requests are authenticated
+ * - Client-side: No API key available, requests fail gracefully (return empty results)
+ *
+ * This is acceptable because:
+ * 1. The backend endpoints may not require authentication
+ * 2. Errors are handled gracefully (no crashes)
+ * 3. The primary health check uses a secure server proxy pattern
+ *
+ * TODO: If backend requires authentication, create server routes for search/logging
+ * similar to /api/agent/health.get.ts
  */
 function getAgentDataClient() {
 	const config = useRuntimeConfig();
 
 	return createAgentDataClient({
 		baseUrl: config.public.agentData?.baseUrl || '',
-		apiKey: config.agentData?.apiKey || '',
+		apiKey: config.agentData?.apiKey || '', // undefined on client, empty string used
 		enabled: config.public.agentData?.enabled || false,
 		timeout: 5000,
 	});

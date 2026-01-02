@@ -61,6 +61,15 @@ export default defineNuxtConfig({
 		},
 		public: {
 			siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://github-chatgpt-ggcloud.web.app',
+			// Standard Directus runtime config (env-first, golden fallback)
+			directus: {
+				url: process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus-test-pfne2mqwja-as.a.run.app',
+				rest: {
+					baseUrl: process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus-test-pfne2mqwja-as.a.run.app',
+					nuxtBaseUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://github-chatgpt-ggcloud.web.app',
+				},
+			},
+			// Legacy key kept for compatibility
 			directusUrl: process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus-test-pfne2mqwja-as.a.run.app',
 			agentData: {
 				baseUrl: process.env.NUXT_PUBLIC_AGENT_DATA_BASE_URL || '',

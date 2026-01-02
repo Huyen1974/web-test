@@ -1,6 +1,7 @@
 // Agent Data Client - Task 0034
 // Minimal client for Agent Data search and logging
 
+import { joinURL } from 'ufo';
 import type {
 	AgentDataConfig,
 	AgentDataSearchRequest,
@@ -25,6 +26,45 @@ export class AgentDataClient {
 	}
 
 	/**
+	 * Check system health and get backend info
+	 * Calls /info endpoint to verify connectivity
+	 */
+	async getSystemInfo(): Promise<{ status: string; backend: string } | null> {
+		// If Agent Data is disabled, return null
+		if (!this.config.enabled || !this.config.baseUrl) {
+			return null;
+		}
+
+		try {
+			const url = joinURL(this.config.baseUrl, '/info');
+
+			const response = await fetch(url, {
+				method: 'GET',
+				headers: {
+					'Content-Type': 'application/json',
+					...(this.config.apiKey && { Authorization: `Bearer ${this.config.apiKey}` }),
+				},
+				signal: AbortSignal.timeout(this.config.timeout || 5000),
+			});
+
+			if (!response.ok) {
+				// eslint-disable-next-line no-console
+				console.warn('[AgentData] Health check failed:', response.status, response.statusText);
+				return null;
+			}
+
+			const data = await response.json();
+			return data;
+		} catch (error) {
+			if (import.meta.dev) {
+				// eslint-disable-next-line no-console
+				console.warn('[AgentData] Health check error:', error);
+			}
+			return null;
+		}
+	}
+
+	/**
 	 * Search for documents
 	 * Returns IDs only - caller must fetch actual content from Directus
 	 */
@@ -39,8 +79,6 @@ export class AgentDataClient {
 		}
 
 		try {
-			const url = new URL('search', this.config.baseUrl);
-
 			const params = new URLSearchParams({
 				q: request.query,
 				...(request.zone && { zone: request.zone }),
@@ -50,9 +88,10 @@ export class AgentDataClient {
 				...(request.language && { language: request.language }),
 			});
 
-			url.search = params.toString();
+			const url = joinURL(this.config.baseUrl, '/search');
+			const fullUrl = `${url}?${params.toString()}`;
 
-			const response = await fetch(url.toString(), {
+			const response = await fetch(fullUrl, {
 				method: 'GET',
 				headers: {
 					'Content-Type': 'application/json',
@@ -110,9 +149,9 @@ export class AgentDataClient {
 		}
 
 		try {
-			const url = new URL('log/page-view', this.config.baseUrl);
+			const url = joinURL(this.config.baseUrl, '/log/page-view');
 
-			await fetch(url.toString(), {
+			await fetch(url, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -143,9 +182,9 @@ export class AgentDataClient {
 		}
 
 		try {
-			const url = new URL('log/search', this.config.baseUrl);
+			const url = joinURL(this.config.baseUrl, '/log/search');
 
-			await fetch(url.toString(), {
+			await fetch(url, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
