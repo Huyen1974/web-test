@@ -25,6 +25,45 @@ export class AgentDataClient {
 	}
 
 	/**
+	 * Check system health and get backend info
+	 * Calls /info endpoint to verify connectivity
+	 */
+	async getSystemInfo(): Promise<{ status: string; backend: string } | null> {
+		// If Agent Data is disabled, return null
+		if (!this.config.enabled || !this.config.baseUrl) {
+			return null;
+		}
+
+		try {
+			const url = new URL('info', this.config.baseUrl);
+
+			const response = await fetch(url.toString(), {
+				method: 'GET',
+				headers: {
+					'Content-Type': 'application/json',
+					...(this.config.apiKey && { Authorization: `Bearer ${this.config.apiKey}` }),
+				},
+				signal: AbortSignal.timeout(this.config.timeout || 5000),
+			});
+
+			if (!response.ok) {
+				// eslint-disable-next-line no-console
+				console.warn('[AgentData] Health check failed:', response.status, response.statusText);
+				return null;
+			}
+
+			const data = await response.json();
+			return data;
+		} catch (error) {
+			if (import.meta.dev) {
+				// eslint-disable-next-line no-console
+				console.warn('[AgentData] Health check error:', error);
+			}
+			return null;
+		}
+	}
+
+	/**
 	 * Search for documents
 	 * Returns IDs only - caller must fetch actual content from Directus
 	 */
