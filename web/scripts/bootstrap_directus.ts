@@ -6,12 +6,17 @@
  * - Task 1: Agent Role, Agent User, and Static Token
  *
  * Usage:
- *   DIRECTUS_URL=<url> DIRECTUS_ADMIN_EMAIL=<email> DIRECTUS_ADMIN_PASSWORD=<password> npx tsx web/scripts/bootstrap_directus.ts
+ *   DIRECTUS_URL=<url> \
+ *   DIRECTUS_ADMIN_EMAIL=<email> \
+ *   DIRECTUS_ADMIN_PASSWORD=<password> \
+ *   DIRECTUS_AGENT_PASSWORD=<agent_password> \
+ *   npx tsx web/scripts/bootstrap_directus.ts
  *
  * Required Environment Variables:
  *   - DIRECTUS_URL: Directus instance URL
  *   - DIRECTUS_ADMIN_EMAIL: Admin user email
  *   - DIRECTUS_ADMIN_PASSWORD: Admin user password
+ *   - DIRECTUS_AGENT_PASSWORD: Agent user password
  *
  * Output:
  *   - Agent token will be written to: agent_token_output.txt (local file, not committed)
@@ -44,6 +49,10 @@ interface DirectusToken {
 const DIRECTUS_URL = process.env.DIRECTUS_URL || '';
 const ADMIN_EMAIL = process.env.DIRECTUS_ADMIN_EMAIL || '';
 const ADMIN_PASSWORD = process.env.DIRECTUS_ADMIN_PASSWORD || '';
+const AGENT_PASSWORD = process.env.DIRECTUS_AGENT_PASSWORD || '';
+
+// Non-sensitive configuration constants
+const AGENT_EMAIL = 'agent@example.com';
 
 let accessToken: string = '';
 
@@ -526,8 +535,8 @@ async function createAgentUser(roleId: string): Promise<string> {
 		const response = await directusAPI('/users', {
 			method: 'POST',
 			body: JSON.stringify({
-				email: 'agent@example.com',
-				password: 'AgentBot@2025!SecurePassword',
+				email: AGENT_EMAIL,
+				password: AGENT_PASSWORD,
 				role: roleId,
 				status: 'active',
 				first_name: 'Agent',
@@ -535,13 +544,13 @@ async function createAgentUser(roleId: string): Promise<string> {
 			}),
 		});
 		userId = response.data.id;
-		console.log(`✅ User "agent@example.com" created with ID: ${userId}`);
+		console.log(`✅ User "${AGENT_EMAIL}" created with ID: ${userId}`);
 	} catch (error: any) {
 		if (error.message.includes('already exists') || error.message.includes('unique')) {
-			console.log('⚠️  User "agent@example.com" already exists, fetching...');
-			const users = await directusAPI('/users?filter[email][_eq]=agent@example.com');
+			console.log(`⚠️  User "${AGENT_EMAIL}" already exists, fetching...`);
+			const users = await directusAPI(`/users?filter[email][_eq]=${AGENT_EMAIL}`);
 			if (!users.data || users.data.length === 0) {
-				throw new Error('User "agent@example.com" exists but could not be found');
+				throw new Error(`User "${AGENT_EMAIL}" exists but could not be found`);
 			}
 			userId = users.data[0].id;
 			console.log(`✅ Found existing user with ID: ${userId}`);
@@ -558,8 +567,8 @@ async function createAgentUser(roleId: string): Promise<string> {
 		const authResponse = await directusAPI('/auth/login', {
 			method: 'POST',
 			body: JSON.stringify({
-				email: 'agent@example.com',
-				password: 'AgentBot@2025!SecurePassword',
+				email: AGENT_EMAIL,
+				password: AGENT_PASSWORD,
 			}),
 		});
 
@@ -584,7 +593,7 @@ async function createAgentUser(roleId: string): Promise<string> {
 	} catch (error: any) {
 		console.error('❌ Error generating token:', error.message);
 		console.log('\nℹ️  Manual token generation required:');
-		console.log('    1. Login to Directus as agent@example.com');
+		console.log(`    1. Login to Directus as ${AGENT_EMAIL}`);
 		console.log('    2. Go to Settings → Access Tokens');
 		console.log('    3. Create a new static token');
 		console.log('    4. Save the token as AGENT_CONTENT_TOKEN\n');
@@ -603,12 +612,17 @@ async function main() {
 	if (!DIRECTUS_URL) missingVars.push('DIRECTUS_URL');
 	if (!ADMIN_EMAIL) missingVars.push('DIRECTUS_ADMIN_EMAIL');
 	if (!ADMIN_PASSWORD) missingVars.push('DIRECTUS_ADMIN_PASSWORD');
+	if (!AGENT_PASSWORD) missingVars.push('DIRECTUS_AGENT_PASSWORD');
 
 	if (missingVars.length > 0) {
 		console.error('\n❌ Missing required environment variables:');
 		missingVars.forEach((varName) => console.error(`   - ${varName}`));
 		console.error('\nUsage:');
-		console.error('  DIRECTUS_URL=<url> DIRECTUS_ADMIN_EMAIL=<email> DIRECTUS_ADMIN_PASSWORD=<password> npx tsx web/scripts/bootstrap_directus.ts\n');
+		console.error('  DIRECTUS_URL=<url> \\');
+		console.error('  DIRECTUS_ADMIN_EMAIL=<email> \\');
+		console.error('  DIRECTUS_ADMIN_PASSWORD=<password> \\');
+		console.error('  DIRECTUS_AGENT_PASSWORD=<agent_password> \\');
+		console.error('  npx tsx web/scripts/bootstrap_directus.ts\n');
 		process.exit(1);
 	}
 
@@ -649,7 +663,7 @@ async function main() {
 		console.log('  ✅ Collection: agent_views');
 		console.log('  ✅ Collection: agent_tasks');
 		console.log('  ✅ Role: Agent');
-		console.log('  ✅ User: agent@example.com');
+		console.log(`  ✅ User: ${AGENT_EMAIL}`);
 		console.log('  ✅ Token: Written to agent_token_output.txt');
 		console.log('\n💾 Token saved to agent_token_output.txt');
 		console.log('💾 Use this token as AGENT_CONTENT_TOKEN in your environment');
