@@ -25,3 +25,6 @@ logs
 !.env.example
 .claude/
 .gemini/
+
+# Sensitive outputs
+agent_token_output.txt
