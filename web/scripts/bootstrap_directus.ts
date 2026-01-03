@@ -6,12 +6,15 @@
  * - Task 1: Agent Role, Agent User, and Static Token
  *
  * Usage:
- *   npx tsx web/scripts/bootstrap_directus.ts
+ *   DIRECTUS_URL=<url> DIRECTUS_ADMIN_EMAIL=<email> DIRECTUS_ADMIN_PASSWORD=<password> npx tsx web/scripts/bootstrap_directus.ts
  *
- * Credentials:
- *   - URL: https://directus-test-812872501910.asia-southeast1.run.app
- *   - Admin Email: admin@example.com
- *   - Admin Password: Directus@2025!
+ * Required Environment Variables:
+ *   - DIRECTUS_URL: Directus instance URL
+ *   - DIRECTUS_ADMIN_EMAIL: Admin user email
+ *   - DIRECTUS_ADMIN_PASSWORD: Admin user password
+ *
+ * Output:
+ *   - Agent token will be written to: agent_token_output.txt (local file, not committed)
  */
 
 interface DirectusAuthResponse {
@@ -37,9 +40,10 @@ interface DirectusToken {
 	token: string;
 }
 
-const DIRECTUS_URL = 'https://directus-test-812872501910.asia-southeast1.run.app';
-const ADMIN_EMAIL = 'admin@example.com';
-const ADMIN_PASSWORD = 'Directus@2025!';
+// Environment variables (validated in main())
+const DIRECTUS_URL = process.env.DIRECTUS_URL || '';
+const ADMIN_EMAIL = process.env.DIRECTUS_ADMIN_EMAIL || '';
+const ADMIN_PASSWORD = process.env.DIRECTUS_ADMIN_PASSWORD || '';
 
 let accessToken: string = '';
 
@@ -561,14 +565,19 @@ async function createAgentUser(roleId: string): Promise<string> {
 
 		const agentToken = authResponse.data.access_token;
 
+		// Write token to file instead of stdout (security requirement)
+		const fs = await import('fs');
+		const path = await import('path');
+		const tokenFilePath = path.join(process.cwd(), 'agent_token_output.txt');
+
+		fs.writeFileSync(tokenFilePath, agentToken, 'utf-8');
+
 		console.log('\n' + '='.repeat(60));
-		console.log('🔑 AGENT ACCESS TOKEN (SAVE THIS!)');
+		console.log('🔑 AGENT ACCESS TOKEN GENERATED');
 		console.log('='.repeat(60));
-		console.log(agentToken);
-		console.log('='.repeat(60));
-		console.log('\nℹ️  This token can be used for API authentication.');
-		console.log('ℹ️  For a static token, generate one manually in Directus UI:');
-		console.log('    Settings → Access Tokens → Create New');
+		console.log('✅ Token written to: agent_token_output.txt');
+		console.log('⚠️  DO NOT commit this file to git');
+		console.log('ℹ️  Use this token as AGENT_CONTENT_TOKEN in your .env');
 		console.log('='.repeat(60) + '\n');
 
 		return agentToken;
@@ -588,6 +597,21 @@ async function main() {
 	console.log('╔═══════════════════════════════════════════════════════════╗');
 	console.log('║   Directus Bootstrap Script - Task 0 & Task 1            ║');
 	console.log('╚═══════════════════════════════════════════════════════════╝');
+
+	// Validate required environment variables
+	const missingVars: string[] = [];
+	if (!DIRECTUS_URL) missingVars.push('DIRECTUS_URL');
+	if (!ADMIN_EMAIL) missingVars.push('DIRECTUS_ADMIN_EMAIL');
+	if (!ADMIN_PASSWORD) missingVars.push('DIRECTUS_ADMIN_PASSWORD');
+
+	if (missingVars.length > 0) {
+		console.error('\n❌ Missing required environment variables:');
+		missingVars.forEach((varName) => console.error(`   - ${varName}`));
+		console.error('\nUsage:');
+		console.error('  DIRECTUS_URL=<url> DIRECTUS_ADMIN_EMAIL=<email> DIRECTUS_ADMIN_PASSWORD=<password> npx tsx web/scripts/bootstrap_directus.ts\n');
+		process.exit(1);
+	}
+
 	console.log(`\n🌐 Directus URL: ${DIRECTUS_URL}`);
 	console.log(`👤 Admin Email: ${ADMIN_EMAIL}\n`);
 
@@ -625,9 +649,10 @@ async function main() {
 		console.log('  ✅ Collection: agent_views');
 		console.log('  ✅ Collection: agent_tasks');
 		console.log('  ✅ Role: Agent');
-		console.log('  ✅ User: agent@system.local');
-		console.log(`  ✅ Static Token: ${token.substring(0, 20)}...`);
-		console.log('\n💾 Save the token above as AGENT_CONTENT_TOKEN');
+		console.log('  ✅ User: agent@example.com');
+		console.log('  ✅ Token: Written to agent_token_output.txt');
+		console.log('\n💾 Token saved to agent_token_output.txt');
+		console.log('💾 Use this token as AGENT_CONTENT_TOKEN in your environment');
 		console.log('\n');
 	} catch (error: any) {
 		console.error('\n❌ Bootstrap failed:', error.message);
