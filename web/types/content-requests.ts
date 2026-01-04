@@ -21,6 +21,25 @@ export type ContentRequestStatus =
 	| 'rejected' // Rejected, needs rework
 	| 'canceled'; // Request canceled
 
+export const CONTENT_REQUEST_STATUS = {
+	NEW: 'new',
+	ASSIGNED: 'assigned',
+	DRAFTING: 'drafting',
+	AWAITING_REVIEW: 'awaiting_review',
+	AWAITING_APPROVAL: 'awaiting_approval',
+	PUBLISHED: 'published',
+	REJECTED: 'rejected',
+	CANCELED: 'canceled',
+} as const;
+
+export const CONTENT_REQUEST_HOLDER = {
+	AGENT: 'agent',
+	EDITOR: 'editor',
+	SYSTEM: 'system',
+} as const;
+
+export type ContentRequestHolder = (typeof CONTENT_REQUEST_HOLDER)[keyof typeof CONTENT_REQUEST_HOLDER];
+
 /**
  * Content Request (Growth Zone collection)
  * Tracks lifecycle of content writing requests from creation to publication
@@ -141,11 +160,17 @@ export type ContentRequestAction = 'approve' | 'reject' | 'request_changes' | 'a
  * Helper type guards
  */
 export function isAwaitingAction(status: ContentRequestStatus): boolean {
-	return status === 'awaiting_review' || status === 'awaiting_approval';
+	return status === CONTENT_REQUEST_STATUS.AWAITING_REVIEW || status === CONTENT_REQUEST_STATUS.AWAITING_APPROVAL;
 }
 
 export function isInProgress(status: ContentRequestStatus): boolean {
-	return !['published', 'rejected', 'canceled'].includes(status);
+	return (
+		![
+			CONTENT_REQUEST_STATUS.PUBLISHED,
+			CONTENT_REQUEST_STATUS.REJECTED,
+			CONTENT_REQUEST_STATUS.CANCELED,
+		].includes(status)
+	);
 }
 
 export function isOverdue(dateUpdated: string, thresholdHours: number = 24): boolean {

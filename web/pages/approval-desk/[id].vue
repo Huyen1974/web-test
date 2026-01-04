@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { ContentRequestView, ContentRequestStatus } from '~/types';
-import { CONTENT_REQUEST_STATUS_META } from '~/types/content-requests';
+import type { ContentRequestStatus } from '~/types';
+import { CONTENT_REQUEST_STATUS, CONTENT_REQUEST_STATUS_META } from '~/types/content-requests';
 
 const route = useRoute();
 const router = useRouter();
@@ -22,6 +22,17 @@ const actionError = ref<string | null>(null);
 const actionSuccess = ref<string | null>(null);
 const comment = ref('');
 
+const actionableStatuses: ContentRequestStatus[] = [
+	CONTENT_REQUEST_STATUS.AWAITING_REVIEW,
+	CONTENT_REQUEST_STATUS.AWAITING_APPROVAL,
+];
+
+function getErrorMessage(err: unknown, fallback: string): string {
+	if (err instanceof Error) return err.message || fallback;
+	if (typeof err === 'string') return err;
+	return fallback;
+}
+
 // Handle approve action
 async function handleApprove() {
 	if (!request.value) return;
@@ -39,8 +50,8 @@ async function handleApprove() {
 		setTimeout(() => {
 			router.push('/approval-desk');
 		}, 2000);
-	} catch (err: any) {
-		actionError.value = err.message || 'Failed to approve request';
+	} catch (err: unknown) {
+		actionError.value = getErrorMessage(err, 'Failed to approve request');
 	} finally {
 		actionPending.value = false;
 	}
@@ -67,8 +78,8 @@ async function handleReject() {
 		setTimeout(() => {
 			router.push('/approval-desk');
 		}, 2000);
-	} catch (err: any) {
-		actionError.value = err.message || 'Failed to reject request';
+	} catch (err: unknown) {
+		actionError.value = getErrorMessage(err, 'Failed to reject request');
 	} finally {
 		actionPending.value = false;
 	}
@@ -78,7 +89,8 @@ async function handleReject() {
 async function handleRequestChanges() {
 	if (!request.value) return;
 
-	if (!comment.value.trim()) {
+	const trimmedComment = comment.value.trim();
+	if (!trimmedComment) {
 		actionError.value = 'Please provide feedback in the comment box';
 		return;
 	}
@@ -88,8 +100,8 @@ async function handleRequestChanges() {
 	actionSuccess.value = null;
 
 	try {
-		await requestChanges(request.value.id);
-		// TODO: Add comment via Directus comments API
+		await requestChanges(request.value.id, trimmedComment);
+		comment.value = '';
 		actionSuccess.value = 'Request sent back for changes';
 		await refresh();
 
@@ -97,8 +109,8 @@ async function handleRequestChanges() {
 		setTimeout(() => {
 			router.push('/approval-desk');
 		}, 2000);
-	} catch (err: any) {
-		actionError.value = err.message || 'Failed to request changes';
+	} catch (err: unknown) {
+		actionError.value = getErrorMessage(err, 'Failed to request changes');
 	} finally {
 		actionPending.value = false;
 	}
@@ -107,12 +119,12 @@ async function handleRequestChanges() {
 // Can user take action on this request?
 const canApprove = computed(() => {
 	if (!request.value) return false;
-	return ['awaiting_review', 'awaiting_approval'].includes(request.value.status);
+	return actionableStatuses.includes(request.value.status);
 });
 
 const canReject = computed(() => {
 	if (!request.value) return false;
-	return ['awaiting_review', 'awaiting_approval'].includes(request.value.status);
+	return actionableStatuses.includes(request.value.status);
 });
 
 // Format date helper
