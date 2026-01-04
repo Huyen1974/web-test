@@ -1,0 +1,44 @@
+[
+  {
+    "title": "Test Request 1",
+    "requirements": "Initial request to validate content migration pipeline.",
+    "status": "new",
+    "current_holder": "agent_codex",
+    "translations": [
+      {
+        "languages_code": "vi",
+        "title": "Yeu cau thu nghiem 1",
+        "content": "Noi dung thu nghiem 1",
+        "summary": "Tom tat 1"
+      }
+    ]
+  },
+  {
+    "title": "Test Request 2",
+    "requirements": "Second request to confirm translations array handling.",
+    "status": "new",
+    "current_holder": "agent_claude",
+    "translations": [
+      {
+        "languages_code": "vi",
+        "title": "Yeu cau thu nghiem 2",
+        "content": "Noi dung thu nghiem 2",
+        "summary": "Tom tat 2"
+      }
+    ]
+  },
+  {
+    "title": "Test Request 3",
+    "requirements": "Third request for sample data coverage.",
+    "status": "new",
+    "current_holder": "agent_langroid",
+    "translations": [
+      {
+        "languages_code": "vi",
+        "title": "Yeu cau thu nghiem 3",
+        "content": "Noi dung thu nghiem 3",
+        "summary": "Tom tat 3"
+      }
+    ]
+  }
+]
