@@ -3,14 +3,51 @@
  * Provides data access layer for content request operations
  */
 
-import { readItems, readItem, updateItem, createItem } from '@directus/sdk';
-import type { ContentRequest, ContentRequestView, ContentRequestStatus, ContentRequestFilters } from '~/types';
+import { readItems, readItem, updateItem } from '@directus/sdk';
+import type {
+	ContentRequest,
+	ContentRequestView,
+	ContentRequestStatus,
+	ContentRequestFilters,
+	DirectusTranslation,
+	DirectusFilter,
+} from '~/types';
+
+const DEFAULT_LANGUAGE = 'vi';
+
+function normalizeTranslations(translations?: DirectusTranslation[] | null): DirectusTranslation[] {
+	return Array.isArray(translations) ? translations : [];
+}
+
+export function resolveContentRequestTranslation(
+	translations: DirectusTranslation[] | null | undefined,
+	preferredLanguage: string,
+	fallbackLanguage: string = DEFAULT_LANGUAGE,
+): DirectusTranslation | undefined {
+	const normalized = normalizeTranslations(translations);
+	if (!normalized.length) return undefined;
+
+	return (
+		normalized.find((entry) => entry.languages_code === preferredLanguage) ??
+		normalized.find((entry) => entry.languages_code === fallbackLanguage) ??
+		normalized[0]
+	);
+}
+
+function normalizeContentRequest<T extends { translations?: DirectusTranslation[] | null }>(
+	item: T,
+): T & { translations: DirectusTranslation[] } {
+	return {
+		...item,
+		translations: normalizeTranslations(item.translations),
+	};
+}
 
 /**
  * Fetch content requests with filters
  */
 export async function useContentRequestsList(filters?: ContentRequestFilters) {
-	const directusFilter: Record<string, any> = {};
+	const directusFilter: DirectusFilter = {};
 
 	// Apply status filter
 	if (filters?.status) {
@@ -43,17 +80,11 @@ export async function useContentRequestsList(filters?: ContentRequestFilters) {
 		directusFilter._or = [{ title: { _contains: filters.search } }, { requirements: { _contains: filters.search } }];
 	}
 
-	return await useDirectus<ContentRequestView[]>(
+	const items = await useDirectus<ContentRequestView[]>(
 		readItems('content_requests', {
 			fields: [
-				'id',
-				'title',
-				'status',
-				'current_holder',
-				'goal',
-				'requirements',
-				'date_created',
-				'date_updated',
+				'*',
+				'translations.*',
 				{
 					user_created: ['id', 'first_name', 'last_name', 'email'],
 					user_updated: ['id', 'first_name', 'last_name', 'email'],
@@ -65,16 +96,19 @@ export async function useContentRequestsList(filters?: ContentRequestFilters) {
 			limit: 100,
 		}),
 	);
+
+	return items.map((item) => normalizeContentRequest(item));
 }
 
 /**
  * Fetch a single content request by ID
  */
 export async function useContentRequestDetail(id: number) {
-	return await useDirectus<ContentRequestView>(
+	const item = await useDirectus<ContentRequestView>(
 		readItem('content_requests', id, {
 			fields: [
 				'*',
+				'translations.*',
 				{
 					user_created: ['id', 'first_name', 'last_name', 'email', 'avatar'],
 					user_updated: ['id', 'first_name', 'last_name', 'email', 'avatar'],
@@ -83,6 +117,8 @@ export async function useContentRequestDetail(id: number) {
 			],
 		}),
 	);
+
+	return normalizeContentRequest(item);
 }
 
 /**

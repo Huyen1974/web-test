@@ -5,6 +5,7 @@
  */
 
 import type { User } from './system';
+import type { DirectusTranslation } from './directus';
 
 /**
  * Content Request Status Enum
@@ -34,6 +35,7 @@ export interface ContentRequest {
 	target_audience?: string; // Intended audience
 	tone?: string; // Desired tone (professional, casual, technical, etc.)
 	knowledge_document?: number | null; // Related knowledge_document ID (M2O)
+	translations?: DirectusTranslation[]; // O2M alias (content_requests_translations)
 	user_created?: string | User; // User who created the request
 	date_created?: string; // ISO timestamp
 	user_updated?: string | User; // User who last updated

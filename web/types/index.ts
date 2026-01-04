@@ -4,6 +4,7 @@ export type * from './meta';
 export type * from './system';
 export type * from './help';
 export type * from './os';
+export type * from './directus';
 export type * from './content-requests';
 export type * from './knowledge-documents';
 export type * from './schema';
