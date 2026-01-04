@@ -17,7 +17,9 @@ config({ path: resolve(__dirname, '../.env') });
 interface SystemInfo {
 	status: string;
 	backend: string;
-	[key: string]: any;
+	version?: string;
+	/** Additional dynamic fields (use unknown for safety) */
+	[key: string]: unknown;
 }
 
 async function verifyConnection(): Promise<void> {

@@ -11,6 +11,7 @@ import type {
 } from '~/types/agent-data';
 import type { KnowledgeCard, KnowledgeListEntry, Language, Category } from '~/types/view-model-0032';
 import { ZONE_MAPPING } from '~/types/view-model-0032';
+import type { DirectusKnowledgeDocument } from '~/types/directus';
 
 /**
  * Get Agent Data client instance
@@ -104,7 +105,7 @@ export async function useAgentDataSearch(
 		);
 
 		// Map to KnowledgeListEntry using existing mapping logic
-		const entries: KnowledgeListEntry[] = (items || []).map((doc: any) => {
+		const entries: KnowledgeListEntry[] = (items || []).map((doc: DirectusKnowledgeDocument) => {
 			const docZone = ZONE_MAPPING[doc.category as Category] || 'Other';
 			const docSubZone = doc.tags?.[0] || 'General';
 			const primaryTopic = doc.tags?.[1] || '';
