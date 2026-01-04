@@ -112,7 +112,28 @@ export interface DirectusFilter {
 	_and?: DirectusFilter[];
 	_or?: DirectusFilter[];
 	[key: string]:
-		| { _eq?: unknown; _neq?: unknown; _lt?: unknown; _lte?: unknown; _gt?: unknown; _gte?: unknown; _in?: unknown[]; _nin?: unknown[]; _null?: boolean; _nnull?: boolean; _contains?: string; _ncontains?: string; _starts_with?: string; _nstarts_with?: string; _ends_with?: string; _nends_with?: string; _between?: unknown[]; _nbetween?: unknown[]; _empty?: boolean; _nempty?: boolean; }
+		| {
+				_eq?: unknown;
+				_neq?: unknown;
+				_lt?: unknown;
+				_lte?: unknown;
+				_gt?: unknown;
+				_gte?: unknown;
+				_in?: unknown[];
+				_nin?: unknown[];
+				_null?: boolean;
+				_nnull?: boolean;
+				_contains?: string;
+				_ncontains?: string;
+				_starts_with?: string;
+				_nstarts_with?: string;
+				_ends_with?: string;
+				_nends_with?: string;
+				_between?: unknown[];
+				_nbetween?: unknown[];
+				_empty?: boolean;
+				_nempty?: boolean;
+		  }
 		| DirectusFilter[]
 		| undefined;
 }
