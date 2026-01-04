@@ -3,7 +3,7 @@
  * Provides data access layer for content request operations
  */
 
-import { readItems, readItem, updateItem, customEndpoint } from '@directus/sdk';
+import { readItems, readItem, updateItem, createComment } from '@directus/sdk';
 import type {
 	ContentRequest,
 	ContentRequestView,
@@ -44,34 +44,9 @@ function normalizeContentRequest<T extends { translations?: DirectusTranslation[
 	};
 }
 
-type ContentRequestUpdateOptions = {
-	comment?: string;
-};
-
 function normalizeComment(comment?: string): string | undefined {
 	const trimmed = comment?.trim();
 	return trimmed ? trimmed : undefined;
-}
-
-async function updateContentRequestWithOptions(
-	id: number,
-	updates: Partial<ContentRequest>,
-	options?: ContentRequestUpdateOptions,
-): Promise<ContentRequest> {
-	const comment = normalizeComment(options?.comment);
-	if (!comment) {
-		return await useDirectus<ContentRequest>(updateItem('content_requests', id, updates));
-	}
-
-	return await useDirectus<ContentRequest>(
-		customEndpoint({
-			path: `/items/content_requests/${id}`,
-			method: 'PATCH',
-			params: { comment },
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(updates),
-		}),
-	);
 }
 
 /**
@@ -162,7 +137,6 @@ export async function updateContentRequestStatus(
 	id: number,
 	status: ContentRequestStatus,
 	currentHolder?: string,
-	options?: ContentRequestUpdateOptions,
 ): Promise<ContentRequest> {
 	const updates: Partial<ContentRequest> = {
 		status,
@@ -172,14 +146,14 @@ export async function updateContentRequestStatus(
 		updates.current_holder = currentHolder;
 	}
 
-	return await updateContentRequestWithOptions(id, updates, options);
+	return await useDirectus<ContentRequest>(updateItem('content_requests', id, updates));
 }
 
 /**
  * Update content request fields
  */
 export async function updateContentRequest(id: number, updates: Partial<ContentRequest>): Promise<ContentRequest> {
-	return await updateContentRequestWithOptions(id, updates);
+	return await useDirectus<ContentRequest>(updateItem('content_requests', id, updates));
 }
 
 /**
@@ -240,7 +214,19 @@ export async function requestChanges(id: number, comment: string): Promise<Conte
 		throw new Error('Comment is required to request changes.');
 	}
 
-	return await updateContentRequestStatus(id, CONTENT_REQUEST_STATUS.DRAFTING, CONTENT_REQUEST_HOLDER.AGENT, {
-		comment: trimmedComment,
-	});
+	const updatedRequest = await updateContentRequestStatus(
+		id,
+		CONTENT_REQUEST_STATUS.DRAFTING,
+		CONTENT_REQUEST_HOLDER.AGENT,
+	);
+
+	await useDirectus(
+		createComment({
+			collection: 'content_requests',
+			item: String(id),
+			comment: trimmedComment,
+		}),
+	);
+
+	return updatedRequest;
 }
