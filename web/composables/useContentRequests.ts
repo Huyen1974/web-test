@@ -3,7 +3,7 @@
  * Provides data access layer for content request operations
  */
 
-import { readItems, readItem, updateItem } from '@directus/sdk';
+import { readItems, readItem, updateItem, customEndpoint } from '@directus/sdk';
 import type {
 	ContentRequest,
 	ContentRequestView,
@@ -12,6 +12,7 @@ import type {
 	DirectusTranslation,
 	DirectusFilter,
 } from '~/types';
+import { CONTENT_REQUEST_HOLDER, CONTENT_REQUEST_STATUS } from '~/types/content-requests';
 
 const DEFAULT_LANGUAGE = 'vi';
 
@@ -43,6 +44,36 @@ function normalizeContentRequest<T extends { translations?: DirectusTranslation[
 	};
 }
 
+type ContentRequestUpdateOptions = {
+	comment?: string;
+};
+
+function normalizeComment(comment?: string): string | undefined {
+	const trimmed = comment?.trim();
+	return trimmed ? trimmed : undefined;
+}
+
+async function updateContentRequestWithOptions(
+	id: number,
+	updates: Partial<ContentRequest>,
+	options?: ContentRequestUpdateOptions,
+): Promise<ContentRequest> {
+	const comment = normalizeComment(options?.comment);
+	if (!comment) {
+		return await useDirectus<ContentRequest>(updateItem('content_requests', id, updates));
+	}
+
+	return await useDirectus<ContentRequest>(
+		customEndpoint({
+			path: `/items/content_requests/${id}`,
+			method: 'PATCH',
+			params: { comment },
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(updates),
+		}),
+	);
+}
+
 /**
  * Fetch content requests with filters
  */
@@ -67,7 +98,10 @@ export async function useContentRequestsList(filters?: ContentRequestFilters) {
 	if (filters?.overdue) {
 		directusFilter._and = [
 			{
-				_or: [{ status: { _eq: 'awaiting_review' } }, { status: { _eq: 'awaiting_approval' } }],
+				_or: [
+					{ status: { _eq: CONTENT_REQUEST_STATUS.AWAITING_REVIEW } },
+					{ status: { _eq: CONTENT_REQUEST_STATUS.AWAITING_APPROVAL } },
+				],
 			},
 			{
 				date_updated: { _lt: '$NOW(-24 hours)' },
@@ -128,6 +162,7 @@ export async function updateContentRequestStatus(
 	id: number,
 	status: ContentRequestStatus,
 	currentHolder?: string,
+	options?: ContentRequestUpdateOptions,
 ): Promise<ContentRequest> {
 	const updates: Partial<ContentRequest> = {
 		status,
@@ -137,14 +172,14 @@ export async function updateContentRequestStatus(
 		updates.current_holder = currentHolder;
 	}
 
-	return await useDirectus<ContentRequest>(updateItem('content_requests', id, updates));
+	return await updateContentRequestWithOptions(id, updates, options);
 }
 
 /**
  * Update content request fields
  */
 export async function updateContentRequest(id: number, updates: Partial<ContentRequest>): Promise<ContentRequest> {
-	return await useDirectus<ContentRequest>(updateItem('content_requests', id, updates));
+	return await updateContentRequestWithOptions(id, updates);
 }
 
 /**
@@ -154,7 +189,7 @@ export async function updateContentRequest(id: number, updates: Partial<ContentR
  */
 export async function useMyTasks() {
 	return await useContentRequestsList({
-		status: ['awaiting_review', 'awaiting_approval'],
+		status: [CONTENT_REQUEST_STATUS.AWAITING_REVIEW, CONTENT_REQUEST_STATUS.AWAITING_APPROVAL],
 	});
 }
 
@@ -166,14 +201,14 @@ export async function approveContentRequest(id: number, currentStatus: ContentRe
 	let newStatus: ContentRequestStatus;
 	let newHolder: string | undefined;
 
-	if (currentStatus === 'awaiting_review') {
+	if (currentStatus === CONTENT_REQUEST_STATUS.AWAITING_REVIEW) {
 		// Move to awaiting_approval for final sign-off
-		newStatus = 'awaiting_approval';
-		newHolder = 'editor'; // Could be team lead/manager
-	} else if (currentStatus === 'awaiting_approval') {
+		newStatus = CONTENT_REQUEST_STATUS.AWAITING_APPROVAL;
+		newHolder = CONTENT_REQUEST_HOLDER.EDITOR; // Could be team lead/manager
+	} else if (currentStatus === CONTENT_REQUEST_STATUS.AWAITING_APPROVAL) {
 		// Final approval - publish
-		newStatus = 'published';
-		newHolder = 'system';
+		newStatus = CONTENT_REQUEST_STATUS.PUBLISHED;
+		newHolder = CONTENT_REQUEST_HOLDER.SYSTEM;
 	} else {
 		throw new Error(`Cannot approve request with status: ${currentStatus}`);
 	}
@@ -186,17 +221,26 @@ export async function approveContentRequest(id: number, currentStatus: ContentRe
  * Moves to rejected status
  */
 export async function rejectContentRequest(id: number, currentStatus: ContentRequestStatus): Promise<ContentRequest> {
-	if (!['awaiting_review', 'awaiting_approval'].includes(currentStatus)) {
+	if (
+		![CONTENT_REQUEST_STATUS.AWAITING_REVIEW, CONTENT_REQUEST_STATUS.AWAITING_APPROVAL].includes(currentStatus)
+	) {
 		throw new Error(`Cannot reject request with status: ${currentStatus}`);
 	}
 
-	return await updateContentRequestStatus(id, 'rejected', undefined);
+	return await updateContentRequestStatus(id, CONTENT_REQUEST_STATUS.REJECTED, undefined);
 }
 
 /**
  * Helper: Request changes on a content request
  * Moves back to drafting for revisions
  */
-export async function requestChanges(id: number): Promise<ContentRequest> {
-	return await updateContentRequestStatus(id, 'drafting', 'agent');
+export async function requestChanges(id: number, comment: string): Promise<ContentRequest> {
+	const trimmedComment = normalizeComment(comment);
+	if (!trimmedComment) {
+		throw new Error('Comment is required to request changes.');
+	}
+
+	return await updateContentRequestStatus(id, CONTENT_REQUEST_STATUS.DRAFTING, CONTENT_REQUEST_HOLDER.AGENT, {
+		comment: trimmedComment,
+	});
 }
