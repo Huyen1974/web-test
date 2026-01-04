@@ -29,10 +29,19 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import type { DirectusTranslation } from '../web/types/directus';
 
 // ============================================================================
 // Types & Interfaces
 // ============================================================================
+
+interface ContentRequestSeed {
+	title: string;
+	requirements?: string;
+	status?: 'new' | 'assigned' | 'drafting' | 'awaiting_review' | 'awaiting_approval' | 'published' | 'rejected' | 'canceled';
+	current_holder?: string;
+	translations?: DirectusTranslation[];
+}
 
 interface DirectusCollection {
 	collection: string;
@@ -113,6 +122,13 @@ interface MigrationResult {
 	relationsCreated: number;
 	errors: Array<{ item: string; error: string }>;
 	dryRun: boolean;
+	seed: {
+		total: number;
+		created: number;
+		skipped: number;
+		failed: number;
+		errors: Array<{ title: string; error: string }>;
+	};
 }
 
 // ============================================================================
@@ -120,6 +136,19 @@ interface MigrationResult {
 // ============================================================================
 
 const COLLECTION_NAME = 'content_requests';
+const TRANSLATIONS_COLLECTION = `${COLLECTION_NAME}_translations`;
+const SEED_FILE_PATH = path.join(process.cwd(), 'web', 'seeds', 'content_requests.json');
+const VALID_STATUSES = new Set([
+	'new',
+	'assigned',
+	'drafting',
+	'awaiting_review',
+	'awaiting_approval',
+	'published',
+	'rejected',
+	'canceled',
+]);
+const VALID_LANGUAGE_CODES = new Set(['vi', 'en', 'ja']);
 
 /**
  * Collection definition for content_requests (Growth Zone)
@@ -142,6 +171,114 @@ const COLLECTION_DEF: DirectusCollection = {
 		comment: 'Growth Zone collection for Phase E1 - Content Operations & Agent Workflows',
 	},
 };
+
+/**
+ * Collection definition for translations (O2M)
+ */
+const TRANSLATIONS_COLLECTION_DEF: DirectusCollection = {
+	collection: TRANSLATIONS_COLLECTION,
+	meta: {
+		icon: 'translate',
+		note: 'Translations for content_requests (E1 Plan F.3)',
+		display_template: '{{languages_code}} - {{title}}',
+		accountability: 'all',
+	},
+	schema: {
+		comment: 'Translations for content_requests (languages_code + translatable fields)',
+	},
+};
+
+/**
+ * Field definitions for translations collection
+ */
+const TRANSLATION_FIELD_DEFINITIONS: DirectusField[] = [
+	{
+		field: 'id',
+		type: 'integer',
+		schema: {
+			is_nullable: false,
+		},
+		meta: {
+			interface: 'input',
+			readonly: true,
+			hidden: true,
+		},
+	},
+	{
+		field: 'content_request_id',
+		type: 'integer',
+		schema: {
+			is_nullable: false,
+		},
+		meta: {
+			interface: 'select-dropdown-m2o',
+			special: ['m2o'],
+			required: true,
+			note: 'Parent content request',
+			display: 'related-values',
+			display_options: {
+				template: '{{title}}',
+			},
+			width: 'half',
+			sort: 1,
+		},
+	},
+	{
+		field: 'languages_code',
+		type: 'string',
+		schema: {
+			max_length: 10,
+			is_nullable: false,
+		},
+		meta: {
+			interface: 'input',
+			required: true,
+			note: 'Language code (vi/en/ja)',
+			width: 'half',
+			sort: 2,
+		},
+	},
+	{
+		field: 'title',
+		type: 'string',
+		schema: {
+			max_length: 255,
+			is_nullable: true,
+		},
+		meta: {
+			interface: 'input',
+			note: 'Translated title',
+			width: 'full',
+			sort: 3,
+		},
+	},
+	{
+		field: 'content',
+		type: 'text',
+		schema: {
+			is_nullable: true,
+		},
+		meta: {
+			interface: 'input-rich-text-md',
+			note: 'Translated content/requirements',
+			width: 'full',
+			sort: 4,
+		},
+	},
+	{
+		field: 'summary',
+		type: 'text',
+		schema: {
+			is_nullable: true,
+		},
+		meta: {
+			interface: 'input-multiline',
+			note: 'Translated summary',
+			width: 'full',
+			sort: 5,
+		},
+	},
+];
 
 /**
  * Field definitions for content_requests
@@ -326,6 +463,18 @@ const FIELD_DEFINITIONS: DirectusField[] = [
 			sort: 13,
 		},
 	},
+	// Translations (O2M to content_requests_translations)
+	{
+		field: 'translations',
+		type: 'alias',
+		meta: {
+			interface: 'list-o2m',
+			special: ['o2m'],
+			note: 'Translated fields (languages_code, title, content, summary)',
+			width: 'full',
+			sort: 19,
+		},
+	},
 	// Relation to knowledge_documents (O2M - one request can result in many documents)
 	{
 		field: 'knowledge_documents',
@@ -359,6 +508,20 @@ const RELATION_DEFINITIONS: DirectusRelation[] = [
 			on_delete: 'SET NULL',
 		},
 	},
+	{
+		collection: TRANSLATIONS_COLLECTION,
+		field: 'content_request_id',
+		related_collection: COLLECTION_NAME,
+		meta: {
+			many_collection: TRANSLATIONS_COLLECTION,
+			many_field: 'content_request_id',
+			one_collection: COLLECTION_NAME,
+			one_field: 'translations',
+		},
+		schema: {
+			on_delete: 'CASCADE',
+		},
+	},
 ];
 
 // ============================================================================
@@ -366,8 +529,16 @@ const RELATION_DEFINITIONS: DirectusRelation[] = [
 // ============================================================================
 
 function validateEnvironment(): void {
-	const required = ['DIRECTUS_URL', 'DIRECTUS_ADMIN_EMAIL', 'DIRECTUS_ADMIN_PASSWORD'];
-	const missing = required.filter((key) => !process.env[key]);
+	const missing: string[] = [];
+	if (!process.env.DIRECTUS_URL) {
+		missing.push('DIRECTUS_URL');
+	}
+	if (!process.env.DIRECTUS_ADMIN_EMAIL) {
+		missing.push('DIRECTUS_ADMIN_EMAIL');
+	}
+	if (!process.env.DIRECTUS_ADMIN_PASSWORD) {
+		missing.push('DIRECTUS_ADMIN_PASSWORD');
+	}
 
 	if (missing.length > 0) {
 		console.error('\n❌ Missing required environment variables:');
@@ -518,6 +689,167 @@ async function createRelation(token: string, relationDef: DirectusRelation): Pro
 	}
 }
 
+// ============================================================================
+// Seed Data Functions
+// ============================================================================
+
+function normalizeSeedItem(raw: any, index: number): ContentRequestSeed {
+	if (!raw || typeof raw !== 'object') {
+		throw new Error(`Seed item #${index + 1} must be an object`);
+	}
+
+	if (!raw.title || typeof raw.title !== 'string') {
+		throw new Error(`Seed item #${index + 1} missing valid "title"`);
+	}
+
+	const status = raw.status ?? 'new';
+	if (typeof status !== 'string' || !VALID_STATUSES.has(status)) {
+		throw new Error(`Seed item #${index + 1} has invalid status "${status}"`);
+	}
+
+	if (raw.translations !== undefined) {
+		if (!Array.isArray(raw.translations)) {
+			throw new Error(`Seed item #${index + 1} "translations" must be an array`);
+		}
+
+		raw.translations.forEach((translation: DirectusTranslation, tIndex: number) => {
+			if (!translation || typeof translation !== 'object') {
+				throw new Error(`Seed item #${index + 1} translation #${tIndex + 1} must be an object`);
+			}
+			if (!translation.languages_code || !VALID_LANGUAGE_CODES.has(translation.languages_code)) {
+				throw new Error(
+					`Seed item #${index + 1} translation #${tIndex + 1} missing valid languages_code`,
+				);
+			}
+		});
+	}
+
+	return {
+		title: raw.title,
+		requirements: typeof raw.requirements === 'string' ? raw.requirements : undefined,
+		status,
+		current_holder: typeof raw.current_holder === 'string' ? raw.current_holder : undefined,
+		translations: raw.translations as DirectusTranslation[] | undefined,
+	};
+}
+
+function loadSeedData(seedPath: string): ContentRequestSeed[] {
+	if (!fs.existsSync(seedPath)) {
+		throw new Error(`Seed file not found: ${seedPath}`);
+	}
+
+	const raw = fs.readFileSync(seedPath, 'utf-8');
+	let data: unknown;
+
+	try {
+		data = JSON.parse(raw);
+	} catch (error: any) {
+		throw new Error(`Seed file is not valid JSON: ${error.message}`);
+	}
+
+	if (!Array.isArray(data)) {
+		throw new Error('Seed file must contain a JSON array of content_requests');
+	}
+
+	return data.map((item, index) => normalizeSeedItem(item, index));
+}
+
+async function contentRequestExists(token: string, title: string, status?: string): Promise<boolean> {
+	const params = new URLSearchParams();
+	params.set('filter[title][_eq]', title);
+	if (status) {
+		params.set('filter[status][_eq]', status);
+	}
+	params.set('limit', '1');
+
+	const url = `${process.env.DIRECTUS_URL}/items/${COLLECTION_NAME}?${params.toString()}`;
+	const response = await fetch(url, {
+		headers: { Authorization: `Bearer ${token}` },
+	});
+
+	if (!response.ok) {
+		return false;
+	}
+
+	const data = await response.json();
+	return Array.isArray(data.data) && data.data.length > 0;
+}
+
+async function seedContentRequests(
+	token: string,
+	seedPath: string,
+	dryRun: boolean,
+): Promise<MigrationResult['seed']> {
+	const result = {
+		total: 0,
+		created: 0,
+		skipped: 0,
+		failed: 0,
+		errors: [] as Array<{ title: string; error: string }>,
+	};
+
+	const seeds = loadSeedData(seedPath);
+	result.total = seeds.length;
+
+	console.log(`\n🌱 Step 8: Seeding content_requests from ${seedPath}...`);
+
+	for (const seed of seeds) {
+		try {
+			const exists = await contentRequestExists(token, seed.title, seed.status);
+			if (exists) {
+				console.log(`   ✓ Seed exists (skipped): ${seed.title}`);
+				result.skipped++;
+				continue;
+			}
+
+			if (dryRun) {
+				console.log(`   [DRY-RUN] Would seed: ${seed.title}`);
+				result.created++;
+				continue;
+			}
+
+			const payload: Record<string, unknown> = {
+				title: seed.title,
+				status: seed.status || 'new',
+			};
+
+			if (seed.requirements) {
+				payload.requirements = seed.requirements;
+			}
+			if (seed.current_holder) {
+				payload.current_holder = seed.current_holder;
+			}
+			if (seed.translations && seed.translations.length > 0) {
+				payload.translations = seed.translations;
+			}
+
+			const url = `${process.env.DIRECTUS_URL}/items/${COLLECTION_NAME}`;
+			const response = await fetch(url, {
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${token}`,
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify(payload),
+			});
+
+			if (!response.ok) {
+				const error = await response.text();
+				throw new Error(`HTTP ${response.status}: ${error}`);
+			}
+
+			console.log(`   ✅ Seeded: ${seed.title}`);
+			result.created++;
+		} catch (error: any) {
+			console.error(`   ❌ Failed to seed ${seed.title}: ${error.message}`);
+			result.failed++;
+			result.errors.push({ title: seed.title, error: error.message });
+		}
+	}
+
+	return result;
+}
+
 /**
  * Create the M2O field in knowledge_documents for the O2M relation
  */
@@ -548,12 +880,19 @@ async function createM2OField(token: string): Promise<void> {
 
 async function runMigration(dryRun: boolean): Promise<MigrationResult> {
 	const result: MigrationResult = {
-		collectionsChecked: 1,
+		collectionsChecked: 2,
 		collectionsCreated: [],
 		fieldsAdded: 0,
 		relationsCreated: 0,
 		errors: [],
 		dryRun,
+		seed: {
+			total: 0,
+			created: 0,
+			skipped: 0,
+			failed: 0,
+			errors: [],
+		},
 	};
 
 	console.log('\n' + '='.repeat(80));
@@ -587,8 +926,28 @@ async function runMigration(dryRun: boolean): Promise<MigrationResult> {
 			}
 		}
 
-		// Step 3: Add fields
-		console.log(`\n📝 Step 3: Checking fields for "${COLLECTION_NAME}"...`);
+		// Step 3: Check translations collection
+		console.log(`\n📋 Step 3: Checking if collection "${TRANSLATIONS_COLLECTION}" exists...`);
+		const translationsExists = await collectionExists(token, TRANSLATIONS_COLLECTION);
+
+		if (translationsExists) {
+			console.log(`   ✓ Collection "${TRANSLATIONS_COLLECTION}" already exists`);
+		} else {
+			console.log(`   ⚠ Collection "${TRANSLATIONS_COLLECTION}" does not exist`);
+
+			if (dryRun) {
+				console.log(`   [DRY-RUN] Would create collection: ${TRANSLATIONS_COLLECTION}`);
+				result.collectionsCreated.push(TRANSLATIONS_COLLECTION);
+			} else {
+				console.log(`   Creating collection: ${TRANSLATIONS_COLLECTION}...`);
+				await createCollection(token, TRANSLATIONS_COLLECTION_DEF);
+				console.log(`   ✅ Created collection: ${TRANSLATIONS_COLLECTION}`);
+				result.collectionsCreated.push(TRANSLATIONS_COLLECTION);
+			}
+		}
+
+		// Step 4: Add fields to content_requests
+		console.log(`\n📝 Step 4: Checking fields for "${COLLECTION_NAME}"...`);
 
 		if (!exists || !dryRun) {
 			const existingFields = await getFields(token, COLLECTION_NAME);
@@ -614,8 +973,35 @@ async function runMigration(dryRun: boolean): Promise<MigrationResult> {
 			}
 		}
 
-		// Step 4: Create M2O field in knowledge_documents
-		console.log('\n🔗 Step 4: Creating M2O field in knowledge_documents...');
+		// Step 5: Add fields to translations collection
+		console.log(`\n📝 Step 5: Checking fields for "${TRANSLATIONS_COLLECTION}"...`);
+
+		if (!translationsExists || !dryRun) {
+			const existingTranslationFields = await getFields(token, TRANSLATIONS_COLLECTION);
+			const existingTranslationFieldNames = new Set(existingTranslationFields.map((f: any) => f.field));
+
+			for (const fieldDef of TRANSLATION_FIELD_DEFINITIONS) {
+				if (existingTranslationFieldNames.has(fieldDef.field)) {
+					console.log(`   ✓ Field exists: ${TRANSLATIONS_COLLECTION}.${fieldDef.field}`);
+				} else {
+					if (dryRun) {
+						console.log(`   [DRY-RUN] Would add field: ${TRANSLATIONS_COLLECTION}.${fieldDef.field} (${fieldDef.type})`);
+					} else {
+						try {
+							await createField(token, TRANSLATIONS_COLLECTION, fieldDef);
+							console.log(`   ✅ Added field: ${TRANSLATIONS_COLLECTION}.${fieldDef.field}`);
+							result.fieldsAdded++;
+						} catch (error: any) {
+							console.error(`   ❌ Failed to add field ${TRANSLATIONS_COLLECTION}.${fieldDef.field}: ${error.message}`);
+							result.errors.push({ item: `field:${TRANSLATIONS_COLLECTION}.${fieldDef.field}`, error: error.message });
+						}
+					}
+				}
+			}
+		}
+
+		// Step 6: Create M2O field in knowledge_documents
+		console.log('\n🔗 Step 6: Creating M2O field in knowledge_documents...');
 
 		const kdFields = await getFields(token, 'knowledge_documents');
 		const hasM2OField = kdFields.some((f: any) => f.field === 'content_request_id');
@@ -637,8 +1023,8 @@ async function runMigration(dryRun: boolean): Promise<MigrationResult> {
 			}
 		}
 
-		// Step 5: Create relations
-		console.log('\n🔗 Step 5: Creating relations...');
+		// Step 7: Create relations
+		console.log('\n🔗 Step 7: Creating relations...');
 
 		const existingRelations = await getRelations(token);
 
@@ -676,6 +1062,14 @@ async function runMigration(dryRun: boolean): Promise<MigrationResult> {
 			}
 		}
 
+		// Step 8: Seed data
+		result.seed = await seedContentRequests(token, SEED_FILE_PATH, dryRun);
+		if (result.seed.failed > 0) {
+			result.seed.errors.forEach((seedError) => {
+				result.errors.push({ item: `seed:${seedError.title}`, error: seedError.error });
+			});
+		}
+
 		return result;
 	} catch (error: any) {
 		result.errors.push({ item: 'migration', error: error.message });
@@ -705,6 +1099,10 @@ function generateReport(result: MigrationResult): string {
 - **Collections Created**: ${result.collectionsCreated.length}
 - **Fields Added**: ${result.fieldsAdded}
 - **Relations Created**: ${result.relationsCreated}
+- **Seed Total**: ${result.seed.total}
+- **Seed Created**: ${result.seed.created}
+- **Seed Skipped**: ${result.seed.skipped}
+- **Seed Failed**: ${result.seed.failed}
 - **Errors**: ${result.errors.length}
 
 ---
@@ -738,6 +1136,7 @@ function generateReport(result: MigrationResult): string {
 | updated_at | timestamp | No | Auto-updated timestamp |
 | created_by | uuid | No | User who created (auto-tracked) |
 | updated_by | uuid | No | User who updated (auto-tracked) |
+| translations | alias (O2M) | No | Translated fields (languages_code, title, content, summary) |
 | knowledge_documents | alias (O2M) | No | Related knowledge documents |
 
 ### Relationships
@@ -746,6 +1145,20 @@ function generateReport(result: MigrationResult): string {
   - One request can result in many documents
   - Foreign key: \`knowledge_documents.content_request_id\`
   - On delete: SET NULL
+- **content_requests** → **content_requests_translations** (O2M)
+  - One request can have many translations
+  - Foreign key: \`${TRANSLATIONS_COLLECTION}.content_request_id\`
+  - On delete: CASCADE
+
+---
+
+## Seed Data
+
+- **Seed File**: \`${SEED_FILE_PATH}\`
+- **Total Records**: ${result.seed.total}
+- **Created**: ${result.seed.created}
+- **Skipped**: ${result.seed.skipped}
+- **Failed**: ${result.seed.failed}
 
 ---
 
@@ -855,6 +1268,10 @@ async function main() {
 		console.log(`Collections Created:  ${result.collectionsCreated.length}`);
 		console.log(`Fields Added:         ${result.fieldsAdded}`);
 		console.log(`Relations Created:    ${result.relationsCreated}`);
+		console.log(`Seed Total:           ${result.seed.total}`);
+		console.log(`Seed Created:         ${result.seed.created}`);
+		console.log(`Seed Skipped:         ${result.seed.skipped}`);
+		console.log(`Seed Failed:          ${result.seed.failed}`);
 		console.log(`Errors:               ${result.errors.length}`);
 		console.log('='.repeat(80) + '\n');
 
@@ -885,6 +1302,10 @@ async function main() {
 		}
 		process.exit(1);
 	}
+}
+
+export async function runContentRequestsMigration(): Promise<void> {
+	await main();
 }
 
 // Run if executed directly
