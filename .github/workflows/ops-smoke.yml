@@ -2,6 +2,10 @@ name: ops-smoke
 
 on:
   pull_request:
+    branches:
+      - main
+      - 'feat/**'
+      - 'fix/**'
     paths:
       - 'web/**'
       - 'scripts/**'
