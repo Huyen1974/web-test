@@ -88,9 +88,9 @@ async function handleRequestChanges() {
 	actionSuccess.value = null;
 
 	try {
-		await requestChanges(request.value.id);
-		// TODO: Add comment via Directus comments API
+		await requestChanges(request.value.id, comment.value);
 		actionSuccess.value = 'Request sent back for changes';
+		comment.value = ''; // Clear comment after successful submission
 		await refresh();
 
 		// Redirect back to list after success

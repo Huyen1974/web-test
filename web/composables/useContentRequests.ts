@@ -3,7 +3,7 @@
  * Provides data access layer for content request operations
  */
 
-import { readItems, readItem, updateItem, createItem } from '@directus/sdk';
+import { readItems, readItem, updateItem, createItem, createComment } from '@directus/sdk';
 import type { ContentRequest, ContentRequestView, ContentRequestStatus, ContentRequestFilters } from '~/types';
 
 /**
@@ -159,8 +159,33 @@ export async function rejectContentRequest(id: number, currentStatus: ContentReq
 
 /**
  * Helper: Request changes on a content request
- * Moves back to drafting for revisions
+ * Moves back to drafting for revisions and attaches a comment
+ *
+ * @param id - Content request ID
+ * @param comment - Comment explaining what changes are needed
+ * @returns Updated content request
  */
-export async function requestChanges(id: number): Promise<ContentRequest> {
-	return await updateContentRequestStatus(id, 'drafting', 'agent');
+export async function requestChanges(id: number, comment?: string): Promise<ContentRequest> {
+	// Step 1: Update status to drafting
+	const updatedRequest = await updateContentRequestStatus(id, 'drafting', 'agent');
+
+	// Step 2: Create comment if provided (separate API call)
+	if (comment && comment.trim().length > 0) {
+		try {
+			await useDirectus(
+				createComment({
+					collection: 'content_requests',
+					item: String(id),
+					comment: comment.trim(),
+				}),
+			);
+		} catch (error) {
+			// Log error but don't fail the entire operation
+			// Status update succeeded, comment creation failed
+			console.error('[requestChanges] Failed to create comment:', error);
+			throw new Error('Status updated successfully, but comment creation failed. Please add comment manually.');
+		}
+	}
+
+	return updatedRequest;
 }
