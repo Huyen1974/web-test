@@ -2,9 +2,15 @@ name: Nuxt 3 CI
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - 'feat/**'
+      - 'fix/**'
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
+      - 'feat/**'
+      - 'fix/**'
 
 jobs:
   build:
