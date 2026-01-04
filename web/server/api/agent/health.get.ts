@@ -44,13 +44,22 @@ export default defineEventHandler(async (event) => {
 
 		// Return the health info to the client
 		return response;
-	} catch (error: any) {
+	} catch (error) {
 		// Log error on server side for debugging
 		console.error('[AgentData] Health check failed:', error);
 
+		// Type-safe error handling
+		const statusCode = typeof error === 'object' && error !== null && 'statusCode' in error
+			? (error.statusCode as number)
+			: 503;
+
+		const message = error instanceof Error
+			? error.message
+			: 'Agent Data backend unavailable';
+
 		throw createError({
-			statusCode: error.statusCode || 503,
-			statusMessage: error.message || 'Agent Data backend unavailable',
+			statusCode,
+			statusMessage: message,
 		});
 	}
 });

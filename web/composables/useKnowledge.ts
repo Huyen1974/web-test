@@ -2,11 +2,12 @@ import { readItems } from '@directus/sdk';
 import type { KnowledgeCard, KnowledgeListEntry, KnowledgeList, Language } from '~/types/view-model-0032';
 import { DIRECTUS_TO_VIEW_MODEL_MAPPING, ZONE_MAPPING } from '~/types/view-model-0032';
 import type { Category } from '~/types/view-model-0032';
+import type { DirectusKnowledgeDocument, DirectusFilter } from '~/types/directus';
 
 /**
  * Map raw Directus document to KnowledgeListEntry
  */
-function mapToListEntry(doc: any): KnowledgeListEntry {
+function mapToListEntry(doc: DirectusKnowledgeDocument): KnowledgeListEntry {
 	const zone = ZONE_MAPPING[doc.category as Category] || 'Other';
 	const subZone = doc.tags?.[0] || 'General';
 	const primaryTopic = doc.tags?.[1] || '';
@@ -36,7 +37,7 @@ function mapToListEntry(doc: any): KnowledgeListEntry {
 /**
  * Map raw Directus document to KnowledgeCard
  */
-export function mapToCard(doc: any): KnowledgeCard {
+export function mapToCard(doc: DirectusKnowledgeDocument): KnowledgeCard {
 	const zone = ZONE_MAPPING[doc.category as Category] || 'Other';
 	const subZone = doc.tags?.[0] || 'General';
 	const topics = doc.tags?.slice(1) || [];
@@ -93,7 +94,7 @@ export async function useKnowledgeList(options: KnowledgeListOptions = {}): Prom
 	const { page = 1, pageSize = 20, zone, subZone, topic, language = 'vn' } = options;
 
 	// Build filter
-	const filter: any = {
+	const filter: DirectusFilter = {
 		status: { _eq: 'published' },
 		visibility: { _eq: 'public' },
 		language: { _eq: language },
@@ -143,7 +144,7 @@ export async function useKnowledgeList(options: KnowledgeListOptions = {}): Prom
 		let filteredItems = items || [];
 
 		if (subZone || topic) {
-			filteredItems = filteredItems.filter((doc: any) => {
+			filteredItems = filteredItems.filter((doc: DirectusKnowledgeDocument) => {
 				if (subZone && doc.tags?.[0] !== subZone) return false;
 				if (topic && !doc.tags?.includes(topic)) return false;
 				return true;
@@ -184,7 +185,7 @@ export async function useKnowledgeDetail(identifier: string): Promise<KnowledgeC
 		// Determine if identifier is UUID or slug
 		const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
 
-		const filter: any = {
+		const filter: DirectusFilter = {
 			status: { _eq: 'published' },
 			visibility: { _eq: 'public' },
 			is_current_version: { _eq: true }, // Task 0047C: Only show current versions
