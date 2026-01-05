@@ -5044,7 +5044,15 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 | T7.2 (Backlog) | ✅ DONE | Flow: "E1: Process Cache Warm Backlog" |
 | T8 (Cleanup) | ✅ DONE | Flow: "E1: Cleanup Expired Tech Requests" |
 
-**Trạng thái Gate:** 🟢 PHASE 2 COMPLETE (Ready for Phase 3: Content & Go-Live).
+### PHASE 3: CONTENT & GO-LIVE
+
+| Task | Tên | Trạng thái | Artifacts / Ghi chú |
+|------|-----|------------|---------------------|
+| T6 | Legal & Globals | ✅ DONE | Privacy: `26ddaa74-a7b3-4183-af57-3d546ffa9c71`<br>Terms: `53a531f9-4fa8-4246-8463-1d591d83d285`<br>*Note:* Globals Schema deferred to T9. |
+| N1-13 | Content Seeding | ❌ | |
+| T9 | Final Verification | ❌ | |
+
+**Trạng thái Gate:** 🔵 PHASE 3 FINALIZING (Task 9: Final Verification).
 
 ---
 
@@ -5121,6 +5129,7 @@ PHASE 3: CONTENT & GO-LIVE
 | 2026-01-04 | **Infrastructure** | CI Workflows updated to support 'fix/**' branches. PR #160 Merged. Phase 1 Closed. |
 | 2026-01-04 | **Phase 2 Start** | Initiating Task 7 (Cache Warmer Flow). |
 | 2026-01-05 | **Phase 2 Closed** | All automation flows deployed. SSOT moved to docs/ folder. |
+| 2026-01-05 | **Content Seeding** | Legal pages created. Globals schema mismatch identified (queued for Task 9 fix). |
 
 ---
 
