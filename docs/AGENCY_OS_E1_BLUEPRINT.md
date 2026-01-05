@@ -5041,18 +5041,24 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 | Task | Tên | Trạng thái | Ghi chú |
 |------|-----|------------|---------|
 | T7 (Cache Warmer) | ✅ DONE | Flows: "E1: Cache Warmer (Dispatch)" & "E1: Cache Warmer (Warm URL)" |
-| T7.2 (Backlog) | ✅ DONE | Flow: "E1: Process Cache Warm Backlog" |
-| T8 (Cleanup) | ✅ DONE | Flow: "E1: Cleanup Expired Tech Requests" |
+| T7.2 (Backlog) | ✅ DONE | Path: `web/scripts/e1-08_setup_maintenance_flows.ts`<br>Flow: "E1: Process Cache Warm Backlog" |
+| T8 (Cleanup) | ✅ DONE | Path: `web/scripts/e1-08_setup_maintenance_flows.ts`<br>Flow: "E1: Cleanup Expired Tech Requests" |
 
 ### PHASE 3: CONTENT & GO-LIVE
 
 | Task | Tên | Trạng thái | Artifacts / Ghi chú |
 |------|-----|------------|---------------------|
-| T6 | Legal & Globals | ✅ DONE | Privacy: `26ddaa74-a7b3-4183-af57-3d546ffa9c71`<br>Terms: `53a531f9-4fa8-4246-8463-1d591d83d285`<br>*Note:* Globals Schema deferred to T9. |
+| T6 | Legal & Globals | ✅ DONE | Privacy: `26ddaa74-a7b3-4183-af57-3d546ffa9c71`<br>Terms: `53a531f9-4fa8-4246-8463-1d591d83d285` |
 | N1-13 | Content Seeding | ❌ | |
-| T9 | Final Verification | ❌ | |
+| T9 | Final Verification | 🔄 IN PROGRESS | |
 
-**Trạng thái Gate:** 🔵 PHASE 3 FINALIZING (Task 9: Final Verification).
+### E2+ DEBT LOG (KNOWN ISSUES)
+
+| Issue | Detail | Resolution Plan |
+|-------|--------|-----------------|
+| Globals Schema Mismatch | Task 6 script attempted to update `project_name`, `google_analytics_id` but fields missing in Directus Globals. | Fix in Task 9 or E2. |
+
+**Trạng thái Gate:** 🔵 PHASE 3 FINALIZING (Waiting for Task 9 Report).
 
 ---
 
@@ -5130,6 +5136,7 @@ PHASE 3: CONTENT & GO-LIVE
 | 2026-01-04 | **Phase 2 Start** | Initiating Task 7 (Cache Warmer Flow). |
 | 2026-01-05 | **Phase 2 Closed** | All automation flows deployed. SSOT moved to docs/ folder. |
 | 2026-01-05 | **Content Seeding** | Legal pages created. Globals schema mismatch identified (queued for Task 9 fix). |
+| 2026-01-05 | **Grand Sync** | Updated all Phase 2 & Task 6 statuses to DONE based on verified deployment logs. |
 
 ---
 
