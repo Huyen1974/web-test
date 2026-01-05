@@ -5040,11 +5040,11 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 
 | Task | Tên | Trạng thái | Ghi chú |
 |------|-----|------------|---------|
-| T7 | Cache Warmer Flow | 🔄 IN PROGRESS | Event Hook: `pages` publish. |
-| T7.2 | Backlog Processor | ❌ | |
-| T8 | Cleanup Flow | ❌ | |
+| T7 (Cache Warmer) | ✅ DONE | Flows: "E1: Cache Warmer (Dispatch)" & "E1: Cache Warmer (Warm URL)" |
+| T7.2 (Backlog) | ✅ DONE | Flow: "E1: Process Cache Warm Backlog" |
+| T8 (Cleanup) | ✅ DONE | Flow: "E1: Cleanup Expired Tech Requests" |
 
-**Trạng thái Gate:** 🔵 PHASE 2 IN PROGRESS (Task 7: Cache Warmer Flow)
+**Trạng thái Gate:** 🟢 PHASE 2 COMPLETE (Ready for Phase 3: Content & Go-Live).
 
 ---
 
@@ -5120,6 +5120,7 @@ PHASE 3: CONTENT & GO-LIVE
 | 2026-01-04 | **Task 5 Workflow: SUCCESS** | Final Fix Verified. Comments persisted via SDK. Phase 1 Execution Concluded. |
 | 2026-01-04 | **Infrastructure** | CI Workflows updated to support 'fix/**' branches. PR #160 Merged. Phase 1 Closed. |
 | 2026-01-04 | **Phase 2 Start** | Initiating Task 7 (Cache Warmer Flow). |
+| 2026-01-05 | **Phase 2 Closed** | All automation flows deployed. SSOT moved to docs/ folder. |
 
 ---
 
