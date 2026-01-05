@@ -5044,15 +5044,7 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 | T7.2 (Backlog) | ✅ DONE | Flow: "E1: Process Cache Warm Backlog" |
 | T8 (Cleanup) | ✅ DONE | Flow: "E1: Cleanup Expired Tech Requests" |
 
-### PHASE 3: CONTENT & GO-LIVE
-
-| Task | Tên | Trạng thái | Artifacts / Ghi chú |
-|------|-----|------------|---------------------|
-| T6 | Legal & Globals | ✅ DONE | Privacy: `26ddaa74-a7b3-4183-af57-3d546ffa9c71`<br>Terms: `53a531f9-4fa8-4246-8463-1d591d83d285`<br>Globals Schema Fixed & Seeded (Script: `web/scripts/fix_globals_schema.ts`). |
-| N1-13 | Content Seeding | ❌ | |
-| T9 | Final Verification | ✅ DONE | Path: `web/scripts/e1-09_final_verification.ts`<br>Result: 100% GREEN (Web, Content, Schema, Flows confirmed). |
-
-**Trạng thái Gate:** 🟢 E1 MISSION ACCOMPLISHED (Ready for Phase E2).
+**Trạng thái Gate:** 🟢 PHASE 2 COMPLETE (Ready for Phase 3: Content & Go-Live).
 
 ---
 
@@ -5129,8 +5121,6 @@ PHASE 3: CONTENT & GO-LIVE
 | 2026-01-04 | **Infrastructure** | CI Workflows updated to support 'fix/**' branches. PR #160 Merged. Phase 1 Closed. |
 | 2026-01-04 | **Phase 2 Start** | Initiating Task 7 (Cache Warmer Flow). |
 | 2026-01-05 | **Phase 2 Closed** | All automation flows deployed. SSOT moved to docs/ folder. |
-| 2026-01-05 | **Content Seeding** | Legal pages created. Globals schema mismatch identified (queued for Task 9 fix). |
-| 2026-01-05 | **E1 CLOSURE** | System reached 100% Green status. Globals Schema fixed. All checkpoints passed. Phase E1 officially completed. |
 
 ---
 
