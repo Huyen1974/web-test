@@ -4917,7 +4917,10 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 | D6 | Field `managed_site` trong directus_users | ✅ CREATED | M2O → sites |
 | D7 | Public Role Permissions | ✅ VERIFIED | Core read access configured via script. Verified 200 OK. |
 | D8 | Maintenance Flows | ✅ DONE | Installed via API. |
-| D9 | Snapshot Schema | ✅ DONE | Merged in PR #169. |
+| D10 | Security | ✅ DONE | Verified via Grand Audit. GSM-only auth active. |
+| D11 | Branding | ✅ DONE | Verified via Grand Audit. Project Name: 'Agency OS'. |
+
+**STATUS: 100% COMPLETE. READY FOR ASSEMBLY.**
 
 ---
 

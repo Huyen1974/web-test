@@ -11,6 +11,9 @@ import uuid
 LOGO_TITLE = "Agency OS Logo"
 LOGO_URL = "https://placehold.co/400x100/ffffff/000000/png?text=Agency+OS"
 
+# Global variable, set in main()
+API_URL = None
+
 def normalize_url(url):
     return url.rstrip("/")
 
@@ -38,22 +41,27 @@ def fetch_secret(name):
 
 def get_access_token_via_login():
     print("Authenticating...")
-    try:
-        email = fetch_secret("DIRECTUS_ADMIN_EMAIL")
-        password = fetch_secret("DIRECTUS_ADMIN_PASSWORD")
-    except Exception as e:
-        print(f"Error fetching secrets: {e}")
-        return None
+    # Try environment variables first, fall back to gcloud secrets
+    email = os.environ.get("DIRECTUS_ADMIN_EMAIL")
+    password = os.environ.get("DIRECTUS_ADMIN_PASSWORD")
+
+    if not email or not password:
+        try:
+            email = email or fetch_secret("DIRECTUS_ADMIN_EMAIL")
+            password = password or fetch_secret("DIRECTUS_ADMIN_PASSWORD")
+        except Exception as e:
+            print(f"Error fetching secrets: {e}")
+            return None
 
     api_url = get_api_url()
     url = f"{api_url}/auth/login"
     data = json.dumps({"email": email, "password": password}).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
-    
+
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
-    
+
     try:
         with urllib.request.urlopen(req, context=ctx) as response:
             resp_data = json.load(response)
@@ -68,31 +76,31 @@ def make_request(url, method="GET", data=None, token=None, check_ssl=False):
         headers["Authorization"] = f"Bearer {token}"
     if data:
         headers["Content-Type"] = "application/json"
-        
+
     req = urllib.request.Request(url, method=method, headers=headers)
     if data:
         req.data = json.dumps(data).encode("utf-8")
-        
+
     ctx = ssl.create_default_context()
     if not check_ssl:
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
-        
+
     try:
         with urllib.request.urlopen(req, context=ctx) as response:
             if response.status == 204:
                 return {}
             content_type = response.getheader("Content-Type", "")
             if "application/json" in content_type:
-                 return json.load(response)
+                return json.load(response)
             return response.read().decode('utf-8')
-            
+
     except urllib.error.HTTPError as e:
         err_body = e.read().decode()
         try:
             return {"error": e.code, "message": err_body}
         except:
-             return {"error": e.code, "message": err_body}
+            return {"error": e.code, "message": err_body}
     except Exception as e:
         return {"error": 500, "message": str(e)}
 
@@ -105,27 +113,22 @@ def get_collection_fields(token, collection):
 def upsert_navigation(token, nav_id, fields):
     # Check existence
     res = make_request(f"{API_URL}/items/navigation/{nav_id}", token=token)
-    
-    exists = False
+
     if "error" not in res:
-         print(f"[SKIP] Navigation '{nav_id}' exists.")
-         return True
-    
-    # If 404 (Not Found) or 403 (Forbidden - maybe implying not found/no access to missing item), try Create.
-    # Note: 403 on specific item GET usually implies RLS or item doesn't exist and we lack create? 
-    # But we are Admin.
+        print(f"[SKIP] Navigation '{nav_id}' exists.")
+        return True
+
     print(f"[INFO] Check '{nav_id}' got {res.get('error')}. Attempting Creation...")
-    
+
     # Create
     print(f"[CREATING] Navigation '{nav_id}'...")
     payload = {"id": nav_id}
-    
-    # Add basic fields if they exist
+
     if "title" in fields:
         payload["title"] = nav_id.capitalize() + " Navigation"
     if "status" in fields:
         payload["status"] = "published"
-        
+
     res_create = make_request(f"{API_URL}/items/navigation", method="POST", data=payload, token=token)
     if "data" in res_create:
         print(f"   [SUCCESS] Created navigation '{nav_id}'")
@@ -139,25 +142,25 @@ def upsert_home_page(token, fields):
     if slug_field not in fields:
         print(f"[WARN] No suitable slug field found in pages (have: {fields})")
         return None
-        
+
     # Search
     res = make_request(f"{API_URL}/items/pages?filter[{slug_field}][_eq]=/", token=token)
-    
+
     if "data" in res and len(res["data"]) > 0:
         print(f"[SKIP] Home Page ('{slug_field}'='/') exists.")
         return res["data"][0]["id"]
-    
+
     # Create
     print(f"[CREATING] Home Page...")
     payload = {
-        "id": str(uuid.uuid4()), # Generate explicit UUID
+        "id": str(uuid.uuid4()),
         slug_field: "/",
     }
     if "title" in fields:
         payload["title"] = "Home Page"
     if "status" in fields:
         payload["status"] = "published"
-    
+
     res_create = make_request(f"{API_URL}/items/pages", method="POST", data=payload, token=token)
     if "data" in res_create:
         print(f"   [SUCCESS] Created Home Page (ID: {res_create['data']['id']})")
@@ -167,29 +170,28 @@ def upsert_home_page(token, fields):
         return None
 
 def create_nav_item(token, fields, nav_id, page_id=None):
-    # Check duplicates? For now just create.
     print(f"[CREATING] Navigation Item for '{nav_id}'...")
-    
+
     payload = {
-        "id": str(uuid.uuid4()), # Explicit UUID
-        "navigation": nav_id, 
+        "id": str(uuid.uuid4()),
+        "navigation": nav_id,
     }
-    
+
     if "title" in fields:
         payload["title"] = "Home"
     if "label" in fields:
         payload["label"] = "Home"
-        
+
     if page_id and "page" in fields:
         payload["page"] = page_id
     elif "url" in fields:
         payload["url"] = "/"
     else:
         print(f"   [WARN] No 'page' or 'url' field. Metadata: {fields}")
-    
+
     if "sort" in fields:
         payload["sort"] = 1
-        
+
     res_create = make_request(f"{API_URL}/items/navigation_items", method="POST", data=payload, token=token)
     if "data" in res_create:
         print(f"   [SUCCESS] Created Nav Item (ID: {res_create['data']['id']})")
@@ -198,9 +200,89 @@ def create_nav_item(token, fields, nav_id, page_id=None):
         print(f"   [ERROR] Create Nav Item failed: {res_create}")
         return True
 
+def find_or_create_logo(token):
+    """Find or import the Agency OS logo asset."""
+    query = urllib.parse.quote(LOGO_TITLE)
+    res = make_request(f"{API_URL}/files?filter[title][_eq]={query}&limit=1", token=token)
+    if "data" in res and res["data"]:
+        print(f"[SKIP] Logo asset already exists (ID: {res['data'][0]['id']})")
+        return res["data"][0]["id"]
+
+    print(f"[CREATING] Importing logo asset...")
+    payload = {
+        "url": LOGO_URL,
+        "data": {
+            "title": LOGO_TITLE,
+        },
+    }
+    res_create = make_request(f"{API_URL}/files/import", method="POST", data=payload, token=token)
+    if "data" in res_create:
+        print(f"   [SUCCESS] Imported logo asset (ID: {res_create['data']['id']})")
+        return res_create["data"]["id"]
+
+    print(f"   [WARN] Failed to import logo asset: {res_create}")
+    return None
+
+def set_branding(token):
+    """
+    Set Directus branding using PATCH /settings endpoint.
+
+    IMPORTANT: This uses the correct /settings endpoint, NOT /items/directus_settings.
+    The /settings endpoint is the proper API for updating Directus project settings.
+    """
+    print("\n--- [Branding Configuration] ---")
+
+    # Get or create logo
+    logo_id = find_or_create_logo(token)
+
+    branding_payload = {
+        "project_name": "Agency OS",
+        "project_descriptor": "Multi-Tenant CMS Platform",
+        "project_url": API_URL,
+    }
+
+    # Add logo if available
+    if logo_id:
+        branding_payload["project_logo"] = logo_id
+
+    res = make_request(
+        f"{API_URL}/settings",
+        method="PATCH",
+        data=branding_payload,
+        token=token
+    )
+
+    if "error" in res:
+        print(f"[ERROR] Failed to set branding: {res}")
+        return False
+
+    print(f"[SUCCESS] Branding set: Project Name = 'Agency OS'")
+    return True
+
+def verify_branding(token):
+    """Verify branding is set correctly (authenticated request)."""
+    print("\n--- [Branding Verification] ---")
+
+    res = make_request(f"{API_URL}/settings", token=token)
+
+    if "error" in res:
+        print(f"[ERROR] Could not verify branding: {res}")
+        return False
+
+    settings = res.get("data", {})
+    project_name = settings.get("project_name", "UNKNOWN")
+    print(f"Current Project Name: '{project_name}'")
+
+    if project_name == "Agency OS":
+        print("[PASS] Branding verified!")
+        return True
+    else:
+        print(f"[WARN] Expected 'Agency OS', got '{project_name}'")
+        return False
+
 def check_public_health():
     print("\n--- [Public Verification] ---")
-    
+
     # 1. API Smoke
     for col in ["pages", "navigation"]:
         url = f"{API_URL}/items/{col}?limit=5"
@@ -224,22 +306,20 @@ def check_public_health():
 
     print(f"\nChecking Web URL: {web_url}")
     req = urllib.request.Request(web_url)
-    # fake user agent to be nice
     req.add_header("User-Agent", "Antigravity-Seed-Verifier/1.0")
-    
+
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
-    
+
     try:
         with urllib.request.urlopen(req, context=ctx) as response:
             html = response.read().decode('utf-8')
             print(f"Web Response: {response.code} OK")
-            
-            # Check for indications of content
+
             snippet = html[:500].replace("\n", " ")
             print(f"Snippet: {snippet}...")
-            
+
             if "Home Page" in html or "Home" in html:
                 print("   [FOUND] 'Home' text found in HTML.")
             else:
@@ -247,108 +327,47 @@ def check_public_health():
     except Exception as e:
         print(f"Web Smoke Test Failed: {e}")
 
-def find_or_create_logo(token):
-    query = urllib.parse.quote(LOGO_TITLE)
-    res = make_request(f"{API_URL}/files?filter[title][_eq]={query}&limit=1", token=token)
-    if "data" in res and res["data"]:
-        return res["data"][0]["id"]
-
-    payload = {
-        "url": LOGO_URL,
-        "data": {
-            "title": LOGO_TITLE,
-        },
-    }
-    res_create = make_request(f"{API_URL}/files/import", method="POST", data=payload, token=token)
-    if "data" in res_create:
-        print(f"[SUCCESS] Imported logo asset (ID: {res_create['data']['id']})")
-        return res_create["data"]["id"]
-
-    print(f"[ERROR] Failed to import logo asset: {res_create}")
-    sys.exit(1)
-
-def update_directus_settings(token):
-    project_url = get_api_url()
-    logo_id = find_or_create_logo(token)
-
-    payload = {
-        "project_name": "Agency OS",
-        "project_url": project_url,
-        "project_logo": logo_id,
-    }
-
-    res = make_request(f"{API_URL}/items/directus_settings?limit=1", token=token)
-    settings = res.get("data")
-    if isinstance(settings, list) and settings:
-        settings_id = settings[0].get("id")
-        if settings_id:
-            res_update = make_request(
-                f"{API_URL}/items/directus_settings/{settings_id}",
-                method="PATCH",
-                data=payload,
-                token=token,
-            )
-            if "data" in res_update:
-                print("[SUCCESS] Updated directus_settings branding.")
-                return
-            print(f"[ERROR] Failed to update settings: {res_update}")
-            sys.exit(1)
-
-    res_update = make_request(f"{API_URL}/items/directus_settings", method="PATCH", data=payload, token=token)
-    if "data" in res_update:
-        print("[SUCCESS] Updated directus_settings branding (singleton).")
-        return
-
-    res_create = make_request(f"{API_URL}/items/directus_settings", method="POST", data=payload, token=token)
-    if "data" in res_create:
-        print("[SUCCESS] Created directus_settings branding.")
-        return
-
-    print(f"[ERROR] Failed to apply branding to directus_settings: {res_create}")
-    sys.exit(1)
-
 
 def main():
-    print("--- [Minimal Content Seed] ---")
     global API_URL
+    print("--- [Minimal Content Seed] ---")
+
     API_URL = get_api_url()
-    
+
     # 1. Auth
     token = get_access_token_via_login()
     if not token:
         print("Auth failed.")
         sys.exit(1)
 
-    # 1b. Branding
-    update_directus_settings(token)
-        
-    # 2. Introspection
+    # 2. Set Branding (CRITICAL: Uses PATCH /settings - the correct endpoint)
+    set_branding(token)
+
+    # 3. Introspection
     print("\nIntrospecting Schema...")
     fields_nav = get_collection_fields(token, "navigation")
     fields_page = get_collection_fields(token, "pages")
     fields_nav_items = get_collection_fields(token, "navigation_items")
-    
+
     print(f"Fields (Navigation): {list(fields_nav)}")
     print(f"Fields (Pages): {list(fields_page)}")
-    
-    # 3. Create Navigation
+
+    # 4. Create Navigation
     upsert_navigation(token, "main", fields_nav)
     upsert_navigation(token, "footer", fields_nav)
-    
-    # 4. Create Home Page
+
+    # 5. Create Home Page
     page_id = upsert_home_page(token, fields_page)
-    
-    # 5. Connect Nav Items
+
+    # 6. Connect Nav Items
     if fields_nav_items:
-        # Check if items already exist for 'main'? 
-        # For minimal seed, assume if we created main, we should create item?
-        # Or Just create one.
         create_nav_item(token, fields_nav_items, "main", page_id)
     else:
         print("[WARN] navigation_items collection not found or no fields.")
 
-    # 6. Verify
+    # 7. Verify
     check_public_health()
+    verify_branding(token)
 
 if __name__ == "__main__":
     main()
