@@ -10,7 +10,7 @@ import argparse
 # Config
 PLAN_PATH = "scripts/directus/schema_plan.json"
 SPEC_PATH = "scripts/directus/schema_spec.extracted.json"
-API_URL = "https://directus-test-812872501910.asia-southeast1.run.app"
+API_URL = os.environ.get("DIRECTUS_URL", "https://directus-test-812872501910.asia-southeast1.run.app")
 
 REQUIRED_BLOCKS = {
     "block_hero", "block_faqs", "block_richtext", "block_testimonials", "block_quote",
@@ -21,14 +21,28 @@ REQUIRED_BLOCKS = {
 def get_access_token_via_login():
     # helper to fetch secret
     def fetch_secret(name):
-        return subprocess.check_output(
-             ["gcloud", "secrets", "versions", "access", "latest", f"--secret={name}"],
-             text=True
-         ).strip()
+        try:
+            return subprocess.check_output(
+                 ["gcloud", "secrets", "versions", "access", "latest", f"--secret={name}"],
+                 text=True
+             ).strip()
+        except Exception:
+            return None
 
     print("Authenticating...")
-    email = os.environ.get("DIRECTUS_ADMIN_EMAIL") or fetch_secret("DIRECTUS_ADMIN_EMAIL_test")
-    password = os.environ.get("DIRECTUS_ADMIN_PASSWORD") or fetch_secret("DIRECTUS_ADMIN_PASSWORD_test")
+    email = (
+        os.environ.get("DIRECTUS_ADMIN_EMAIL")
+        or fetch_secret("DIRECTUS_ADMIN_EMAIL")
+        or fetch_secret("DIRECTUS_ADMIN_EMAIL_test")
+    )
+    password = (
+        os.environ.get("DIRECTUS_ADMIN_PASSWORD")
+        or fetch_secret("DIRECTUS_ADMIN_PASSWORD")
+        or fetch_secret("DIRECTUS_ADMIN_PASSWORD_test")
+    )
+    if not email or not password:
+        print("Missing DIRECTUS_ADMIN_EMAIL or DIRECTUS_ADMIN_PASSWORD (env or GSM).")
+        return None
     
     url = f"{API_URL}/auth/login"
     data = json.dumps({"email": email, "password": password}).encode("utf-8")
