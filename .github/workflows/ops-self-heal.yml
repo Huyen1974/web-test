@@ -69,12 +69,18 @@ jobs:
         working-directory: ./web
         run: pnpm install --frozen-lockfile
 
+      - name: Validate GCP service account key
+        run: |
+          if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
+            echo "::error::Missing GCP_SA_KEY secret"
+            exit 1
+          fi
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           project_id: ${{ vars.GCP_PROJECT_ID || '812872501910' }}
-          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
