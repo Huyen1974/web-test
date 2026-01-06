@@ -4916,8 +4916,11 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 | D5 | Collection `agent_tasks` | ✅ CREATED | |
 | D6 | Field `managed_site` trong directus_users | ✅ CREATED | M2O → sites |
 | D7 | Public Role Permissions | ✅ VERIFIED | Core read access configured via script. Verified 200 OK. |
-| D8 | Agent Role Permissions | ✅ CREATED | Xem Permission Matrix |
-| D9 | Activity Log bật | ✅ VERIFIED | |
+| D8 | Maintenance Flows | ✅ DONE | Installed via API. |
+| D10 | Security | ✅ DONE | Verified via Grand Audit. GSM-only auth active. |
+| D11 | Branding | ✅ DONE | Verified via Grand Audit. Project Name: 'Agency OS'. |
+
+**STATUS: 100% COMPLETE. READY FOR ASSEMBLY.**
 
 ---
 
@@ -5026,7 +5029,7 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 | 7. Flows | 6 | 6 | 100% |
 | **TỔNG** | **61** | **61** | **100%** |
 
-**Trạng thái Gate:** 🟢 **E1 PREREQUISITES COMPLETE**. Verified by Cursor Audit on 2026-01-06.
+**Trạng thái Gate:** 🟢 **PHASE 1 TECHNICALLY COMPLETE**. Undergoing Deep Audit.
 
 ---
 
