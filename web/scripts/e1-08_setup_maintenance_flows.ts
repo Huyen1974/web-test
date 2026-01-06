@@ -27,11 +27,15 @@ import {
 	type AuthenticationMode,
 	type RestClient,
 } from '@directus/sdk';
+import { config } from 'dotenv';
+import { resolve } from 'path';
 
 type FlowRecord = {
 	id: string;
 	name: string;
 	operation?: string | null;
+	status?: string;
+	trigger?: string;
 };
 
 type OperationRecord = {
@@ -70,6 +74,12 @@ const FLOW_NAMES = {
 	cleanup: 'E1: Cleanup Expired Tech Requests',
 };
 
+const EXPECTED_BACKLOG_KEYS = ['read_backlog', 'backlog_meta', 'check_backlog', 'mark_processing', 'loop_domains', 'mark_processed'];
+const EXPECTED_WORKER_KEYS = ['read_processing', 'loop_domains', 'warm_req', 'log_failure'];
+const EXPECTED_CLEANUP_KEYS = ['delete_expired'];
+
+config({ path: resolve(__dirname, '../.env') });
+
 function normalizeUrl(url: string): string {
 	return url.replace(/\/+$/, '');
 }
@@ -95,7 +105,7 @@ async function getFlowByName(client: DirectusClient, name: string): Promise<Flow
 		readFlows({
 			filter: { name: { _eq: name } },
 			limit: 1,
-			fields: ['id', 'name', 'operation'],
+			fields: ['id', 'name', 'operation', 'status', 'trigger'],
 		}),
 	);
 	return flows[0] ?? null;
@@ -163,6 +173,37 @@ async function createFlowOperations(
 	await client.request(updateFlow(flowId, { operation: created[firstKey].id }));
 
 	return created;
+}
+
+async function verifyFlow(
+	client: DirectusClient,
+	name: string,
+	expectedTrigger: string,
+	expectedKeys: string[],
+): Promise<void> {
+	const flow = await getFlowByName(client, name);
+	if (!flow) {
+		throw new Error(`Flow not found after creation: ${name}`);
+	}
+	if (!flow.operation) {
+		throw new Error(`Flow missing root operation: ${name}`);
+	}
+	if (flow.trigger && flow.trigger !== expectedTrigger) {
+		throw new Error(`Flow trigger mismatch for ${name}: expected ${expectedTrigger}, got ${flow.trigger}`);
+	}
+
+	const operations = await client.request(
+		readOperations({
+			filter: { flow: { _eq: flow.id } },
+			fields: ['id', 'key'],
+			limit: -1,
+		}),
+	);
+	const keys = new Set(operations.map((op) => op.key));
+	const missing = expectedKeys.filter((key) => !keys.has(key));
+	if (missing.length > 0) {
+		throw new Error(`Flow ${name} missing operations: ${missing.join(', ')}`);
+	}
 }
 
 function buildBacklogWorkerOperations(): OperationTemplate[] {
@@ -368,6 +409,7 @@ async function main() {
 	});
 	await clearFlowOperations(client, workerFlow.id);
 	await createFlowOperations(client, workerFlow.id, buildBacklogWorkerOperations(), 'read_processing');
+	await verifyFlow(client, FLOW_NAMES.worker, 'operation', EXPECTED_WORKER_KEYS);
 
 	const backlogFlow = await upsertFlow(client, {
 		name: FLOW_NAMES.backlog,
@@ -383,6 +425,7 @@ async function main() {
 	});
 	await clearFlowOperations(client, backlogFlow.id);
 	await createFlowOperations(client, backlogFlow.id, buildBacklogOperations(workerFlow.id), 'read_backlog');
+	await verifyFlow(client, FLOW_NAMES.backlog, 'schedule', EXPECTED_BACKLOG_KEYS);
 
 	const cleanupFlow = await upsertFlow(client, {
 		name: FLOW_NAMES.cleanup,
@@ -398,11 +441,13 @@ async function main() {
 	});
 	await clearFlowOperations(client, cleanupFlow.id);
 	await createFlowOperations(client, cleanupFlow.id, buildCleanupOperations(), 'delete_expired');
+	await verifyFlow(client, FLOW_NAMES.cleanup, 'schedule', EXPECTED_CLEANUP_KEYS);
 
 	console.log('Maintenance flows configured:');
 	console.log(`- ${FLOW_NAMES.backlog}`);
 	console.log(`- ${FLOW_NAMES.worker}`);
 	console.log(`- ${FLOW_NAMES.cleanup}`);
+	process.exit(0);
 }
 
 main().catch((error) => {
