@@ -200,6 +200,149 @@ def create_nav_item(token, fields, nav_id, page_id=None):
         print(f"   [ERROR] Create Nav Item failed: {res_create}")
         return True
 
+
+# =============================================================================
+# LEGAL PAGES (APPENDIX 16 Compliance)
+# =============================================================================
+
+LEGAL_PAGES = [
+    {
+        "permalink": "/privacy",
+        "title": "Privacy Policy",
+        "summary": "Our commitment to protecting your privacy and personal data.",
+        "content": """# Privacy Policy
+
+**Last Updated:** January 2026
+
+## 1. Introduction
+
+Welcome to Agency OS. We respect your privacy and are committed to protecting your personal data.
+
+## 2. Information We Collect
+
+We may collect the following types of information:
+- Contact information (name, email address)
+- Usage data (pages visited, features used)
+- Technical data (IP address, browser type)
+
+## 3. How We Use Your Information
+
+We use your information to:
+- Provide and improve our services
+- Communicate with you about updates
+- Ensure security and prevent fraud
+
+## 4. Data Security
+
+We implement appropriate security measures to protect your personal data.
+
+## 5. Your Rights
+
+You have the right to:
+- Access your personal data
+- Request correction or deletion
+- Opt-out of marketing communications
+
+## 6. Contact Us
+
+For privacy-related inquiries, please contact us through our website.
+""",
+    },
+    {
+        "permalink": "/terms",
+        "title": "Terms of Service",
+        "summary": "Terms and conditions governing the use of our platform.",
+        "content": """# Terms of Service
+
+**Last Updated:** January 2026
+
+## 1. Acceptance of Terms
+
+By accessing and using Agency OS, you agree to be bound by these Terms of Service.
+
+## 2. Use of Service
+
+You agree to use the service only for lawful purposes and in accordance with these Terms.
+
+## 3. User Accounts
+
+You are responsible for maintaining the confidentiality of your account credentials.
+
+## 4. Intellectual Property
+
+All content and materials on this platform are protected by intellectual property laws.
+
+## 5. Limitation of Liability
+
+We shall not be liable for any indirect, incidental, or consequential damages.
+
+## 6. Modifications
+
+We reserve the right to modify these terms at any time. Continued use constitutes acceptance.
+
+## 7. Governing Law
+
+These terms shall be governed by applicable laws.
+
+## 8. Contact
+
+For questions about these Terms, please contact us through our website.
+""",
+    },
+]
+
+
+def upsert_legal_page(token, fields, page_config):
+    """Create or skip a legal page (privacy, terms) if it doesn't exist."""
+    slug_field = "permalink" if "permalink" in fields else "slug"
+    permalink = page_config["permalink"]
+
+    # Check if page exists
+    res = make_request(
+        f"{API_URL}/items/pages?filter[{slug_field}][_eq]={permalink}",
+        token=token
+    )
+
+    if "data" in res and len(res["data"]) > 0:
+        print(f"[SKIP] Legal page '{permalink}' already exists.")
+        return res["data"][0]["id"]
+
+    # Create page
+    print(f"[CREATING] Legal page '{permalink}'...")
+    payload = {
+        "id": str(uuid.uuid4()),
+        slug_field: permalink,
+    }
+
+    if "title" in fields:
+        payload["title"] = page_config["title"]
+    if "summary" in fields:
+        payload["summary"] = page_config["summary"]
+    if "status" in fields:
+        payload["status"] = "published"
+
+    res_create = make_request(
+        f"{API_URL}/items/pages",
+        method="POST",
+        data=payload,
+        token=token
+    )
+
+    if "data" in res_create:
+        print(f"   [SUCCESS] Created '{permalink}' (ID: {res_create['data']['id']})")
+        return res_create["data"]["id"]
+    else:
+        print(f"   [ERROR] Failed to create '{permalink}': {res_create}")
+        return None
+
+
+def seed_legal_pages(token, fields):
+    """Seed all required legal pages (Privacy Policy, Terms of Service)."""
+    print("\n--- [Legal Pages] ---")
+
+    for page_config in LEGAL_PAGES:
+        upsert_legal_page(token, fields, page_config)
+
 def find_or_create_logo(token):
     """Find or import the Agency OS logo asset."""
     query = urllib.parse.quote(LOGO_TITLE)
@@ -365,7 +508,10 @@ def main():
     else:
         print("[WARN] navigation_items collection not found or no fields.")
 
-    # 7. Verify
+    # 7. Seed Legal Pages (Privacy Policy, Terms of Service)
+    seed_legal_pages(token, fields_page)
+
+    # 8. Verify
     check_public_health()
     verify_branding(token)
 
