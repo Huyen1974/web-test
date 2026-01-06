@@ -126,13 +126,16 @@ async function getPublicPolicyId(token: string): Promise<string | null> {
 async function getExistingPermissions(token: string, policyId: string): Promise<Permission[]> {
 	console.log('  Fetching existing permissions for public policy...');
 
-	const response = await fetch(`${DIRECTUS_URL}/permissions?filter[policy][_eq]=${policyId}&limit=-1`, {
+	const response = await fetch(
+		`${DIRECTUS_URL}/permissions?filter[policy][_eq]=${policyId}&limit=-1&fields=id,collection,action,fields,permissions,validation`,
+		{
 		method: 'GET',
 		headers: {
 			Authorization: `Bearer ${token}`,
 			'Content-Type': 'application/json',
 		},
-	});
+	},
+	);
 
 	if (!response.ok) {
 		const text = await response.text();
@@ -158,7 +161,15 @@ async function checkCollectionExists(token: string, collection: string): Promise
 }
 
 
-async function grantPublicReadAccess(token: string): Promise<{ created: string[]; skipped: string[]; missing: string[]; policyId: string | null }> {
+async function grantPublicReadAccess(
+	token: string,
+): Promise<{
+	created: string[];
+	skipped: string[];
+	missing: string[];
+	updated: string[];
+	policyId: string | null;
+}> {
 	console.log('  Granting public READ access to collections...\n');
 
 	// Step 1: Find public policy
@@ -171,6 +182,7 @@ async function grantPublicReadAccess(token: string): Promise<{ created: string[]
 	const created: string[] = [];
 	const skipped: string[] = [];
 	const missing: string[] = [];
+	const updated: string[] = [];
 
 	for (const collection of PUBLIC_READ_COLLECTIONS) {
 		// Check if collection exists
@@ -187,8 +199,38 @@ async function grantPublicReadAccess(token: string): Promise<{ created: string[]
 		);
 
 		if (existingPerm) {
-			console.log(`  ℹ️  Permission for '${collection}' already exists (ID: ${existingPerm.id}) - skipping`);
-			skipped.push(collection);
+			if (collection === 'directus_files' && existingPerm.id) {
+				try {
+					const response = await fetch(`${DIRECTUS_URL}/permissions/${existingPerm.id}`, {
+						method: 'PATCH',
+						headers: {
+							Authorization: `Bearer ${token}`,
+							'Content-Type': 'application/json',
+						},
+						body: JSON.stringify({
+							fields: ['*'],
+							permissions: {},
+							validation: {},
+						}),
+					});
+
+					if (!response.ok) {
+						const text = await response.text();
+						throw new Error(`${response.status} - ${text}`);
+					}
+
+					console.log(`  ✅ Updated READ permission for '${collection}'`);
+					updated.push(collection);
+				} catch (error) {
+					console.error(
+						`  ❌ Failed to update permission for '${collection}':`,
+						error instanceof Error ? error.message : String(error),
+					);
+				}
+			} else {
+				console.log(`  ℹ️  Permission for '${collection}' already exists (ID: ${existingPerm.id}) - skipping`);
+				skipped.push(collection);
+			}
 			continue;
 		}
 
@@ -222,7 +264,7 @@ async function grantPublicReadAccess(token: string): Promise<{ created: string[]
 		}
 	}
 
-	return { created, skipped, missing, policyId };
+	return { created, skipped, missing, updated, policyId };
 }
 
 async function verifyPublicAccess(): Promise<{ collection: string; status: number; accessible: boolean }[]> {
@@ -295,6 +337,11 @@ async function fixPublicPermissions(): Promise<void> {
 		console.log(`  Created: ${result.created.length} permissions`);
 		if (result.created.length > 0) {
 			result.created.forEach((c) => console.log(`    - ${c}`));
+		}
+		console.log();
+		console.log(`  Updated: ${result.updated.length} permissions`);
+		if (result.updated.length > 0) {
+			result.updated.forEach((c) => console.log(`    - ${c}`));
 		}
 		console.log();
 		console.log(`  Skipped: ${result.skipped.length} (already exist)`);

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # =============================================================================
 # RESTORE_APPENDIX_16.SH - Idempotent Restoration Sequence
 # =============================================================================
@@ -31,7 +31,7 @@ NC='\033[0m' # No Color
 DIRECTUS_URL="${DIRECTUS_URL:-https://directus-test-812872501910.asia-southeast1.run.app}"
 
 # Get script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 WEB_DIR="$ROOT_DIR/web"
 
@@ -60,23 +60,23 @@ export DIRECTUS_ADMIN_EMAIL
 export DIRECTUS_ADMIN_PASSWORD
 
 # Track results
-STEP_RESULTS=()
+STEP_RESULTS_FILE="$(mktemp)"
 
 run_step() {
-    local step_num="$1"
-    local step_name="$2"
-    local step_cmd="$3"
+    step_num="$1"
+    step_name="$2"
+    step_cmd="$3"
 
     echo ""
     echo -e "${BLUE}--- Step $step_num: $step_name ---${NC}"
 
     if eval "$step_cmd"; then
         echo -e "${GREEN}[PASS] $step_name completed successfully${NC}"
-        STEP_RESULTS+=("$step_num:PASS:$step_name")
+        printf '%s\n' "$step_num:PASS:$step_name" >> "$STEP_RESULTS_FILE"
         return 0
     else
         echo -e "${RED}[FAIL] $step_name failed${NC}"
-        STEP_RESULTS+=("$step_num:FAIL:$step_name")
+        printf '%s\n' "$step_num:FAIL:$step_name" >> "$STEP_RESULTS_FILE"
         return 1
     fi
 }
@@ -110,6 +110,12 @@ run_step "4" "Seed Content & Branding" \
 # =============================================================================
 run_step "5" "Fix Public Permissions" \
     "cd '$WEB_DIR' && npx tsx scripts/e1-11_fix_public_permissions.ts"
+
+# =============================================================================
+# STEP 6: SEED GOLDEN ASSET
+# =============================================================================
+run_step "6" "Seed Golden Asset" \
+    "cd '$WEB_DIR' && npx tsx scripts/e1-10_seed_branding_navigation.ts"
 
 # =============================================================================
 # VERIFICATION
@@ -183,16 +189,17 @@ echo ""
 PASS_COUNT=0
 FAIL_COUNT=0
 
-for result in "${STEP_RESULTS[@]}"; do
-    IFS=':' read -r num status name <<< "$result"
+while IFS=: read -r num status name; do
     if [ "$status" = "PASS" ]; then
         echo -e "  Step $num: ${GREEN}PASS${NC} - $name"
-        ((PASS_COUNT++))
+        PASS_COUNT=$((PASS_COUNT + 1))
     else
         echo -e "  Step $num: ${RED}FAIL${NC} - $name"
-        ((FAIL_COUNT++))
+        FAIL_COUNT=$((FAIL_COUNT + 1))
     fi
-done
+done < "$STEP_RESULTS_FILE"
+
+rm -f "$STEP_RESULTS_FILE"
 
 echo ""
 echo -e "Results: ${GREEN}$PASS_COUNT passed${NC}, ${RED}$FAIL_COUNT failed${NC}"
