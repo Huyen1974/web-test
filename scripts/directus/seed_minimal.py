@@ -8,25 +8,45 @@ import ssl
 import sys
 import uuid
 
-API_URL = "https://directus-test-812872501910.asia-southeast1.run.app"
-WEB_URL = "https://github-chatgpt-ggcloud.web.app"
+LOGO_TITLE = "Agency OS Logo"
+LOGO_URL = "https://placehold.co/400x100/ffffff/000000/png?text=Agency+OS"
+
+def normalize_url(url):
+    return url.rstrip("/")
+
+def get_api_url():
+    url = os.environ.get("DIRECTUS_URL") or os.environ.get("NUXT_PUBLIC_DIRECTUS_URL")
+    if not url:
+        print("Missing required environment variable: DIRECTUS_URL or NUXT_PUBLIC_DIRECTUS_URL")
+        sys.exit(1)
+    return normalize_url(url)
+
+def get_web_url():
+    return os.environ.get("NUXT_PUBLIC_WEB_URL") or os.environ.get("NUXT_PUBLIC_SITE_URL")
+
+def fetch_secret(name):
+    try:
+        value = subprocess.check_output(
+            ["gcloud", "secrets", "versions", "access", "latest", f"--secret={name}"],
+            text=True,
+        ).strip()
+        if not value:
+            raise RuntimeError("Secret is empty")
+        return value
+    except Exception as e:
+        raise RuntimeError(f"Failed to fetch secret {name}: {e}")
 
 def get_access_token_via_login():
-    def fetch_secret(name):
-        return subprocess.check_output(
-             ["gcloud", "secrets", "versions", "access", "latest", f"--secret={name}"],
-             text=True
-         ).strip()
-
     print("Authenticating...")
     try:
-        email = os.environ.get("DIRECTUS_ADMIN_EMAIL") or fetch_secret("DIRECTUS_ADMIN_EMAIL_test")
-        password = os.environ.get("DIRECTUS_ADMIN_PASSWORD") or fetch_secret("DIRECTUS_ADMIN_PASSWORD_test")
+        email = fetch_secret("DIRECTUS_ADMIN_EMAIL")
+        password = fetch_secret("DIRECTUS_ADMIN_PASSWORD")
     except Exception as e:
         print(f"Error fetching secrets: {e}")
         return None
-    
-    url = f"{API_URL}/auth/login"
+
+    api_url = get_api_url()
+    url = f"{api_url}/auth/login"
     data = json.dumps({"email": email, "password": password}).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
     
@@ -197,8 +217,13 @@ def check_public_health():
             print(f"GET /items/{col} -> FAILED: {e}")
 
     # 2. Web Smoke
-    print(f"\nChecking Web URL: {WEB_URL}")
-    req = urllib.request.Request(WEB_URL)
+    web_url = get_web_url()
+    if not web_url:
+        print("\n[WARN] WEB_URL not set; skipping web smoke check.")
+        return
+
+    print(f"\nChecking Web URL: {web_url}")
+    req = urllib.request.Request(web_url)
     # fake user agent to be nice
     req.add_header("User-Agent", "Antigravity-Seed-Verifier/1.0")
     
@@ -222,15 +247,80 @@ def check_public_health():
     except Exception as e:
         print(f"Web Smoke Test Failed: {e}")
 
+def find_or_create_logo(token):
+    query = urllib.parse.quote(LOGO_TITLE)
+    res = make_request(f"{API_URL}/files?filter[title][_eq]={query}&limit=1", token=token)
+    if "data" in res and res["data"]:
+        return res["data"][0]["id"]
+
+    payload = {
+        "url": LOGO_URL,
+        "data": {
+            "title": LOGO_TITLE,
+        },
+    }
+    res_create = make_request(f"{API_URL}/files/import", method="POST", data=payload, token=token)
+    if "data" in res_create:
+        print(f"[SUCCESS] Imported logo asset (ID: {res_create['data']['id']})")
+        return res_create["data"]["id"]
+
+    print(f"[ERROR] Failed to import logo asset: {res_create}")
+    sys.exit(1)
+
+def update_directus_settings(token):
+    project_url = get_api_url()
+    logo_id = find_or_create_logo(token)
+
+    payload = {
+        "project_name": "Agency OS",
+        "project_url": project_url,
+        "project_logo": logo_id,
+    }
+
+    res = make_request(f"{API_URL}/items/directus_settings?limit=1", token=token)
+    settings = res.get("data")
+    if isinstance(settings, list) and settings:
+        settings_id = settings[0].get("id")
+        if settings_id:
+            res_update = make_request(
+                f"{API_URL}/items/directus_settings/{settings_id}",
+                method="PATCH",
+                data=payload,
+                token=token,
+            )
+            if "data" in res_update:
+                print("[SUCCESS] Updated directus_settings branding.")
+                return
+            print(f"[ERROR] Failed to update settings: {res_update}")
+            sys.exit(1)
+
+    res_update = make_request(f"{API_URL}/items/directus_settings", method="PATCH", data=payload, token=token)
+    if "data" in res_update:
+        print("[SUCCESS] Updated directus_settings branding (singleton).")
+        return
+
+    res_create = make_request(f"{API_URL}/items/directus_settings", method="POST", data=payload, token=token)
+    if "data" in res_create:
+        print("[SUCCESS] Created directus_settings branding.")
+        return
+
+    print(f"[ERROR] Failed to apply branding to directus_settings: {res_create}")
+    sys.exit(1)
+
 
 def main():
     print("--- [Minimal Content Seed] ---")
+    global API_URL
+    API_URL = get_api_url()
     
     # 1. Auth
     token = get_access_token_via_login()
     if not token:
         print("Auth failed.")
         sys.exit(1)
+
+    # 1b. Branding
+    update_directus_settings(token)
         
     # 2. Introspection
     print("\nIntrospecting Schema...")
