@@ -227,27 +227,10 @@ async function ensureAccessLink(
 	roleId: string,
 	policyId: string,
 ): Promise<boolean> {
-	const params = new URLSearchParams({
-		limit: '1',
-		fields: 'id,role,policy',
-		'filter[role][_eq]': roleId,
-		'filter[policy][_eq]': policyId,
-	});
-	const listUrl = `${baseUrl}${endpoint}?${params.toString()}`;
-
-	try {
-		const data = await fetchJson<DirectusResponse<DirectusAccessRecord[]>>(listUrl, {
-			headers: { Authorization: `Bearer ${token}` },
-		});
-		if (data.data?.length) {
-			console.log('  Access link already exists.');
-			return true;
-		}
-	} catch (error) {
-		if (error instanceof HttpError && (error.status === 403 || error.status === 404)) {
-			return false;
-		}
-		throw error;
+	const linked = await hasAccessLink(baseUrl, token, endpoint, roleId, policyId);
+	if (linked) {
+		console.log('  Access link already exists.');
+		return true;
 	}
 
 	const createUrl = `${baseUrl}${endpoint}`;
@@ -262,6 +245,34 @@ async function ensureAccessLink(
 		});
 		console.log('  Access link created.');
 		return true;
+	} catch (error) {
+		if (error instanceof HttpError && (error.status === 403 || error.status === 404)) {
+			return false;
+		}
+		throw error;
+	}
+}
+
+async function hasAccessLink(
+	baseUrl: string,
+	token: string,
+	endpoint: string,
+	roleId: string,
+	policyId: string,
+): Promise<boolean> {
+	const params = new URLSearchParams({
+		limit: '1',
+		fields: 'id,role,policy',
+		'filter[role][_eq]': roleId,
+		'filter[policy][_eq]': policyId,
+	});
+	const listUrl = `${baseUrl}${endpoint}?${params.toString()}`;
+
+	try {
+		const data = await fetchJson<DirectusResponse<DirectusAccessRecord[]>>(listUrl, {
+			headers: { Authorization: `Bearer ${token}` },
+		});
+		return Boolean(data.data?.length);
 	} catch (error) {
 		if (error instanceof HttpError && (error.status === 403 || error.status === 404)) {
 			return false;
@@ -317,6 +328,25 @@ async function linkPolicyToRole(baseUrl: string, token: string, roleId: string, 
 
 	console.log('  Access endpoint unavailable; falling back to role.policies update.');
 	await ensureRolePolicyLink(baseUrl, token, roleId, policyId);
+}
+
+async function verifyPolicyLink(baseUrl: string, token: string, roleId: string, policyId: string): Promise<void> {
+	console.log('Step B: Verifying policy link...');
+	const accessEndpoints = ['/access', '/items/directus_access'];
+	for (const endpoint of accessEndpoints) {
+		if (await hasAccessLink(baseUrl, token, endpoint, roleId, policyId)) {
+			console.log('  Policy link verified via access endpoint.');
+			return;
+		}
+	}
+
+	const role = await fetchRoleById(baseUrl, token, roleId);
+	if (role.policies?.includes(policyId)) {
+		console.log('  Policy link verified via role policies.');
+		return;
+	}
+
+	throw new Error('Policy link verification failed: policy not linked to role.');
 }
 
 async function fetchPermission(
@@ -500,6 +530,7 @@ async function main(): Promise<void> {
 	console.log(`  Using policy: ${policy.name} (${policy.id})`);
 
 	await linkPolicyToRole(baseUrl, adminToken, agentRole.id, policy.id);
+	await verifyPolicyLink(baseUrl, adminToken, agentRole.id, policy.id);
 
 	console.log('Step C: Upserting CRU permissions...');
 	let created = 0;
