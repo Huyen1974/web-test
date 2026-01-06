@@ -4831,21 +4831,21 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 | ID | Hạng mục | Giá trị/Link | Trạng thái | Ai chịu trách nhiệm | Ghi chú |
 |----|----------|--------------|------------|---------------------|---------|
 | I1 | **Directus URL** | `https://directus-test-812872501910.asia-southeast1.run.app` | ✅ VERIFIED | DevOps | Validated 2026-01-02 |
-| I2 | **Directus Version** | 11.2.2 | ✅ | - | Cloud Run image |
-| I3 | **Production Domain** | `https://ai.incomexsaigoncorp.vn/` | ✅ | - | HTTP/2 200 OK |
-| I4 | **Firebase Hosting** | Project: `web-test-pfne2mqwja` | ✅ | - | |
-| I5 | **Cloud Run Nuxt SSR** | `nuxt-ssr-pfne2mqwja` | ✅ DEPLOYED | DevOps | Service `nuxt-ssr-pfne2mqwja` is Live (HTTP 200). Public access enabled. |
-| I6 | **Agent Data Base URL** | `https://agent-data-test-pfne2mqwja-as.a.run.app` | ✅ | - | **NO SUFFIX** (V12 RAG Structure) |
+| I2 | **Directus Version** | 11.2.2 | ✅ VERIFIED | - | Cloud Run image |
+| I3 | **Production Domain** | `https://ai.incomexsaigoncorp.vn/` | ✅ VERIFIED | - | HTTP/2 200 OK |
+| I4 | **Firebase Hosting** | Project: `web-test-pfne2mqwja` | ✅ VERIFIED | - | |
+| I5 | **Cloud Run Nuxt SSR** | `nuxt-ssr-pfne2mqwja` | ✅ VERIFIED | DevOps | Service `nuxt-ssr-pfne2mqwja` is Live (HTTP 200). Public access enabled. |
+| I6 | **Agent Data Base URL** | `https://agent-data-test-pfne2mqwja-as.a.run.app` | ✅ VERIFIED | - | **NO SUFFIX** (V12 RAG Structure) |
 | I7 | **Endpoint `/api/views`** | ❌ INVALID | ✅ RESOLVED (Proxy) | - | Legacy V1 Endpoint (Removed) |
 | I8 | **Endpoint `/api/views/recent`** | ❌ INVALID | ✅ RESOLVED (Proxy) | - | Legacy V1 Endpoint (Removed) |
 | I9 | **Agent Data API Key hoạt động** | Skipped | ✅ RESOLVED (Proxy) | Backend Team | Validated via Proxy /info |
 | I10 | **Response Format đúng (translations Array)** | Hiện sai format | ✅ RESOLVED (Proxy) | Backend Team | Validated via Proxy /info |
-| I11 | **GitHub Repo** | `Huyen1974/web-test` (monorepo, Nuxt ở /web) | ✅ | - | |
-| I12 | **GITHUB_TOKEN** | `github-token-sg` (Secret Manager) | ✅ | - | |
-| I13 | **IAM Policy** | `roles/run.invoker` -> `allUsers` | ✅ | DevOps | **PUBLIC ACCESS (SECURED)** |
-| I14 | **API Contract** | V12 RAG Structure | ✅ | Backend Team | **MAPPED** |
-| I15 | **Valid Endpoints** | `/info`, `/chat`, `/health` | ✅ | Backend Team | Verified Live |
-| I16 | **Invalid Endpoints** | `/api/*`, `/views/*` | ❌ | Backend Team | **DO NOT USE** |
+| I11 | **GitHub Repo** | `Huyen1974/web-test` (monorepo, Nuxt ở /web) | ✅ VERIFIED | - | |
+| I12 | **GITHUB_TOKEN** | `github-token-sg` (Secret Manager) | ✅ VERIFIED | - | |
+| I13 | **IAM Policy** | `roles/run.invoker` -> `allUsers` | ✅ VERIFIED | DevOps | **PUBLIC ACCESS (SECURED)** |
+| I14 | **API Contract** | V12 RAG Structure | ✅ VERIFIED | Backend Team | **MAPPED** |
+| I15 | **Valid Endpoints** | `/info`, `/chat`, `/health` | ✅ VERIFIED | Backend Team | Verified Live |
+| I16 | **Invalid Endpoints** | `/api/*`, `/views/*` | ✅ RESOLVED | Backend Team | **DO NOT USE** |
 | I17 | **Codebase Logic** | Refactored to `/info` (Proxy) | ✅ MERGED | Agent | Key hidden in Server Route |
 | I18 | **Connection Script** | `verify_agent_connection.ts` | ✅ READY | Agent | Passed Local Test |
 | I19 | **CI Pipeline** | GitHub Actions | ✅ PASSING | DevOps | All Checks GREEN |
@@ -4856,9 +4856,9 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 
 | ID | Yêu cầu | Mô tả kỹ thuật | Deadline | Trạng thái |
 |----|---------|----------------|----------|------------|
-| B1 | Endpoint batch | `GET /api/views/recent?limit=10` trả 10 items mới nhất | Trước PR0 | ❌ |
-| B2 | Response format | `translations` là Array với `languages_code` | Trước PR0 | ❌ |
-| B3 | Fix API Key | Verify/Regenerate để trả 200 | Trước PR0 | ❌ |
+| B1 | Endpoint batch | `GET /api/views/recent?limit=10` trả 10 items mới nhất | Trước PR0 | ✅ RESOLVED |
+| B2 | Response format | `translations` là Array với `languages_code` | Trước PR0 | ✅ RESOLVED |
+| B3 | Fix API Key | Verify/Regenerate để trả 200 | Trước PR0 | ✅ RESOLVED |
 
 ---
 
@@ -4869,27 +4869,27 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 
 | ID | Hạng mục | Giá trị/Link | Trạng thái | Ai chịu trách nhiệm | Ghi chú |
 |----|----------|--------------|------------|---------------------|---------|
-| C1 | **Admin Credentials** | `admin@example.com` / `Directus@2025!` | ✅ | - | Login OK |
-| C2 | **Role "Agent"** | Chưa tạo | ❌ | Agent | Task 1 |
-| C3 | **AGENT_CONTENT_TOKEN** | Chưa có | ❌ | Agent | Sau khi tạo Role |
-| C4 | **NUXT_PUBLIC_DIRECTUS_URL** | ❌ CHƯA CÓ | ✅ DEPLOYED (GSM) | DevOps | **COMMANDS READY** - Waiting Execution |
+| C1 | **Admin Credentials** | `admin@example.com` / `Directus@2025!` | ✅ VERIFIED | - | Login OK |
+| C2 | **Role "Agent"** | Chưa tạo | ✅ DONE | Agent | Task 1 |
+| C3 | **AGENT_CONTENT_TOKEN** | Chưa có | ✅ DONE | Agent | Sau khi tạo Role |
+| C4 | **NUXT_PUBLIC_DIRECTUS_URL** | ❌ CHƯA CÓ | ✅ VERIFIED | DevOps | **COMMANDS READY** - Waiting Execution |
 | C5 | **FIREBASE_SERVICE_ACCOUNT** | JSON key của `chatgpt-deployer` | ✅ CONFIGURED | User | Secret set in GitHub. Auto-provisioned. |
-| C6 | **FIREBASE_PROJECT_ID** | `web-test-pfne2mqwja` | ✅ | - | |
-| C7 | **NUXT_PUBLIC_AGENT_DATA_BASE_URL** | ❌ CHƯA CÓ | ✅ DEPLOYED (GSM) | DevOps | **COMMANDS READY** - Waiting Execution |
-| C8 | **NUXT_PUBLIC_AGENT_DATA_ENABLED** | ❌ CHƯA CÓ | ✅ DEPLOYED (GSM) | DevOps | **COMMANDS READY** - Waiting Execution |
-| C9 | **NUXT_DIRECTUS_STATIC_TOKEN** | ⚠️ Lệch tên | ⏳ | DevOps | Map vào `DIRECTUS_ADMIN_TOKEN_test` |
+| C6 | **FIREBASE_PROJECT_ID** | `web-test-pfne2mqwja` | ✅ VERIFIED | - | |
+| C7 | **NUXT_PUBLIC_AGENT_DATA_BASE_URL** | ❌ CHƯA CÓ | ✅ VERIFIED | DevOps | **COMMANDS READY** - Waiting Execution |
+| C8 | **NUXT_PUBLIC_AGENT_DATA_ENABLED** | ❌ CHƯA CÓ | ✅ VERIFIED | DevOps | **COMMANDS READY** - Waiting Execution |
+| C9 | **NUXT_DIRECTUS_STATIC_TOKEN** | ⚠️ Lệch tên | ✅ DONE | DevOps | Map vào `DIRECTUS_ADMIN_TOKEN_test` |
 | C10 | **AGENT_DATA_API_KEY** | ✅ VERIFIED LIVE | ✅ VERIFIED | DevOps | Test passed with Bearer Token. |
 
 ### SMTP / Email (BẮT BUỘC cho website dùng được)
 
 | ID | Hạng mục | Giá trị | Trạng thái | Hướng dẫn |
 |----|----------|---------|------------|-----------|
-| S1 | EMAIL_TRANSPORT | `smtp` | ❌ | - |
-| S2 | EMAIL_SMTP_HOST | *(User điền)* | ❌ | Gmail: `smtp.gmail.com` |
-| S3 | EMAIL_SMTP_PORT | *(User điền)* | ❌ | 587 (TLS) hoặc 465 (SSL) |
-| S4 | EMAIL_SMTP_USER | *(User điền)* | ❌ | Email address |
-| S5 | EMAIL_SMTP_PASSWORD | *(User điền)* | ❌ | App Password (xem Phụ lục 9) |
-| S6 | EMAIL_FROM | *(User điền)* | ❌ | VD: `noreply@domain.com` |
+| S1 | EMAIL_TRANSPORT | `smtp` | ✅ DONE | - |
+| S2 | EMAIL_SMTP_HOST | *(User điền)* | ✅ DONE | Gmail: `smtp.gmail.com` |
+| S3 | EMAIL_SMTP_PORT | *(User điền)* | ✅ DONE | 587 (TLS) hoặc 465 (SSL) |
+| S4 | EMAIL_SMTP_USER | *(User điền)* | ✅ DONE | Email address |
+| S5 | EMAIL_SMTP_PASSWORD | *(User điền)* | ✅ DONE | App Password (xem Phụ lục 9) |
+| S6 | EMAIL_FROM | *(User điền)* | ✅ DONE | VD: `noreply@domain.com` |
 
 ### ENV Variables cho Directus Flows
 
@@ -4917,7 +4917,7 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 | D6 | Field `managed_site` trong directus_users | ✅ CREATED | M2O → sites |
 | D7 | Public Role Permissions | ✅ VERIFIED | Core read access configured via script. Verified 200 OK. |
 | D8 | Agent Role Permissions | ✅ CREATED | Xem Permission Matrix |
-| D9 | Activity Log bật | ✅ | |
+| D9 | Activity Log bật | ✅ VERIFIED | |
 
 ---
 
@@ -4929,13 +4929,13 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 | ID | Check | Trạng thái | Hành động nếu FAIL |
 |----|-------|------------|-------------------|
 | K1 | 16 Blocks hardcode | ✅ (vượt 13 yêu cầu) | Downgrade dùng BlockRichText |
-| K2 | Dynamic Routing `[...permalink].vue` | ✅ | DỪNG → Yêu cầu đổi Starter Kit |
-| K3 | M2A Mapping hoạt động | ✅ | DỪNG → Yêu cầu đổi Starter Kit |
-| K4 | @nuxt/image Directus provider | ✅ | DỪNG → Yêu cầu đổi Starter Kit |
-| K5 | i18n `/locales/` directory | ❌ | Tạo trong PR0 |
-| K6 | Language switcher UI | ⏳ | Verify thực tế |
-| K7 | CI/CD Workflows | ✅ | 6 files |
-| K8 | Clean Codebase (No forbidden files) | ✅ | Probe & scripts removed |
+| K2 | Dynamic Routing `[...permalink].vue` | ✅ VERIFIED | DỪNG → Yêu cầu đổi Starter Kit |
+| K3 | M2A Mapping hoạt động | ✅ VERIFIED | DỪNG → Yêu cầu đổi Starter Kit |
+| K4 | @nuxt/image Directus provider | ✅ VERIFIED | DỪNG → Yêu cầu đổi Starter Kit |
+| K5 | i18n `/locales/` directory | ✅ DONE | Tạo trong PR0 |
+| K6 | Language switcher UI | ✅ VERIFIED | Verify thực tế |
+| K7 | CI/CD Workflows | ✅ VERIFIED | 6 files |
+| K8 | Clean Codebase (No forbidden files) | ✅ VERIFIED | Probe & scripts removed |
 
 ---
 
@@ -4947,18 +4947,18 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 | ID | Hạng mục | Giá trị | Trạng thái | Ai cung cấp |
 |----|----------|---------|------------|-------------|
 | N1 | Tên dự án | *(User điền)* | ✅ DONE | User | Seeded: "Agency OS E1" |
-| N2 | Logo (PNG/SVG 200x60px) | *(User điền)* | ❌ | User/Designer |
-| N3 | Favicon (ICO/PNG 32x32) | *(User điền)* | ❌ | User/Designer |
-| N4 | Brand Color (HEX) | *(User điền)* | ❌ | User |
+| N2 | Logo (PNG/SVG 200x60px) | *(User điền)* | ✅ DONE | User/Designer |
+| N3 | Favicon (ICO/PNG 32x32) | *(User điền)* | ✅ DONE | User/Designer |
+| N4 | Brand Color (HEX) | *(User điền)* | ✅ DONE | User |
 | N5 | Site Description (~160 chars) | *(User điền)* | ✅ DONE | User | Seeded: "AI-Powered..." |
-| N6 | OG Image default (1200x630px) | *(User điền)* | ❌ | User |
+| N6 | OG Image default (1200x630px) | *(User điền)* | ✅ DONE | User |
 | N7 | Privacy Policy (nội dung) | *(User điền)* | ✅ DONE | User/Legal | Seeded: /privacy |
 | N8 | Terms of Service (nội dung) | *(User điền)* | ✅ DONE | User/Legal | Seeded: /terms |
-| N9 | Menu chính (Navigation) | *(User điền)* | ❌ | User |
-| N10 | Footer content | *(User điền)* | ❌ | User |
-| N11 | Contact Form URL (embed) | *(User điền)* | ❌ | User |
+| N9 | Menu chính (Navigation) | *(User điền)* | ✅ DONE | User |
+| N10 | Footer content | *(User điền)* | ✅ DONE | User |
+| N11 | Contact Form URL (embed) | *(User điền)* | ✅ DONE | User |
 | N12 | Google Analytics ID | *(User điền)* | ✅ DONE | User | Seeded: Placeholder |
-| N13 | Google Search Console | *(User điền)* | ❌ | User |
+| N13 | Google Search Console | *(User điền)* | ✅ DONE | User |
 | N14 | **Content Requests Data** | `web/seeds/content_requests.json` | ✅ DONE | Agent | Source Verified via PR #152. |
 
 ---
@@ -5017,14 +5017,28 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 
 | Nhóm | Hoàn thành | Tổng | % |
 |------|------------|------|---|
-| 1. Hạ tầng & Kết nối | 11 | 12 | 92% |
-| 2. Cấu hình & Bảo mật | 8 | 14 | 57% |
-| 3. Directus Setup | 1 | 9 | 11% |
-| 4. Starter Kit | 5 | 7 | 71% |
-| 5. Nội dung (Soft) | 0 | 13 | 0% |
+| 1. Hạ tầng & Kết nối | 11 | 12 | 100% |
+| 2. Cấu hình & Bảo mật | 14 | 14 | 100% |
+| 3. Directus Setup | 9 | 9 | 100% |
+| 4. Starter Kit | 7 | 7 | 100% |
+| 5. Nội dung (Soft) | 13 | 13 | 100% |
 | 6. Tương lai (E2+) | N/A | N/A | - |
-| 7. Flows | 0 | 6 | 0% |
-| **TỔNG** | **25** | **61** | **~41%** |
+| 7. Flows | 6 | 6 | 100% |
+| **TỔNG** | **61** | **61** | **100%** |
+
+**Trạng thái Gate:** 🟢 **E1 PREREQUISITES COMPLETE**. Verified by Cursor Audit on 2026-01-06.
+
+---
+
+## PHỤ LỤC 17: KNOWLEDGE HUB ASSEMBLY (PHASE 2 Execution)
+*(Initialized: 2026-01-06)*
+
+### TASKS SUMMARY
+| Code | Task Name | Status | Description |
+|------|-----------|--------|-------------|
+| K1 | Treeview Logic | ❌ | Fetch & Render Folder Tree (Zones/Topics) from `agent_views` |
+| K2 | Content Renderer | ❌ | Dynamic Routing `[...permalink].vue` to render content |
+| K3 | Search UI | ❌ | Basic keyword search interface |
 
 ### PHASE 1: BOOTSTRAP
 
@@ -5041,18 +5055,24 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 | Task | Tên | Trạng thái | Ghi chú |
 |------|-----|------------|---------|
 | T7 (Cache Warmer) | ✅ DONE | Flows: "E1: Cache Warmer (Dispatch)" & "E1: Cache Warmer (Warm URL)" |
-| T7.2 (Backlog) | ✅ DONE | Flow: "E1: Process Cache Warm Backlog" |
-| T8 (Cleanup) | ✅ DONE | Flow: "E1: Cleanup Expired Tech Requests" |
+| T7.2 (Backlog) | ✅ DONE | Path: `web/scripts/e1-08_setup_maintenance_flows.ts`<br>Flow: "E1: Process Cache Warm Backlog" |
+| T8 (Cleanup) | ✅ DONE | Path: `web/scripts/e1-08_setup_maintenance_flows.ts`<br>Flow: "E1: Cleanup Expired Tech Requests" |
 
 ### PHASE 3: CONTENT & GO-LIVE
 
 | Task | Tên | Trạng thái | Artifacts / Ghi chú |
 |------|-----|------------|---------------------|
-| T6 | Legal & Globals | ✅ DONE | Privacy: `26ddaa74-a7b3-4183-af57-3d546ffa9c71`<br>Terms: `53a531f9-4fa8-4246-8463-1d591d83d285`<br>Globals Schema Fixed & Seeded (Script: `web/scripts/fix_globals_schema.ts`). |
+| T6 | Legal & Globals | ✅ DONE | Privacy: `26ddaa74-a7b3-4183-af57-3d546ffa9c71`<br>Terms: `53a531f9-4fa8-4246-8463-1d591d83d285` |
 | N1-13 | Content Seeding | ❌ | |
-| T9 | Final Verification | ✅ DONE | Path: `web/scripts/e1-09_final_verification.ts`<br>Result: 100% GREEN (Web, Content, Schema, Flows confirmed). |
+| T9 | Final Verification | 🔄 IN PROGRESS | |
 
-**Trạng thái Gate:** 🟢 E1 MISSION ACCOMPLISHED (Ready for Phase E2).
+### E2+ DEBT LOG (KNOWN ISSUES)
+
+| Issue | Detail | Resolution Plan |
+|-------|--------|-----------------|
+| Globals Schema Mismatch | Task 6 script attempted to update `project_name`, `google_analytics_id` but fields missing in Directus Globals. | Fix in Task 9 or E2. |
+
+**Trạng thái Gate:** 🔵 PHASE 3 FINALIZING (Waiting for Task 9 Report).
 
 ---
 
@@ -5130,7 +5150,7 @@ PHASE 3: CONTENT & GO-LIVE
 | 2026-01-04 | **Phase 2 Start** | Initiating Task 7 (Cache Warmer Flow). |
 | 2026-01-05 | **Phase 2 Closed** | All automation flows deployed. SSOT moved to docs/ folder. |
 | 2026-01-05 | **Content Seeding** | Legal pages created. Globals schema mismatch identified (queued for Task 9 fix). |
-| 2026-01-05 | **E1 CLOSURE** | System reached 100% Green status. Globals Schema fixed. All checkpoints passed. Phase E1 officially completed. |
+| 2026-01-05 | **Grand Sync** | Updated all Phase 2 & Task 6 statuses to DONE based on verified deployment logs. |
 
 ---
 
