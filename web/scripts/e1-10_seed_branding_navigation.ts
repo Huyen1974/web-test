@@ -40,6 +40,8 @@ const ADMIN_PASSWORD = requireEnv('DIRECTUS_ADMIN_PASSWORD');
 const TARGET_WEBSITE = 'incomexsaigoncorp.vn';
 const CLEARBIT_LOGO_URL = `https://logo.clearbit.com/${TARGET_WEBSITE}`;
 const FALLBACK_LOGO_URL = 'https://placehold.co/400x100/ffffff/000000/png?text=INCOMEX+SAIGON';
+const SMOKE_ASSET_ID = 'b18f3792-bd31-43e5-8a7d-b25d76f41dd9';
+const SMOKE_ASSET_URL = 'https://placehold.co/1x1.png';
 
 interface DirectusFile {
 	id: string;
@@ -195,6 +197,44 @@ async function ensureGlobalsFields(token: string): Promise<void> {
 
 		console.log(`  ✅ Created globals field: ${fieldDef.field}`);
 	}
+}
+
+async function ensureSmokeTestAsset(token: string): Promise<void> {
+	console.log('  Ensuring smoke-test asset exists...');
+	const existing = await fetch(`${DIRECTUS_URL}/files/${SMOKE_ASSET_ID}`, {
+		method: 'GET',
+		headers: {
+			Authorization: `Bearer ${token}`,
+			'Content-Type': 'application/json',
+		},
+	});
+
+	if (existing.ok) {
+		console.log('  ✅ Smoke-test asset already present');
+		return;
+	}
+
+	const importResponse = await fetch(`${DIRECTUS_URL}/files/import`, {
+		method: 'POST',
+		headers: {
+			Authorization: `Bearer ${token}`,
+			'Content-Type': 'application/json',
+		},
+		body: JSON.stringify({
+			url: SMOKE_ASSET_URL,
+			data: {
+				id: SMOKE_ASSET_ID,
+				title: 'Smoke Test Asset',
+			},
+		}),
+	});
+
+	if (!importResponse.ok) {
+		const text = await importResponse.text();
+		throw new Error(`Failed to create smoke-test asset: ${importResponse.status} - ${text}`);
+	}
+
+	console.log('  ✅ Smoke-test asset created');
 }
 
 /**
@@ -429,25 +469,30 @@ async function seedBrandingNavigation(): Promise<void> {
 		await ensureGlobalsFields(token);
 		console.log();
 
-		// Step 3: Smart Logo Fetch
-		console.log('Step 3: Smart Logo Fetch');
+		// Step 3: Ensure Smoke-Test Asset
+		console.log('Step 3: Ensure Smoke-Test Asset');
+		await ensureSmokeTestAsset(token);
+		console.log();
+
+		// Step 4: Smart Logo Fetch
+		console.log('Step 4: Smart Logo Fetch');
 		const logoInfo = await fetchLogoUrl();
 		console.log(`  Source: ${logoInfo.source}`);
 		console.log(`  URL: ${logoInfo.url}`);
 		console.log();
 
-		// Step 4: Import Logo File
-		console.log('Step 4: Import Logo to Directus');
+		// Step 5: Import Logo File
+		console.log('Step 5: Import Logo to Directus');
 		const logoFileId = await importLogoFile(token, logoInfo.url);
 		console.log();
 
-		// Step 5: Update Globals Branding
-		console.log('Step 5: Update Globals (Identity)');
+		// Step 6: Update Globals Branding
+		console.log('Step 6: Update Globals (Identity)');
 		await updateGlobalsBranding(token, logoFileId);
 		console.log();
 
-		// Step 6: Update Navigation
-		console.log('Step 6: Seed Navigation Structure');
+		// Step 7: Update Navigation
+		console.log('Step 7: Seed Navigation Structure');
 		await updateNavigation(token);
 		console.log();
 
