@@ -112,6 +112,12 @@ run_step "5" "Fix Public Permissions" \
     "cd '$WEB_DIR' && npx tsx scripts/e1-11_fix_public_permissions.ts"
 
 # =============================================================================
+# STEP 6: SEED GOLDEN ASSET
+# =============================================================================
+run_step "6" "Seed Golden Asset" \
+    "cd '$WEB_DIR' && npx tsx scripts/e1-10_seed_branding_navigation.ts"
+
+# =============================================================================
 # VERIFICATION
 # =============================================================================
 echo ""
