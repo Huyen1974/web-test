@@ -32,6 +32,7 @@ jobs:
       contents: read
       id-token: write
       pull-requests: write
+      issues: write
     uses: ./.github/workflows/terraform-apply.yml
     with:
       project_id: github-chatgpt-ggcloud
