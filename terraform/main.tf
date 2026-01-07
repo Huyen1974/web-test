@@ -212,8 +212,8 @@ resource "google_cloud_run_v2_service" "directus" {
     module.mysql_directus,
     google_secret_manager_secret.directus_key,
     google_secret_manager_secret.directus_secret,
-    google_secret_manager_secret.directus_db_password,
-    google_secret_manager_secret.directus_admin_password
+    google_secret_manager_secret.directus_db_password
+    # Note: directus_admin_password is a data source (pre-existing secret)
   ]
 }
 

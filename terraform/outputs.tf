@@ -73,10 +73,10 @@ output "directus_service" {
 output "secrets" {
   description = "Secret Manager secret IDs (metadata only per HP-05)"
   value = {
-    directus_key         = google_secret_manager_secret.directus_key.secret_id
-    directus_secret      = google_secret_manager_secret.directus_secret.secret_id
-    directus_db_password = google_secret_manager_secret.directus_db_password.secret_id
-    directus_admin_password = google_secret_manager_secret.directus_admin_password.secret_id
+    directus_key            = google_secret_manager_secret.directus_key.secret_id
+    directus_secret         = google_secret_manager_secret.directus_secret.secret_id
+    directus_db_password    = google_secret_manager_secret.directus_db_password.secret_id
+    directus_admin_password = data.google_secret_manager_secret.directus_admin_password.secret_id
   }
   sensitive = false
 }
@@ -101,8 +101,5 @@ output "directus_db_password_value" {
   sensitive   = true
 }
 
-output "directus_admin_password_value" {
-  description = "Directus admin password value for external injection into Secret Manager"
-  value       = random_password.directus_admin_password.result
-  sensitive   = true
-}
+# Note: directus_admin_password_value removed - secret was created manually
+# and is now referenced as a data source
