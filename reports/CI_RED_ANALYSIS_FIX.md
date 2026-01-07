@@ -148,9 +148,33 @@ exec npx directus start
 | File | Change |
 |------|--------|
 | `.github/workflows/deploy.yml` | Fixed auth from GCP_SA_KEY to WIF |
-| `scripts/start.sh` | Made restoration resilient |
+| `scripts/start.sh` | Python-only restoration, resilient |
+| `Dockerfile` | Simplified to avoid Alpine/glibc incompatibility |
+
+---
+
+## 8. Additional Fix: Dockerfile Platform Compatibility
+
+### Problem Discovered After Auth Fix
+After fixing the authentication, a second issue emerged: Docker build failed due to Alpine/glibc incompatibility.
+
+**Error:**
+```
+Cannot find module '@oxc-parser/binding-linux-x64-musl'
+```
+
+### Root Cause
+The original Dockerfile tried to install web dependencies (`pnpm install`) which include native bindings compiled for glibc. Directus uses Alpine Linux (musl libc), causing build failure.
+
+### Solution
+Simplified Dockerfile to only include Python-based restoration:
+- `schema_apply.py` - Creates collections
+- `seed_minimal.py` - Seeds content and branding
+
+TypeScript scripts (e1-07, e1-08, e1-11) run via GitHub Actions post-deploy.
 
 ---
 
 **Report Generated:** 2026-01-07
+**Report Updated:** 2026-01-07 (Dockerfile fix)
 **Branch:** `fix/ci-deployment-stabilization`
