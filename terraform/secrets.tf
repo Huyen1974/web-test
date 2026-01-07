@@ -114,6 +114,40 @@ resource "google_secret_manager_secret" "directus_db_password" {
 # echo -n "$(terraform output -raw directus_db_password_value)" | \
 #   gcloud secrets versions add DIRECTUS_DB_PASSWORD_test --data-file=-
 
+# Directus admin password
+# Note: random_password is kept for reference but value must be injected externally
+# HP-05 Compliance: Terraform manages metadata only, not secret values
+resource "random_password" "directus_admin_password" {
+  length  = 32
+  special = true
+}
+
+resource "google_secret_manager_secret" "directus_admin_password" {
+  secret_id = "DIRECTUS_ADMIN_PASSWORD_${var.env}"
+  project   = var.project_id
+
+  replication {
+    user_managed {
+      replicas {
+        location = var.region
+      }
+    }
+  }
+
+  labels = {
+    environment = var.env
+    project     = "web-test"
+    managed_by  = "terraform"
+  }
+
+  depends_on = [google_project_service.secretmanager]
+}
+
+# HP-05 COMPLIANCE: Secret version removed - values must be injected externally
+# After terraform apply, run:
+# echo -n "$(terraform output -raw directus_admin_password_value)" | \
+#   gcloud secrets versions add DIRECTUS_ADMIN_PASSWORD_test --data-file=-
+
 # ------------------------------------------------------------------------------
 # IAM Bindings for chatgpt-deployer Service Account
 # ------------------------------------------------------------------------------
@@ -138,6 +172,13 @@ resource "google_secret_manager_secret_iam_member" "directus_secret_accessor" {
 
 resource "google_secret_manager_secret_iam_member" "directus_db_password_accessor" {
   secret_id = google_secret_manager_secret.directus_db_password.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = local.chatgpt_deployer_sa
+  project   = var.project_id
+}
+
+resource "google_secret_manager_secret_iam_member" "directus_admin_password_accessor" {
+  secret_id = google_secret_manager_secret.directus_admin_password.secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = local.chatgpt_deployer_sa
   project   = var.project_id

@@ -135,6 +135,11 @@ resource "google_cloud_run_v2_service" "directus" {
       }
 
       env {
+        name  = "DIRECTUS_ADMIN_EMAIL"
+        value = var.directus_admin_email
+      }
+
+      env {
         name  = "PUBLIC_URL"
         value = "https://directus-${var.env}-812872501910.${var.region}.run.app"
       }
@@ -154,6 +159,16 @@ resource "google_cloud_run_v2_service" "directus" {
         value_source {
           secret_key_ref {
             secret  = google_secret_manager_secret.directus_db_password.secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "DIRECTUS_ADMIN_PASSWORD"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.directus_admin_password.secret_id
             version = "latest"
           }
         }
@@ -197,7 +212,8 @@ resource "google_cloud_run_v2_service" "directus" {
     module.mysql_directus,
     google_secret_manager_secret.directus_key,
     google_secret_manager_secret.directus_secret,
-    google_secret_manager_secret.directus_db_password
+    google_secret_manager_secret.directus_db_password,
+    google_secret_manager_secret.directus_admin_password
   ]
 }
 

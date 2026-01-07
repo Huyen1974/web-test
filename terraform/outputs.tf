@@ -76,6 +76,7 @@ output "secrets" {
     directus_key         = google_secret_manager_secret.directus_key.secret_id
     directus_secret      = google_secret_manager_secret.directus_secret.secret_id
     directus_db_password = google_secret_manager_secret.directus_db_password.secret_id
+    directus_admin_password = google_secret_manager_secret.directus_admin_password.secret_id
   }
   sensitive = false
 }
@@ -97,5 +98,11 @@ output "directus_secret_value" {
 output "directus_db_password_value" {
   description = "Directus DB password value for external injection into Secret Manager"
   value       = random_password.directus_db_password.result
+  sensitive   = true
+}
+
+output "directus_admin_password_value" {
+  description = "Directus admin password value for external injection into Secret Manager"
+  value       = random_password.directus_admin_password.result
   sensitive   = true
 }
