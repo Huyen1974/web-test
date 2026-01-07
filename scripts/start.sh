@@ -32,6 +32,7 @@ if [ -n "$DIRECTUS_ADMIN_EMAIL" ] && [ -n "$DIRECTUS_ADMIN_PASSWORD" ]; then
         echo "[Cold Start] Target: $DIRECTUS_URL"
 
         # Step 1: Schema Apply (Python)
+        # Creates/updates collections and fields
         if [ -f "./scripts/directus/schema_apply.py" ]; then
             echo "[Cold Start] Step 1: Applying schema..."
             python3 ./scripts/directus/schema_apply.py --execute || {
@@ -40,10 +41,21 @@ if [ -n "$DIRECTUS_ADMIN_EMAIL" ] && [ -n "$DIRECTUS_ADMIN_PASSWORD" ]; then
         fi
 
         # Step 2: Seed Content & Branding (Python)
+        # Creates pages, navigation, branding data
         if [ -f "./scripts/directus/seed_minimal.py" ]; then
             echo "[Cold Start] Step 2: Seeding content..."
             python3 ./scripts/directus/seed_minimal.py || {
                 echo "[Cold Start] WARNING: Content seed had errors (non-fatal)"
+            }
+        fi
+
+        # Step 3: Fix Permissions (Python) - CRITICAL
+        # MUST run AFTER schema_apply and seed to prevent permission reset
+        # Handles: directus_files READ access, Ghost Asset re-hydration
+        if [ -f "./scripts/directus/fix_permissions.py" ]; then
+            echo "[Cold Start] Step 3: Fixing public permissions..."
+            python3 ./scripts/directus/fix_permissions.py || {
+                echo "[Cold Start] WARNING: Permission fix had errors (non-fatal)"
             }
         fi
 
