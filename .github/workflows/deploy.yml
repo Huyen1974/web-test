@@ -126,6 +126,14 @@ jobs:
             exit 1
           fi
 
+  # ===========================================================================
+  # Directus Custom Image Build & Deploy
+  # ===========================================================================
+  # Architecture: Build custom Docker image with start.sh entrypoint for
+  # cold-start restoration, push to Artifact Registry, deploy to Cloud Run.
+  #
+  # Auth: Uses Workload Identity Federation (WIF) - same as Terraform.
+  # ===========================================================================
   directus_deploy:
     name: Deploy Directus (Cloud Run)
     runs-on: ubuntu-latest
@@ -143,18 +151,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Validate GCP service account key
-        run: |
-          if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
-            echo "::error::Missing GCP_SA_KEY secret"
-            exit 1
-          fi
-
-      - name: Authenticate to Google Cloud
+      - name: Authenticate to Google Cloud (Workload Identity)
         uses: google-github-actions/auth@v2
         with:
           project_id: ${{ env.PROJECT_ID }}
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: projects/812872501910/locations/global/workloadIdentityPools/agent-data-pool/providers/github-provider
+          service_account: chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com
+          token_format: access_token
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
