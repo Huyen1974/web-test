@@ -100,6 +100,11 @@ def find_collection_spec(spec, collection_name):
 def create_collection(token, collection_name, spec_details):
     # Construct Payload
     # Directus POST /collections expects: { "collection": "name", "schema": {}, "meta": {}, "fields": [] }
+
+    # Guard against empty fields to avoid invalid collection creation
+    if not spec_details.get("fields"):
+        print(f"[WARN] SKIPPING {collection_name}: No fields defined (Defensive Guard Triggered)")
+        return
     
     payload = {
         "collection": collection_name,
