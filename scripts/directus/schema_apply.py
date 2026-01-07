@@ -115,13 +115,13 @@ def create_collection(token, collection_name, spec_details):
         payload["meta"]["singleton"] = True
     
     # Fields Construction
-    # The spec has "fields": { "fieldname": { ... } }
+    # The spec has "fields": { "fieldname": { ... } } or an API-ready list
     # Directus expects array of objects
     spec_fields = spec_details.get("fields", {})
-    if not spec_fields and "fields" not in spec_details:
-        # Fallback if spec has different structure or empty
-        pass
-        
+    if isinstance(spec_fields, list):
+        payload["fields"] = spec_fields
+        spec_fields = {}
+
     for field_name, field_def in spec_fields.items():
         # Skip 'id' usually, but for singletons or UUIDs explicit creation might be needed?
         # Directus usually auto-creates ID. 
@@ -260,6 +260,10 @@ def main():
             
             if not collection_spec:
                 print(f"[WARN] No spec found for {collection_name}. Skipping.")
+                continue
+
+            if not collection_spec.get("fields") and not collection_spec.get("schema"):
+                print(f"[SKIP] {collection_name} (No fields defined)")
                 continue
 
             # Check existence
