@@ -1203,17 +1203,10 @@
     },
     "categories": {
       "collection": "categories",
-      "type": "collection",
-      "note": "Post categories",
       "fields": [
         {
           "field": "id",
           "type": "integer",
-          "meta": {
-            "hidden": true,
-            "interface": "input",
-            "readonly": true
-          },
           "schema": {
             "is_primary_key": true,
             "has_auto_increment": true
@@ -1221,17 +1214,8 @@
         },
         {
           "field": "name",
-          "type": "string",
-          "meta": {
-            "interface": "input",
-            "required": true
-          }
+          "type": "string"
         }
-      ],
-      "evidence": [
-        "web/pages/posts/categories/[category].vue:10",
-        "web/components/Categories.vue:4",
-        "web/types/schema.ts:73"
       ]
     }
   },
