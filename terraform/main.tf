@@ -168,7 +168,7 @@ resource "google_cloud_run_v2_service" "directus" {
         name = "DIRECTUS_ADMIN_PASSWORD"
         value_source {
           secret_key_ref {
-            secret  = google_secret_manager_secret.directus_admin_password.secret_id
+            secret  = "DIRECTUS_ADMIN_PASSWORD_test"
             version = "latest"
           }
         }

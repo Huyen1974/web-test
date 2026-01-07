@@ -123,7 +123,7 @@ resource "random_password" "directus_admin_password" {
 }
 
 resource "google_secret_manager_secret" "directus_admin_password" {
-  secret_id = "DIRECTUS_ADMIN_PASSWORD_${var.env}"
+  secret_id = "DIRECTUS_ADMIN_PASSWORD_test"
   project   = var.project_id
 
   replication {
