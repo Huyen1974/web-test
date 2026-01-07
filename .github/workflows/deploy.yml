@@ -125,3 +125,58 @@ jobs:
             echo "Error: Build output incomplete"
             exit 1
           fi
+
+  directus_deploy:
+    name: Deploy Directus (Cloud Run)
+    runs-on: ubuntu-latest
+    needs: [pass_gate, quality_gate, e2e_smoke_test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT_ID: github-chatgpt-ggcloud
+      REGION: asia-southeast1
+      SERVICE_NAME: directus-test
+      IMAGE_NAME: asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/web-test/directus:latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate GCP service account key
+        run: |
+          if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
+            echo "::error::Missing GCP_SA_KEY secret"
+            exit 1
+          fi
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Configure Docker auth
+        run: |
+          gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build Directus image
+        run: |
+          docker build -t "${{ env.IMAGE_NAME }}" .
+
+      - name: Push Directus image
+        run: |
+          docker push "${{ env.IMAGE_NAME }}"
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${{ env.SERVICE_NAME }}" \
+            --image "${{ env.IMAGE_NAME }}" \
+            --region "${{ env.REGION }}" \
+            --project "${{ env.PROJECT_ID }}" \
+            --quiet
