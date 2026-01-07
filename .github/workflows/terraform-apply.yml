@@ -112,10 +112,15 @@ jobs:
           fi
 
       - name: Terraform Apply
-        if: (inputs.auto_apply == true && steps.plan.outputs.has_changes == 'true') || github.event_name == 'workflow_dispatch'
+        if: steps.plan.outputs.has_changes == 'true' && (inputs.auto_apply == true || inputs.auto_apply == 'true')
         run: |
           cd ${{ inputs.terraform_directory }}
           terraform apply -auto-approve tfplan
+
+      - name: Skip Apply
+        if: steps.plan.outputs.has_changes != 'true' || (inputs.auto_apply != true && inputs.auto_apply != 'true')
+        run: |
+          echo "Skipping Apply: auto_apply=${{ inputs.auto_apply }}, has_changes=${{ steps.plan.outputs.has_changes }}"
 
       - name: Comment PR with Plan
         if: github.event_name == 'pull_request' && steps.plan.outputs.has_changes == 'true'
