@@ -70,6 +70,16 @@ variable "directus_image" {
 }
 
 # ==============================================================================
+# Nuxt SSR Configuration
+# ==============================================================================
+
+variable "nuxt_ssr_image" {
+  description = "Docker image for Nuxt SSR server"
+  type        = string
+  default     = "asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/web-test/nuxt-ssr:latest"
+}
+
+# ==============================================================================
 # Chatwoot Configuration (Postponed - Phase 2)
 # ==============================================================================
 

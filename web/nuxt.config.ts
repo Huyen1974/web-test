@@ -6,6 +6,9 @@ export default defineNuxtConfig({
 	ssr: true,
 
 	nitro: {
+		// Use node-server preset for Cloud Run deployment
+		// This creates a standalone Node.js server (not static generation)
+		preset: process.env.NITRO_PRESET || 'node-server',
 		prerender: {
 			crawlLinks: false,
 			routes: [],

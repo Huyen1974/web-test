@@ -235,6 +235,97 @@ resource "google_cloud_run_v2_service_iam_member" "directus_public_access" {
 }
 
 # ------------------------------------------------------------------------------
+# Cloud Run Service for Nuxt SSR
+# ------------------------------------------------------------------------------
+# This service provides server-side rendering for the Nuxt frontend.
+# Firebase Hosting proxies requests to this service for dynamic content.
+
+resource "google_cloud_run_v2_service" "nuxt_ssr" {
+  name     = "nuxt-ssr-pfne2mqwja"
+  location = var.region
+  project  = var.project_id
+
+  template {
+    service_account = "chatgpt-deployer@${var.project_id}.iam.gserviceaccount.com"
+
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 3
+    }
+
+    containers {
+      image = var.nuxt_ssr_image
+
+      resources {
+        limits = {
+          cpu    = "1000m"
+          memory = "512Mi"
+        }
+      }
+
+      # Cloud Run injects PORT=8080 automatically
+      env {
+        name  = "NODE_ENV"
+        value = "production"
+      }
+
+      env {
+        name  = "NUXT_PUBLIC_SITE_URL"
+        value = "https://ai.incomexsaigoncorp.vn"
+      }
+
+      env {
+        name  = "NUXT_PUBLIC_DIRECTUS_URL"
+        value = "https://directus-${var.env}-812872501910.${var.region}.run.app"
+      }
+
+      # Startup probe - Nuxt SSR starts quickly
+      startup_probe {
+        http_get {
+          path = "/"
+          port = 8080
+        }
+        initial_delay_seconds = 5
+        timeout_seconds       = 3
+        period_seconds        = 5
+        failure_threshold     = 10
+      }
+
+      # Liveness probe
+      liveness_probe {
+        http_get {
+          path = "/"
+          port = 8080
+        }
+        initial_delay_seconds = 5
+        timeout_seconds       = 3
+        period_seconds        = 15
+        failure_threshold     = 3
+      }
+    }
+  }
+
+  traffic {
+    type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
+    percent = 100
+  }
+
+  depends_on = [
+    google_project_service.run,
+    google_artifact_registry_repository.web_test_docker_repo
+  ]
+}
+
+# Allow unauthenticated access to Nuxt SSR (Firebase proxies here)
+resource "google_cloud_run_v2_service_iam_member" "nuxt_ssr_public_access" {
+  name     = google_cloud_run_v2_service.nuxt_ssr.name
+  location = google_cloud_run_v2_service.nuxt_ssr.location
+  project  = var.project_id
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}
+
+# ------------------------------------------------------------------------------
 # Cloud Run Service for Chatwoot (Postponed - Phase 2)
 # ------------------------------------------------------------------------------
 
