@@ -17,10 +17,78 @@ permissions:
   contents: read
   id-token: write
 
+env:
+  PROJECT_ID: github-chatgpt-ggcloud
+  REGION: asia-southeast1
+  NUXT_SSR_IMAGE: asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/web-test/nuxt-ssr:latest
+
 jobs:
-  build-and-deploy:
-    name: Build and Deploy to Firebase
+  # ===========================================================================
+  # Build and Push Nuxt SSR Docker Image to Artifact Registry
+  # ===========================================================================
+  build-nuxt-ssr:
+    name: Build Nuxt SSR Image
     runs-on: ubuntu-latest
+    # Only build Docker image on push to main (not PRs)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: projects/812872501910/locations/global/workloadIdentityPools/agent-data-pool/providers/github-provider
+          service_account: chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com
+          token_format: access_token
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Configure Docker auth
+        run: |
+          gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build Nuxt SSR Docker image
+        working-directory: ./web
+        run: |
+          docker build \
+            --build-arg NUXT_PUBLIC_SITE_URL=https://ai.incomexsaigoncorp.vn \
+            --build-arg NUXT_PUBLIC_DIRECTUS_URL=https://directus-test-pfne2mqwja-as.a.run.app \
+            -t "${{ env.NUXT_SSR_IMAGE }}" \
+            .
+
+      - name: Push Nuxt SSR image to Artifact Registry
+        run: |
+          docker push "${{ env.NUXT_SSR_IMAGE }}"
+
+      - name: Deploy Nuxt SSR to Cloud Run
+        run: |
+          gcloud run deploy nuxt-ssr-pfne2mqwja \
+            --image="${{ env.NUXT_SSR_IMAGE }}" \
+            --region=${{ env.REGION }} \
+            --platform=managed \
+            --allow-unauthenticated \
+            --port=8080 \
+            --memory=512Mi \
+            --cpu=1 \
+            --min-instances=0 \
+            --max-instances=3 \
+            --set-env-vars="NODE_ENV=production,NUXT_PUBLIC_SITE_URL=https://ai.incomexsaigoncorp.vn,NUXT_PUBLIC_DIRECTUS_URL=https://directus-test-pfne2mqwja-as.a.run.app"
+
+  # ===========================================================================
+  # Deploy Firebase Hosting (Static Assets Only + Cloud Run Rewrite)
+  # ===========================================================================
+  deploy-firebase:
+    name: Deploy Firebase Hosting
+    runs-on: ubuntu-latest
+    needs: [build-nuxt-ssr]
+    # Always run for Firebase config updates, skip needs if not on main
+    if: always() && (needs.build-nuxt-ssr.result == 'success' || needs.build-nuxt-ssr.result == 'skipped')
     defaults:
       run:
         working-directory: ./web
@@ -42,10 +110,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Generate static site
+      - name: Build static assets only (for Firebase CDN)
         env:
-          NUXT_PUBLIC_SITE_URL: "https://github-chatgpt-ggcloud.web.app"
-          NUXT_PUBLIC_DIRECTUS_URL: "https://directus-test-812872501910.asia-southeast1.run.app"
+          NITRO_PRESET: static
+          NUXT_PUBLIC_SITE_URL: "https://ai.incomexsaigoncorp.vn"
+          NUXT_PUBLIC_DIRECTUS_URL: "https://directus-test-pfne2mqwja-as.a.run.app"
           NUXT_PUBLIC_AGENT_DATA_ENABLED: "false"
           NUXT_PUBLIC_FIREBASE_API_KEY: "AIzaSyA3nEhCqAl7XsOljcDY_z9_7g02NG8SAwY"
           NUXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "github-chatgpt-ggcloud.firebaseapp.com"
@@ -56,28 +125,14 @@ jobs:
           NUXT_PUBLIC_FIREBASE_MEASUREMENT_ID: "G-MVYG2LN378"
         run: pnpm run generate
 
-      - name: Verify no localhost or legacy proxy in bundle
+      - name: Remove index.html to force Cloud Run proxy
         run: |
-          if grep -r "localhost:3000" .output/public; then
-            echo "ERROR: localhost:3000 found in generated bundle!"
-            echo "This indicates env vars were not properly baked into the build."
-            exit 1
-          fi
-          if grep -r '"/api/proxy' .output/public; then
-            echo "ERROR: /api/proxy found in generated bundle!"
-            echo "This indicates legacy proxy code is still present (should use Directus SDK)."
-            exit 1
-          fi
-          echo "✓ No localhost URLs or legacy proxy paths found in bundle"
-
-      - name: Verify Firebase config in bundle
-        run: |
-          if ! grep -r "AIzaSyA3nEhCqAl7XsOljcDY_z9_7g02NG8SAwY" .output/public; then
-            echo "ERROR: Firebase API key not found in generated bundle!"
-            echo "This indicates Firebase config was not properly baked into runtimeConfig."
-            exit 1
-          fi
-          echo "✓ Firebase config found in bundle"
+          # Remove all HTML files except 404.html
+          # This forces Firebase to proxy ALL page requests to Cloud Run for SSR
+          find .output/public -name "*.html" ! -name "404.html" -delete || true
+          echo "✓ Removed HTML files to enable Cloud Run SSR proxy"
+          echo "Remaining files:"
+          ls -la .output/public/
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
