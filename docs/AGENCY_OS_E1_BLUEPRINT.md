@@ -5163,6 +5163,7 @@ PHASE 3: CONTENT & GO-LIVE
 | 2026-01-08 | **Architecture Remediation** | **IN PROGRESS**. PR #192 merged. Enabled SSR, configured Firebase Proxy for `/api/agent-data`, and injected `FLOWS_ENV_ALLOW_LIST`. Phase 1 remains AUDITING. |
 | 2026-01-08 | **SSR Architecture Upgrade** | **SUCCESS**. Nuxt SSR deployed as standalone Cloud Run service. |
 | 2026-01-08 | **Asset Regression** | **FAILED**. Ghost Asset (403) resurfaced after deployment. Directus service update required. |
+| 2026-01-08 | **Asset Persistence Fix (PR #195)** | **PARTIAL SUCCESS**. Commit `8f9cededa6e9259a1d33f1a9064f2e4e874fc50a`. Injected `DIRECTUS_BOOTSTRAP_REV`. Asset b18f3792 returns HTTP 200. **CI WARNING**: Terraform workflow failed despite runtime success. |
 
 ---
 
