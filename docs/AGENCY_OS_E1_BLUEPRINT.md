@@ -4835,12 +4835,12 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 | I2 | **Directus Version** | 11.2.2 | ✅ VERIFIED | - | Cloud Run image |
 | I3 | **Production Domain** | `https://ai.incomexsaigoncorp.vn/` | ✅ VERIFIED | - | HTTP/2 200 OK |
 | I4 | **Firebase Hosting** | Project: `web-test-pfne2mqwja` | ✅ VERIFIED | - | |
-| I5 | **Cloud Run Nuxt SSR** | `nuxt-ssr-pfne2mqwja` | ✅ VERIFIED | DevOps | Service `nuxt-ssr-pfne2mqwja` is Live (HTTP 200). Public access enabled. |
+| I5 | **Cloud Run Nuxt SSR** | `nuxt-ssr-pfne2mqwja` | ❌ FAILED (Bypassed) | DevOps | **SPA MODE ONLY**. SSR failed. |
 | I6 | **Agent Data Base URL** | `https://agent-data-test-pfne2mqwja-as.a.run.app` | ✅ VERIFIED | - | **NO SUFFIX** (V12 RAG Structure) |
 | I7 | **Endpoint `/api/views`** | ❌ INVALID | ✅ RESOLVED (Proxy) | - | Legacy V1 Endpoint (Removed) |
 | I8 | **Endpoint `/api/views/recent`** | ❌ INVALID | ✅ RESOLVED (Proxy) | - | Legacy V1 Endpoint (Removed) |
-| I9 | **Agent Data API Key hoạt động** | Skipped | ✅ RESOLVED (Proxy) | Backend Team | Validated via Proxy /info |
-| I10 | **Response Format đúng (translations Array)** | Hiện sai format | ✅ RESOLVED (Proxy) | Backend Team | Validated via Proxy /info |
+| I9 | **Agent Data API Key hoạt động** | Skipped | ❌ FAILED (Proxy) | Backend Team | Validated via Proxy /info |
+| I10 | **Response Format đúng (translations Array)** | Hiện sai format | ❌ FAILED (Proxy) | Backend Team | Validated via Proxy /info |
 | I11 | **GitHub Repo** | `Huyen1974/web-test` (monorepo, Nuxt ở /web) | ✅ VERIFIED | - | |
 | I12 | **GITHUB_TOKEN** | `github-token-sg` (Secret Manager) | ✅ VERIFIED | - | |
 | I13 | **IAM Policy** | `roles/run.invoker` -> `allUsers` | ✅ VERIFIED | DevOps | **PUBLIC ACCESS (SECURED)** |
@@ -4899,7 +4899,7 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 | E1 | WEB_URL | `https://ai.incomexsaigoncorp.vn` | ✅ CONFIGURED | Injected via `update-secrets` (2026-01-02). |
 | E2 | AGENT_DATA_URL | `https://agent-data-test-pfne2mqwja-as.a.run.app/api` | ✅ CONFIGURED | Injected via `update-secrets` (2026-01-02). |
 | E3 | AGENT_DATA_API_KEY | *(Secret)* | ✅ CONFIGURED | Injected via `update-secrets` (2026-01-02). |
-| E4 | FLOWS_ENV_ALLOW_LIST | `WEB_URL,AGENT_DATA_URL,AGENT_DATA_API_KEY,GITHUB_TOKEN` | ✅ CONFIGURED | Injected via `update-secrets` (2026-01-02). |
+| E4 | FLOWS_ENV_ALLOW_LIST | `WEB_URL,AGENT_DATA_URL,AGENT_DATA_API_KEY,GITHUB_TOKEN` | ❌ UNSTABLE (Crashing) | Injected via `update-secrets` (2026-01-02). |
 
 ---
 
@@ -5161,6 +5161,7 @@ PHASE 3: CONTENT & GO-LIVE
 | 2026-01-08 | **Incident: Zombie Container** | **FAILING**. "Zombie Container" suspected. 403 returns after Scale-to-Zero. Action: Hardening startup sequence. |
 | 2026-01-08 | **Phase 1 Status: REOPENED** | **UNSTABLE - Cold Start Regression**. Smoke test fails after ~1 hour idle time. Root cause: `fix_permissions.py` fails silently during cold start, container stays up in broken state. Phase 1 status changed from CLOSED to AUDITING. |
 | 2026-01-08 | **Architecture Remediation** | **IN PROGRESS**. PR #192 merged. Enabled SSR, configured Firebase Proxy for `/api/agent-data`, and injected `FLOWS_ENV_ALLOW_LIST`. Phase 1 remains AUDITING. |
+| 2026-01-08 | **REALITY CHECK** | **FAILED**. System found in Emergency SPA Mode. SSR/Proxy/Flows non-functional. Re-opening Phase 1 repair. |
 
 ---
 
