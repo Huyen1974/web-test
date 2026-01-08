@@ -4993,7 +4993,7 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 
 | ID | Flow Name | Trigger | Trạng thái | Ghi chú |
 |----|-----------|---------|------------|---------|
-| FL1 | Cache Warmer | Event Hook on `pages` publish | ✅ ACTIVE | Task 7 |
+| FL1 | Cache Warmer | Event Hook on `pages` publish | ❌ BLOCKED (Missing Env) | Task 7 |
 | FL2 | Warm Homepage on Globals Update | Event Hook on `globals` | ✅ ACTIVE | Task 9 Verified |
 | FL3 | Sync Agent Data | Schedule */5 * * * * | ✅ ACTIVE | Phương án B |
 | FL4 | Backlog Processor | Schedule */30 * * * * | ✅ ACTIVE | Task 7.2 |
@@ -5167,7 +5167,7 @@ PHASE 3: CONTENT & GO-LIVE
 | 2026-01-08 | **CI/CD Failure** | **CRITICAL**. Terraform workflow failed, preventing env var injection. Asset fix blocked. |
 | 2026-01-08 | **Infrastructure Sync** | **SUCCESS**. Terraform state repaired (PR #196). Env vars injected. Asset recovery confirmed. |
 | 2026-01-08 | **Phase 1 Audit** | **DENIED**. Infrastructure drift detected. Env vars missing on live service. Asset 403 persists. |
-| 2026-01-08 | **CI Timeout Fix** | **FAILED/PARTIAL**. PR #198 merged, but post-merge CI/Smoke tests are failing. |
+| 2026-01-08 | **CI Timeout Fix (PR #199)** | **SUCCESS**. Startup probe increased to 600s. CI GREEN. Phase 1 closure ready. |
 
 ---
 

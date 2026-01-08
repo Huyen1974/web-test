@@ -75,6 +75,7 @@ resource "google_cloud_run_v2_service" "directus" {
       # Health check endpoint
       # Fix (0022B): Increased initial_delay_seconds from 10 to 30 for Directus CMS startup
       # Fix (0022J): Changed port from 8055 to 8080 (Cloud Run default PORT)
+      # Fix (0022K): Expanded startup probe window to match long bootstrap time
       # Fix (CI-TIMEOUT): Increased to 600s total (10min) to accommodate 4m13s bootstrap time
       # Directus needs time to initialize, connect to DB, and start web server
       # Calculation: 60s initial + (20s period × 27 failures) = 600s total
@@ -149,6 +150,11 @@ resource "google_cloud_run_v2_service" "directus" {
       env {
         name  = "FLOWS_ENV_ALLOW_LIST"
         value = "WEB_URL,AGENT_DATA_URL,AGENT_DATA_API_KEY,GITHUB_TOKEN"
+      }
+
+      env {
+        name  = "DIRECTUS_BOOTSTRAP_REV"
+        value = "force-sync-20260108-2"
       }
 
       env {
@@ -316,6 +322,12 @@ resource "google_cloud_run_v2_service" "nuxt_ssr" {
     google_project_service.run,
     google_artifact_registry_repository.web_test_docker_repo
   ]
+}
+
+# Import existing Cloud Run service if it already exists to avoid 409 on first apply.
+import {
+  to = google_cloud_run_v2_service.nuxt_ssr
+  id = "projects/${var.project_id}/locations/${var.region}/services/nuxt-ssr-pfne2mqwja"
 }
 
 # Allow unauthenticated access to Nuxt SSR (Firebase proxies here)
