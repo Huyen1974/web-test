@@ -4835,7 +4835,7 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 | I2 | **Directus Version** | 11.2.2 | ✅ VERIFIED | - | Cloud Run image |
 | I3 | **Production Domain** | `https://ai.incomexsaigoncorp.vn/` | ✅ VERIFIED | - | HTTP/2 200 OK |
 | I4 | **Firebase Hosting** | Project: `web-test-pfne2mqwja` | ✅ VERIFIED | - | |
-| I5 | **Cloud Run Nuxt SSR** | `nuxt-ssr-pfne2mqwja` | ✅ VERIFIED | DevOps | Service `nuxt-ssr-pfne2mqwja` is Live (HTTP 200). Public access enabled. |
+| I5 | **Cloud Run Nuxt SSR** | `https://nuxt-ssr-pfne2mqwja-812872501910.asia-southeast1.run.app/` | ✅ VERIFIED (Live) | DevOps | Dockerized (node-server preset). Proxied via Firebase. |
 | I6 | **Agent Data Base URL** | `https://agent-data-test-pfne2mqwja-as.a.run.app` | ✅ VERIFIED | - | **NO SUFFIX** (V12 RAG Structure) |
 | I7 | **Endpoint `/api/views`** | ❌ INVALID | ✅ RESOLVED (Proxy) | - | Legacy V1 Endpoint (Removed) |
 | I8 | **Endpoint `/api/views/recent`** | ❌ INVALID | ✅ RESOLVED (Proxy) | - | Legacy V1 Endpoint (Removed) |
@@ -4896,10 +4896,10 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 
 | ID | Biến | Giá trị | Trạng thái | Ghi chú |
 |----|------|---------|------------|---------|
-| E1 | WEB_URL | `https://ai.incomexsaigoncorp.vn` | ✅ CONFIGURED | Injected via `update-secrets` (2026-01-02). |
-| E2 | AGENT_DATA_URL | `https://agent-data-test-pfne2mqwja-as.a.run.app/api` | ✅ CONFIGURED | Injected via `update-secrets` (2026-01-02). |
-| E3 | AGENT_DATA_API_KEY | *(Secret)* | ✅ CONFIGURED | Injected via `update-secrets` (2026-01-02). |
-| E4 | FLOWS_ENV_ALLOW_LIST | `WEB_URL,AGENT_DATA_URL,AGENT_DATA_API_KEY,GITHUB_TOKEN` | ✅ CONFIGURED | Injected via `update-secrets` (2026-01-02). |
+| E1 | WEB_URL | `https://ai.incomexsaigoncorp.vn` | ❌ FAILED (Sync Error) | Injected via `update-secrets` (2026-01-02). |
+| E2 | AGENT_DATA_URL | `https://agent-data-test-pfne2mqwja-as.a.run.app/api` | ❌ FAILED (Sync Error) | Injected via `update-secrets` (2026-01-02). |
+| E3 | AGENT_DATA_API_KEY | *(Secret)* | ❌ FAILED (Sync Error) | Injected via `update-secrets` (2026-01-02). |
+| E4 | FLOWS_ENV_ALLOW_LIST | `WEB_URL,AGENT_DATA_URL,AGENT_DATA_API_KEY,GITHUB_TOKEN` | ❌ FAILED (Sync Error) | Injected via `update-secrets` (2026-01-02). |
 
 ---
 
@@ -4993,7 +4993,7 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 
 | ID | Flow Name | Trigger | Trạng thái | Ghi chú |
 |----|-----------|---------|------------|---------|
-| FL1 | Cache Warmer | Event Hook on `pages` publish | ✅ ACTIVE | Task 7 |
+| FL1 | Cache Warmer | Event Hook on `pages` publish | ❌ BLOCKED (Missing Env) | Task 7 |
 | FL2 | Warm Homepage on Globals Update | Event Hook on `globals` | ✅ ACTIVE | Task 9 Verified |
 | FL3 | Sync Agent Data | Schedule */5 * * * * | ✅ ACTIVE | Phương án B |
 | FL4 | Backlog Processor | Schedule */30 * * * * | ✅ ACTIVE | Task 7.2 |
@@ -5161,6 +5161,10 @@ PHASE 3: CONTENT & GO-LIVE
 | 2026-01-08 | **Incident: Zombie Container** | **FAILING**. "Zombie Container" suspected. 403 returns after Scale-to-Zero. Action: Hardening startup sequence. |
 | 2026-01-08 | **Phase 1 Status: REOPENED** | **UNSTABLE - Cold Start Regression**. Smoke test fails after ~1 hour idle time. Root cause: `fix_permissions.py` fails silently during cold start, container stays up in broken state. Phase 1 status changed from CLOSED to AUDITING. |
 | 2026-01-08 | **Architecture Remediation** | **IN PROGRESS**. PR #192 merged. Enabled SSR, configured Firebase Proxy for `/api/agent-data`, and injected `FLOWS_ENV_ALLOW_LIST`. Phase 1 remains AUDITING. |
+| 2026-01-08 | **SSR Architecture Upgrade** | **SUCCESS**. Nuxt SSR deployed as standalone Cloud Run service. |
+| 2026-01-08 | **Asset Regression** | **FAILED**. Ghost Asset (403) resurfaced after deployment. Directus service update required. |
+| 2026-01-08 | **Asset Persistence Fix (PR #195)** | **PARTIAL SUCCESS**. Commit `8f9cededa6e9259a1d33f1a9064f2e4e874fc50a`. Injected `DIRECTUS_BOOTSTRAP_REV`. Asset b18f3792 returns HTTP 200. **CI WARNING**: Terraform workflow failed despite runtime success. |
+| 2026-01-08 | **CI/CD Failure** | **CRITICAL**. Terraform workflow failed, preventing env var injection. Asset fix blocked. |
 
 ---
 
