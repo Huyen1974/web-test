@@ -4896,10 +4896,10 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 
 | ID | Biến | Giá trị | Trạng thái | Ghi chú |
 |----|------|---------|------------|---------|
-| E1 | WEB_URL | `https://ai.incomexsaigoncorp.vn` | ✅ VERIFIED (Synced via Terraform) | Injected via `update-secrets` (2026-01-02). |
-| E2 | AGENT_DATA_URL | `https://agent-data-test-pfne2mqwja-as.a.run.app/api` | ✅ VERIFIED (Synced via Terraform) | Injected via `update-secrets` (2026-01-02). |
-| E3 | AGENT_DATA_API_KEY | *(Secret)* | ✅ VERIFIED (Synced via Terraform) | Injected via `update-secrets` (2026-01-02). |
-| E4 | FLOWS_ENV_ALLOW_LIST | `WEB_URL,AGENT_DATA_URL,AGENT_DATA_API_KEY,GITHUB_TOKEN` | ✅ VERIFIED (Synced via Terraform) | Injected via `update-secrets` (2026-01-02). |
+| E1 | WEB_URL | `https://ai.incomexsaigoncorp.vn` | ❌ FAILED (Live mismatch) | Injected via `update-secrets` (2026-01-02). |
+| E2 | AGENT_DATA_URL | `https://agent-data-test-pfne2mqwja-as.a.run.app/api` | ❌ FAILED (Live mismatch) | Injected via `update-secrets` (2026-01-02). |
+| E3 | AGENT_DATA_API_KEY | *(Secret)* | ❌ FAILED (Live mismatch) | Injected via `update-secrets` (2026-01-02). |
+| E4 | FLOWS_ENV_ALLOW_LIST | `WEB_URL,AGENT_DATA_URL,AGENT_DATA_API_KEY,GITHUB_TOKEN` | ❌ FAILED (Live mismatch) | Injected via `update-secrets` (2026-01-02). |
 
 ---
 
@@ -5166,6 +5166,7 @@ PHASE 3: CONTENT & GO-LIVE
 | 2026-01-08 | **Asset Persistence Fix (PR #195)** | **PARTIAL SUCCESS**. Commit `8f9cededa6e9259a1d33f1a9064f2e4e874fc50a`. Injected `DIRECTUS_BOOTSTRAP_REV`. Asset b18f3792 returns HTTP 200. **CI WARNING**: Terraform workflow failed despite runtime success. |
 | 2026-01-08 | **CI/CD Failure** | **CRITICAL**. Terraform workflow failed, preventing env var injection. Asset fix blocked. |
 | 2026-01-08 | **Infrastructure Sync** | **SUCCESS**. Terraform state repaired (PR #196). Env vars injected. Asset recovery confirmed. |
+| 2026-01-08 | **Phase 1 Audit** | **DENIED**. Infrastructure drift detected. Env vars missing on live service. Asset 403 persists. |
 
 ---
 
