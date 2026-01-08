@@ -444,13 +444,33 @@ def fix_permissions():
         if collection in existing_perms:
             perm_id = existing_perms[collection]
 
-            # For directus_files, always update to ensure full access
+            # For directus_files, forcefully recreate to ensure full access (no restrictions)
+            # This fixes the persistent 403 issue by clearing any filter/validation rules
             if collection == "directus_files":
-                if update_permission(token, perm_id, collection):
-                    print(f"  [UPDATE] {collection} - refreshed full access")
-                    updated += 1
+                print(f"  [FORCE-FIX] {collection} - deleting and recreating for clean state...")
+
+                # Step 1: Delete existing permission
+                del_res = make_request(
+                    f"{api_url}/permissions/{perm_id}",
+                    method="DELETE",
+                    token=token,
+                    retry=False
+                )
+
+                if "error" in del_res and del_res.get("error") not in [204, 200]:
+                    print(f"  [WARN] {collection} - delete failed: {del_res.get('message')}")
+
+                # Step 2: Create fresh permission (even if delete failed, try to create)
+                if use_v10:
+                    success = grant_permission_v10(token, policy_id, collection)
                 else:
-                    print(f"  [WARN] {collection} - update failed")
+                    success = grant_permission_legacy(token, collection)
+
+                if success:
+                    print(f"  [SUCCESS] {collection} - recreated with full public access")
+                    created += 1
+                else:
+                    print(f"  [ERROR] {collection} - recreation failed")
             else:
                 print(f"  [SKIP] {collection} - already exists")
                 skipped += 1
