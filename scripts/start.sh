@@ -1,71 +1,76 @@
 #!/bin/sh
 # =============================================================================
-# DIRECTUS COLD START ENTRYPOINT
+# DIRECTUS COLD START ENTRYPOINT (v2 - Ghost Asset Fix)
 # =============================================================================
-# This script handles container cold starts:
-# 1. (Optional) Run Python-based restoration if admin credentials are available
-# 2. Start Directus server
+# ARCHITECTURE FIX: Scripts that need Directus API must run AFTER Directus starts
 #
-# Note: Restoration requires DIRECTUS_URL, DIRECTUS_ADMIN_EMAIL, and
-# DIRECTUS_ADMIN_PASSWORD environment variables. If not present, restoration
-# is skipped and Directus starts normally.
+# Sequence:
+# 1. Start Directus server (background)
+# 2. Wait for Directus to be healthy (localhost:8055/server/health)
+# 3. Run fix_permissions.py (needs API access for Ghost Asset re-hydration)
+# 4. Keep Directus running (foreground wait)
 #
-# Architecture: Only Python scripts are run here due to Alpine/glibc
-# incompatibility. TypeScript scripts run via GitHub Actions post-deploy.
+# Note: Schema/seed scripts removed from cold start - they run via ops-restore
+# workflow post-deploy. Only fix_permissions.py runs here for Ghost Asset fix.
 # =============================================================================
 
-echo "[Cold Start] Directus Container Starting..."
+echo "[Cold Start] Directus Container Starting (v2)..."
 
-# Check if restoration credentials are available
-if [ -n "$DIRECTUS_ADMIN_EMAIL" ] && [ -n "$DIRECTUS_ADMIN_PASSWORD" ]; then
-    echo "[Cold Start] Admin credentials detected. Running restoration..."
+# Start Directus in background
+echo "[Cold Start] Starting Directus server (background)..."
+npx directus start &
+DIRECTUS_PID=$!
 
-    # Set DIRECTUS_URL to PUBLIC_URL if not explicitly set
-    if [ -z "$DIRECTUS_URL" ] && [ -n "$PUBLIC_URL" ]; then
-        export DIRECTUS_URL="$PUBLIC_URL"
+# Wait for Directus to be healthy (max 60 seconds)
+echo "[Cold Start] Waiting for Directus to be healthy..."
+MAX_WAIT=60
+WAITED=0
+HEALTH_URL="http://localhost:8055/server/health"
+
+while [ $WAITED -lt $MAX_WAIT ]; do
+    # Check if Directus process is still running
+    if ! kill -0 $DIRECTUS_PID 2>/dev/null; then
+        echo "[Cold Start] ERROR: Directus process died unexpectedly"
+        exit 1
     fi
 
-    # Verify DIRECTUS_URL is set
-    if [ -z "$DIRECTUS_URL" ]; then
-        echo "[Cold Start] WARNING: DIRECTUS_URL not set. Skipping restoration."
-    else
-        echo "[Cold Start] Target: $DIRECTUS_URL"
-
-        # Step 1: Schema Apply (Python)
-        # Creates/updates collections and fields
-        if [ -f "./scripts/directus/schema_apply.py" ]; then
-            echo "[Cold Start] Step 1: Applying schema..."
-            python3 ./scripts/directus/schema_apply.py --execute || {
-                echo "[Cold Start] WARNING: Schema apply had errors (non-fatal)"
-            }
-        fi
-
-        # Step 2: Seed Content & Branding (Python)
-        # Creates pages, navigation, branding data
-        if [ -f "./scripts/directus/seed_minimal.py" ]; then
-            echo "[Cold Start] Step 2: Seeding content..."
-            python3 ./scripts/directus/seed_minimal.py || {
-                echo "[Cold Start] WARNING: Content seed had errors (non-fatal)"
-            }
-        fi
-
-        # Step 3: Fix Permissions (Python) - CRITICAL
-        # MUST run AFTER schema_apply and seed to prevent permission reset
-        # Handles: directus_files READ access, Ghost Asset re-hydration
-        if [ -f "./scripts/directus/fix_permissions.py" ]; then
-            echo "[Cold Start] Step 3: Fixing public permissions..."
-            python3 ./scripts/directus/fix_permissions.py || {
-                echo "[Cold Start] WARNING: Permission fix had errors (non-fatal)"
-            }
-        fi
-
-        echo "[Cold Start] Restoration attempt complete."
-        echo "[Cold Start] Note: Run ops-restore workflow for full APPENDIX 16 compliance."
+    # Check health endpoint
+    if wget -q -O /dev/null --timeout=2 "$HEALTH_URL" 2>/dev/null; then
+        echo "[Cold Start] Directus is healthy after ${WAITED}s"
+        break
     fi
-else
-    echo "[Cold Start] No admin credentials set. Skipping restoration."
-    echo "[Cold Start] To enable: Set DIRECTUS_ADMIN_EMAIL and DIRECTUS_ADMIN_PASSWORD"
+
+    sleep 1
+    WAITED=$((WAITED + 1))
+done
+
+if [ $WAITED -ge $MAX_WAIT ]; then
+    echo "[Cold Start] WARNING: Directus health check timed out after ${MAX_WAIT}s"
+    echo "[Cold Start] Continuing anyway - fix_permissions.py may fail"
 fi
 
-echo "[Cold Start] Starting Directus server..."
-exec npx directus start
+# Run fix_permissions.py if credentials are available
+if [ -n "$DIRECTUS_ADMIN_EMAIL" ] && [ -n "$DIRECTUS_ADMIN_PASSWORD" ]; then
+    echo "[Cold Start] Admin credentials detected. Running Ghost Asset fix..."
+
+    # Use localhost for internal calls (faster, no TLS overhead)
+    export DIRECTUS_URL="http://localhost:8055"
+
+    if [ -f "./scripts/directus/fix_permissions.py" ]; then
+        echo "[Cold Start] Fixing permissions and re-hydrating Ghost Assets..."
+        python3 ./scripts/directus/fix_permissions.py || {
+            echo "[Cold Start] WARNING: Permission fix had errors (non-fatal)"
+        }
+    else
+        echo "[Cold Start] WARNING: fix_permissions.py not found"
+    fi
+
+    echo "[Cold Start] Ghost Asset fix complete."
+else
+    echo "[Cold Start] No admin credentials set. Skipping Ghost Asset fix."
+fi
+
+echo "[Cold Start] Directus running (PID: $DIRECTUS_PID). Waiting..."
+
+# Wait for Directus process (keeps container alive)
+wait $DIRECTUS_PID

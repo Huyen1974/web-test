@@ -66,7 +66,8 @@ PUBLIC_READ_COLLECTIONS = [
 
 # Smoke test asset ID (from ops-smoke.yml)
 SMOKE_ASSET_ID = "b18f3792-bd31-43e5-8a7d-b25d76f41dd9"
-SMOKE_ASSET_URL = "https://placehold.co/1x1.png"
+# Use 600x400 for visibility in smoke tests (not 1x1 which may cause issues)
+SMOKE_ASSET_URL = "https://placehold.co/600x400.png"
 
 def get_api_url():
     url = os.environ.get("DIRECTUS_URL") or os.environ.get("NUXT_PUBLIC_DIRECTUS_URL")
