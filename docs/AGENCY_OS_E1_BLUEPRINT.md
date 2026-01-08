@@ -4831,6 +4831,7 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 | ID | Hạng mục | Giá trị/Link | Trạng thái | Ai chịu trách nhiệm | Ghi chú |
 |----|----------|--------------|------------|---------------------|---------|
 | I1 | **Directus URL** | `https://directus-test-812872501910.asia-southeast1.run.app` | ✅ VERIFIED | DevOps | Validated 2026-01-02 |
+| I1a | **Directus Resources** | 1024Mi RAM | ✅ VERIFIED | DevOps | Upgraded via Terraform to support Cold Start |
 | I2 | **Directus Version** | 11.2.2 | ✅ VERIFIED | - | Cloud Run image |
 | I3 | **Production Domain** | `https://ai.incomexsaigoncorp.vn/` | ✅ VERIFIED | - | HTTP/2 200 OK |
 | I4 | **Firebase Hosting** | Project: `web-test-pfne2mqwja` | ✅ VERIFIED | - | |
@@ -5075,7 +5076,7 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 |-------|--------|-----------------|
 | Globals Schema Mismatch | Task 6 script attempted to update `project_name`, `google_analytics_id` but fields missing in Directus Globals. | Fix in Task 9 or E2. |
 
-**Trạng thái Gate:** 🟢 **PHASE 1 COMPLETE**. Ready for Phase 2.
+**Trạng thái Gate:** 🟢 **PHASE 1 TECHNICALLY COMPLETE**. Undergoing Deep Audit.
 
 ---
 
