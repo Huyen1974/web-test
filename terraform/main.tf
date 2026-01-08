@@ -76,7 +76,9 @@ resource "google_cloud_run_v2_service" "directus" {
       # Fix (0022B): Increased initial_delay_seconds from 10 to 30 for Directus CMS startup
       # Fix (0022J): Changed port from 8055 to 8080 (Cloud Run default PORT)
       # Fix (0022K): Expanded startup probe window to match long bootstrap time
+      # Fix (CI-TIMEOUT): Increased to 600s total (10min) to accommodate 4m13s bootstrap time
       # Directus needs time to initialize, connect to DB, and start web server
+      # Calculation: 60s initial + (20s period × 27 failures) = 600s total
       startup_probe {
         http_get {
           path = "/server/health"
@@ -84,8 +86,8 @@ resource "google_cloud_run_v2_service" "directus" {
         }
         initial_delay_seconds = 60
         timeout_seconds       = 3
-        period_seconds        = 15
-        failure_threshold     = 24
+        period_seconds        = 20
+        failure_threshold     = 27
       }
 
       liveness_probe {
