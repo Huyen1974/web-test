@@ -5158,6 +5158,7 @@ PHASE 3: CONTENT & GO-LIVE
 | 2026-01-07 | **Permission & Persistence Fix** | **MERGED**. PR #189 (fix_permissions.py) merged to main. Solves Cloud Run ephemeral storage & 403 issues. |
 | 2026-01-08 | **Smoke Test / Incident** | **FAILING**. Persistent 403 on Assets. Cloud Run ephemeral storage not fully resolved by PR #189. Next: Opus Deep Fix. |
 | 2026-01-08 | **Phase 1 Completion** | **IN PROGRESS**. Infrastructure verified (Directus 1024Mi, Nuxt SSR, Agent Data Proxy). Capability unlocked: Self-healing, Ghost Asset Recovery. Phase 1 AUDITING. |
+| 2026-01-08 | **Incident: Zombie Container** | **FAILING**. "Zombie Container" suspected. 403 returns after Scale-to-Zero. Action: Hardening startup sequence. |
 
 ---
 
