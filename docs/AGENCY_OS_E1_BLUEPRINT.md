@@ -5076,7 +5076,7 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 |-------|--------|-----------------|
 | Globals Schema Mismatch | Task 6 script attempted to update `project_name`, `google_analytics_id` but fields missing in Directus Globals. | Fix in Task 9 or E2. |
 
-**Trạng thái Gate:** 🟢 **PHASE 1 TECHNICALLY COMPLETE**. Undergoing Deep Audit.
+**Trạng thái Gate:** ⚠️ **DEGRADED**. CI/Smoke Tests Failing Post-Merge.
 
 ---
 
@@ -5167,6 +5167,7 @@ PHASE 3: CONTENT & GO-LIVE
 | 2026-01-08 | **CI/CD Failure** | **CRITICAL**. Terraform workflow failed, preventing env var injection. Asset fix blocked. |
 | 2026-01-08 | **Infrastructure Sync** | **SUCCESS**. Terraform state repaired (PR #196). Env vars injected. Asset recovery confirmed. |
 | 2026-01-08 | **Phase 1 Audit** | **DENIED**. Infrastructure drift detected. Env vars missing on live service. Asset 403 persists. |
+| 2026-01-08 | **CI Timeout Fix** | **FAILED/PARTIAL**. PR #198 merged, but post-merge CI/Smoke tests are failing. |
 
 ---
 
