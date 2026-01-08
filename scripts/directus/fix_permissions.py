@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """
 fix_permissions.py - Grant Public READ access to essential collections
+                     (v2 - Hardened with Retry Logic)
 
 MISSION: Fix ops-smoke 403 errors by ensuring Public role has READ access
 CONTEXT: Cloud Run cold starts can reset permissions, this script enforces them
 
-CRITICAL: This MUST run AFTER schema_apply.py and seed_minimal.py
-WHY: Schema changes can reset or overwrite permissions
+HARDENING (v2):
+- Polite Retries: 5 attempts with exponential backoff (2s, 4s, 8s, 16s, 32s)
+- Handles transient 503/504 errors during Directus boot
+- Strict exit codes for start.sh "Death on Error" protocol
+
+CRITICAL: This MUST run AFTER Directus is healthy (start.sh handles this)
 
 Supports both:
 - Directus v9 (role=null for public)
@@ -20,6 +25,12 @@ import urllib.error
 import subprocess
 import ssl
 import sys
+import time
+
+# Retry configuration
+MAX_RETRIES = 5
+INITIAL_BACKOFF = 2  # seconds
+RETRYABLE_ERRORS = [503, 504, 502, 500]  # Server errors that may be transient
 
 # Collections that MUST have public READ access for ops-smoke to pass
 # CRITICAL: directus_files is required for asset access (403 fix)
@@ -94,7 +105,10 @@ def fetch_secret(name):
         return None
 
 def authenticate():
-    """Authenticate as admin and return access token."""
+    """
+    Authenticate as admin and return access token.
+    Uses retry logic with exponential backoff for transient errors.
+    """
     api_url = get_api_url()
 
     email = os.environ.get("DIRECTUS_ADMIN_EMAIL")
@@ -111,44 +125,89 @@ def authenticate():
 
     url = f"{api_url}/auth/login"
     data = json.dumps({"email": email, "password": password}).encode("utf-8")
-    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
 
-    try:
-        with urllib.request.urlopen(req, context=get_ssl_context()) as response:
-            resp_data = json.load(response)
-            return resp_data["data"]["access_token"]
-    except Exception as e:
-        print(f"[ERROR] Authentication failed: {e}")
-        return None
+    # Retry logic with exponential backoff
+    for attempt in range(1, MAX_RETRIES + 1):
+        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, context=get_ssl_context(), timeout=30) as response:
+                resp_data = json.load(response)
+                if attempt > 1:
+                    print(f"  [OK] Authentication succeeded on attempt {attempt}")
+                return resp_data["data"]["access_token"]
+        except urllib.error.HTTPError as e:
+            if e.code in RETRYABLE_ERRORS and attempt < MAX_RETRIES:
+                backoff = INITIAL_BACKOFF * (2 ** (attempt - 1))
+                print(f"  [RETRY] Auth failed ({e.code}), attempt {attempt}/{MAX_RETRIES}. Waiting {backoff}s...")
+                time.sleep(backoff)
+                continue
+            print(f"[ERROR] Authentication failed: HTTP {e.code}")
+            return None
+        except urllib.error.URLError as e:
+            if attempt < MAX_RETRIES:
+                backoff = INITIAL_BACKOFF * (2 ** (attempt - 1))
+                print(f"  [RETRY] Connection error, attempt {attempt}/{MAX_RETRIES}. Waiting {backoff}s...")
+                time.sleep(backoff)
+                continue
+            print(f"[ERROR] Authentication failed: {e}")
+            return None
+        except Exception as e:
+            print(f"[ERROR] Authentication failed: {e}")
+            return None
 
-def make_request(url, method="GET", data=None, token=None):
-    """Make HTTP request with optional auth."""
+    print("[ERROR] Authentication failed after all retries")
+    return None
+
+def make_request(url, method="GET", data=None, token=None, retry=True):
+    """
+    Make HTTP request with optional auth.
+    Uses retry logic for transient server errors (5xx).
+    """
     headers = {}
     if token:
         headers["Authorization"] = f"Bearer {token}"
     if data:
         headers["Content-Type"] = "application/json"
 
-    req = urllib.request.Request(url, method=method, headers=headers)
-    if data:
-        req.data = json.dumps(data).encode("utf-8")
+    max_attempts = MAX_RETRIES if retry else 1
 
-    try:
-        with urllib.request.urlopen(req, context=get_ssl_context()) as response:
-            if response.status == 204:
-                return {"success": True}
-            content_type = response.getheader("Content-Type", "")
-            if "application/json" in content_type:
-                return json.load(response)
-            return {"success": True}
-    except urllib.error.HTTPError as e:
+    for attempt in range(1, max_attempts + 1):
+        req = urllib.request.Request(url, method=method, headers=headers)
+        if data:
+            req.data = json.dumps(data).encode("utf-8")
+
         try:
-            err_body = e.read().decode()
-            return {"error": e.code, "message": err_body}
-        except:
-            return {"error": e.code, "message": str(e)}
-    except Exception as e:
-        return {"error": 500, "message": str(e)}
+            with urllib.request.urlopen(req, context=get_ssl_context(), timeout=30) as response:
+                if response.status == 204:
+                    return {"success": True}
+                content_type = response.getheader("Content-Type", "")
+                if "application/json" in content_type:
+                    return json.load(response)
+                return {"success": True}
+        except urllib.error.HTTPError as e:
+            # Retry on transient server errors
+            if e.code in RETRYABLE_ERRORS and attempt < max_attempts:
+                backoff = INITIAL_BACKOFF * (2 ** (attempt - 1))
+                print(f"  [RETRY] Request failed ({e.code}), attempt {attempt}/{max_attempts}. Waiting {backoff}s...")
+                time.sleep(backoff)
+                continue
+            try:
+                err_body = e.read().decode()
+                return {"error": e.code, "message": err_body}
+            except:
+                return {"error": e.code, "message": str(e)}
+        except urllib.error.URLError as e:
+            # Retry on connection errors
+            if attempt < max_attempts:
+                backoff = INITIAL_BACKOFF * (2 ** (attempt - 1))
+                print(f"  [RETRY] Connection error, attempt {attempt}/{max_attempts}. Waiting {backoff}s...")
+                time.sleep(backoff)
+                continue
+            return {"error": 500, "message": str(e)}
+        except Exception as e:
+            return {"error": 500, "message": str(e)}
+
+    return {"error": 500, "message": "Max retries exceeded"}
 
 def check_collection_exists(token, collection):
     """Check if a collection exists in Directus."""

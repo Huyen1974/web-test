@@ -4831,6 +4831,7 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 | ID | Hạng mục | Giá trị/Link | Trạng thái | Ai chịu trách nhiệm | Ghi chú |
 |----|----------|--------------|------------|---------------------|---------|
 | I1 | **Directus URL** | `https://directus-test-812872501910.asia-southeast1.run.app` | ✅ VERIFIED | DevOps | Validated 2026-01-02 |
+| I1a | **Directus Resources** | 1024Mi RAM | ✅ VERIFIED | DevOps | Upgraded via Terraform to support Cold Start |
 | I2 | **Directus Version** | 11.2.2 | ✅ VERIFIED | - | Cloud Run image |
 | I3 | **Production Domain** | `https://ai.incomexsaigoncorp.vn/` | ✅ VERIFIED | - | HTTP/2 200 OK |
 | I4 | **Firebase Hosting** | Project: `web-test-pfne2mqwja` | ✅ VERIFIED | - | |
@@ -5075,7 +5076,7 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 |-------|--------|-----------------|
 | Globals Schema Mismatch | Task 6 script attempted to update `project_name`, `google_analytics_id` but fields missing in Directus Globals. | Fix in Task 9 or E2. |
 
-**Trạng thái Gate:** 🔵 PHASE 3 FINALIZING (Waiting for Task 9 Report).
+**Trạng thái Gate:** 🟢 **PHASE 1 TECHNICALLY COMPLETE**. Undergoing Deep Audit.
 
 ---
 
@@ -5156,6 +5157,9 @@ PHASE 3: CONTENT & GO-LIVE
 | 2026-01-05 | **Grand Sync** | Updated all Phase 2 & Task 6 statuses to DONE based on verified deployment logs. |
 | 2026-01-07 | **Permission & Persistence Fix** | **MERGED**. PR #189 (fix_permissions.py) merged to main. Solves Cloud Run ephemeral storage & 403 issues. |
 | 2026-01-08 | **Smoke Test / Incident** | **FAILING**. Persistent 403 on Assets. Cloud Run ephemeral storage not fully resolved by PR #189. Next: Opus Deep Fix. |
+| 2026-01-08 | **Phase 1 Completion** | **IN PROGRESS**. Infrastructure verified (Directus 1024Mi, Nuxt SSR, Agent Data Proxy). Capability unlocked: Self-healing, Ghost Asset Recovery. Phase 1 AUDITING. |
+| 2026-01-08 | **Incident: Zombie Container** | **FAILING**. "Zombie Container" suspected. 403 returns after Scale-to-Zero. Action: Hardening startup sequence. |
+| 2026-01-08 | **Phase 1 Status: REOPENED** | **UNSTABLE - Cold Start Regression**. Smoke test fails after ~1 hour idle time. Root cause: `fix_permissions.py` fails silently during cold start, container stays up in broken state. Phase 1 status changed from CLOSED to AUDITING. |
 
 ---
 
