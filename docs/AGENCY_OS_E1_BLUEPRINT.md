@@ -5155,6 +5155,7 @@ PHASE 3: CONTENT & GO-LIVE
 | 2026-01-05 | **Content Seeding** | Legal pages created. Globals schema mismatch identified (queued for Task 9 fix). |
 | 2026-01-05 | **Grand Sync** | Updated all Phase 2 & Task 6 statuses to DONE based on verified deployment logs. |
 | 2026-01-07 | **Permission & Persistence Fix** | **MERGED**. PR #189 (fix_permissions.py) merged to main. Solves Cloud Run ephemeral storage & 403 issues. |
+| 2026-01-08 | **Smoke Test / Incident** | **FAILING**. Persistent 403 on Assets. Cloud Run ephemeral storage not fully resolved by PR #189. Next: Opus Deep Fix. |
 
 ---
 
