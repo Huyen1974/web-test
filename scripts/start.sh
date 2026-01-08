@@ -39,7 +39,8 @@ DIRECTUS_PID=$!
 echo "[Cold Start] Waiting for Directus to be healthy..."
 MAX_WAIT=90
 WAITED=0
-HEALTH_URL="http://localhost:8055/server/health"
+HEALTH_PORT="${PORT:-8080}"
+HEALTH_URL="http://localhost:${HEALTH_PORT}/server/health"
 
 while [ $WAITED -lt $MAX_WAIT ]; do
     # Check if Directus process is still running
@@ -68,7 +69,7 @@ if [ -n "$DIRECTUS_ADMIN_EMAIL" ] && [ -n "$DIRECTUS_ADMIN_PASSWORD" ]; then
     echo "[Cold Start] Admin credentials detected. Running Ghost Asset fix..."
 
     # Use localhost for internal calls (faster, no TLS overhead)
-    export DIRECTUS_URL="http://localhost:8055"
+    export DIRECTUS_URL="http://localhost:${HEALTH_PORT}"
 
     if [ -f "./scripts/directus/fix_permissions.py" ]; then
         echo "[Cold Start] Fixing permissions and re-hydrating Ghost Assets..."
