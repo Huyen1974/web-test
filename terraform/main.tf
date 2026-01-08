@@ -145,6 +145,11 @@ resource "google_cloud_run_v2_service" "directus" {
       }
 
       env {
+        name  = "FLOWS_ENV_ALLOW_LIST"
+        value = "WEB_URL,AGENT_DATA_URL,AGENT_DATA_API_KEY,GITHUB_TOKEN"
+      }
+
+      env {
         name  = "WEBSOCKETS_ENABLED"
         value = "true"
       }

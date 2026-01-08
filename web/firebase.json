@@ -9,7 +9,10 @@
     "rewrites": [
       {
         "source": "**",
-        "destination": "/index.html"
+        "run": {
+          "serviceId": "nuxt-ssr-pfne2mqwja",
+          "region": "asia-southeast1"
+        }
       }
     ]
   }
