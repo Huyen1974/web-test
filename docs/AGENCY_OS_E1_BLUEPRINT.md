@@ -5160,6 +5160,7 @@ PHASE 3: CONTENT & GO-LIVE
 | 2026-01-08 | **Phase 1 Completion** | **IN PROGRESS**. Infrastructure verified (Directus 1024Mi, Nuxt SSR, Agent Data Proxy). Capability unlocked: Self-healing, Ghost Asset Recovery. Phase 1 AUDITING. |
 | 2026-01-08 | **Incident: Zombie Container** | **FAILING**. "Zombie Container" suspected. 403 returns after Scale-to-Zero. Action: Hardening startup sequence. |
 | 2026-01-08 | **Phase 1 Status: REOPENED** | **UNSTABLE - Cold Start Regression**. Smoke test fails after ~1 hour idle time. Root cause: `fix_permissions.py` fails silently during cold start, container stays up in broken state. Phase 1 status changed from CLOSED to AUDITING. |
+| 2026-01-08 | **Architecture Remediation** | **IN PROGRESS**. PR #192 merged. Enabled SSR, configured Firebase Proxy for `/api/agent-data`, and injected `FLOWS_ENV_ALLOW_LIST`. Phase 1 remains AUDITING. |
 
 ---
 
