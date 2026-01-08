@@ -50,7 +50,7 @@ while [ $WAITED -lt $MAX_WAIT ]; do
     fi
 
     # Check health endpoint
-    if wget -q -O /dev/null --timeout=2 "$HEALTH_URL" 2>/dev/null; then
+    if curl -fsS --max-time 2 "$HEALTH_URL" >/dev/null 2>&1; then
         echo "[Cold Start] Directus is healthy after ${WAITED}s"
         break
     fi
