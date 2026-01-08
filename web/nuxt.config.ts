@@ -3,12 +3,13 @@ import { theme } from './theme';
 
 export default defineNuxtConfig({
 	// https://nuxt.com/docs/api/configuration/nuxt-config
-	ssr: false,
+	ssr: true,
 
 	nitro: {
 		prerender: {
 			crawlLinks: false,
-			routes: ['/'],
+			routes: [],
+			failOnError: false,
 		},
 	},
 
