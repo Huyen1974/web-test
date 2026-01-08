@@ -151,7 +151,7 @@ resource "google_cloud_run_v2_service" "directus" {
 
       env {
         name  = "DIRECTUS_BOOTSTRAP_REV"
-        value = "force-sync-20260108-1"
+        value = "force-sync-20260108-2"
       }
 
       env {
