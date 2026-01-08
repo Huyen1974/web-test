@@ -66,7 +66,7 @@ variable "directus_admin_email" {
 variable "directus_image" {
   description = "Docker image for Directus"
   type        = string
-  default     = "directus/directus:11.2.2"
+  default     = "asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/web-test/directus:latest"
 }
 
 # ==============================================================================
