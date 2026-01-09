@@ -505,11 +505,22 @@ def fix_permissions():
             print(f"  [FAIL] {col} - NOT accessible")
             all_ok = False
 
-    # Verify asset access
-    if verify_asset_access(SMOKE_ASSET_ID):
-        print(f"  [PASS] Asset {SMOKE_ASSET_ID[:8]}... - HTTP 200")
-    else:
-        print(f"  [FAIL] Asset {SMOKE_ASSET_ID[:8]}... - NOT accessible")
+    # Verify asset access with retry (permissions may take time to propagate)
+    asset_verified = False
+    max_asset_attempts = 3
+    for attempt in range(1, max_asset_attempts + 1):
+        if verify_asset_access(SMOKE_ASSET_ID):
+            print(f"  [PASS] Asset {SMOKE_ASSET_ID[:8]}... - HTTP 200")
+            asset_verified = True
+            break
+        else:
+            if attempt < max_asset_attempts:
+                print(f"  [RETRY {attempt}/{max_asset_attempts}] Asset not accessible yet, waiting 3s for permission propagation...")
+                time.sleep(3)
+            else:
+                print(f"  [FAIL] Asset {SMOKE_ASSET_ID[:8]}... - NOT accessible after {max_asset_attempts} attempts")
+
+    if not asset_verified:
         all_ok = False
 
     # Summary
