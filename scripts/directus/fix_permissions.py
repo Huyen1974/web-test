@@ -450,26 +450,13 @@ def fix_permissions():
                 print(f"  [FORCE-FIX] {collection} - updating permission to clear restrictions...")
 
                 # Use PATCH to update existing permission in-place (safer than DELETE + CREATE)
-                # Clear permissions and validation fields to remove any restrictive filters
-                if use_v10:
-                    # v10: Update with clean policy-based permission
-                    payload = {
-                        "policy": policy_id,
-                        "collection": collection,
-                        "action": "read",
-                        "fields": ["*"],
-                        "permissions": {},  # Clear any restrictive filters
-                        "validation": {}    # Clear any validation rules
-                    }
-                else:
-                    # Legacy: Update with clean role-based permission
-                    payload = {
-                        "role": None,
-                        "collection": collection,
-                        "action": "read",
-                        "fields": ["*"],
-                        "permissions": {}  # Clear any restrictive filters
-                    }
+                # Only send mutable fields: fields, permissions, validation
+                # Do NOT send immutable fields like policy, collection, action, role
+                payload = {
+                    "fields": ["*"],
+                    "permissions": {},  # Clear any restrictive filters
+                    "validation": {}    # Clear any validation rules
+                }
 
                 patch_res = make_request(
                     f"{api_url}/permissions/{perm_id}",
