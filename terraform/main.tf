@@ -48,6 +48,13 @@ resource "google_cloud_run_v2_service" "directus" {
   template {
     service_account = "chatgpt-deployer@${var.project_id}.iam.gserviceaccount.com"
 
+    # Force new revision deployment when image changes
+    # Timestamp annotation ensures Cloud Run pulls latest :latest tag
+    annotations = {
+      "run.googleapis.com/client-name" = "terraform"
+      "deploy-time"                     = timestamp()
+    }
+
     # Cloud SQL connection
     volumes {
       name = "cloudsql"
