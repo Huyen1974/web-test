@@ -444,33 +444,47 @@ def fix_permissions():
         if collection in existing_perms:
             perm_id = existing_perms[collection]
 
-            # For directus_files, forcefully recreate to ensure full access (no restrictions)
+            # For directus_files, forcefully update to ensure full access (no restrictions)
             # This fixes the persistent 403 issue by clearing any filter/validation rules
             if collection == "directus_files":
-                print(f"  [FORCE-FIX] {collection} - deleting and recreating for clean state...")
+                print(f"  [FORCE-FIX] {collection} - updating permission to clear restrictions...")
 
-                # Step 1: Delete existing permission
-                del_res = make_request(
+                # Use PATCH to update existing permission in-place (safer than DELETE + CREATE)
+                # Clear permissions and validation fields to remove any restrictive filters
+                if use_v10:
+                    # v10: Update with clean policy-based permission
+                    payload = {
+                        "policy": policy_id,
+                        "collection": collection,
+                        "action": "read",
+                        "fields": ["*"],
+                        "permissions": {},  # Clear any restrictive filters
+                        "validation": {}    # Clear any validation rules
+                    }
+                else:
+                    # Legacy: Update with clean role-based permission
+                    payload = {
+                        "role": None,
+                        "collection": collection,
+                        "action": "read",
+                        "fields": ["*"],
+                        "permissions": {}  # Clear any restrictive filters
+                    }
+
+                patch_res = make_request(
                     f"{api_url}/permissions/{perm_id}",
-                    method="DELETE",
+                    method="PATCH",
+                    data=payload,
                     token=token,
-                    retry=False
+                    retry=True
                 )
 
-                if "error" in del_res and del_res.get("error") not in [204, 200]:
-                    print(f"  [WARN] {collection} - delete failed: {del_res.get('message')}")
-
-                # Step 2: Create fresh permission (even if delete failed, try to create)
-                if use_v10:
-                    success = grant_permission_v10(token, policy_id, collection)
+                if "error" not in patch_res:
+                    print(f"  [SUCCESS] {collection} - updated with full public access")
+                    updated += 1
                 else:
-                    success = grant_permission_legacy(token, collection)
-
-                if success:
-                    print(f"  [SUCCESS] {collection} - recreated with full public access")
-                    created += 1
-                else:
-                    print(f"  [ERROR] {collection} - recreation failed")
+                    print(f"  [ERROR] {collection} - update failed: {patch_res.get('message')}")
+                    # Continue anyway - verification step will catch if it's still broken
             else:
                 print(f"  [SKIP] {collection} - already exists")
                 skipped += 1
