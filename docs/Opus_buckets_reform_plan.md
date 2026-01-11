@@ -88,8 +88,8 @@ For each bucket in Blueprint, check:
 ### TASK 3: CHECK FOR UNEXPECTED BUCKETS
 List any buckets found in GCP that are NOT in Blueprint:
 ```bash
-# Step 1: Get all actual buckets matching our patterns
-gsutil ls -p github-chatgpt-ggcloud | grep -E "huyen1974-|directus-|github-chatgpt-ggcloud" | sort > /tmp/actual_buckets.txt
+# Step 1: Get all actual buckets matching our patterns (including gcf-v2-* and run-sources-*)
+gsutil ls -p github-chatgpt-ggcloud | grep -E "huyen1974-|directus-|github-chatgpt-ggcloud|gcf-v2-|run-sources-" | sort > /tmp/actual_buckets.txt
 
 # Step 2: Create expected list from Blueprint (web-test scope + Sys buckets)
 cat << 'EOF' > /tmp/expected_buckets.txt
