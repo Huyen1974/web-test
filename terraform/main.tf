@@ -334,7 +334,7 @@ resource "google_cloud_run_v2_service" "nuxt_ssr" {
 # Import existing Cloud Run service if it already exists to avoid 409 on first apply.
 import {
   to = google_cloud_run_v2_service.nuxt_ssr
-  id = "projects/${var.project_id}/locations/${var.region}/services/nuxt-ssr-pfne2mqwja"
+  id = "projects/github-chatgpt-ggcloud/locations/asia-southeast1/services/nuxt-ssr-pfne2mqwja"
 }
 
 # Allow unauthenticated access to Nuxt SSR (Firebase proxies here)
