@@ -19,6 +19,13 @@ set -e  # Exit on any error (defensive)
 
 echo "[Cold Start] Directus Container Starting (v3 - Hardened)..."
 
+# Ensure database schema exists and is up to date before starting the server
+echo "[Cold Start] Bootstrapping database (schema init)..."
+npx directus bootstrap --skipAdminInit
+
+echo "[Cold Start] Running database migrations..."
+npx directus database migrate:latest
+
 # Function to kill Directus and exit with error
 die_with_directus() {
     echo "[Cold Start] FATAL: $1"

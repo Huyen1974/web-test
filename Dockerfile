@@ -1,36 +1,35 @@
 # =============================================================================
-# Directus with Cold-Start Restoration (Python-only approach)
+# Directus Build-Time Install (Cold-Start Optimization)
 # =============================================================================
-# Architecture: Uses Python scripts for schema/content restoration to avoid
-# Alpine/glibc incompatibility issues with Node.js native bindings.
-#
-# Note: TypeScript-based restoration scripts (e1-07, e1-08, e1-11) are NOT
-# included here due to platform incompatibility. They should be run via
-# GitHub Actions workflow after deployment (ops-restore workflow).
+# Goal: Install dependencies at build-time to eliminate runtime npm install.
 # =============================================================================
 
-FROM directus/directus:11.2.2
+# === BUILD STAGE ===
+FROM node:22-alpine AS builder
 
-USER root
-WORKDIR /app
+WORKDIR /directus
 
-# Install Python3 and curl for restoration scripts
-RUN set -eux; \
-    if command -v apk >/dev/null 2>&1; then \
-        apk add --no-cache bash python3 curl; \
-    elif command -v apt-get >/dev/null 2>&1; then \
-        apt-get update && apt-get install -y --no-install-recommends bash python3 curl; \
-        rm -rf /var/lib/apt/lists/*; \
-    else \
-        echo "Unsupported base image: no apk/apt-get available"; \
-        exit 1; \
-    fi
+# Install Directus dependencies at build time
+COPY directus/package.json directus/package-lock.json ./
+RUN npm ci --omit=dev --legacy-peer-deps
 
-# Copy only Python-based restoration scripts (no web dependencies)
-COPY scripts/directus ./scripts/directus
-COPY scripts/start.sh ./scripts/start.sh
+# === RUNTIME STAGE ===
+FROM node:22-alpine
 
-RUN chmod +x /app/scripts/start.sh
+WORKDIR /directus
 
-# Entrypoint runs optional restoration then starts Directus
-CMD ["/bin/sh", "./scripts/start.sh"]
+# Runtime dependencies for scripts/start.sh
+RUN apk add --no-cache bash python3 curl
+
+# Copy built node_modules and package files
+COPY --from=builder /directus /directus
+
+# Copy runtime scripts
+COPY scripts/ /directus/scripts/
+
+# Ensure start script is executable (host permissions may not carry over)
+RUN chmod +x /directus/scripts/start.sh
+
+EXPOSE 8055
+
+CMD ["sh", "/directus/scripts/start.sh"]
