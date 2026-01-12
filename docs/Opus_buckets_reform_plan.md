@@ -8,14 +8,14 @@
 | | **B0.2** | Verify Blueprint vs Reality (agent-data-test) |
 | | **B0.3** | Backup web-test → web-test-backup |
 | | **B0.4** | Backup agent-data-test → agent-data-test-backup |
-| **PHASE 1: IMPORT & LOCK (web-test)** | **B1.1** | Setup Terraform Structure (web-test) |
+| **PHASE 1: IMPORT & LOCK (web-test) [COMPLETED]** | **B1.1** | Setup Terraform Structure (web-test) |
 | | **B1.2** | Import W1-T (TF State) |
 | | **B1.3** | Import S3, S4, S5 (Orphan/Legacy) |
-| **PHASE 2: CREATE TEST BUCKETS (web-test)** | **B2.1** | Create S1 (System Backups) |
+| **PHASE 2: CREATE TEST BUCKETS (web-test) [COMPLETED]** | **B2.1** | Create S1 (System Backups) |
 | | **B2.2** | Create S2 (Temp) |
 | | **B2.3** | Create W2-T (Directus) + Migration Plan |
 | | **B2.4** | Create W3-T, W4-T, W5-T |
-| **PHASE 3: CREATE PRODUCTION BUCKETS (web-test)** | **B3.1** | Create W1-P (TF State Prod) |
+| **PHASE 3: CREATE PRODUCTION BUCKETS (web-test) [COMPLETED]** | **B3.1** | Create W1-P (TF State Prod) |
 | | **B3.2** | Create W2-P → W5-P |
 | **PHASE 4: AGENT-DATA (Separate Track)** | **B4.1** | Setup Terraform Structure (agent-data-test) |
 | | **B4.2** | Import A1-T → A6-T, A-L1, A-L2 |
