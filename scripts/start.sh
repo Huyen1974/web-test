@@ -29,6 +29,85 @@ run_directus() {
     fi
 }
 
+# Wait for database to be ready before running migrations or starting Directus
+wait_for_database() {
+    MAX_WAIT="${DIRECTUS_DB_WAIT_MAX:-60}"
+    SLEEP_SEC="${DIRECTUS_DB_WAIT_INTERVAL:-2}"
+    WAITED=0
+
+    if [ -n "$DB_SOCKET_PATH" ]; then
+        echo "[Cold Start] Waiting for Cloud SQL socket (${DB_SOCKET_PATH})..."
+        while [ $WAITED -lt $MAX_WAIT ]; do
+            if python3 - "$DB_SOCKET_PATH" <<'PY'
+import socket
+import sys
+
+path = sys.argv[1]
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.settimeout(1)
+try:
+    s.connect(path)
+except Exception:
+    sys.exit(1)
+else:
+    sys.exit(0)
+finally:
+    try:
+        s.close()
+    except Exception:
+        pass
+PY
+            then
+                echo "[Cold Start] Cloud SQL socket is ready after ${WAITED}s"
+                return 0
+            fi
+            sleep "$SLEEP_SEC"
+            WAITED=$((WAITED + SLEEP_SEC))
+        done
+        echo "[Cold Start] FATAL: Cloud SQL socket not ready after ${MAX_WAIT}s"
+        exit 1
+    fi
+
+    if [ -n "$DB_HOST" ] && [ -n "$DB_PORT" ]; then
+        echo "[Cold Start] Waiting for DB TCP ${DB_HOST}:${DB_PORT}..."
+        while [ $WAITED -lt $MAX_WAIT ]; do
+            if python3 - "$DB_HOST" "$DB_PORT" <<'PY'
+import socket
+import sys
+
+host = sys.argv[1]
+port = int(sys.argv[2])
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.settimeout(1)
+try:
+    s.connect((host, port))
+except Exception:
+    sys.exit(1)
+else:
+    sys.exit(0)
+finally:
+    try:
+        s.close()
+    except Exception:
+        pass
+PY
+            then
+                echo "[Cold Start] DB TCP is ready after ${WAITED}s"
+                return 0
+            fi
+            sleep "$SLEEP_SEC"
+            WAITED=$((WAITED + SLEEP_SEC))
+        done
+        echo "[Cold Start] FATAL: DB TCP not ready after ${MAX_WAIT}s"
+        exit 1
+    fi
+
+    echo "[Cold Start] WARNING: No DB_SOCKET_PATH or DB_HOST set; skipping DB wait."
+}
+
+# Wait for DB before any schema actions
+wait_for_database
+
 # Optional schema bootstrap/migrations (disable for faster cold starts)
 if [ "${DIRECTUS_BOOTSTRAP_ON_START:-false}" = "true" ]; then
     echo "[Cold Start] Bootstrapping database (schema init)..."

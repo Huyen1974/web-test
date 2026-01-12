@@ -4831,8 +4831,8 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 | ID | Hạng mục | Giá trị/Link | Trạng thái | Ai chịu trách nhiệm | Ghi chú |
 |----|----------|--------------|------------|---------------------|---------|
 | I1 | **Directus URL** | `https://directus-test-812872501910.asia-southeast1.run.app` | ✅ VERIFIED | DevOps | Validated 2026-01-02 |
-| I1a | **Directus Resources** | 1024Mi RAM | ✅ VERIFIED | DevOps | Upgraded via Terraform to support Cold Start |
-| I2 | **Directus Version** | 11.2.2 | ✅ VERIFIED | - | Cloud Run image |
+| I1a | **Directus Resources** | 1024Mi RAM | ✅ VERIFIED (Phase 6) | DevOps | Upgraded via Terraform to support Cold Start |
+| I2 | **Directus Version** | 11.14.0 | ✅ VERIFIED (Phase 5) | - | Cloud Run image |
 | I3 | **Production Domain** | `https://ai.incomexsaigoncorp.vn/` | ✅ VERIFIED | - | HTTP/2 200 OK |
 | I4 | **Firebase Hosting** | Project: `web-test-pfne2mqwja` | ✅ VERIFIED | - | |
 | I5 | **Cloud Run Nuxt SSR** | `https://nuxt-ssr-pfne2mqwja-812872501910.asia-southeast1.run.app/` | ✅ VERIFIED (Live) | DevOps | Dockerized (node-server preset). Proxied via Firebase. |
