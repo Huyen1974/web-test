@@ -171,7 +171,7 @@ resource "google_cloud_run_v2_service" "directus" {
 
       env {
         name  = "DIRECTUS_MIGRATE_ON_START"
-        value = "false"
+        value = "true"
       }
 
       env {
