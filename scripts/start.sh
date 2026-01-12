@@ -35,9 +35,9 @@ echo "[Cold Start] Starting Directus server (background)..."
 npx directus start &
 DIRECTUS_PID=$!
 
-# Wait for Directus to be healthy (max 90 seconds - increased for cold starts)
+# Wait for Directus to be healthy (configurable via DIRECTUS_STARTUP_MAX_WAIT)
 echo "[Cold Start] Waiting for Directus to be healthy..."
-MAX_WAIT=90
+MAX_WAIT="${DIRECTUS_STARTUP_MAX_WAIT:-600}"
 WAITED=0
 HEALTH_PORT="${PORT:-8080}"
 HEALTH_URL="http://localhost:${HEALTH_PORT}/server/health"
