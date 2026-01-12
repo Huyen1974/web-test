@@ -19,12 +19,30 @@ set -e  # Exit on any error (defensive)
 
 echo "[Cold Start] Directus Container Starting (v3 - Hardened)..."
 
-# Ensure database schema exists and is up to date before starting the server
-echo "[Cold Start] Bootstrapping database (schema init)..."
-npx directus bootstrap --skipAdminInit
+# Use local Directus binary when available to avoid npm/npx overhead at runtime
+DIRECTUS_BIN="/directus/node_modules/.bin/directus"
+run_directus() {
+    if [ -x "$DIRECTUS_BIN" ]; then
+        "$DIRECTUS_BIN" "$@"
+    else
+        npx directus "$@"
+    fi
+}
 
-echo "[Cold Start] Running database migrations..."
-npx directus database migrate:latest
+# Optional schema bootstrap/migrations (disable for faster cold starts)
+if [ "${DIRECTUS_BOOTSTRAP_ON_START:-false}" = "true" ]; then
+    echo "[Cold Start] Bootstrapping database (schema init)..."
+    run_directus bootstrap --skipAdminInit
+else
+    echo "[Cold Start] Skipping bootstrap (DIRECTUS_BOOTSTRAP_ON_START not true)"
+fi
+
+if [ "${DIRECTUS_MIGRATE_ON_START:-false}" = "true" ]; then
+    echo "[Cold Start] Running database migrations..."
+    run_directus database migrate:latest
+else
+    echo "[Cold Start] Skipping migrations (DIRECTUS_MIGRATE_ON_START not true)"
+fi
 
 # Function to kill Directus and exit with error
 die_with_directus() {
@@ -39,7 +57,7 @@ die_with_directus() {
 
 # Start Directus in background
 echo "[Cold Start] Starting Directus server (background)..."
-npx directus start &
+run_directus start &
 DIRECTUS_PID=$!
 
 # Wait for Directus to be healthy (configurable via DIRECTUS_STARTUP_MAX_WAIT)
