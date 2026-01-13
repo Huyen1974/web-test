@@ -352,8 +352,27 @@ def ensure_smoke_asset(token):
     res = make_request(f"{api_url}/files/{SMOKE_ASSET_ID}", token=token)
 
     if "error" not in res:
-        # Record exists but binary missing (Ghost Asset)
-        print("  [GHOST ASSET] DB record exists but binary missing")
+        file_data = res.get("data", {})
+        access = file_data.get("access")
+
+        if access != "public":
+            print("  [ACTION] Asset access is not public. Updating access to public...")
+            patch_res = make_request(
+                f"{api_url}/files/{SMOKE_ASSET_ID}",
+                method="PATCH",
+                data={"access": "public"},
+                token=token,
+            )
+            if "error" not in patch_res:
+                time.sleep(2)
+                if verify_asset_access(SMOKE_ASSET_ID):
+                    print("  [OK] Asset is accessible after access update")
+                    return True
+            else:
+                print(f"  [WARN] Could not update access: {patch_res}")
+
+        # Record exists but binary missing or still inaccessible (Ghost Asset)
+        print("  [GHOST ASSET] DB record exists but binary missing or inaccessible")
         print("  [ACTION] Deleting stale record...")
 
         # Delete stale record
@@ -369,6 +388,7 @@ def ensure_smoke_asset(token):
         "data": {
             "id": SMOKE_ASSET_ID,
             "title": "Smoke Test Asset",
+            "access": "public",
         },
     }
 
@@ -377,6 +397,16 @@ def ensure_smoke_asset(token):
     if "error" in res:
         print(f"  [ERROR] Failed to import asset: {res}")
         return False
+
+    # Ensure access is public (defensive)
+    patch_res = make_request(
+        f"{api_url}/files/{SMOKE_ASSET_ID}",
+        method="PATCH",
+        data={"access": "public"},
+        token=token,
+    )
+    if "error" in patch_res:
+        print(f"  [WARN] Could not enforce public access: {patch_res}")
 
     print("  [SUCCESS] Smoke asset re-imported")
     return True
