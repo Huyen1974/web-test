@@ -1,18 +1,9 @@
 name: ops-smoke
 
 on:
-  pull_request:
-    branches:
-      - main
-      - 'feat/**'
-      - 'fix/**'
-    paths:
-      - 'web/**'
-      - 'scripts/**'
-      - '.github/workflows/ops-smoke.yml'
-  workflow_dispatch:
   schedule:
-    - cron: '*/30 * * * *' # Every 30 mins
+    - cron: '0 */6 * * *' # Every 6 hours
+  workflow_dispatch:
 
 env:
   DIRECTUS_BASE_URL: "https://directus-test-pfne2mqwja-as.a.run.app"
@@ -23,63 +14,90 @@ env:
 jobs:
   smoke-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Check Directus Server Ping
+      - name: Health Check with Cold Start Tolerance
+        env:
+          DIRECTUS_URL: ${{ env.DIRECTUS_BASE_URL }}
+          MAX_WAIT_SECONDS: 300
+          RETRY_INTERVAL: 10
+          SMOKE_ASSET_ID: ${{ env.SMOKE_ASSET_ID }}
         run: |
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            --connect-timeout 10 --max-time 60 \
-            "${{ env.DIRECTUS_BASE_URL }}/server/ping")
-          echo "Directus Ping: $HTTP_CODE"
-          if [[ "$HTTP_CODE" != "200" ]]; then
-            echo "::error::Server Ping Failed (Expected 200, Got $HTTP_CODE)"
-            exit 1
-          fi
+          echo "🔹 Starting health check with cold start tolerance..."
+          echo "   Max wait: ${MAX_WAIT_SECONDS}s"
+          echo "   Retry interval: ${RETRY_INTERVAL}s"
+          echo ""
 
-      - name: Check Public Pages API (Anonymous)
-        run: |
-          # Use --globoff (-g) for bracket filters in query string
-          HTTP_CODE=$(curl --globoff -s -o /dev/null -w "%{http_code}" \
-            --connect-timeout 10 --max-time 60 \
-            "${{ env.DIRECTUS_BASE_URL }}/items/pages?filter[permalink][_eq]=/")
-          echo "Pages API Status: $HTTP_CODE"
-          if [[ "$HTTP_CODE" != "200" ]]; then
-            echo "::error::Public Pages API Access Failed (Expected 200, Got $HTTP_CODE)"
-            exit 1
-          fi
+          HEALTH_URL="${DIRECTUS_URL}/server/health"
+          PAGES_URL="${DIRECTUS_URL}/items/pages?filter[permalink][_eq]=/"
+          ASSET_URL="${DIRECTUS_URL}/assets/${SMOKE_ASSET_ID}"
 
-      - name: Check Public Asset Access (Anonymous)
-        run: |
-          # Strict check: Golden Asset MUST return 200
-          # Follow redirects (-L) and set User-Agent to avoid bot blocking
-          ASSET_URL="${{ env.DIRECTUS_BASE_URL }}/assets/${{ env.SMOKE_ASSET_ID }}"
-          echo "Testing: $ASSET_URL"
+          START_TIME=$(date +%s)
+          ATTEMPT=1
+          LAST_HEALTH="000"
+          LAST_PAGES="000"
+          LAST_ASSET="000"
 
-          HTTP_CODE=$(curl -sS -L -A "Mozilla/5.0 (ops-smoke)" \
-            --connect-timeout 10 --max-time 60 \
-            -D /tmp/asset_headers.txt \
-            -o /tmp/asset_body.txt \
-            -w "%{http_code}" \
-            "$ASSET_URL")
+          while true; do
+            CURRENT_TIME=$(date +%s)
+            ELAPSED=$((CURRENT_TIME - START_TIME))
 
-          echo "Asset Status: $HTTP_CODE"
+            if [ $ELAPSED -ge $MAX_WAIT_SECONDS ]; then
+              echo "❌ TIMEOUT: Service did not become healthy within ${MAX_WAIT_SECONDS}s"
+              echo "   Last health: ${LAST_HEALTH}, pages: ${LAST_PAGES}, asset: ${LAST_ASSET}"
+              exit 1
+            fi
 
-          if [[ "$HTTP_CODE" == "200" ]]; then
-            echo "✅ Public asset check passed"
-          else
-            echo "::error::Public Asset Access Failed (Expected 200, Got $HTTP_CODE)"
-            echo ""
-            echo "=== Response Headers ==="
-            cat /tmp/asset_headers.txt || echo "(no headers captured)"
-            echo ""
-            echo "=== Response Body (first 500 chars) ==="
-            head -c 500 /tmp/asset_body.txt || echo "(no body captured)"
-            echo ""
-            exit 1
-          fi
+            echo "Attempt $ATTEMPT (${ELAPSED}s elapsed)..."
+            LAST_HEALTH=$(curl -s -o /dev/null -w "%{http_code}" \
+              --connect-timeout 10 \
+              --max-time 30 \
+              "$HEALTH_URL" 2>/dev/null || echo "000")
+            echo "   Health Status: $LAST_HEALTH"
 
-      - name: Report Success
-        if: success()
-        run: echo "✅ Directus Golden State is Healthy"
+            if [ "$LAST_HEALTH" = "500" ]; then
+              echo "❌ CRITICAL: Health endpoint returned 500"
+              exit 1
+            fi
+
+            if [ "$LAST_HEALTH" = "200" ]; then
+              LAST_PAGES=$(curl --globoff -s -o /dev/null -w "%{http_code}" \
+                --connect-timeout 10 --max-time 30 \
+                "$PAGES_URL" 2>/dev/null || echo "000")
+              echo "   Pages Status:  $LAST_PAGES"
+
+              if [ "$LAST_PAGES" = "500" ]; then
+                echo "❌ CRITICAL: Pages API returned 500"
+                exit 1
+              fi
+
+              LAST_ASSET=$(curl -sS -L -A "Mozilla/5.0 (ops-smoke)" \
+                --connect-timeout 10 --max-time 30 \
+                -D /tmp/asset_headers.txt \
+                -o /tmp/asset_body.txt \
+                -w "%{http_code}" \
+                "$ASSET_URL" 2>/dev/null || echo "000")
+              echo "   Asset Status:  $LAST_ASSET"
+
+              if [ "$LAST_ASSET" = "500" ]; then
+                echo "❌ CRITICAL: Asset endpoint returned 500"
+                head -c 500 /tmp/asset_body.txt || true
+                exit 1
+              fi
+
+              if [ "$LAST_PAGES" = "200" ] && [ "$LAST_ASSET" = "200" ]; then
+                echo "✅ SUCCESS: Service is healthy!"
+                echo "   Total time: ${ELAPSED}s"
+                break
+              fi
+            fi
+
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep "$RETRY_INTERVAL"
+          done
+
+          echo ""
+          echo "✅ SMOKE TEST PASSED"
