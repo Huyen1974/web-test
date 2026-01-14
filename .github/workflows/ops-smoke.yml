@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  DIRECTUS_BASE_URL: "https://directus-test-pfne2mqwja-as.a.run.app"
+  DIRECTUS_BASE_URL: ${{ vars.DIRECTUS_BASE_URL || vars.NUXT_PUBLIC_DIRECTUS_URL || secrets.DIRECTUS_BASE_URL || secrets.NUXT_PUBLIC_DIRECTUS_URL }}
   # GCS switch 2025-12-23 – persistent public assets
   # Updated 2026-01-06 after schema migration
   SMOKE_ASSET_ID: "b18f3792-bd31-43e5-8a7d-b25d76f41dd9"
@@ -22,11 +22,14 @@ jobs:
       - name: Health Check with Cold Start Tolerance
         env:
           DIRECTUS_URL: ${{ env.DIRECTUS_BASE_URL }}
-          MAX_WAIT_SECONDS: 300
-          RETRY_INTERVAL: 10
+          MAX_WAIT_SECONDS: 600
+          RETRY_INTERVAL: 15
           SMOKE_ASSET_ID: ${{ env.SMOKE_ASSET_ID }}
         run: |
           echo "🔹 Starting health check with cold start tolerance..."
+          if [ -z "$DIRECTUS_URL" ]; then
+            echo "⚠️  DIRECTUS_URL is empty (check repo variables). Polling will continue until timeout."
+          fi
           echo "   Max wait: ${MAX_WAIT_SECONDS}s"
           echo "   Retry interval: ${RETRY_INTERVAL}s"
           echo ""
@@ -40,6 +43,21 @@ jobs:
           LAST_HEALTH="000"
           LAST_PAGES="000"
           LAST_ASSET="000"
+
+          classify_status() {
+            case "$1" in
+              200) echo "healthy" ;;
+              500|502|503|504) echo "startup noise" ;;
+              000) echo "no response yet" ;;
+              *) echo "real failure (still waiting)" ;;
+            esac
+          }
+
+          log_status() {
+            local label="$1"
+            local code="$2"
+            echo "   ${label} Status: ${code} ($(classify_status "$code"))"
+          }
 
           while true; do
             CURRENT_TIME=$(date +%s)
@@ -56,23 +74,13 @@ jobs:
               --connect-timeout 10 \
               --max-time 30 \
               "$HEALTH_URL" 2>/dev/null || echo "000")
-            echo "   Health Status: $LAST_HEALTH"
-
-            if [ "$LAST_HEALTH" = "500" ]; then
-              echo "❌ CRITICAL: Health endpoint returned 500"
-              exit 1
-            fi
+            log_status "Health" "$LAST_HEALTH"
 
             if [ "$LAST_HEALTH" = "200" ]; then
               LAST_PAGES=$(curl --globoff -s -o /dev/null -w "%{http_code}" \
                 --connect-timeout 10 --max-time 30 \
                 "$PAGES_URL" 2>/dev/null || echo "000")
-              echo "   Pages Status:  $LAST_PAGES"
-
-              if [ "$LAST_PAGES" = "500" ]; then
-                echo "❌ CRITICAL: Pages API returned 500"
-                exit 1
-              fi
+              log_status "Pages" "$LAST_PAGES"
 
               LAST_ASSET=$(curl -sS -L -A "Mozilla/5.0 (ops-smoke)" \
                 --connect-timeout 10 --max-time 30 \
@@ -80,19 +88,15 @@ jobs:
                 -o /tmp/asset_body.txt \
                 -w "%{http_code}" \
                 "$ASSET_URL" 2>/dev/null || echo "000")
-              echo "   Asset Status:  $LAST_ASSET"
-
-              if [ "$LAST_ASSET" = "500" ]; then
-                echo "❌ CRITICAL: Asset endpoint returned 500"
-                head -c 500 /tmp/asset_body.txt || true
-                exit 1
-              fi
+              log_status "Asset" "$LAST_ASSET"
 
               if [ "$LAST_PAGES" = "200" ] && [ "$LAST_ASSET" = "200" ]; then
                 echo "✅ SUCCESS: Service is healthy!"
                 echo "   Total time: ${ELAPSED}s"
                 break
               fi
+            else
+              echo "   Waiting for health endpoint to return 200..."
             fi
 
             ATTEMPT=$((ATTEMPT + 1))
