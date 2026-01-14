@@ -99,6 +99,7 @@ version: FINAL-LOCKED-v1.0
 | A-L1 | `huyen1974-agent-data-source-test` | Legacy Source | Private | DevOps SA | `agent-data-test/terraform/storage.tf` | **EXIST** | **IMPORT & LOCK** | Legacy. |
 | A-L2 | `huyen1974-faiss-index-storage` | **Legacy FAISS (TEST ONLY)** | Private | DevOps SA | `agent-data-test/terraform/storage.tf` | **EXIST** | **IMPORT & LOCK** | Legacy. Prod MUST NOT use. |
 | Legacy | `huyen1974-agent-data-terraform-state` | Legacy State | N/A | DevOps SA | N/A | **EXIST** | **DEPRECATED & FREEZE - DO NOT USE** | Migrate to A1-T. |
+| **A7-T** | `huyen1974-agent-data-uploads-test` | **User Uploads** (Images/PDF) | **Standard; No Lifecycle** (Permanent) | DevOps SA + App | `agent-data-test/terraform/gcs_buckets.tf` | **NEW** | **CREATE (PR #217)** | Added during stabilization. |
 
 ### NHÓM 3: REPO `AGENT-DATA-TEST` (NHÁNH PRODUCTION)
 
@@ -111,6 +112,7 @@ version: FINAL-LOCKED-v1.0
 | A5-P | `huyen1974-agent-data-qdrant-snapshots-production`| Snapshots | **Lifecycle: 30d; Ver: Disabled** | DevOps SA | `agent-data-test/terraform/storage.tf` | **EXIST** | **IMPORT** | **Critical**. NO DELETE. |
 | A6-P | `huyen1974-agent-data-backup-production` | Backups | **Lifecycle: 90d; Ver: Enabled** | DevOps SA | `agent-data-test/terraform/storage.tf` | **MISSING** | **CREATE** | **Critical**. NO DELETE. |
 | A-LP | `huyen1974-agent-data-source-production` | Legacy Source | Private | DevOps SA | `agent-data-test/terraform/storage.tf` | **EXIST** | **IMPORT & LOCK** | Legacy. |
+| **A7-P** | `huyen1974-agent-data-uploads-production` | **User Uploads** (Images/PDF) | **Standard; No Lifecycle** (Permanent) | DevOps SA + App | `agent-data-test/terraform/gcs_buckets.tf` | **MISSING** | **CREATE (RESERVED)** | Reserved for E2. |
 
 ### NHÓM 4: REPO `WEB-TEST` (NHÁNH TEST)
 
