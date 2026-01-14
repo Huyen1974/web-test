@@ -72,10 +72,12 @@ resource "google_cloud_run_v2_service" "directus" {
       image = var.directus_image
 
       # Resource limits
+      # Fix: Increased memory from 1024Mi to 2048Mi to handle Cloud SQL connection delays during cold start
+      # Root cause: Cloud SQL wake-up delays causing 20+ minute cold starts (Error 409 invalidState)
       resources {
         limits = {
           cpu    = "1000m"
-          memory = "1024Mi"
+          memory = "2048Mi"
         }
       }
 
