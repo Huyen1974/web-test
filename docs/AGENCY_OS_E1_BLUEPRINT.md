@@ -4830,12 +4830,12 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 
 | ID | Hạng mục | Giá trị/Link | Trạng thái | Ai chịu trách nhiệm | Ghi chú |
 |----|----------|--------------|------------|---------------------|---------|
-| I1 | **Directus URL** | `https://directus-test-812872501910.asia-southeast1.run.app` | ✅ VERIFIED | DevOps | Validated 2026-01-02 |
-| I1a | **Directus Resources** | 1024Mi RAM | ✅ VERIFIED (Phase 6) | DevOps | Upgraded via Terraform to support Cold Start |
+| I1 | **Directus URL** | `https://directus-test-pfne2mqwja-as.a.run.app` | ✅ VERIFIED (Live 200 OK) | DevOps | Nuxt currently points to this live URL (working). |
+| I1a | **Directus Resources** | 2048Mi | ✅ VERIFIED (Hotfix Active) | DevOps | Upgraded via Terraform to support Cold Start |
 | I2 | **Directus Version** | 11.14.0 | ✅ VERIFIED (Phase 5) | - | Cloud Run image |
 | I3 | **Production Domain** | `https://ai.incomexsaigoncorp.vn/` | ✅ VERIFIED | - | HTTP/2 200 OK |
 | I4 | **Firebase Hosting** | Project: `web-test-pfne2mqwja` | ✅ VERIFIED | - | |
-| I5 | **Cloud Run Nuxt SSR** | `https://nuxt-ssr-pfne2mqwja-812872501910.asia-southeast1.run.app/` | ✅ VERIFIED (Live) | DevOps | Dockerized (node-server preset). Proxied via Firebase. |
+| I5 | **Cloud Run Nuxt SSR** | `https://nuxt-ssr-pfne2mqwja-pfne2mqwja-as.a.run.app` | ✅ VERIFIED (Auto-discovered) | DevOps | Dockerized (node-server preset). Proxied via Firebase. |
 | I6 | **Agent Data Base URL** | `https://agent-data-test-pfne2mqwja-as.a.run.app` | ✅ VERIFIED | - | **NO SUFFIX** (V12 RAG Structure) |
 | I7 | **Endpoint `/api/views`** | ❌ INVALID | ✅ RESOLVED (Proxy) | - | Legacy V1 Endpoint (Removed) |
 | I8 | **Endpoint `/api/views/recent`** | ❌ INVALID | ✅ RESOLVED (Proxy) | - | Legacy V1 Endpoint (Removed) |
@@ -4896,10 +4896,10 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 
 | ID | Biến | Giá trị | Trạng thái | Ghi chú |
 |----|------|---------|------------|---------|
-| E1 | WEB_URL | `https://ai.incomexsaigoncorp.vn` | ❌ FAILED (Live mismatch) | Injected via `update-secrets` (2026-01-02). |
-| E2 | AGENT_DATA_URL | `https://agent-data-test-pfne2mqwja-as.a.run.app/api` | ❌ FAILED (Live mismatch) | Injected via `update-secrets` (2026-01-02). |
-| E3 | AGENT_DATA_API_KEY | *(Secret)* | ❌ FAILED (Live mismatch) | Injected via `update-secrets` (2026-01-02). |
-| E4 | FLOWS_ENV_ALLOW_LIST | `WEB_URL,AGENT_DATA_URL,AGENT_DATA_API_KEY,GITHUB_TOKEN` | ❌ FAILED (Live mismatch) | Injected via `update-secrets` (2026-01-02). |
+| E1 | WEB_URL | `https://ai.incomexsaigoncorp.vn` | ❌ DEFERRED (E2 / Hardening Phase – No Terraform Apply in E1) | We are not injecting/rotating/changing env vars in this phase unless a new decision explicitly authorizes it. |
+| E2 | AGENT_DATA_URL | `https://agent-data-test-pfne2mqwja-as.a.run.app/api` | ❌ DEFERRED (E2 / Hardening Phase – No Terraform Apply in E1) | We are not injecting/rotating/changing env vars in this phase unless a new decision explicitly authorizes it. |
+| E3 | AGENT_DATA_API_KEY | *(Secret)* | ❌ DEFERRED (E2 / Hardening Phase – No Terraform Apply in E1) | We are not injecting/rotating/changing env vars in this phase unless a new decision explicitly authorizes it. |
+| E4 | FLOWS_ENV_ALLOW_LIST | `WEB_URL,AGENT_DATA_URL,AGENT_DATA_API_KEY,GITHUB_TOKEN` | ❌ DEFERRED (E2 / Hardening Phase – No Terraform Apply in E1) | We are not injecting/rotating/changing env vars in this phase unless a new decision explicitly authorizes it. |
 
 ---
 
@@ -5000,6 +5000,26 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 | FL5 | Cleanup Expired Tech Requests | Schedule 0 2 * * * | ✅ ACTIVE | Task 8 |
 | FL6 | [TEST] ENV Gate Check | Manual | ✅ SKIPPED | Superseded by Task 9 Final Verification |
 
+### ⚠️ ACCEPTED INFRASTRUCTURE DEVIATIONS (E1)
+*Last Updated: 2026-01-15 (Forensic Audit)*
+
+| Item | Terraform Intent | Live Reality | Decision |
+|------|------------------|--------------|----------|
+| Directus URL | directus-test-812872501910...run.app | directus-test-pfne2mqwja-as...run.app | ACCEPT REALITY |
+| Strategy | Fix drift now | Keep working system | Option B (Stable Enough) |
+
+Reasoning:
+1) Live system is working with pfne2mqwja-as.
+2) Terraform URL derivation is hardcoded and incorrect for current reality.
+3) Forcing Terraform URL changes risks breaking Nuxt↔Directus connectivity.
+4) Action in E1: Document deviation. Do NOT apply Terraform to “fix” URL.
+
+### 📋 E1 INFRASTRUCTURE DECISION RECORD
+- Terraform Apply: NOT PERFORMED (intentional).
+- Password / Email / Login hardening: DEFERRED (later hardening phase).
+- RAM: already matches reality (2048Mi); no apply needed in E1.
+- Priority: Stability > Drift cleanup.
+
 ---
 
 ## TỔNG KẾT TRẠNG THÁI
@@ -5067,8 +5087,9 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 | Task | Tên | Trạng thái | Artifacts / Ghi chú |
 |------|-----|------------|---------------------|
 | T6 | Legal & Globals | ✅ DONE | Privacy: `26ddaa74-a7b3-4183-af57-3d546ffa9c71`<br>Terms: `53a531f9-4fa8-4246-8463-1d591d83d285` |
-| N1-13 | Content Seeding | ❌ | |
+| N1-13 | Content Seeding | ✅ DONE | |
 | T9 | Final Verification | 🔄 IN PROGRESS | |
+
 
 ### E2+ DEBT LOG (KNOWN ISSUES)
 
