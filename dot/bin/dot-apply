@@ -1,0 +1,197 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SPEC_PATH="${1:-${ROOT_DIR}/specs/directus_flows.v0.1.json}"
+REPORT_PATH="${ROOT_DIR}/reports/DOT_APPLY_REPORT.md"
+
+if [[ -z "${DOT_TOKEN:-}" ]]; then
+  echo "ERROR: DOT_TOKEN not set. Run: source dot/bin/dot-auth" >&2
+  exit 1
+fi
+
+for cmd in curl jq; do
+  command -v "$cmd" >/dev/null 2>&1 || { echo "ERROR: Missing required command: $cmd" >&2; exit 1; }
+done
+
+if [[ ! -f "$SPEC_PATH" ]]; then
+  echo "ERROR: Spec file not found: $SPEC_PATH" >&2
+  exit 1
+fi
+
+BASE_URL="${DIRECTUS_BASE_URL:-}"
+if [[ -z "$BASE_URL" ]]; then
+  BASE_URL=$(jq -r '.directus.base_url // empty' "$SPEC_PATH")
+fi
+if [[ -z "$BASE_URL" ]]; then
+  echo "ERROR: directus.base_url missing in spec and DIRECTUS_BASE_URL not set" >&2
+  exit 1
+fi
+
+api_request() {
+  local method="$1"
+  local url="$2"
+  local data="${3-}"
+  local resp
+  if [[ -n "${data-}" ]]; then
+    resp=$(curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "$data" \
+      -w "\n%{http_code}")
+  else
+    resp=$(curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -w "\n%{http_code}")
+  fi
+  printf '%s' "$resp"
+}
+
+urlencode() {
+  jq -rn --arg v "$1" '$v|@uri'
+}
+
+delete_flow_operations() {
+  local flow_id="$1"
+  local resp body code ids count
+  resp=$(api_request GET "$BASE_URL/operations?filter[flow][_eq]=${flow_id}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+  if [[ "$code" != "200" ]]; then
+    echo "ERROR: Failed to list operations for flow $flow_id (HTTP $code)" >&2
+    exit 1
+  fi
+  ids=$(echo "$body" | jq -r '.data[]?.id // empty')
+  count=0
+  if [[ -n "$ids" ]]; then
+    while IFS= read -r op_id; do
+      [[ -z "$op_id" ]] && continue
+      resp=$(api_request DELETE "$BASE_URL/operations/${op_id}")
+      code="${resp##*$'\n'}"
+      if [[ "$code" != "204" ]]; then
+        echo "ERROR: Failed to delete operation $op_id (HTTP $code)" >&2
+        exit 1
+      fi
+      count=$((count + 1))
+    done <<< "$ids"
+  fi
+  echo "$count"
+}
+
+{
+  echo "# DOT Apply Report"
+  echo "Date: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  echo "Base URL: $BASE_URL"
+  echo "Spec: $SPEC_PATH"
+  echo ""
+} > "$REPORT_PATH"
+
+flow_count=$(jq -r '.flows | length' "$SPEC_PATH")
+if [[ "$flow_count" == "0" ]]; then
+  echo "ERROR: No flows found in spec" >&2
+  exit 1
+fi
+
+while IFS= read -r flow_json; do
+  flow_name=$(echo "$flow_json" | jq -r '.name // empty')
+  if [[ -z "$flow_name" ]]; then
+    echo "ERROR: Flow missing name in spec" >&2
+    exit 1
+  fi
+
+  encoded_name=$(urlencode "$flow_name")
+  resp=$(api_request GET "$BASE_URL/flows?filter[name][_eq]=${encoded_name}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+  if [[ "$code" != "200" ]]; then
+    echo "ERROR: Failed to query flow '$flow_name' (HTTP $code)" >&2
+    exit 1
+  fi
+
+  flow_id=$(echo "$body" | jq -r '.data[0].id // empty')
+  flow_payload=$(echo "$flow_json" | jq -c '{name,status,trigger,options}')
+  flow_action="created"
+
+  if [[ -n "$flow_id" ]]; then
+    existing_flow_id="$flow_id"
+    deleted_count=$(delete_flow_operations "$flow_id")
+    resp=$(api_request PATCH "$BASE_URL/flows/${flow_id}" "$flow_payload")
+    body="${resp%$'\n'*}"
+    code="${resp##*$'\n'}"
+    if [[ "$code" != "200" ]]; then
+      echo "ERROR: Failed to update flow '$flow_name' (HTTP $code)" >&2
+      exit 1
+    fi
+    flow_action="updated"
+    flow_id=$(echo "$body" | jq -r '.data.id // empty')
+    if [[ -z "$flow_id" || "$flow_id" == "null" ]]; then
+      flow_id=$(echo "$body" | jq -r '.data[0].id // empty')
+    fi
+    if [[ -z "$flow_id" || "$flow_id" == "null" ]]; then
+      flow_id="$existing_flow_id"
+    fi
+  else
+    deleted_count=0
+    resp=$(api_request POST "$BASE_URL/flows" "$flow_payload")
+    body="${resp%$'\n'*}"
+    code="${resp##*$'\n'}"
+    if [[ "$code" != "200" ]]; then
+      echo "ERROR: Failed to create flow '$flow_name' (HTTP $code)" >&2
+      exit 1
+    fi
+    flow_id=$(echo "$body" | jq -r '.data.id // empty')
+  fi
+
+  if [[ -z "$flow_id" || "$flow_id" == "null" ]]; then
+    echo "ERROR: Flow ID missing for '$flow_name'" >&2
+    exit 1
+  fi
+
+  echo "Flow: $flow_name"
+  echo "  ID: $flow_id ($flow_action, HTTP $code)"
+  echo "  Deleted operations: $deleted_count"
+
+  {
+    echo "- Flow: $flow_name"
+    echo "  Flow ID: $flow_id"
+    echo "  Action: $flow_action (HTTP $code)"
+    echo "  Deleted operations: $deleted_count"
+  } >> "$REPORT_PATH"
+
+  op_count=0
+  while IFS= read -r op_json; do
+    [[ -z "$op_json" ]] && continue
+    op_payload=$(echo "$op_json" | jq -c --arg flow_id "$flow_id" '{name,key,type,flow:$flow_id,position_x,position_y,options}')
+    resp=$(api_request POST "$BASE_URL/operations" "$op_payload")
+    body="${resp%$'\n'*}"
+    code="${resp##*$'\n'}"
+    if [[ "$code" != "200" ]]; then
+      echo "ERROR: Failed to create operation for flow '$flow_name' (HTTP $code)" >&2
+      exit 1
+    fi
+    op_id=$(echo "$body" | jq -r '.data.id // empty')
+    op_name=$(echo "$op_json" | jq -r '.name // empty')
+    echo "  Operation: $op_name"
+    echo "    ID: $op_id (HTTP $code)"
+
+    {
+      echo "  Operation: $op_name"
+      echo "    Operation ID: $op_id"
+      echo "    HTTP: $code"
+    } >> "$REPORT_PATH"
+
+    op_count=$((op_count + 1))
+  done < <(echo "$flow_json" | jq -c '.operations[]')
+
+  if [[ "$op_count" -eq "0" ]]; then
+    echo "ERROR: No operations defined for flow '$flow_name'" >&2
+    exit 1
+  fi
+
+  echo ""
+  echo "" >> "$REPORT_PATH"
+
+done < <(jq -c '.flows[]' "$SPEC_PATH")
+
+echo "Apply complete. Report: $REPORT_PATH"

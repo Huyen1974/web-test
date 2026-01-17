@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+
+is_sourced() {
+  [[ "${BASH_SOURCE[0]}" != "$0" ]]
+}
+
+die() {
+  echo "ERROR: $*" >&2
+  if is_sourced && [[ -n "${saved_opts-}" ]]; then
+    eval "$saved_opts"
+  fi
+  if is_sourced; then
+    return 1
+  fi
+  exit 1
+}
+
+if is_sourced; then
+  saved_opts=$(set +o)
+fi
+
+set -euo pipefail
+
+if ! is_sourced; then
+  echo "ERROR: Please source this script to export DOT_TOKEN in the current shell." >&2
+  echo "Run: source dot/bin/dot-auth" >&2
+  exit 1
+fi
+
+for cmd in curl jq; do
+  command -v "$cmd" >/dev/null 2>&1 || die "Missing required command: $cmd"
+done
+
+BASE_URL="${DIRECTUS_BASE_URL:-https://directus-test-pfne2mqwja-as.a.run.app}"
+EMAIL="${DIRECTUS_ADMIN_EMAIL:-admin@example.com}"
+PASSWORD="${DIRECTUS_ADMIN_PASSWORD:-}"
+
+if [[ -z "$PASSWORD" ]]; then
+  die "DIRECTUS_ADMIN_PASSWORD not set"
+fi
+
+set +x
+response=$(curl -sS -X POST "${BASE_URL}/auth/login" \
+  -H "Content-Type: application/json" \
+  -d "{\"email\":\"${EMAIL}\",\"password\":\"${PASSWORD}\"}" \
+  -w "\n%{http_code}")
+
+body="${response%$'\n'*}"
+code="${response##*$'\n'}"
+
+if [[ "$code" != "200" ]]; then
+  err_msg=$(echo "$body" | jq -r '.errors[0].message // .message // empty')
+  if [[ -n "$err_msg" ]]; then
+    die "Login failed (HTTP $code): $err_msg"
+  fi
+  die "Login failed (HTTP $code)."
+fi
+
+token=$(echo "$body" | jq -r '.data.access_token // empty')
+if [[ -z "$token" || "$token" == "null" ]]; then
+  die "Login failed: token missing in response."
+fi
+
+export DOT_TOKEN="$token"
+echo "Authenticated with Directus. Token length: ${#token}"
+
+if is_sourced; then
+  eval "$saved_opts"
+fi
