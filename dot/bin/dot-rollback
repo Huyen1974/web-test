@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Purpose: Delete all flows created by DOT (prefix "[DOT]")
+# Safety: Only delete flows matching the prefix
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPORT_PATH="${ROOT_DIR}/reports/DOT_ROLLBACK_REPORT.md"
+
+if [[ -z "${DOT_TOKEN:-}" ]]; then
+  echo "ERROR: DOT_TOKEN not set. Run: source dot/bin/dot-auth" >&2
+  exit 1
+fi
+
+BASE_URL="${DIRECTUS_BASE_URL:-https://directus-test-pfne2mqwja-as.a.run.app}"
+DOT_PREFIX="[DOT]"
+
+# List all flows
+resp=$(curl -sS -X GET "$BASE_URL/flows" \
+  -H "Authorization: Bearer $DOT_TOKEN" \
+  -w "\n%{http_code}")
+body="${resp%$'\n'*}"
+code="${resp##*$'\n'}"
+
+if [[ "$code" != "200" ]]; then
+  echo "ERROR: Failed to list flows (HTTP $code)" >&2
+  exit 1
+fi
+
+# Filter DOT-managed flows
+flow_ids=$(echo "$body" | jq -r --arg prefix "$DOT_PREFIX" \
+  '.data[] | select(.name | startswith($prefix)) | .id')
+
+if [[ -z "$flow_ids" ]]; then
+  echo "No DOT-managed flows found. Nothing to rollback."
+  exit 0
+fi
+
+{
+  echo "# DOT Rollback Report"
+  echo "Date: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  echo ""
+} > "$REPORT_PATH"
+
+deleted=0
+while IFS= read -r flow_id; do
+  [[ -z "$flow_id" ]] && continue
+
+  # Get flow name for logging
+  flow_name=$(echo "$body" | jq -r --arg id "$flow_id" '.data[] | select(.id == $id) | .name')
+
+  # Delete flow (operations auto-deleted)
+  del_resp=$(curl -sS -X DELETE "$BASE_URL/flows/${flow_id}" \
+    -H "Authorization: Bearer $DOT_TOKEN" \
+    -w "\n%{http_code}")
+  del_code="${del_resp##*$'\n'}"
+
+  if [[ "$del_code" == "204" ]]; then
+    echo "Deleted: $flow_name ($flow_id)"
+    echo "- Deleted: $flow_name ($flow_id)" >> "$REPORT_PATH"
+    deleted=$((deleted + 1))
+  else
+    echo "FAILED to delete: $flow_name ($flow_id) - HTTP $del_code"
+    echo "- FAILED: $flow_name ($flow_id) - HTTP $del_code" >> "$REPORT_PATH"
+  fi
+done <<< "$flow_ids"
+
+echo ""
+echo "Rollback complete. Deleted $deleted flow(s)."
+echo "Report: $REPORT_PATH"
