@@ -1,0 +1,58 @@
+{
+  "directus": {
+    "base_url": "https://directus-test-pfne2mqwja-as.a.run.app"
+  },
+  "flows": [
+    {
+      "name": "[DOT] Agent Data Health Check",
+      "status": "active",
+      "trigger": "webhook",
+      "options": {},
+      "operations": [
+        {
+          "name": "Check Info Endpoint",
+          "key": "check_info",
+          "type": "request",
+          "position_x": 10,
+          "position_y": 10,
+          "options": {
+            "method": "GET",
+            "url": "{{$env.AGENT_DATA_URL}}/info",
+            "headers": [],
+            "body": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "[DOT] Agent Data Chat Test",
+      "status": "active",
+      "trigger": "webhook",
+      "options": {},
+      "operations": [
+        {
+          "name": "Send Chat Query",
+          "key": "send_chat",
+          "type": "request",
+          "position_x": 10,
+          "position_y": 10,
+          "options": {
+            "method": "POST",
+            "url": "{{$env.AGENT_DATA_URL}}/chat",
+            "headers": [
+              {
+                "header": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "header": "x-api-key",
+                "value": "{{$env.AGENT_DATA_API_KEY}}"
+              }
+            ],
+            "body": "{\"query\": \"hello from dot v0.1\"}"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,187 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SPEC_PATH="${1:-${ROOT_DIR}/specs/directus_flows.v0.1.json}"
+REPORT_PATH="${ROOT_DIR}/reports/DOT_VERIFY_REPORT.md"
+
+if [[ -z "${DOT_TOKEN:-}" ]]; then
+  echo "ERROR: DOT_TOKEN not set. Run: source dot/bin/dot-auth" >&2
+  exit 1
+fi
+
+for cmd in curl jq; do
+  command -v "$cmd" >/dev/null 2>&1 || { echo "ERROR: Missing required command: $cmd" >&2; exit 1; }
+done
+
+if [[ ! -f "$SPEC_PATH" ]]; then
+  echo "ERROR: Spec file not found: $SPEC_PATH" >&2
+  exit 1
+fi
+
+BASE_URL="${DIRECTUS_BASE_URL:-}"
+if [[ -z "$BASE_URL" ]]; then
+  BASE_URL=$(jq -r '.directus.base_url // empty' "$SPEC_PATH")
+fi
+if [[ -z "$BASE_URL" ]]; then
+  echo "ERROR: directus.base_url missing in spec and DIRECTUS_BASE_URL not set" >&2
+  exit 1
+fi
+
+api_request() {
+  local method="$1"
+  local url="$2"
+  local data="${3-}"
+  local resp
+  if [[ -n "${data-}" ]]; then
+    resp=$(curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "$data" \
+      -w "\n%{http_code}")
+  else
+    resp=$(curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -w "\n%{http_code}")
+  fi
+  printf '%s' "$resp"
+}
+
+urlencode() {
+  jq -rn --arg v "$1" '$v|@uri'
+}
+
+parse_error_message() {
+  local body="$1"
+  local msg
+  msg=$(echo "$body" | jq -r '.errors[0].message // .message // empty' 2>/dev/null || true)
+  if [[ -n "$msg" ]]; then
+    printf '%s' "$msg"
+    return 0
+  fi
+  printf '%s' "$(printf '%s' "$body" | tr '\n' ' ' | cut -c1-200)"
+}
+
+MANUAL_INSTRUCTIONS=$(cat <<'TXT'
+AUTO-TRIGGER FAILED (Expected in v0.1 - Permission Issue)
+
+MANUAL VERIFICATION REQUIRED:
+1. Login to Directus Admin:
+   https://directus-test-pfne2mqwja-as.a.run.app/admin
+
+2. Go to: Settings -> Flows
+
+3. Find flows starting with "[DOT]":
+   - [DOT] Agent Data Health Check
+   - [DOT] Agent Data Chat Test
+
+4. For each flow:
+   a. Click the flow to open it
+   b. Click "Run Flow" button (play icon)
+   c. Check the Logs tab for execution result
+
+5. Expected Results:
+   - Health Check: Should show 200 OK from Agent Data /info
+   - Chat Test: Should show response with "response" field
+
+6. After manual verification, update DOT_VERIFY_REPORT.md with results.
+TXT
+)
+
+{
+  echo "# DOT Verify Report"
+  echo "Date: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  echo "Base URL: $BASE_URL"
+  echo "Spec: $SPEC_PATH"
+  echo ""
+  echo "## Automated Trigger Attempts"
+} > "$REPORT_PATH"
+
+manual_required=0
+
+while IFS= read -r flow_json; do
+  flow_name=$(echo "$flow_json" | jq -r '.name // empty')
+  if [[ -z "$flow_name" ]]; then
+    echo "ERROR: Flow missing name in spec" >&2
+    exit 1
+  fi
+
+  encoded_name=$(urlencode "$flow_name")
+  resp=$(api_request GET "$BASE_URL/flows?filter[name][_eq]=${encoded_name}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+  if [[ "$code" != "200" ]]; then
+    echo "ERROR: Failed to query flow '$flow_name' (HTTP $code)" >&2
+    exit 1
+  fi
+
+  flow_id=$(echo "$body" | jq -r '.data[0].id // empty')
+  if [[ -z "$flow_id" || "$flow_id" == "null" ]]; then
+    echo "ERROR: Flow not found: $flow_name" >&2
+    exit 1
+  fi
+
+  trigger_url="$BASE_URL/flows/trigger/${flow_id}"
+  resp=$(api_request POST "$trigger_url" "{}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+  snippet=$(printf '%s' "$body" | tr '\n' ' ' | cut -c1-200)
+  err_msg="N/A"
+  if [[ "$code" != "200" ]]; then
+    err_msg=$(parse_error_message "$body")
+  fi
+
+  is_chat_flow="NO"
+  if echo "$flow_json" | jq -e '.operations[]? | select(.key == "send_chat")' >/dev/null 2>&1; then
+    is_chat_flow="YES"
+  fi
+
+  chat_has_response="N/A"
+  if [[ "$is_chat_flow" == "YES" && "$code" == "200" ]]; then
+    if echo "$body" | jq -e '.response // .data.response' >/dev/null 2>&1; then
+      chat_has_response="YES"
+    else
+      chat_has_response="NO"
+    fi
+  fi
+
+  if [[ "$code" != "200" ]]; then
+    manual_required=1
+  fi
+  if [[ "$is_chat_flow" == "YES" && "$code" == "200" && "$chat_has_response" == "NO" ]]; then
+    manual_required=1
+  fi
+
+  {
+    echo "- Flow: $flow_name"
+    echo "  Flow ID: $flow_id"
+    echo "  Trigger: POST /flows/trigger/$flow_id"
+    echo "  HTTP: $code"
+    echo "  Response Snippet: $snippet"
+    echo "  Error Message: $err_msg"
+    if [[ "$is_chat_flow" == "YES" ]]; then
+      echo "  Chat Response Field: $chat_has_response"
+    fi
+    echo ""
+  } >> "$REPORT_PATH"
+
+done < <(jq -c '.flows[]' "$SPEC_PATH")
+
+{
+  echo "## Manual Verification"
+  echo ""
+  echo "$MANUAL_INSTRUCTIONS"
+  echo ""
+  echo "Results (fill in):"
+  echo "- Health Check: PENDING"
+  echo "- Chat Test: PENDING"
+} >> "$REPORT_PATH"
+
+if [[ "$manual_required" -eq 1 ]]; then
+  echo ""
+  echo "$MANUAL_INSTRUCTIONS"
+fi
+
+echo "Verify complete. Report: $REPORT_PATH"
+exit 0
