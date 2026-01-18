@@ -148,7 +148,18 @@ Trước khi thực hiện BẤT KỲ task nào, Agent phải tự hỏi:
 2. Verify Prerequisites Inputs đã đủ → Nếu thiếu, yêu cầu User/Backend Team
 3. Thực hiện **PR0** theo Chương 2, Bước 1 (Bootstrap Window)
 4. Sau PR0: **FREEZE CODE** - Chỉ làm việc trong Directus
+4. Sau PR0: **FREEZE CODE** - Chỉ làm việc trong Directus
 5. Mọi task theo **Chương 3** (Quy trình vận hành)
+
+### Runtime Observability Note (E1 Scope)
+
+Within E1, Directus is treated as a **deterministic wiring layer**.
+
+- Flow creation, update, and deletion are automated.
+- Runtime execution observability is **not required** in E1.
+- UI-based verification is informational only.
+
+Agent-first automation supersedes manual UI validation.
 
 ### Nếu bạn là BACKEND TEAM:
 1. Đọc **Tình huống F.2 & F.3** → Chuẩn bị endpoint + response format

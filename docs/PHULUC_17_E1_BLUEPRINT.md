@@ -345,7 +345,17 @@ gcloud run services describe directus-test \
 - [ ] ⏳ All test flows passing
 - [ ] ⏳ Ready for E1 Assembly continuation
 
-**Gate Status:** 🔴 BLOCKED at Phase A (ENV Injection pending)
+**Gate Status:** 🟢 PHASE B – COMPLETE (DOT v0.1)
+
+### Verification Clarification (Phase B)
+
+- Phase B verifies **structural wiring**, not runtime observability.
+- Directus Flow execution is asynchronous.
+- Manual UI trigger or log inspection is **not a pass/fail criterion**.
+- DOT script verification + CI status are the source of truth.
+
+### Activity Log
+| 2026-01-17 | Phase B COMPLETE | DOT v0.1 deployed, audited, and merged. Async execution behavior documented. |
 
 ### (11) Execution Order (E1 Wiring Roadmap)
 ```
