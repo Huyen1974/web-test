@@ -161,6 +161,15 @@ Within E1, Directus is treated as a **deterministic wiring layer**.
 
 Agent-first automation supersedes manual UI validation.
 
+### Agent Data Runtime Verification (Completed)
+
+Agent Data service has been verified independently with the following results:
+- All required endpoints operational
+- Proper JSON responses returned
+- Secrets and environment variables configured correctly
+
+This confirms that previous E2E uncertainty was not caused by Agent Data runtime.
+
 ### Nếu bạn là BACKEND TEAM:
 1. Đọc **Tình huống F.2 & F.3** → Chuẩn bị endpoint + response format
 2. **E1 CHỈ DÙNG PHƯƠNG ÁN B (PULL bằng Directus Flow)** - Không triển khai A/C
