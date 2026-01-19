@@ -12,6 +12,7 @@
 - Directus env readiness verified: `AGENT_DATA_URL`, `AGENT_DATA_API_KEY` secret mounted, `FLOWS_ENV_ALLOW_LIST` includes both
 
 ## Trigger Behavior and Evidence Gap
+- NOTE: Webhook trigger is CANONICAL for DOT flows. Manual UI trigger (Play/Run) is debug-only and NOT a success criterion.
 - Directus webhook trigger is async by design; trigger response does not include operation result.
 - UI manual trigger/log inspection is informational only and not a pass/fail gate.
 - Deterministic E2E evidence plan is tracked in Issue #228.

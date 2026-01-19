@@ -696,7 +696,7 @@ Date: 2026-01-19
 | 6 | Cloud Run `nuxt-ssr-pfne2mqwja` đã tạo | ✅ | DevOps | `gcloud run services describe...` |
 | 7 | SA `chatgpt-deployer` có quyền Firebase | ✅ | DevOps | Verified 2026-01-19 via gcloud projects get-iam-policy (firebasehosting.admin) |
 | 8 | Growth Zone Collections đã tạo | ✅ | Agent | Verified 2026-01-19 via dot-schema-ensure (PR #234) |
-| 9 | SMTP credentials đã có (C2-C6) | ✅ DEFERRED (To E2) | User | Deferred to E2 (external dependency, user-owned credentials) |
+| 9 | SMTP credentials đã có (C2-C6) | ⏳ DEFERRED (to E2) | User | Deferred to E2 (external dependency, user-owned credentials) |
 | 10 | ENV vars đã inject vào Directus **BAO GỒM FLOWS_ENV_ALLOW_LIST** | ⏳ | DevOps | Test Flow gọi `{{$env.WEB_URL}}` → có giá trị |
 | 11 | WEB_URL, AGENT_DATA_URL, AGENT_DATA_API_KEY đã set | ⏳ | DevOps | Phụ lục 4.3 verify script |
 | 12 | Schema `sites` đã tạo với fields: `code`, `domain`, `is_active` | ⏳ | Agent | Directus → Data Model → Verify fields |
