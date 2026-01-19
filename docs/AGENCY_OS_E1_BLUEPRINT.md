@@ -686,7 +686,7 @@ Ngày 3+: Nếu chưa xong
 | 5 | V12 RAG Endpoints operational | ✅ | Backend Team | `/info`, `/chat`, `/health` return 200 |
 | 6 | Cloud Run `nuxt-ssr-pfne2mqwja` đã tạo | ✅ | DevOps | `gcloud run services describe...` |
 | 7 | SA `chatgpt-deployer` có quyền Firebase | ✅ | DevOps | Verified 2026-01-19 via gcloud projects get-iam-policy (firebasehosting.admin) |
-| 8 | Growth Zone Collections đã tạo | ❌ | Agent | Collections not found |
+| 8 | Growth Zone Collections đã tạo | ✅ | Agent | Verified 2026-01-19 via dot-schema-ensure (PR #234) |
 | 9 | SMTP credentials đã có (C2-C6) | ⏳ | User | Phụ lục 9 - requires user verification |
 | 10 | ENV vars đã inject vào Directus **BAO GỒM FLOWS_ENV_ALLOW_LIST** | ⏳ | DevOps | Test Flow gọi `{{$env.WEB_URL}}` → có giá trị |
 | 11 | WEB_URL, AGENT_DATA_URL, AGENT_DATA_API_KEY đã set | ⏳ | DevOps | Phụ lục 4.3 verify script |
