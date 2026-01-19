@@ -682,7 +682,7 @@ Ngày 3+: Nếu chưa xong
 | 1 | Role "Agent" đã tạo trong Directus | ✅ | Agent | Settings → Roles → Tìm "Agent" |
 | 2 | AGENT_CONTENT_TOKEN đã có | ✅ | Agent | Test API call với token |
 | 3 | Agent Data API Key hoạt động (200) | ✅ | Backend Team | `curl -H "Auth..." $URL` → 200 |
-| 4 | Response format đúng (translations Array) | ❌ | Backend Team | translations field missing |
+| 4 | Response format đúng (translations Array) | ✅ | Backend Team | Verified 2026-01-19 via `curl .../items/pages?limit=1` -> `jq -r '.data[0].translations | type'` == "array" |
 | 5 | V12 RAG Endpoints operational | ✅ | Backend Team | `/info`, `/chat`, `/health` return 200 |
 | 6 | Cloud Run `nuxt-ssr-pfne2mqwja` đã tạo | ✅ | DevOps | `gcloud run services describe...` |
 | 7 | SA `chatgpt-deployer` có quyền Firebase | ✅ | DevOps | Verified 2026-01-19 via gcloud projects get-iam-policy (firebasehosting.admin) |
