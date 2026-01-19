@@ -685,7 +685,7 @@ Ngày 3+: Nếu chưa xong
 | 4 | Response format đúng (translations Array) | ❌ | Backend Team | translations field missing |
 | 5 | Endpoint `/api/views/recent?limit=10` tồn tại | ❌ | Backend Team | 404 Not Found |
 | 6 | Cloud Run `nuxt-ssr-pfne2mqwja` đã tạo | ✅ | DevOps | `gcloud run services describe...` |
-| 7 | SA `chatgpt-deployer` có quyền Firebase | ❌ | DevOps | No Firebase roles found |
+| 7 | SA `chatgpt-deployer` có quyền Firebase | ✅ | DevOps | Verified 2026-01-19 via gcloud projects get-iam-policy (firebasehosting.admin) |
 | 8 | Growth Zone Collections đã tạo | ❌ | Agent | Collections not found |
 | 9 | SMTP credentials đã có (C2-C6) | ⏳ | User | Phụ lục 9 - requires user verification |
 | 10 | ENV vars đã inject vào Directus **BAO GỒM FLOWS_ENV_ALLOW_LIST** | ⏳ | DevOps | Test Flow gọi `{{$env.WEB_URL}}` → có giá trị |
