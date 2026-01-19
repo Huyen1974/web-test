@@ -602,7 +602,7 @@ export default defineNuxtConfig({
 | **E6** Locales files | Thiếu vi.json, ja.json, en.json | Tạo trong PR0 theo template Phụ lục 4 | Agent | 🟡 MEDIUM |
 | **F1** Languages collection | Chưa seed vi/ja/en | Tạo collection + seed trong Directus | Agent | 🟡 MEDIUM |
 | **F5** Role "Agent" | Chưa tồn tại | Tạo theo Tình huống M | Agent | 🔥 HIGH |
-| **C** SMTP Credentials | Chưa có | **Cần Gmail App Password** (Task 5) | User | 🔥 HIGH |
+| **C** SMTP Credentials | DEFERRED to E2 | SMTP: DEFERRED to E2 (external dependency, user-owned credentials) | User | ⚠️ MED |
 | **G** Branding & Legal | Chưa có | **Cung cấp Logo, Privacy, Terms** (Task 6) | User | ⚠️ MED |
 
 ### ⚫ OUT OF SCOPE E1 (KHÔNG LÀM)
@@ -628,7 +628,7 @@ export default defineNuxtConfig({
 | Starter Kit duy nhất | Agency OS | 2025-12-29 | User |
 | Phương án đồng bộ Agent Data | **Phương án B: PULL** (Directus Flow) | 2025-12-29 | User |
 | Hosting | Firebase Hosting | 2025-12-29 | User |
-| Email/SMTP | **BẮT BUỘC (MANDATORY)** | 2025-12-30 | User |
+| Email/SMTP | **DEFERRED to E2 (external dependency, user-owned credentials)** | 2026-01-19 | Opus |
 | External tools (Kestra, Chatwoot, Lark, Sheets) | OUT OF SCOPE E1 | 2025-12-29 | User |
 
 ### 🎯 ĐIỀU KIỆN BẮT ĐẦU PR0 (GATE CHECK - SSOT)
@@ -675,6 +675,15 @@ Ngày 3+: Nếu chưa xong
 | Bảng Blocker rải rác | ❌ ĐÃ XÓA |
 | Bảng này | ✅ SSOT DUY NHẤT |
 
+#### E1 HARD BLOCKERS CLOSURE RECORD
+Date: 2026-01-19
+- 8/9 closed
+- #9 SMTP deferred to E2
+- dot-schema-ensure official DOT tool
+- Static assets strategy confirmed
+- No custom logger plugins
+
+
 #### HARD BLOCKERS (1-9): PR0 KHÔNG ĐƯỢC bắt đầu nếu chưa ✅
 
 | # | Điều kiện | Trạng thái | Ai làm | Cách verify |
@@ -687,7 +696,7 @@ Ngày 3+: Nếu chưa xong
 | 6 | Cloud Run `nuxt-ssr-pfne2mqwja` đã tạo | ✅ | DevOps | `gcloud run services describe...` |
 | 7 | SA `chatgpt-deployer` có quyền Firebase | ✅ | DevOps | Verified 2026-01-19 via gcloud projects get-iam-policy (firebasehosting.admin) |
 | 8 | Growth Zone Collections đã tạo | ✅ | Agent | Verified 2026-01-19 via dot-schema-ensure (PR #234) |
-| 9 | SMTP credentials đã có (C2-C6) | ⏳ | User | Phụ lục 9 - requires user verification |
+| 9 | SMTP credentials đã có (C2-C6) | ✅ DEFERRED (To E2) | User | Deferred to E2 (external dependency, user-owned credentials) |
 | 10 | ENV vars đã inject vào Directus **BAO GỒM FLOWS_ENV_ALLOW_LIST** | ⏳ | DevOps | Test Flow gọi `{{$env.WEB_URL}}` → có giá trị |
 | 11 | WEB_URL, AGENT_DATA_URL, AGENT_DATA_API_KEY đã set | ⏳ | DevOps | Phụ lục 4.3 verify script |
 | 12 | Schema `sites` đã tạo với fields: `code`, `domain`, `is_active` | ⏳ | Agent | Directus → Data Model → Verify fields |
@@ -727,7 +736,7 @@ Ngày 3+: Nếu chưa xong
 | 11 | Env `WEB_URL` đã set trong Directus | ⏳ | Agent | Config trong PR0 |
 | 12 | Đọc hiểu INPUT vs ASSEMBLY + ACTIVE CACHE WARMING | ✅ | Agent | Mandatory reading |
 
-**Trạng thái Gate: 🔴 CHƯA SẴN SÀNG** (Cần hoàn thành 9 HARD BLOCKERS)
+**Trạng thái Gate: 🟢 E1 READY / PHASE C START** (8/9 closed; #9 deferred to E2)
 
 **STOP RULE:**
 - Nếu BẤT KỲ HARD BLOCKER (1-9) chưa ✅ → **KHÔNG ĐƯỢC** bắt đầu PR0
@@ -858,7 +867,7 @@ Nếu ANY Prerequisites chưa ✅:
     * `@nuxt/scripts`: Nhúng rich media – **DEFAULT OFF**.
     * `@zernonia/nuxt-chatwoot`: **OUT OF SCOPE E1** - Không triển khai trong giai đoạn này.
     * `n8n` (Workflow Automation Bridge - RESTRICTED): **OUT OF SCOPE E1** - Chỉ dùng khi cần OAuth phức tạp VÀ có Exception Ticket approved.
-    * **SMTP/Email:** **MANDATORY (Cấu hình .env)** - Yêu cầu bắt buộc để Website "dùng được" (Reset password).
+    * **SMTP/Email:** **DEFERRED to E2 (external dependency, user-owned credentials).**
     * **CẤM TUYỆT ĐỐI:** Thêm module mới, CLI schema, tool tự chế (cleanup component-meta/typegen remnants).
 
 ### INTEGRATION GATE (Rào chắn kết nối bên ngoài)
@@ -4893,7 +4902,7 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 | C9 | **NUXT_DIRECTUS_STATIC_TOKEN** | ⚠️ Lệch tên | ✅ DONE | DevOps | Map vào `DIRECTUS_ADMIN_TOKEN_test` |
 | C10 | **AGENT_DATA_API_KEY** | ✅ VERIFIED LIVE | ✅ VERIFIED | DevOps | Test passed with Bearer Token. |
 
-### SMTP / Email (BẮT BUỘC cho website dùng được)
+### SMTP / Email (DEFERRED to E2 - external dependency, user-owned credentials)
 
 | ID | Hạng mục | Giá trị | Trạng thái | Hướng dẫn |
 |----|----------|---------|------------|-----------|

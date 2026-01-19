@@ -87,8 +87,8 @@ All prerequisites satisfied.
 
 | Env Var | Required | Present in Directus | Value / Notes |
 |---------|----------|---------------------|---------------|
-| `AGENT_DATA_URL` | ✅ YES | ❌ **MISSING** | Target: `https://agent-data-test-pfne2mqwja-as.a.run.app` |
-| `AGENT_DATA_API_KEY` | ✅ YES | ❌ **MISSING** | Secret exists in GSM (v2 enabled), NOT mounted |
+| `AGENT_DATA_URL` | ✅ YES | ✅ PRESENT | Value: `https://agent-data-test-pfne2mqwja-as.a.run.app` |
+| `AGENT_DATA_API_KEY` | ✅ YES | ✅ PRESENT | Secret mounted (latest) |
 | `FLOWS_ENV_ALLOW_LIST` | ✅ YES | ✅ PRESENT | Value: `WEB_URL,AGENT_DATA_URL,AGENT_DATA_API_KEY,GITHUB_TOKEN` |
 
 **Secret Manager Status:**
@@ -102,11 +102,11 @@ All prerequisites satisfied.
 - Region: `asia-southeast1`
 
 **VERDICT:**
-- ENV Injection: ❌ **NOT DONE**
-- Ready for Flow Wiring: ❌ **NO** (blocked until ENV injected)
-- Blocking Issues: Directus Flows cannot reference `{{$env.AGENT_DATA_URL}}` or `{{$env.AGENT_DATA_API_KEY}}`
+- ENV Injection: ✅ **DONE**
+- Ready for Flow Wiring: ✅ **YES**
+- Blocking Issues: None (env ready for DOT flows)
 
-**Last Verified:** 2026-01-15 by Cursor
+**Last Verified:** 2026-01-19 by Opus
 
 ========================
 PHẦN 2: KẾ HOẠCH LẮP RÁP & ĐẤU NỐI (ASSEMBLY EXECUTION)
@@ -190,13 +190,21 @@ gcloud run services describe directus-test \
 # AGENT_DATA_API_KEY
 ```
 
-**Verification Result (2026-01-16, Codex [CODEX]):** `AGENT_DATA_URL`, `AGENT_DATA_API_KEY` present in Directus env.
+**Verification Result (2026-01-19, Opus):** `AGENT_DATA_URL`, `AGENT_DATA_API_KEY` present in Directus env.
 
 ### (9) Live-Fire Verification Plan (No-Code)
+**Canonical DOT flows (default path):**
+- [DOT] Agent Data Health Check (created by DOT scripts; Trigger: Webhook / Request URL)
+- [DOT] Agent Data Chat Test (created by DOT scripts; Trigger: Webhook / Request URL)
+
+**Trigger method:** Webhook. Manual UI Run is informational only (async by design).
+
 **Test Strategy:**
 * **Flow 1 (Health):** Call `GET /info` (Expect 200). Timeout: `10s`.
 * **Flow 2 (Chat):** Call `POST /chat` with `{"query": "hello"}` (Expect 200). Timeout: `30s`.
 * **Flow 3 (Ingest):** Call `POST /ingest` with dummy GCS path (Expect 202). Timeout: `15s`.
+
+**DEPRECATED (historical reference only):** Manual UI creation + Run (▶) is not the default path.
 
 **Test Flow: `[TEST] Agent Data Connectivity`**
 - **Trigger:** Manual
@@ -207,7 +215,7 @@ gcloud run services describe directus-test \
 - **Pass Criteria:** HTTP 200 (and no network failure).
 - **Fail Criteria:** DNS Error, Timeout, Connection Refused.
 
-### (9A) Step-by-Step Flow Creation Guide (Directus UI)
+### (9A) Step-by-Step Flow Creation Guide (Directus UI) — DEPRECATED (Historical Only)
 
 **Prerequisite:** ENV Injection (8B) MUST be completed first.
 
@@ -343,9 +351,9 @@ gcloud run services describe directus-test \
 **PHASE C: Final Verification**
 - [x] ✅ No secrets leaked/logged (E1-safe verification)
 - [ ] ⏳ Deterministic E2E proof method pending (tracked in Issue #228)
-- [ ] ⏳ Ready for E1 Assembly continuation
+- [x] ✅ Ready for E1 Assembly continuation (Phase C started)
 
-**Gate Status:** 🟢 PHASE B CLOSED (DOT v0.1 complete). Phase C pending E2E evidence plan.
+**Gate Status:** 🟢 PHASE B CLOSED (DOT v0.1 complete). Phase C STARTED; E2E evidence plan tracked in Issue #228.
 
 ### Phase B Closure Evidence (DOT v0.1)
 - Directus base URL: `https://directus-test-pfne2mqwja-as.a.run.app`
@@ -404,8 +412,8 @@ PHASE C: VERIFICATION & SIGN-OFF ───────────────�
 └── C3. ✅ Ready for Nuxt ↔ Agency OS Assembly (E1 continues)
 ```
 
-**Current Position:** Phase C (E2E evidence/observability plan tracked in Issue #228)
+**Current Position:** Phase C STARTED (E2E evidence/observability plan tracked in Issue #228)
 
 **Blocking Status:**
 - Phase B CLOSED
-- Phase C pending deterministic E2E evidence method
+- Phase C started; deterministic E2E evidence method pending (Issue #228)
