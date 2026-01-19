@@ -182,6 +182,7 @@ flows:
 ### 3.3 Trigger Type Decision (v0.1)
 *   **Decision:** DOT v0.1 uses **WEBHOOK** trigger (not Manual) for AI-triggerable flows.
 *   **Sync Requirement:** This requires syncing `PHULUC_17_E1_BLUEPRINT.md` (Manual → Webhook).
+*   **NOTE:** Webhook trigger is CANONICAL for DOT flows. Manual UI trigger (Play/Run) is for debugging only and MUST NOT be used as a success criterion.
 
 ---
 
