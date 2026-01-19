@@ -679,15 +679,15 @@ Ngày 3+: Nếu chưa xong
 
 | # | Điều kiện | Trạng thái | Ai làm | Cách verify |
 |---|-----------|------------|--------|-------------|
-| 1 | Role "Agent" đã tạo trong Directus | ⏳ | Agent | Settings → Roles → Tìm "Agent" |
-| 2 | AGENT_CONTENT_TOKEN đã có | ⏳ | Agent | Test API call với token |
-| 3 | Agent Data API Key hoạt động (200) | ⏳ | Backend Team | `curl -H "Auth..." $URL` → 200 |
-| 4 | Response format đúng (translations Array) | ⏳ | Backend Team | `jq '.data[0].translations \| type'` → "array" |
-| 5 | Endpoint `/api/views/recent?limit=10` tồn tại | ⏳ | Backend Team | `curl` → 200 + 10 items |
-| 6 | Cloud Run `nuxt-ssr-pfne2mqwja` đã tạo | ⏳ | DevOps | `gcloud run services describe...` |
-| 7 | SA `chatgpt-deployer` có quyền Firebase | ⏳ | DevOps | IAM verify roles |
-| 8 | Growth Zone Collections đã tạo | ⏳ | Agent | Directus → Data Model verify |
-| 9 | SMTP credentials đã có (C2-C6) | ⏳ | User | Phụ lục 9 |
+| 1 | Role "Agent" đã tạo trong Directus | ✅ | Agent | Settings → Roles → Tìm "Agent" |
+| 2 | AGENT_CONTENT_TOKEN đã có | ✅ | Agent | Test API call với token |
+| 3 | Agent Data API Key hoạt động (200) | ✅ | Backend Team | `curl -H "Auth..." $URL` → 200 |
+| 4 | Response format đúng (translations Array) | ❌ | Backend Team | translations field missing |
+| 5 | Endpoint `/api/views/recent?limit=10` tồn tại | ❌ | Backend Team | 404 Not Found |
+| 6 | Cloud Run `nuxt-ssr-pfne2mqwja` đã tạo | ✅ | DevOps | `gcloud run services describe...` |
+| 7 | SA `chatgpt-deployer` có quyền Firebase | ❌ | DevOps | No Firebase roles found |
+| 8 | Growth Zone Collections đã tạo | ❌ | Agent | Collections not found |
+| 9 | SMTP credentials đã có (C2-C6) | ⏳ | User | Phụ lục 9 - requires user verification |
 | 10 | ENV vars đã inject vào Directus **BAO GỒM FLOWS_ENV_ALLOW_LIST** | ⏳ | DevOps | Test Flow gọi `{{$env.WEB_URL}}` → có giá trị |
 | 11 | WEB_URL, AGENT_DATA_URL, AGENT_DATA_API_KEY đã set | ⏳ | DevOps | Phụ lục 4.3 verify script |
 | 12 | Schema `sites` đã tạo với fields: `code`, `domain`, `is_active` | ⏳ | Agent | Directus → Data Model → Verify fields |
