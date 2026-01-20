@@ -1,8 +1,7 @@
 # dot-schema-redirects-ensure
 
 ## Purpose
-Ensures the Directus `redirects` collection exists and has the fields Nuxt uses to build route rules.
-This addresses the Phase C mismatch where `redirects` was missing.
+Ensures the Directus `redirects` collection exists with the minimal schema required for Nuxt redirect rules, and configures Public READ access for anonymous requests.
 
 ## Preconditions
 - Directus base URL set via `DIRECTUS_BASE_URL` or default in tool
@@ -12,14 +11,17 @@ This addresses the Phase C mismatch where `redirects` was missing.
 ## What it changes
 - Creates collection `redirects` if missing
 - Ensures fields:
-  - `url_old` (string, required)
-  - `url_new` (string, required)
-  - `response_code` (integer, optional)
-  - `notice_redirects` (string, optional)
+  - `from` (string, required)
+  - `to` (string, required)
+  - `status_code` (integer, default 301)
+  - `enabled` (boolean, default true)
+  - `sort` (integer, optional)
+  - `note` (text, optional)
+- Ensures Public role READ permission on `redirects` for the fields above
 
 ## What it does NOT do
-- Does not configure public permissions. If public reads return 403, set Public role READ on `redirects` separately.
-- Does not seed any redirect rows.
+- Does not seed any redirect rows
+- Does not change Nuxt configuration
 
 ## Usage
 ```bash
@@ -35,17 +37,15 @@ Expected output includes:
 
 ## Verification
 ```bash
-# Admin check
-curl --globoff -sS -H "Authorization: Bearer $DOT_TOKEN" \
-  "${DIRECTUS_BASE_URL}/items/redirects?limit=1&fields=url_old,url_new,response_code" \
-  | jq '.data'
+# Anonymous check (should be HTTP 200)
+curl -s -o /dev/null -w "%{http_code}\n" \
+  "${DIRECTUS_BASE_URL}/items/redirects?limit=1"
 
-# Anonymous check (requires public READ permission)
-curl --globoff -sS \
-  "${DIRECTUS_BASE_URL}/items/redirects?limit=1&fields=url_old,url_new,response_code" \
-  | jq '.data'
+curl -s \
+  "${DIRECTUS_BASE_URL}/items/redirects?limit=1&fields=from,to,status_code,enabled" \
+  | jq '.'
 ```
 
 ## Rollback notes
 - Remove the collection only if you have a schema snapshot.
-- Prefer disabling public permissions instead of deleting the collection when debugging.
+- Prefer disabling Public permissions instead of deleting the collection when debugging.
