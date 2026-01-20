@@ -350,10 +350,10 @@ gcloud run services describe directus-test \
 
 **PHASE C: Final Verification**
 - [x] ✅ No secrets leaked/logged (E1-safe verification)
-- [ ] ⏳ Deterministic E2E proof method pending (tracked in Issue #228)
-- [x] ✅ Ready for E1 Assembly continuation (Phase C started)
+- [ ] ⏳ Deterministic E2E proof method deferred to E2 (Issue #228)
+- [x] ✅ Ready for E1 Assembly continuation (Phase C complete)
 
-**Gate Status:** 🟢 PHASE B CLOSED (DOT v0.1 complete). Phase C STARTED; E2E evidence plan tracked in Issue #228.
+**Gate Status:** ✅ PHASE C COMPLETE. E2E evidence plan tracked in Issue #228.
 
 ### Phase B Closure Evidence (DOT v0.1)
 - Directus base URL: `https://directus-test-pfne2mqwja-as.a.run.app`
@@ -405,15 +405,15 @@ PHASE B: FLOW WIRING (Directus UI) ───────────────
 
 PHASE C: VERIFICATION & SIGN-OFF ────────────────────────────────────
 │
-├── C1. ⏳ Deterministic E2E proof method (Issue #228)
+├── C1. ⏳ Deterministic E2E proof method deferred to E2 (Issue #228)
 │
-├── C2. ⏳ Phụ lục 17 status → 🟢 COMPLETE
+├── C2. ✅ Phụ lục 17 status → ✅ PHASE C COMPLETE
 │
 └── C3. ✅ Ready for Nuxt ↔ Agency OS Assembly (E1 continues)
 ```
 
-**Current Position:** Phase C STARTED (E2E evidence/observability plan tracked in Issue #228)
+**Current Position:** Phase C COMPLETE (E2E evidence/observability plan tracked in Issue #228)
 
 **Blocking Status:**
 - Phase B CLOSED
-- Phase C started; deterministic E2E evidence method pending (Issue #228)
+- Phase C COMPLETE; deterministic E2E evidence method deferred to E2 (Issue #228)
