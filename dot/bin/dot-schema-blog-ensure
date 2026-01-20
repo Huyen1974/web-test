@@ -1,0 +1,450 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOT_AUTH="${SCRIPT_DIR}/dot-auth"
+
+log_info() {
+  echo "[INFO] $1"
+}
+
+log_ok() {
+  echo "[OK] $1"
+}
+
+log_warn() {
+  echo "[WARN] $1"
+}
+
+log_skip() {
+  echo "[SKIP] $1"
+}
+
+log_err() {
+  echo "[ERR] $1" >&2
+}
+
+require_cmds() {
+  for cmd in curl jq; do
+    command -v "$cmd" >/dev/null 2>&1 || { log_err "Missing required command: $cmd"; exit 1; }
+  done
+}
+
+api_request() {
+  local method="$1"
+  local url="$2"
+  local data="${3-}"
+  local resp
+
+  if [[ -n "${data-}" ]]; then
+    resp=$(curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "$data" \
+      -w "\n%{http_code}")
+  else
+    resp=$(curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -w "\n%{http_code}")
+  fi
+
+  printf '%s' "$resp"
+}
+
+ensure_auth() {
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    if [[ ! -f "$DOT_AUTH" ]]; then
+      log_err "dot-auth not found at ${DOT_AUTH}"
+      exit 1
+    fi
+    log_info "Authenticating with Directus..."
+    # shellcheck source=/dev/null
+    source "$DOT_AUTH" >/dev/null
+  fi
+
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "DOT_TOKEN is empty after authentication"
+    exit 1
+  fi
+}
+
+collection_exists() {
+  local collection="$1"
+  local resp body code
+
+  resp=$(api_request GET "${BASE_URL}/collections")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to list collections (HTTP $code)"
+    echo "$body" | head -c 200 >&2
+    exit 1
+  fi
+
+  if echo "$body" | jq -e --arg collection "$collection" '.data[]? | select(.collection == $collection)' >/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
+field_exists() {
+  local collection="$1"
+  local field="$2"
+  local resp body code
+
+  resp=$(api_request GET "${BASE_URL}/fields/${collection}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to list fields for ${collection} (HTTP $code)"
+    echo "$body" | head -c 200 >&2
+    exit 1
+  fi
+
+  if echo "$body" | jq -e --arg field "$field" '.data[]? | select(.field == $field)' >/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
+get_field_info() {
+  local collection="$1"
+  local field="$2"
+  local resp body code
+
+  resp=$(api_request GET "${BASE_URL}/fields/${collection}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to list fields for ${collection} (HTTP $code)"
+    echo "$body" | head -c 200 >&2
+    exit 1
+  fi
+
+  echo "$body" | jq -c --arg field "$field" '.data[]? | select(.field == $field)'
+}
+
+relation_exists() {
+  local collection="$1"
+  local field="$2"
+  local related="$3"
+  local resp body code
+
+  resp=$(api_request GET "${BASE_URL}/relations")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to list relations (HTTP $code)"
+    echo "$body" | head -c 200 >&2
+    exit 1
+  fi
+
+  if echo "$body" | jq -e --arg collection "$collection" --arg field "$field" --arg related "$related" \
+    '.data[]? | select(.collection == $collection and .field == $field and .related_collection == $related)' >/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
+create_collection_with_id() {
+  local collection="$1"
+  local note="$2"
+  local payload resp body code
+
+  payload=$(jq -nc --arg collection "$collection" --arg note "$note" '
+    {
+      collection: $collection,
+      schema: {},
+      meta: { note: $note },
+      fields: [
+        { field: "id", type: "uuid", meta: { required: true }, schema: { is_primary_key: true, is_nullable: false } }
+      ]
+    }
+  ')
+
+  log_info "Creating collection ${collection}"
+  resp=$(api_request POST "${BASE_URL}/collections" "$payload")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to create collection ${collection} (HTTP $code)"
+    echo "$body" | head -c 200 >&2
+    exit 1
+  fi
+
+  log_ok "Collection ${collection} created"
+}
+
+create_field() {
+  local collection="$1"
+  local payload="$2"
+  local resp body code
+
+  resp=$(api_request POST "${BASE_URL}/fields/${collection}" "$payload")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to create field in ${collection} (HTTP $code)"
+    echo "$body" | head -c 200 >&2
+    exit 1
+  fi
+}
+
+delete_field() {
+  local collection="$1"
+  local field="$2"
+  local resp body code
+
+  resp=$(api_request DELETE "${BASE_URL}/fields/${collection}/${field}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "204" ]]; then
+    log_err "Failed to delete field ${collection}.${field} (HTTP $code)"
+    echo "$body" | head -c 200 >&2
+    exit 1
+  fi
+}
+
+create_relation() {
+  local payload="$1"
+  local resp body code
+
+  resp=$(api_request POST "${BASE_URL}/relations" "$payload")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to create relation (HTTP $code)"
+    echo "$body" | head -c 200 >&2
+    exit 1
+  fi
+}
+
+simple_field_payload() {
+  local field="$1"
+  local type="$2"
+  local required="$3"
+
+  if [[ "$required" == "true" ]]; then
+    jq -nc --arg field "$field" --arg type "$type" '{field:$field, type:$type, meta:{required:true}, schema:{is_nullable:false}}'
+  else
+    jq -nc --arg field "$field" --arg type "$type" '{field:$field, type:$type, meta:{required:false}, schema:{is_nullable:true}}'
+  fi
+}
+
+m2o_field_payload() {
+  local field="$1"
+  local related="$2"
+  local interface="$3"
+
+  jq -nc --arg field "$field" --arg related "$related" --arg interface "$interface" \
+    '{field:$field, type:"string", meta:{required:false, special:["m2o"], interface:$interface}, schema:{is_nullable:true, foreign_key_table:$related, foreign_key_column:"id"}}'
+}
+
+m2o_relation_payload() {
+  local collection="$1"
+  local field="$2"
+  local related="$3"
+
+  jq -nc --arg collection "$collection" --arg field "$field" --arg related "$related" '
+    {
+      collection: $collection,
+      field: $field,
+      related_collection: $related,
+      schema: {
+        table: $collection,
+        column: $field,
+        foreign_key_table: $related,
+        foreign_key_column: "id",
+        on_delete: "SET NULL"
+      },
+      meta: {
+        many_collection: $collection,
+        many_field: $field,
+        one_collection: $related,
+        one_field: null,
+        one_deselect_action: "nullify",
+        junction_field: null,
+        sort_field: null
+      }
+    }
+  '
+}
+
+ensure_simple_field() {
+  local collection="$1"
+  local field="$2"
+  local type="$3"
+  local required="$4"
+
+  if field_exists "$collection" "$field"; then
+    log_skip "Field ${collection}.${field} already exists"
+    return 0
+  fi
+
+  log_info "Creating field ${collection}.${field}"
+  create_field "$collection" "$(simple_field_payload "$field" "$type" "$required")"
+  log_ok "Field ${collection}.${field} created"
+}
+
+ensure_m2o_field() {
+  local collection="$1"
+  local field="$2"
+  local related="$3"
+  local interface="$4"
+  local allow_recreate="$5"
+  local field_info
+
+  if field_exists "$collection" "$field"; then
+    field_info=$(get_field_info "$collection" "$field")
+    if echo "$field_info" | jq -e --arg related "$related" '(.meta.special | index("m2o")) and (.schema.foreign_key_table == $related)' >/dev/null; then
+      log_skip "Field ${collection}.${field} already exists"
+    else
+      if [[ "$allow_recreate" == "true" ]]; then
+        log_warn "Field ${collection}.${field} is not a valid M2O to ${related}; recreating"
+        recreate_m2o_field "$collection" "$field" "$related" "$interface"
+      else
+        log_err "Field ${collection}.${field} exists but is not M2O to ${related}"
+        exit 1
+      fi
+    fi
+  else
+    log_info "Creating field ${collection}.${field}"
+    create_field "$collection" "$(m2o_field_payload "$field" "$related" "$interface")"
+    log_ok "Field ${collection}.${field} created"
+  fi
+
+  if relation_exists "$collection" "$field" "$related"; then
+    log_skip "Relation ${collection}.${field} -> ${related} already exists"
+  else
+    log_info "Creating relation ${collection}.${field} -> ${related}"
+    create_relation "$(m2o_relation_payload "$collection" "$field" "$related")"
+    log_ok "Relation ${collection}.${field} -> ${related} created"
+  fi
+}
+
+recreate_m2o_field() {
+  local collection="$1"
+  local field="$2"
+  local related="$3"
+  local interface="$4"
+  local resp body code value
+
+  if [[ "$collection" != "pages_blog" ]]; then
+    log_err "Refusing to recreate field ${collection}.${field} (non-singleton collection)"
+    exit 1
+  fi
+
+  resp=$(api_request GET "${BASE_URL}/items/${collection}?fields=${field}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to read ${collection}.${field} (HTTP $code)"
+    echo "$body" | head -c 200 >&2
+    exit 1
+  fi
+
+  value=$(echo "$body" | jq -r --arg field "$field" '.data[$field] // empty')
+  if [[ -n "$value" && "$value" != "null" ]]; then
+    log_err "Refusing to recreate ${collection}.${field}: existing value is not null"
+    exit 1
+  fi
+
+  log_info "Nulling ${collection}.${field} before recreation"
+  resp=$(api_request PATCH "${BASE_URL}/items/${collection}" "{\"${field}\":null}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to null ${collection}.${field} (HTTP $code)"
+    echo "$body" | head -c 200 >&2
+    exit 1
+  fi
+
+  log_info "Deleting field ${collection}.${field}"
+  delete_field "$collection" "$field"
+
+  log_info "Creating field ${collection}.${field}"
+  create_field "$collection" "$(m2o_field_payload "$field" "$related" "$interface")"
+  log_ok "Field ${collection}.${field} recreated"
+
+  log_info "Creating relation ${collection}.${field} -> ${related}"
+  create_relation "$(m2o_relation_payload "$collection" "$field" "$related")"
+  log_ok "Relation ${collection}.${field} -> ${related} created"
+}
+
+ensure_collection_with_id() {
+  local collection="$1"
+  local note="$2"
+
+  if collection_exists "$collection"; then
+    log_skip "Collection ${collection} already exists"
+  else
+    create_collection_with_id "$collection" "$note"
+  fi
+}
+
+ensure_blog_schema() {
+  log_info "Ensuring blog schema collections"
+
+  ensure_collection_with_id "categories" "Created by DOT blog schema ensure"
+  ensure_collection_with_id "team" "Created by DOT blog schema ensure"
+  ensure_collection_with_id "posts" "Created by DOT blog schema ensure"
+  ensure_collection_with_id "pages_blog" "Created by DOT blog schema ensure"
+
+  log_info "Ensuring categories fields"
+  ensure_simple_field "categories" "title" "string" "false"
+  ensure_simple_field "categories" "slug" "string" "false"
+  ensure_simple_field "categories" "color" "string" "false"
+
+  log_info "Ensuring team fields"
+  ensure_simple_field "team" "name" "string" "false"
+  ensure_simple_field "team" "job_title" "string" "false"
+  ensure_m2o_field "team" "image" "directus_files" "file-image" "false"
+
+  log_info "Ensuring posts fields"
+  ensure_simple_field "posts" "slug" "string" "true"
+  ensure_simple_field "posts" "title" "string" "false"
+  ensure_simple_field "posts" "summary" "text" "false"
+  ensure_simple_field "posts" "type" "string" "false"
+  ensure_simple_field "posts" "date_published" "timestamp" "false"
+  ensure_m2o_field "posts" "image" "directus_files" "file-image" "false"
+  ensure_m2o_field "posts" "author" "team" "select-dropdown-m2o" "false"
+  ensure_m2o_field "posts" "category" "categories" "select-dropdown-m2o" "false"
+
+  log_info "Ensuring pages_blog relations"
+  ensure_m2o_field "pages_blog" "featured_post" "posts" "select-dropdown-m2o" "true"
+  ensure_m2o_field "pages_blog" "seo" "seo" "select-dropdown-m2o" "true"
+
+  log_ok "Blog schema ready"
+}
+
+main() {
+  require_cmds
+  BASE_URL="${DIRECTUS_BASE_URL:-https://directus-test-pfne2mqwja-as.a.run.app}"
+
+  echo "========================================="
+  echo "DOT Tool: Blog Schema Ensure"
+  echo "========================================="
+  echo "Ensuring Directus blog schema"
+  echo "Target: ${BASE_URL}"
+  echo ""
+
+  ensure_auth
+  ensure_blog_schema
+
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Blog Schema Ensure - COMPLETE"
+  echo "========================================="
+}
+
+main "$@"
