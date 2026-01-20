@@ -30,7 +30,7 @@ export DIRECTUS_BASE_URL="https://directus-test-pfne2mqwja-as.a.run.app"
 | dot/bin/dot-rollback | Delete DOT flows (prefix [DOT]) | DOT_TOKEN, DIRECTUS_BASE_URL | No (destructive) | `dot/bin/dot-rollback` |
 | dot/bin/dot-schema-ensure | Ensure core collection agent_views + required fields | DOT_TOKEN or DIRECTUS_ADMIN_PASSWORD (via dot-auth), DIRECTUS_BASE_URL | Yes | `dot/bin/dot-schema-ensure` |
 | dot/bin/dot-schema-blog-ensure | Ensure blog schema for posts/pages_blog (relations + fields) | DOT_TOKEN or DIRECTUS_ADMIN_PASSWORD (via dot-auth), DIRECTUS_BASE_URL | Yes (may recreate fields if misconfigured) | `dot/bin/dot-schema-blog-ensure` |
-| dot/bin/dot-schema-redirects-ensure | Ensure redirects collection + required fields | DOT_TOKEN or DIRECTUS_ADMIN_PASSWORD (via dot-auth), DIRECTUS_BASE_URL | Yes | `dot/bin/dot-schema-redirects-ensure` |
+| dot/bin/dot-schema-redirects-ensure | Ensure redirects collection + Public READ | DOT_TOKEN or DIRECTUS_ADMIN_PASSWORD (via dot-auth), DIRECTUS_BASE_URL | Yes | `dot/bin/dot-schema-redirects-ensure` |
 
 ## Safety and laws
 - No UI automation. These tools use Directus API only.

@@ -6,10 +6,21 @@ DOT_AUTH="${SCRIPT_DIR}/dot-auth"
 
 COLLECTION="redirects"
 REQUIRED_FIELDS=(
-  url_old
-  url_new
-  response_code
-  notice_redirects
+  from
+  to
+  status_code
+  enabled
+  sort
+  note
+)
+PERMISSION_FIELDS=(
+  id
+  from
+  to
+  status_code
+  enabled
+  sort
+  note
 )
 
 log_info() {
@@ -134,24 +145,34 @@ get_field_type() {
 
 field_payload() {
   case "$1" in
-    url_old)
+    from)
       cat <<'JSON'
-{"field":"url_old","type":"string","meta":{"required":true},"schema":{"is_nullable":false}}
+{"field":"from","type":"string","meta":{"required":true},"schema":{"is_nullable":false}}
 JSON
       ;;
-    url_new)
+    to)
       cat <<'JSON'
-{"field":"url_new","type":"string","meta":{"required":true},"schema":{"is_nullable":false}}
+{"field":"to","type":"string","meta":{"required":true},"schema":{"is_nullable":false}}
 JSON
       ;;
-    response_code)
+    status_code)
       cat <<'JSON'
-{"field":"response_code","type":"integer","meta":{"required":false},"schema":{"is_nullable":true}}
+{"field":"status_code","type":"integer","meta":{"required":false},"schema":{"is_nullable":true,"default_value":301}}
 JSON
       ;;
-    notice_redirects)
+    enabled)
       cat <<'JSON'
-{"field":"notice_redirects","type":"string","meta":{"required":false},"schema":{"is_nullable":true}}
+{"field":"enabled","type":"boolean","meta":{"required":false},"schema":{"is_nullable":false,"default_value":true}}
+JSON
+      ;;
+    sort)
+      cat <<'JSON'
+{"field":"sort","type":"integer","meta":{"required":false},"schema":{"is_nullable":true}}
+JSON
+      ;;
+    note)
+      cat <<'JSON'
+{"field":"note","type":"text","meta":{"required":false},"schema":{"is_nullable":true}}
 JSON
       ;;
     *)
@@ -212,16 +233,173 @@ field_type_ok() {
   local field_type="$2"
 
   case "$field_name" in
-    url_old|url_new|notice_redirects)
+    from|to)
       [[ "$field_type" == "string" ]]
       ;;
-    response_code)
-      [[ "$field_type" == "integer" || "$field_type" == "string" ]]
+    status_code|sort)
+      [[ "$field_type" == "integer" ]]
+      ;;
+    enabled)
+      [[ "$field_type" == "boolean" ]]
+      ;;
+    note)
+      [[ "$field_type" == "text" ]]
       ;;
     *)
       return 1
       ;;
   esac
+}
+
+get_public_policy_id() {
+  local resp body code policy_id
+
+  resp=$(api_request GET "${BASE_URL}/policies")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    echo ""
+    return 0
+  fi
+
+  policy_id=$(echo "$body" | jq -r '.data[]? | select(.name == "$t:public_label" or (.name | ascii_downcase | contains("public"))) | .id' | head -n 1)
+  echo "$policy_id"
+}
+
+permission_fields_json() {
+  printf '%s\n' "${PERMISSION_FIELDS[@]}" | jq -R . | jq -s .
+}
+
+permission_payload() {
+  local mode="$1"
+  local scope_id="${2-}"
+  local fields_json
+
+  fields_json=$(permission_fields_json)
+  if [[ "$mode" == "policy" ]]; then
+    jq -nc --arg policy "$scope_id" --arg collection "$COLLECTION" --argjson fields "$fields_json" '
+      {
+        policy: $policy,
+        collection: $collection,
+        action: "read",
+        fields: $fields,
+        permissions: {},
+        validation: {}
+      }
+    '
+    return 0
+  fi
+
+  jq -nc --arg collection "$COLLECTION" --argjson fields "$fields_json" '
+    {
+      collection: $collection,
+      action: "read",
+      role: null,
+      fields: $fields,
+      permissions: {},
+      validation: {}
+    }
+  '
+}
+
+permission_fields_ok() {
+  local body="$1"
+  local required_json
+
+  if echo "$body" | jq -e '.data[0].fields == null or (.data[0].fields | length == 0) or (.data[0].fields | index("*"))' >/dev/null; then
+    return 0
+  fi
+
+  required_json=$(permission_fields_json)
+  echo "$body" | jq -e --argjson required "$required_json" '(.data[0].fields // []) as $fields | ($required - $fields) | length == 0' >/dev/null
+}
+
+create_permission() {
+  local mode="$1"
+  local scope_id="${2-}"
+  local payload resp body code
+
+  payload=$(permission_payload "$mode" "$scope_id")
+  resp=$(api_request POST "${BASE_URL}/permissions" "$payload")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to create Public read permission (HTTP $code)"
+    echo "$body" | head -c 200 >&2
+    return 1
+  fi
+
+  log_ok "Public read permission created"
+  return 0
+}
+
+update_permission_fields() {
+  local permission_id="$1"
+  local fields_json payload resp body code
+
+  fields_json=$(permission_fields_json)
+  payload=$(jq -nc --argjson fields "$fields_json" '{fields:$fields, permissions:{}, validation:{}}')
+  resp=$(api_request PATCH "${BASE_URL}/permissions/${permission_id}" "$payload")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to update Public read permission (HTTP $code)"
+    echo "$body" | head -c 200 >&2
+    return 1
+  fi
+
+  log_ok "Public read permission updated"
+  return 0
+}
+
+ensure_public_read() {
+  local policy_id resp body code permission_id mode scope_id filter_query
+
+  policy_id=$(get_public_policy_id)
+  if [[ -n "$policy_id" ]]; then
+    mode="policy"
+    scope_id="$policy_id"
+    filter_query="filter[policy][_eq]=${policy_id}"
+  else
+    mode="role"
+    scope_id=""
+    filter_query="filter[role][_null]=true"
+  fi
+
+  resp=$(api_request GET "${BASE_URL}/permissions?${filter_query}&filter[collection][_eq]=${COLLECTION}&filter[action][_eq]=read")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" == "200" ]]; then
+    permission_id=$(echo "$body" | jq -r '.data[0].id // empty')
+    if [[ -n "$permission_id" ]]; then
+      if permission_fields_ok "$body"; then
+        log_skip "Public read permission already configured"
+        return 0
+      fi
+
+      log_warn "Public read permission exists but fields differ; updating"
+      update_permission_fields "$permission_id" || return 1
+      return 0
+    fi
+
+    log_info "Creating Public read permission"
+    create_permission "$mode" "$scope_id" || return 1
+    return 0
+  fi
+
+  if [[ "$code" == "403" ]]; then
+    log_warn "Unable to read permissions (HTTP 403). Attempting to create Public read permission."
+    create_permission "$mode" "$scope_id" || return 1
+    return 0
+  fi
+
+  log_err "Failed to read permissions (HTTP $code)"
+  echo "$body" | head -c 200 >&2
+  return 1
 }
 
 verify_fields() {
@@ -281,6 +459,11 @@ main() {
 
   log_info "Running final verification..."
   verify_fields
+  log_info "Ensuring Public read access..."
+  if ! ensure_public_read; then
+    log_err "Public read permission not configured. Please set Public READ on collection 'redirects'."
+    exit 1
+  fi
   log_ok "Collection redirects ready"
 
   echo ""
