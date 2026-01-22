@@ -7,11 +7,20 @@ import { defineNuxtPlugin, useRoute, useRuntimeConfig } from '#imports';
 export default defineNuxtPlugin((nuxtApp) => {
 	const config = useRuntimeConfig();
 
-	const directusBaseUrl =
+	// E2 Task #010: Use different URLs for SSR vs browser to avoid CORS
+	// Server-side (SSR): Call Directus directly (faster, no proxy loop)
+	// Client-side (Browser): Use /api/directus proxy (same-origin, bypasses CORS)
+	const serverDirectusUrl =
+		config.directusInternalUrl ||
 		config.public.directus?.rest?.baseUrl ||
 		config.public.directus?.url ||
 		config.public.directusUrl ||
-		config.public.siteUrl;
+		'https://directus-test-pfne2mqwja-as.a.run.app';
+
+	// Client uses proxy path for CORS bypass
+	const clientDirectusUrl = '/api/directus';
+
+	const directusBaseUrl = import.meta.server ? serverDirectusUrl : clientDirectusUrl;
 
 	if (!directusBaseUrl) {
 		console.warn('[Directus] Missing base URL – skipping client initialization');
@@ -26,8 +35,8 @@ export default defineNuxtPlugin((nuxtApp) => {
 
 	// Client-side only: Add session authentication and live preview support
 	if (import.meta.client) {
-		// Re-create with authentication for client-side
-		const clientDirectus = createDirectus<Schema>(joinURL(directusBaseUrl), { globals: { fetch: $fetch } })
+		// Re-create with authentication for client-side using proxy URL
+		const clientDirectus = createDirectus<Schema>(joinURL(clientDirectusUrl), { globals: { fetch: $fetch } })
 			.with(authentication('session'))
 			.with(rest());
 
