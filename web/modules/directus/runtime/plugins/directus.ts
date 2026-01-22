@@ -7,9 +7,9 @@ import { defineNuxtPlugin, useRoute, useRuntimeConfig } from '#imports';
 export default defineNuxtPlugin((nuxtApp) => {
 	const config = useRuntimeConfig();
 
-	// E2 Task #010: Use different URLs for SSR vs browser to avoid CORS
+	// E2 Task #011: SDK requires ABSOLUTE URL for initialization
 	// Server-side (SSR): Call Directus directly (faster, no proxy loop)
-	// Client-side (Browser): Use /api/directus proxy (same-origin, bypasses CORS)
+	// Client-side (Browser): Use origin + /api/directus proxy (absolute URL, bypasses CORS)
 	const serverDirectusUrl =
 		config.directusInternalUrl ||
 		config.public.directus?.rest?.baseUrl ||
@@ -17,8 +17,11 @@ export default defineNuxtPlugin((nuxtApp) => {
 		config.public.directusUrl ||
 		'https://directus-test-pfne2mqwja-as.a.run.app';
 
-	// Client uses proxy path for CORS bypass
-	const clientDirectusUrl = '/api/directus';
+	// Client uses absolute proxy URL (SDK needs absolute URL for `new URL()`)
+	// window.location.origin provides the current domain (e.g., https://ai.incomexsaigoncorp.vn)
+	const clientDirectusUrl = import.meta.client
+		? window.location.origin + '/api/directus'
+		: '/api/directus';
 
 	const directusBaseUrl = import.meta.server ? serverDirectusUrl : clientDirectusUrl;
 
