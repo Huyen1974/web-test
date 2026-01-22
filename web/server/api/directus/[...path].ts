@@ -48,7 +48,7 @@ export default defineEventHandler(async (event) => {
   try {
     const response = await $fetch.raw(fullUrl, {
       method,
-      body: body ? JSON.stringify(body) : undefined,
+      body: body || undefined,
       headers: forwardHeaders,
       ignoreResponseError: true,
     })
