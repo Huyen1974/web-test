@@ -5,6 +5,7 @@
  * This bypasses CORS issues by making requests same-origin.
  *
  * E2 Task #009 - User Approved Code Change
+ * E2 Task #012 - Fix cookie handling for session authentication
  */
 
 export default defineEventHandler(async (event) => {
@@ -45,6 +46,12 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  // E2 Task #012: Log auth requests for debugging
+  const isAuthRequest = path.startsWith('auth/')
+  if (isAuthRequest) {
+    console.log('[Directus Proxy] Auth request:', method, path)
+  }
+
   try {
     const response = await $fetch.raw(fullUrl, {
       method,
@@ -53,12 +60,34 @@ export default defineEventHandler(async (event) => {
       ignoreResponseError: true,
     })
 
-    const setCookie = response.headers.get('set-cookie')
-    if (setCookie) {
-      setResponseHeader(event, 'set-cookie', setCookie)
+    // E2 Task #012: Handle multiple Set-Cookie headers properly
+    // Directus returns multiple cookies (session_token, refresh_token)
+    // getSetCookie() returns an array of all Set-Cookie headers
+    const cookies = response.headers.getSetCookie?.() || []
+    if (cookies.length > 0) {
+      // Append each cookie header separately to preserve all cookies
+      for (const cookie of cookies) {
+        appendResponseHeader(event, 'set-cookie', cookie)
+      }
+      if (isAuthRequest) {
+        console.log('[Directus Proxy] Setting', cookies.length, 'cookie(s)')
+      }
+    } else {
+      // Fallback for environments where getSetCookie is not available
+      const setCookie = response.headers.get('set-cookie')
+      if (setCookie) {
+        setResponseHeader(event, 'set-cookie', setCookie)
+        if (isAuthRequest) {
+          console.log('[Directus Proxy] Setting cookie (fallback)')
+        }
+      }
     }
 
     setResponseStatus(event, response.status)
+
+    if (isAuthRequest) {
+      console.log('[Directus Proxy] Auth response status:', response.status)
+    }
 
     return response._data
   } catch (error: any) {

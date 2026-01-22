@@ -2,7 +2,7 @@ import { authentication, createDirectus, rest } from '@directus/sdk';
 import { joinURL } from 'ufo';
 import type { Schema } from '~/types/schema';
 
-import { defineNuxtPlugin, useRoute, useRuntimeConfig } from '#imports';
+import { defineNuxtPlugin, refreshNuxtData, useRoute, useRuntimeConfig } from '#imports';
 
 export default defineNuxtPlugin((nuxtApp) => {
 	const config = useRuntimeConfig();
@@ -38,9 +38,19 @@ export default defineNuxtPlugin((nuxtApp) => {
 
 	// Client-side only: Add session authentication and live preview support
 	if (import.meta.client) {
+		// E2 Task #012: Wrap $fetch to include credentials for session cookie handling
+		// This ensures cookies are sent with all requests for session-based authentication
+		const fetchWithCredentials = (url: string, options: any = {}) => {
+			return $fetch(url, {
+				...options,
+				credentials: 'include',
+			});
+		};
+
 		// Re-create with authentication for client-side using proxy URL
-		const clientDirectus = createDirectus<Schema>(joinURL(clientDirectusUrl), { globals: { fetch: $fetch } })
-			.with(authentication('session'))
+		// Using fetchWithCredentials ensures session cookies are sent/received properly
+		const clientDirectus = createDirectus<Schema>(joinURL(clientDirectusUrl), { globals: { fetch: fetchWithCredentials as typeof $fetch } })
+			.with(authentication('session', { credentials: 'include' }))
 			.with(rest());
 
 		const route = useRoute();

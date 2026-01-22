@@ -21,24 +21,30 @@ export default function useDirectusAuth<DirectusSchema extends object>() {
 	async function login(email: string, password: string, otp?: string) {
 		const route = useRoute();
 
+		// E2 Task #012: Fix login flow to properly await all operations
+		// SDK with session auth - login sets cookies via Set-Cookie header from proxy
 		const response = await $directus.login(email, password);
+
+		console.log('[Directus Auth] Login response received');
 
 		const returnPath = route.query.redirect?.toString();
 		const redirect = returnPath ? returnPath : '/portal';
 
 		_loggedIn.set(true);
 
-		setTimeout(async () => {
-			try {
-				await fetchUser({ fields: ['*', { contacts: ['*'] }] });
-				await navigateTo(redirect);
-			} catch (err: any) {
-				console.error('[Directus Auth] Post-login fetchUser failed:', err);
-				_loggedIn.set(false);
-				user.value = null;
-				await navigateTo('/auth/signin?error=fetch_user_failed');
-			}
-		}, 100);
+		// Fetch user data immediately after login (session cookie should be set)
+		try {
+			await fetchUser({ fields: ['*', { contacts: ['*'] }] });
+			console.log('[Directus Auth] User fetched successfully:', user.value?.email);
+
+			// Navigate to redirect destination
+			await navigateTo(redirect);
+		} catch (err: any) {
+			console.error('[Directus Auth] Post-login fetchUser failed:', err);
+			_loggedIn.set(false);
+			user.value = null;
+			await navigateTo('/auth/signin?error=fetch_user_failed');
+		}
 	}
 
 	async function logout() {
