@@ -60,6 +60,8 @@ export default defineNuxtConfig({
 	},
 
 	runtimeConfig: {
+		// Server-side Directus URL for proxy (E2 Task #009)
+		directusInternalUrl: process.env.DIRECTUS_INTERNAL_URL || 'https://directus-test-pfne2mqwja-as.a.run.app',
 		agentData: {
 			apiKey: process.env.AGENT_DATA_API_KEY || '',
 		},
