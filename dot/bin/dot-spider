@@ -169,6 +169,7 @@ async function checkPageHealth(page, url, verbose) {
 
   const jsErrors = [];
   const consoleErrors = [];
+  const failedRequests = [];
 
   // Capture JavaScript errors
   const errorHandler = (error) => {
@@ -179,6 +180,23 @@ async function checkPageHealth(page, url, verbose) {
     });
   };
   page.on('pageerror', errorHandler);
+
+  // Capture failed network requests (403, 404, 500, etc.)
+  const responseHandler = (response) => {
+    const status = response.status();
+    if (status >= 400) {
+      const reqUrl = response.url();
+      // Check if this is an API call or a static asset
+      const isApiCall = reqUrl.includes('/api/') || reqUrl.includes('/items/') || reqUrl.includes('/users/');
+      failedRequests.push({
+        type: isApiCall ? 'API_ERROR' : 'RESOURCE_ERROR',
+        status,
+        url: reqUrl,
+        message: `${status} ${response.statusText()} - ${reqUrl}`,
+      });
+    }
+  };
+  page.on('response', responseHandler);
 
   // Capture console errors
   const consoleHandler = (msg) => {
@@ -219,9 +237,22 @@ async function checkPageHealth(page, url, verbose) {
 
     result.loadTime = Date.now() - start;
 
-    // Add collected JS errors
+    // Add collected errors
     result.errors.push(...jsErrors);
-    result.errors.push(...consoleErrors);
+    // Only add API errors as real errors, resource errors are warnings
+    const apiErrors = failedRequests.filter(r => r.type === 'API_ERROR');
+    const resourceErrors = failedRequests.filter(r => r.type === 'RESOURCE_ERROR');
+    result.errors.push(...apiErrors);
+    if (resourceErrors.length > 0 && verbose) {
+      result.warnings.push(...resourceErrors.map(r => ({
+        type: 'RESOURCE_ERROR',
+        message: r.message,
+      })));
+    }
+    // Skip generic console errors if we already have detailed request errors
+    if (failedRequests.length === 0) {
+      result.errors.push(...consoleErrors);
+    }
 
     // Check for error text in page
     const pageText = await page.textContent('body').catch(() => '');
@@ -294,6 +325,7 @@ async function checkPageHealth(page, url, verbose) {
 
   // Cleanup listeners
   page.removeListener('pageerror', errorHandler);
+  page.removeListener('response', responseHandler);
   page.removeListener('console', consoleHandler);
 
   // Determine status
