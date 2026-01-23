@@ -11,9 +11,13 @@
 		"lint": "eslint --cache .",
 		"format": "prettier --write \"**/*.{md,y?(a)ml,json,vue}\"",
 		"test:e2e": "playwright test",
+		"test:e2e:prod": "PLAYWRIGHT_BASE_URL=https://ai.incomexsaigoncorp.vn npx playwright test",
 		"test:e2e:ui": "playwright test --ui",
 		"test:e2e:debug": "playwright test --debug",
-		"test:e2e:report": "playwright show-report"
+		"test:e2e:report": "playwright show-report",
+		"health": "node ../dot/bin/dot-health-check",
+		"dot:schema": "../dot/bin/dot-schema-ensure",
+		"dot:cost": "../dot/bin/dot-cost-audit"
 	},
 	"devDependencies": {
 		"@iconify-json/material-symbols": "^1.2.17",

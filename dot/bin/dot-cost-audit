@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v gcloud >/dev/null 2>&1; then
+  echo "ERROR: gcloud is required for dot-cost-audit" >&2
+  exit 1
+fi
+
+PROJECT="${GCP_PROJECT:-github-chatgpt-ggcloud}"
+REGION="${GCP_REGION:-asia-southeast1}"
+
+services=$(gcloud run services list --project "$PROJECT" --region "$REGION" --format="value(metadata.name)" 2>/dev/null || true)
+
+if [[ -z "$services" ]]; then
+  echo "ERROR: No Cloud Run services found or access denied." >&2
+  exit 1
+fi
+
+printf "Service\tCPU\tMemory\tMin\tMax\n"
+
+for svc in $services; do
+  cpu=$(gcloud run services describe "$svc" --project "$PROJECT" --region "$REGION" --format="value(spec.template.spec.containers[0].resources.limits.cpu)" 2>/dev/null || true)
+  mem=$(gcloud run services describe "$svc" --project "$PROJECT" --region "$REGION" --format="value(spec.template.spec.containers[0].resources.limits.memory)" 2>/dev/null || true)
+  min=$(gcloud run services describe "$svc" --project "$PROJECT" --region "$REGION" --format="value(spec.template.metadata.annotations.autoscaling.knative.dev/minScale)" 2>/dev/null || true)
+  max=$(gcloud run services describe "$svc" --project "$PROJECT" --region "$REGION" --format="value(spec.template.metadata.annotations.autoscaling.knative.dev/maxScale)" 2>/dev/null || true)
+
+  [[ -z "$cpu" ]] && cpu="default"
+  [[ -z "$mem" ]] && mem="default"
+  [[ -z "$min" ]] && min="default"
+  [[ -z "$max" ]] && max="default"
+
+  printf "%s\t%s\t%s\t%s\t%s\n" "$svc" "$cpu" "$mem" "$min" "$max"
+done
+
+echo ""
+echo "Note: This is a configuration snapshot only; billing data is not queried."
