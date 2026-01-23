@@ -1,0 +1,313 @@
+#!/usr/bin/env node
+
+/**
+ * DOT Fix Permissions - Directus Role Permission Fixer
+ *
+ * Sets admin_access: true on the Administrator role to grant
+ * full collection access.
+ *
+ * Usage:
+ *   ./dot/bin/dot-fix-permissions [options]
+ *
+ * Options:
+ *   --dry-run     Show what would be done without making changes
+ *   --help        Show this help
+ *
+ * Environment Variables:
+ *   DIRECTUS_URL            Directus API URL (required)
+ *   DIRECTUS_ADMIN_EMAIL    Admin email (required)
+ *   DIRECTUS_ADMIN_PASSWORD Admin password (required)
+ *
+ * Or use credentials.local.json for Spider compatibility
+ */
+
+const path = require('path');
+const fs = require('fs');
+const https = require('https');
+const http = require('http');
+
+// Parse command line arguments
+const args = process.argv.slice(2);
+const options = {
+  dryRun: args.includes('--dry-run'),
+  help: args.includes('--help'),
+};
+
+if (options.help) {
+  console.log(`
+DOT Fix Permissions - Directus Role Permission Fixer
+
+Usage:
+  ./dot/bin/dot-fix-permissions [options]
+
+Options:
+  --dry-run     Show what would be done without making changes
+  --help        Show this help
+
+Environment Variables:
+  DIRECTUS_URL            Directus API URL
+  DIRECTUS_ADMIN_EMAIL    Admin email
+  DIRECTUS_ADMIN_PASSWORD Admin password
+
+Or create dot/config/credentials.local.json with directusUrl field.
+`);
+  process.exit(0);
+}
+
+// Load credentials
+function loadConfig() {
+  const configDir = path.resolve(__dirname, '../config');
+  const localPath = path.resolve(configDir, 'credentials.local.json');
+
+  let config = {
+    directusUrl: process.env.DIRECTUS_URL,
+    email: process.env.DIRECTUS_ADMIN_EMAIL,
+    password: process.env.DIRECTUS_ADMIN_PASSWORD,
+  };
+
+  // Try loading from credentials file
+  if (fs.existsSync(localPath)) {
+    try {
+      const creds = JSON.parse(fs.readFileSync(localPath, 'utf-8'));
+      const profile = creds.profiles?.[0];
+      if (profile) {
+        config.email = config.email || profile.username;
+        config.password = config.password || profile.password;
+        // Use directusUrl from config or derive from domain
+        config.directusUrl = config.directusUrl || creds.directusUrl;
+      }
+    } catch (e) {
+      // Ignore parse errors
+    }
+  }
+
+  // Validate required fields
+  if (!config.directusUrl) {
+    console.error('Error: DIRECTUS_URL is required');
+    console.error('Set environment variable or add directusUrl to credentials.local.json');
+    process.exit(1);
+  }
+  if (!config.email || !config.password) {
+    console.error('Error: DIRECTUS_ADMIN_EMAIL and DIRECTUS_ADMIN_PASSWORD are required');
+    process.exit(1);
+  }
+
+  return config;
+}
+
+// HTTP request helper
+function request(url, options = {}) {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    const client = urlObj.protocol === 'https:' ? https : http;
+
+    const req = client.request(url, {
+      method: options.method || 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          resolve({ status: res.statusCode, data: json });
+        } catch {
+          resolve({ status: res.statusCode, data: data });
+        }
+      });
+    });
+
+    req.on('error', reject);
+
+    if (options.body) {
+      req.write(JSON.stringify(options.body));
+    }
+    req.end();
+  });
+}
+
+// Main function
+async function main() {
+  const config = loadConfig();
+
+  console.log(`
+\x1b[36m\x1b[1m🔐 DOT FIX PERMISSIONS\x1b[0m
+${'━'.repeat(52)}
+`);
+  console.log(`Directus URL: ${config.directusUrl}`);
+  console.log(`Admin Email:  ${config.email}`);
+  if (options.dryRun) {
+    console.log(`\x1b[33mMode: DRY RUN (no changes will be made)\x1b[0m`);
+  }
+  console.log('');
+
+  // Step 1: Authenticate
+  console.log('\x1b[33m[1/4]\x1b[0m Authenticating with Directus...');
+
+  const authRes = await request(`${config.directusUrl}/auth/login`, {
+    method: 'POST',
+    body: {
+      email: config.email,
+      password: config.password,
+    },
+  });
+
+  if (authRes.status !== 200 || !authRes.data?.data?.access_token) {
+    console.error(`\x1b[31m✗ Authentication failed\x1b[0m`);
+    console.error(`  Status: ${authRes.status}`);
+    console.error(`  Response: ${JSON.stringify(authRes.data)}`);
+    process.exit(1);
+  }
+
+  const accessToken = authRes.data.data.access_token;
+  console.log(`\x1b[32m✓ Authenticated successfully\x1b[0m`);
+
+  // Step 2: Get all roles
+  console.log('\x1b[33m[2/4]\x1b[0m Fetching roles...');
+
+  const rolesRes = await request(`${config.directusUrl}/roles`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+    },
+  });
+
+  if (rolesRes.status !== 200 || !rolesRes.data?.data) {
+    console.error(`\x1b[31m✗ Failed to fetch roles\x1b[0m`);
+    console.error(`  Status: ${rolesRes.status}`);
+    console.error(`  Response: ${JSON.stringify(rolesRes.data)}`);
+    process.exit(1);
+  }
+
+  const roles = rolesRes.data.data;
+  console.log(`\x1b[32m✓ Found ${roles.length} roles\x1b[0m`);
+
+  // Step 3: Find Administrator role
+  console.log('\x1b[33m[3/4]\x1b[0m Finding Administrator role...');
+
+  const adminRole = roles.find(r =>
+    r.name === 'Administrator' ||
+    r.name === 'Admin' ||
+    r.name.toLowerCase().includes('admin')
+  );
+
+  if (!adminRole) {
+    console.error(`\x1b[31m✗ Administrator role not found\x1b[0m`);
+    console.log('  Available roles:');
+    roles.forEach(r => console.log(`    - ${r.name} (${r.id})`));
+    process.exit(1);
+  }
+
+  console.log(`\x1b[32m✓ Found role: "${adminRole.name}" (${adminRole.id})\x1b[0m`);
+  console.log(`  Current admin_access: ${adminRole.admin_access}`);
+
+  // Check if already has admin_access
+  if (adminRole.admin_access === true) {
+    console.log(`\n\x1b[32m✓ Role already has admin_access: true\x1b[0m`);
+    console.log('  No changes needed. Tool is idempotent.');
+    console.log(`\n${'━'.repeat(52)}`);
+    console.log('\x1b[32m\x1b[1m✓ PERMISSIONS OK\x1b[0m');
+    process.exit(0);
+  }
+
+  // Step 4: Patch the role
+  console.log('\x1b[33m[4/4]\x1b[0m Setting admin_access: true...');
+
+  if (options.dryRun) {
+    console.log(`\x1b[33m⚠ DRY RUN: Would PATCH /roles/${adminRole.id} with { admin_access: true }\x1b[0m`);
+  } else {
+    const patchRes = await request(`${config.directusUrl}/roles/${adminRole.id}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: {
+        admin_access: true,
+      },
+    });
+
+    if (patchRes.status !== 200) {
+      console.error(`\x1b[31m✗ Failed to update role\x1b[0m`);
+      console.error(`  Status: ${patchRes.status}`);
+      console.error(`  Response: ${JSON.stringify(patchRes.data)}`);
+      process.exit(1);
+    }
+
+    console.log(`\x1b[32m✓ Role updated successfully\x1b[0m`);
+  }
+
+  // Step 5: Verify by checking collection access
+  console.log('\x1b[33m[5/5]\x1b[0m Verifying collection access...');
+
+  const requiredCollections = ['os_invoices', 'os_tasks', 'os_projects'];
+  const accessResults = [];
+
+  for (const collection of requiredCollections) {
+    const testRes = await request(`${config.directusUrl}/items/${collection}?limit=1`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    });
+
+    if (testRes.status === 200) {
+      accessResults.push({ collection, status: 'OK', count: testRes.data?.data?.length || 0 });
+    } else if (testRes.status === 403) {
+      const msg = testRes.data?.errors?.[0]?.message || 'Permission denied';
+      const notExist = msg.includes('does not exist');
+      accessResults.push({
+        collection,
+        status: notExist ? 'NOT_EXIST' : 'DENIED',
+        message: msg
+      });
+    } else {
+      accessResults.push({ collection, status: 'ERROR', message: `HTTP ${testRes.status}` });
+    }
+  }
+
+  // Print verification results
+  console.log('');
+  for (const result of accessResults) {
+    if (result.status === 'OK') {
+      console.log(`  \x1b[32m✓\x1b[0m ${result.collection}: OK (${result.count} items)`);
+    } else if (result.status === 'NOT_EXIST') {
+      console.log(`  \x1b[31m✗\x1b[0m ${result.collection}: \x1b[31mCOLLECTION DOES NOT EXIST\x1b[0m`);
+    } else if (result.status === 'DENIED') {
+      console.log(`  \x1b[31m✗\x1b[0m ${result.collection}: Permission denied`);
+    } else {
+      console.log(`  \x1b[33m?\x1b[0m ${result.collection}: ${result.message}`);
+    }
+  }
+
+  // Summary
+  console.log(`\n${'━'.repeat(52)}`);
+
+  const hasErrors = accessResults.some(r => r.status !== 'OK');
+  const hasMissing = accessResults.some(r => r.status === 'NOT_EXIST');
+
+  if (hasMissing) {
+    console.log('\x1b[31m\x1b[1m✗ MISSING COLLECTIONS\x1b[0m');
+    console.log('\nThe following collections do not exist in Directus:');
+    accessResults.filter(r => r.status === 'NOT_EXIST').forEach(r => {
+      console.log(`  - ${r.collection}`);
+    });
+    console.log('\nThis is a schema issue, not a permissions issue.');
+    console.log('Create these collections in Directus Admin or run schema migration.');
+    process.exit(1);
+  } else if (hasErrors) {
+    console.log('\x1b[31m\x1b[1m✗ PERMISSION ERRORS REMAIN\x1b[0m');
+    process.exit(1);
+  } else if (options.dryRun) {
+    console.log('\x1b[33m\x1b[1m⚠ DRY RUN COMPLETE - No changes made\x1b[0m');
+  } else {
+    console.log('\x1b[32m\x1b[1m✓ PERMISSIONS VERIFIED\x1b[0m');
+    console.log('\nAll required collections are accessible.');
+  }
+}
+
+// Run
+main().catch((error) => {
+  console.error('Error:', error.message);
+  process.exit(1);
+});
