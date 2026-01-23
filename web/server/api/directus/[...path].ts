@@ -110,13 +110,17 @@ export default defineEventHandler(async (event) => {
       body = await readBody(event)
     }
 
-    // Make request to Directus using $fetch
-    const response = await $fetch.raw(targetUrl, {
-      method: method as any,
-      headers,
+    // Make request to Directus using native fetch
+    // Using native fetch because $fetch/ofetch may strip cookie headers
+    if (isAuthRequest) {
+      console.log('[Directus Proxy] Target URL:', targetUrl)
+      console.log('[Directus Proxy] Headers:', JSON.stringify(headers))
+    }
+
+    const response = await fetch(targetUrl, {
+      method: method,
+      headers: headers,
       body: body ? JSON.stringify(body) : undefined,
-      // Don't throw on error status codes
-      ignoreResponseError: true,
     })
 
     if (isAuthRequest) {
@@ -144,8 +148,9 @@ export default defineEventHandler(async (event) => {
     // Set response status
     setResponseStatus(event, response.status)
 
-    // Return response body
-    return response._data
+    // Parse and return response body
+    const responseBody = await response.json().catch(() => response.text())
+    return responseBody
   } catch (error: any) {
     console.error('[Directus Proxy Error]', error.message)
     setResponseStatus(event, error.statusCode || 500)
