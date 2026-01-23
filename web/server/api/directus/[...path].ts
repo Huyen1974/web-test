@@ -8,6 +8,7 @@
  * E2 Task #012 - Fix cookie handling for session authentication
  * E2 Task #014 - Fix cookie Domain attribute for cross-origin proxy
  */
+// H3/Nuxt server utilities are auto-imported
 
 /**
  * Rewrites cookie attributes for proxy compatibility.
@@ -91,18 +92,39 @@ export default defineEventHandler(async (event) => {
   }
 
   // E2 Task #012: Log auth requests for debugging
-  const isAuthRequest = path.startsWith('auth/')
+  const isAuthRequest = path.startsWith('auth/') || path.startsWith('users/')
   if (isAuthRequest) {
-    console.log('[Directus Proxy] Auth request:', method, path)
+    console.log('[Directus Proxy] Request:', method, path)
+    console.log('[Directus Proxy] Cookie header:', forwardHeaders['cookie'] ? 'present' : 'MISSING')
   }
 
   try {
-    const response = await $fetch.raw(fullUrl, {
+    // E2 Task #014: Use native fetch to ensure headers are forwarded correctly
+    // $fetch (ofetch) may not properly forward all headers including cookies
+    const fetchOptions: RequestInit = {
       method,
-      body: body || undefined,
       headers: forwardHeaders,
-      ignoreResponseError: true,
-    })
+    }
+
+    // Only add body for methods that support it
+    if (body && ['POST', 'PUT', 'PATCH'].includes(method)) {
+      fetchOptions.body = JSON.stringify(body)
+      // Ensure content-type is set for JSON body
+      if (!forwardHeaders['content-type']) {
+        (fetchOptions.headers as Record<string, string>)['content-type'] = 'application/json'
+      }
+    }
+
+    const fetchResponse = await fetch(fullUrl, fetchOptions)
+
+    // Convert to a format compatible with the rest of the code
+    const response = {
+      status: fetchResponse.status,
+      headers: fetchResponse.headers,
+      _data: fetchResponse.headers.get('content-type')?.includes('application/json')
+        ? await fetchResponse.json()
+        : await fetchResponse.text(),
+    }
 
     // E2 Task #012 & #014: Handle Set-Cookie headers with domain rewriting
     // Directus returns cookies with Domain=directus-xxx.run.app which browser rejects
