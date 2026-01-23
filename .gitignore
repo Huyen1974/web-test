@@ -28,3 +28,4 @@ logs
 
 # Sensitive outputs
 agent_token_output.txt
+dot/config/credentials.local.json
