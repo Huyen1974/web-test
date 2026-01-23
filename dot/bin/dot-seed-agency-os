@@ -1,0 +1,540 @@
+#!/usr/bin/env node
+
+/**
+ * DOT Seed Agency OS - Create missing collections and seed dummy data
+ *
+ * Creates the os_invoices, os_tasks, os_projects, and contacts collections
+ * that are required by the Portal pages but missing from Directus.
+ *
+ * Usage:
+ *   ./dot/bin/dot-seed-agency-os [options]
+ *
+ * Options:
+ *   --dry-run     Show what would be done without making changes
+ *   --skip-seed   Only create collections, don't seed data
+ *   --help        Show this help
+ */
+
+const path = require('path');
+const fs = require('fs');
+const https = require('https');
+const http = require('http');
+
+// Parse command line arguments
+const args = process.argv.slice(2);
+const options = {
+  dryRun: args.includes('--dry-run'),
+  skipSeed: args.includes('--skip-seed'),
+  help: args.includes('--help'),
+};
+
+if (options.help) {
+  console.log(`
+DOT Seed Agency OS - Create missing collections and seed dummy data
+
+Usage:
+  ./dot/bin/dot-seed-agency-os [options]
+
+Options:
+  --dry-run     Show what would be done without making changes
+  --skip-seed   Only create collections, don't seed data
+  --help        Show this help
+
+Environment Variables:
+  DIRECTUS_URL            Directus API URL
+  DIRECTUS_ADMIN_EMAIL    Admin email
+  DIRECTUS_ADMIN_PASSWORD Admin password
+
+Or create dot/config/credentials.local.json with directusUrl field.
+`);
+  process.exit(0);
+}
+
+// Load credentials
+function loadConfig() {
+  const configDir = path.resolve(__dirname, '../config');
+  const localPath = path.resolve(configDir, 'credentials.local.json');
+
+  let config = {
+    directusUrl: process.env.DIRECTUS_URL,
+    email: process.env.DIRECTUS_ADMIN_EMAIL,
+    password: process.env.DIRECTUS_ADMIN_PASSWORD,
+  };
+
+  if (fs.existsSync(localPath)) {
+    try {
+      const creds = JSON.parse(fs.readFileSync(localPath, 'utf-8'));
+      const profile = creds.profiles?.[0];
+      if (profile) {
+        config.email = config.email || profile.username;
+        config.password = config.password || profile.password;
+        config.directusUrl = config.directusUrl || creds.directusUrl;
+      }
+    } catch (e) {
+      // Ignore parse errors
+    }
+  }
+
+  if (!config.directusUrl) {
+    console.error('Error: DIRECTUS_URL is required');
+    process.exit(1);
+  }
+  if (!config.email || !config.password) {
+    console.error('Error: DIRECTUS_ADMIN_EMAIL and DIRECTUS_ADMIN_PASSWORD are required');
+    process.exit(1);
+  }
+
+  return config;
+}
+
+// HTTP request helper
+function request(url, options = {}) {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    const client = urlObj.protocol === 'https:' ? https : http;
+
+    const req = client.request(url, {
+      method: options.method || 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          resolve({ status: res.statusCode, data: json });
+        } catch {
+          resolve({ status: res.statusCode, data: data });
+        }
+      });
+    });
+
+    req.on('error', reject);
+
+    if (options.body) {
+      req.write(JSON.stringify(options.body));
+    }
+    req.end();
+  });
+}
+
+// Collection schemas based on TypeScript types
+// IMPORTANT: Include schema: {} to create actual database tables
+const COLLECTIONS = {
+  contacts: {
+    collection: 'contacts',
+    schema: {},  // Creates actual database table
+    meta: {
+      collection: 'contacts',
+      icon: 'account_circle',
+      note: 'Customer and client contacts',
+      display_template: '{{first_name}} {{last_name}}',
+      archive_field: 'status',
+      archive_value: 'archived',
+      unarchive_value: 'active',
+      sort_field: 'sort',
+    },
+    fields: [
+      { field: 'id', type: 'uuid', meta: { hidden: true, readonly: true, interface: 'input', special: ['uuid'] }, schema: { is_primary_key: true, has_auto_increment: false } },
+      { field: 'status', type: 'string', meta: { interface: 'select-dropdown', options: { choices: [{ text: 'Active', value: 'active' }, { text: 'Archived', value: 'archived' }] }, width: 'half' }, schema: { default_value: 'active' } },
+      { field: 'sort', type: 'integer', meta: { hidden: true, interface: 'input' }, schema: {} },
+      { field: 'user_created', type: 'uuid', meta: { special: ['user-created'], interface: 'select-dropdown-m2o', readonly: true, hidden: true, width: 'half' }, schema: {} },
+      { field: 'date_created', type: 'timestamp', meta: { special: ['date-created'], interface: 'datetime', readonly: true, hidden: true, width: 'half' }, schema: {} },
+      { field: 'user_updated', type: 'uuid', meta: { special: ['user-updated'], interface: 'select-dropdown-m2o', readonly: true, hidden: true, width: 'half' }, schema: {} },
+      { field: 'date_updated', type: 'timestamp', meta: { special: ['date-updated'], interface: 'datetime', readonly: true, hidden: true, width: 'half' }, schema: {} },
+      { field: 'first_name', type: 'string', meta: { interface: 'input', width: 'half' }, schema: {} },
+      { field: 'last_name', type: 'string', meta: { interface: 'input', width: 'half' }, schema: {} },
+      { field: 'email', type: 'string', meta: { interface: 'input' }, schema: {} },
+      { field: 'phone', type: 'string', meta: { interface: 'input', width: 'half' }, schema: {} },
+      { field: 'job_title', type: 'string', meta: { interface: 'input', width: 'half' }, schema: {} },
+    ],
+  },
+  os_projects: {
+    collection: 'os_projects',
+    schema: {},  // Creates actual database table
+    meta: {
+      collection: 'os_projects',
+      icon: 'folder_special',
+      note: 'Client projects',
+      display_template: '{{name}}',
+      archive_field: 'status',
+      archive_value: 'archived',
+      unarchive_value: 'active',
+      sort_field: 'sort',
+    },
+    fields: [
+      { field: 'id', type: 'uuid', meta: { hidden: true, readonly: true, interface: 'input', special: ['uuid'] }, schema: { is_primary_key: true, has_auto_increment: false } },
+      { field: 'status', type: 'string', meta: { interface: 'select-dropdown', options: { choices: [{ text: 'Active', value: 'active' }, { text: 'Completed', value: 'completed' }, { text: 'On Hold', value: 'on_hold' }, { text: 'Archived', value: 'archived' }] }, width: 'half' }, schema: { default_value: 'active' } },
+      { field: 'sort', type: 'integer', meta: { hidden: true, interface: 'input' }, schema: {} },
+      { field: 'user_created', type: 'uuid', meta: { special: ['user-created'], interface: 'select-dropdown-m2o', readonly: true, hidden: true, width: 'half' }, schema: {} },
+      { field: 'date_created', type: 'timestamp', meta: { special: ['date-created'], interface: 'datetime', readonly: true, hidden: true, width: 'half' }, schema: {} },
+      { field: 'user_updated', type: 'uuid', meta: { special: ['user-updated'], interface: 'select-dropdown-m2o', readonly: true, hidden: true, width: 'half' }, schema: {} },
+      { field: 'date_updated', type: 'timestamp', meta: { special: ['date-updated'], interface: 'datetime', readonly: true, hidden: true, width: 'half' }, schema: {} },
+      { field: 'name', type: 'string', meta: { interface: 'input', required: true }, schema: {} },
+      { field: 'description', type: 'text', meta: { interface: 'input-rich-text-md' }, schema: {} },
+      { field: 'start_date', type: 'date', meta: { interface: 'datetime', width: 'half' }, schema: {} },
+      { field: 'due_date', type: 'date', meta: { interface: 'datetime', width: 'half' }, schema: {} },
+      { field: 'billing', type: 'string', meta: { interface: 'select-dropdown', options: { choices: [{ text: 'Fixed', value: 'fixed' }, { text: 'Hourly', value: 'hourly' }, { text: 'Retainer', value: 'retainer' }] }, width: 'half' }, schema: { default_value: 'fixed' } },
+    ],
+  },
+  os_tasks: {
+    collection: 'os_tasks',
+    schema: {},  // Creates actual database table
+    meta: {
+      collection: 'os_tasks',
+      icon: 'task_alt',
+      note: 'Project tasks and milestones',
+      display_template: '{{name}}',
+      archive_field: 'status',
+      archive_value: 'completed',
+      unarchive_value: 'pending',
+      sort_field: 'sort',
+    },
+    fields: [
+      { field: 'id', type: 'uuid', meta: { hidden: true, readonly: true, interface: 'input', special: ['uuid'] }, schema: { is_primary_key: true, has_auto_increment: false } },
+      { field: 'status', type: 'string', meta: { interface: 'select-dropdown', options: { choices: [{ text: 'Pending', value: 'pending' }, { text: 'Active', value: 'active' }, { text: 'In Progress', value: 'in_progress' }, { text: 'In Review', value: 'in_review' }, { text: 'Completed', value: 'completed' }] }, width: 'half' }, schema: { default_value: 'pending' } },
+      { field: 'sort', type: 'integer', meta: { hidden: true, interface: 'input' }, schema: {} },
+      { field: 'user_created', type: 'uuid', meta: { special: ['user-created'], interface: 'select-dropdown-m2o', readonly: true, hidden: true, width: 'half' }, schema: {} },
+      { field: 'date_created', type: 'timestamp', meta: { special: ['date-created'], interface: 'datetime', readonly: true, hidden: true, width: 'half' }, schema: {} },
+      { field: 'user_updated', type: 'uuid', meta: { special: ['user-updated'], interface: 'select-dropdown-m2o', readonly: true, hidden: true, width: 'half' }, schema: {} },
+      { field: 'date_updated', type: 'timestamp', meta: { special: ['date-updated'], interface: 'datetime', readonly: true, hidden: true, width: 'half' }, schema: {} },
+      { field: 'name', type: 'string', meta: { interface: 'input', required: true }, schema: {} },
+      { field: 'description', type: 'text', meta: { interface: 'input-rich-text-md' }, schema: {} },
+      { field: 'due_date', type: 'date', meta: { interface: 'datetime', width: 'half' }, schema: {} },
+      { field: 'start_date', type: 'date', meta: { interface: 'datetime', width: 'half' }, schema: {} },
+      { field: 'type', type: 'string', meta: { interface: 'select-dropdown', options: { choices: [{ text: 'Task', value: 'task' }, { text: 'Milestone', value: 'milestone' }] }, width: 'half' }, schema: { default_value: 'task' } },
+      { field: 'is_visible_to_client', type: 'boolean', meta: { interface: 'boolean', width: 'half' }, schema: { default_value: true } },
+      { field: 'project', type: 'uuid', meta: { interface: 'select-dropdown-m2o', special: ['m2o'], width: 'half' }, schema: {} },
+    ],
+  },
+  os_invoices: {
+    collection: 'os_invoices',
+    schema: {},  // Creates actual database table
+    meta: {
+      collection: 'os_invoices',
+      icon: 'receipt_long',
+      note: 'Client invoices',
+      display_template: '{{invoice_number}}',
+      archive_field: 'status',
+      archive_value: 'void',
+      unarchive_value: 'unpaid',
+      sort_field: 'sort',
+    },
+    fields: [
+      { field: 'id', type: 'uuid', meta: { hidden: true, readonly: true, interface: 'input', special: ['uuid'] }, schema: { is_primary_key: true, has_auto_increment: false } },
+      { field: 'status', type: 'string', meta: { interface: 'select-dropdown', options: { choices: [{ text: 'Draft', value: 'draft' }, { text: 'Unpaid', value: 'unpaid' }, { text: 'Paid', value: 'paid' }, { text: 'Void', value: 'void' }] }, width: 'half' }, schema: { default_value: 'draft' } },
+      { field: 'sort', type: 'integer', meta: { hidden: true, interface: 'input' }, schema: {} },
+      { field: 'user_created', type: 'uuid', meta: { special: ['user-created'], interface: 'select-dropdown-m2o', readonly: true, hidden: true, width: 'half' }, schema: {} },
+      { field: 'date_created', type: 'timestamp', meta: { special: ['date-created'], interface: 'datetime', readonly: true, hidden: true, width: 'half' }, schema: {} },
+      { field: 'user_updated', type: 'uuid', meta: { special: ['user-updated'], interface: 'select-dropdown-m2o', readonly: true, hidden: true, width: 'half' }, schema: {} },
+      { field: 'date_updated', type: 'timestamp', meta: { special: ['date-updated'], interface: 'datetime', readonly: true, hidden: true, width: 'half' }, schema: {} },
+      { field: 'invoice_number', type: 'string', meta: { interface: 'input', width: 'half' }, schema: {} },
+      { field: 'issue_date', type: 'date', meta: { interface: 'datetime', width: 'half' }, schema: {} },
+      { field: 'due_date', type: 'date', meta: { interface: 'datetime', width: 'half' }, schema: {} },
+      { field: 'reference', type: 'string', meta: { interface: 'input', width: 'half' }, schema: {} },
+      { field: 'subtotal', type: 'float', meta: { interface: 'input', width: 'half' }, schema: { default_value: 0 } },
+      { field: 'total_tax', type: 'float', meta: { interface: 'input', width: 'half' }, schema: { default_value: 0 } },
+      { field: 'total', type: 'float', meta: { interface: 'input', width: 'half' }, schema: { default_value: 0 } },
+      { field: 'amount_paid', type: 'float', meta: { interface: 'input', width: 'half' }, schema: { default_value: 0 } },
+      { field: 'amount_due', type: 'float', meta: { interface: 'input', width: 'half' }, schema: { default_value: 0 } },
+      { field: 'contact', type: 'uuid', meta: { interface: 'select-dropdown-m2o', special: ['m2o'], width: 'half' }, schema: {} },
+      { field: 'project', type: 'uuid', meta: { interface: 'select-dropdown-m2o', special: ['m2o'], width: 'half' }, schema: {} },
+    ],
+  },
+};
+
+// Dummy data for seeding
+function generateSeedData() {
+  const now = new Date();
+  const nextMonth = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const lastMonth = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  return {
+    contacts: [
+      { first_name: 'John', last_name: 'Smith', email: 'john.smith@example.com', phone: '+1-555-0101', job_title: 'CEO', status: 'active' },
+      { first_name: 'Sarah', last_name: 'Johnson', email: 'sarah.j@example.com', phone: '+1-555-0102', job_title: 'Project Manager', status: 'active' },
+      { first_name: 'Michael', last_name: 'Chen', email: 'mchen@example.com', phone: '+1-555-0103', job_title: 'CTO', status: 'active' },
+    ],
+    os_projects: [
+      { name: 'Website Redesign', description: 'Complete overhaul of corporate website with modern design', status: 'active', start_date: lastMonth.toISOString().split('T')[0], due_date: nextMonth.toISOString().split('T')[0], billing: 'fixed' },
+      { name: 'Mobile App Development', description: 'Cross-platform mobile application for customer portal', status: 'active', start_date: now.toISOString().split('T')[0], due_date: new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], billing: 'hourly' },
+      { name: 'E-commerce Platform', description: 'Full-featured online store with payment integration', status: 'active', start_date: lastMonth.toISOString().split('T')[0], due_date: new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], billing: 'retainer' },
+    ],
+    os_tasks: [
+      { name: 'Design Mockups', description: 'Create initial design mockups for homepage', status: 'completed', type: 'milestone', due_date: lastMonth.toISOString().split('T')[0], is_visible_to_client: true },
+      { name: 'Frontend Development', description: 'Implement responsive frontend using Vue.js', status: 'in_progress', type: 'task', due_date: nextWeek.toISOString().split('T')[0], is_visible_to_client: true },
+      { name: 'API Integration', description: 'Connect frontend to backend APIs', status: 'pending', type: 'task', due_date: nextMonth.toISOString().split('T')[0], is_visible_to_client: true },
+      { name: 'User Testing', description: 'Conduct user acceptance testing', status: 'pending', type: 'milestone', due_date: nextMonth.toISOString().split('T')[0], is_visible_to_client: true },
+      { name: 'Launch Preparation', description: 'Final checks before going live', status: 'pending', type: 'milestone', due_date: nextMonth.toISOString().split('T')[0], is_visible_to_client: true },
+    ],
+    os_invoices: [
+      { invoice_number: 'INV-2026-001', status: 'paid', issue_date: lastMonth.toISOString().split('T')[0], due_date: now.toISOString().split('T')[0], subtotal: 5000, total_tax: 500, total: 5500, amount_paid: 5500, amount_due: 0, reference: 'Website Redesign - Phase 1' },
+      { invoice_number: 'INV-2026-002', status: 'unpaid', issue_date: now.toISOString().split('T')[0], due_date: nextMonth.toISOString().split('T')[0], subtotal: 7500, total_tax: 750, total: 8250, amount_paid: 0, amount_due: 8250, reference: 'Mobile App - Sprint 1' },
+      { invoice_number: 'INV-2026-003', status: 'unpaid', issue_date: now.toISOString().split('T')[0], due_date: nextWeek.toISOString().split('T')[0], subtotal: 3000, total_tax: 300, total: 3300, amount_paid: 0, amount_due: 3300, reference: 'E-commerce Retainer - January' },
+    ],
+  };
+}
+
+// Main function
+async function main() {
+  const config = loadConfig();
+
+  console.log(`
+\x1b[36m\x1b[1m🌱 DOT SEED AGENCY OS\x1b[0m
+${'━'.repeat(52)}
+`);
+  console.log(`Directus URL: ${config.directusUrl}`);
+  console.log(`Admin Email:  ${config.email}`);
+  if (options.dryRun) {
+    console.log(`\x1b[33mMode: DRY RUN (no changes will be made)\x1b[0m`);
+  }
+  console.log('');
+
+  // Step 1: Authenticate
+  console.log('\x1b[33m[1/4]\x1b[0m Authenticating with Directus...');
+
+  const authRes = await request(`${config.directusUrl}/auth/login`, {
+    method: 'POST',
+    body: { email: config.email, password: config.password },
+  });
+
+  if (authRes.status !== 200 || !authRes.data?.data?.access_token) {
+    console.error(`\x1b[31m✗ Authentication failed\x1b[0m`);
+    console.error(`  Status: ${authRes.status}`);
+    process.exit(1);
+  }
+
+  const accessToken = authRes.data.data.access_token;
+  console.log(`\x1b[32m✓ Authenticated successfully\x1b[0m`);
+
+  // Step 2: Check existing collections
+  console.log('\x1b[33m[2/4]\x1b[0m Checking existing collections...');
+
+  const collectionsRes = await request(`${config.directusUrl}/collections`, {
+    headers: { 'Authorization': `Bearer ${accessToken}` },
+  });
+
+  const existingCollections = new Set(
+    collectionsRes.data?.data?.map(c => c.collection) || []
+  );
+
+  const collectionsToCreate = Object.keys(COLLECTIONS).filter(
+    c => !existingCollections.has(c)
+  );
+  const existingCount = Object.keys(COLLECTIONS).length - collectionsToCreate.length;
+
+  console.log(`  Found ${existingCount} existing, ${collectionsToCreate.length} to create`);
+
+  // Step 3: Create collections
+  console.log('\x1b[33m[3/4]\x1b[0m Creating collections...');
+
+  for (const collName of collectionsToCreate) {
+    const coll = COLLECTIONS[collName];
+
+    if (options.dryRun) {
+      console.log(`  \x1b[33m⚠\x1b[0m Would create: ${collName}`);
+      continue;
+    }
+
+    // Create collection with schema (creates actual database table)
+    const createRes = await request(`${config.directusUrl}/collections`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+      body: { collection: coll.collection, schema: coll.schema, meta: coll.meta, fields: coll.fields },
+    });
+
+    if (createRes.status === 200 || createRes.status === 201) {
+      console.log(`  \x1b[32m✓\x1b[0m Created: ${collName}`);
+    } else if (createRes.status === 400 && createRes.data?.errors?.[0]?.message?.includes('already exists')) {
+      console.log(`  \x1b[34m○\x1b[0m Already exists: ${collName}`);
+    } else {
+      console.log(`  \x1b[31m✗\x1b[0m Failed: ${collName} - ${createRes.data?.errors?.[0]?.message || createRes.status}`);
+    }
+  }
+
+  // Mark existing collections
+  for (const collName of Object.keys(COLLECTIONS)) {
+    if (existingCollections.has(collName)) {
+      console.log(`  \x1b[34m○\x1b[0m Already exists: ${collName}`);
+    }
+  }
+
+  // Step 3.5: Create relations
+  console.log('\x1b[33m[3.5/5]\x1b[0m Setting up relations...');
+
+  const relations = [
+    // os_tasks.project -> os_projects (M2O)
+    {
+      collection: 'os_tasks',
+      field: 'project',
+      related_collection: 'os_projects',
+      meta: { one_field: 'tasks', sort_field: null, one_deselect_action: 'nullify' },
+    },
+    // os_invoices.contact -> contacts (M2O)
+    {
+      collection: 'os_invoices',
+      field: 'contact',
+      related_collection: 'contacts',
+      meta: { sort_field: null },
+    },
+    // os_invoices.project -> os_projects (M2O)
+    {
+      collection: 'os_invoices',
+      field: 'project',
+      related_collection: 'os_projects',
+      meta: { sort_field: null },
+    },
+  ];
+
+  for (const rel of relations) {
+    if (options.dryRun) {
+      console.log(`  \x1b[33m⚠\x1b[0m Would create relation: ${rel.collection}.${rel.field} -> ${rel.related_collection}`);
+      continue;
+    }
+
+    // Check if relation exists
+    const checkRes = await request(`${config.directusUrl}/relations/${rel.collection}/${rel.field}`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+    });
+
+    if (checkRes.status === 200) {
+      console.log(`  \x1b[34m○\x1b[0m Relation exists: ${rel.collection}.${rel.field}`);
+      continue;
+    }
+
+    // Add O2M field if needed (for tasks on os_projects)
+    if (rel.meta?.one_field) {
+      await request(`${config.directusUrl}/fields/${rel.related_collection}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        body: { field: rel.meta.one_field, type: 'alias', meta: { interface: 'list-o2m', special: ['o2m'] } },
+      });
+    }
+
+    // Create relation
+    const createRes = await request(`${config.directusUrl}/relations`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+      body: rel,
+    });
+
+    if (createRes.status === 200 || createRes.status === 201) {
+      console.log(`  \x1b[32m✓\x1b[0m Created: ${rel.collection}.${rel.field} -> ${rel.related_collection}`);
+    } else {
+      console.log(`  \x1b[33m⚠\x1b[0m ${rel.collection}.${rel.field}: ${createRes.data?.errors?.[0]?.message || 'Unknown error'}`);
+    }
+  }
+
+  // Step 4: Seed data
+  if (options.skipSeed) {
+    console.log('\x1b[33m[4/4]\x1b[0m Skipping data seeding (--skip-seed)');
+  } else {
+    console.log('\x1b[33m[4/4]\x1b[0m Seeding dummy data...');
+
+    const seedData = generateSeedData();
+    const createdIds = { contacts: [], os_projects: [], os_tasks: [], os_invoices: [] };
+
+    // Seed in order: contacts -> projects -> tasks (link to project) -> invoices (link to contact and project)
+    for (const collName of ['contacts', 'os_projects', 'os_tasks', 'os_invoices']) {
+      const items = seedData[collName];
+
+      // Check if collection has data already
+      const checkRes = await request(`${config.directusUrl}/items/${collName}?limit=1`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      });
+
+      if (checkRes.status === 200 && checkRes.data?.data?.length > 0) {
+        console.log(`  \x1b[34m○\x1b[0m ${collName}: Already has data (${checkRes.data.data.length}+ items)`);
+        continue;
+      }
+
+      if (options.dryRun) {
+        console.log(`  \x1b[33m⚠\x1b[0m Would seed: ${collName} (${items.length} items)`);
+        continue;
+      }
+
+      // Link tasks to first project
+      if (collName === 'os_tasks' && createdIds.os_projects.length > 0) {
+        items.forEach((item, i) => {
+          item.project = createdIds.os_projects[i % createdIds.os_projects.length];
+        });
+      }
+
+      // Link invoices to contacts and projects
+      if (collName === 'os_invoices') {
+        items.forEach((item, i) => {
+          if (createdIds.contacts.length > 0) {
+            item.contact = createdIds.contacts[i % createdIds.contacts.length];
+          }
+          if (createdIds.os_projects.length > 0) {
+            item.project = createdIds.os_projects[i % createdIds.os_projects.length];
+          }
+        });
+      }
+
+      // Insert items one by one to capture IDs
+      let successCount = 0;
+      for (const item of items) {
+        const insertRes = await request(`${config.directusUrl}/items/${collName}`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${accessToken}` },
+          body: item,
+        });
+
+        if (insertRes.status === 200 || insertRes.status === 201) {
+          successCount++;
+          if (insertRes.data?.data?.id) {
+            createdIds[collName].push(insertRes.data.data.id);
+          }
+        }
+      }
+
+      console.log(`  \x1b[32m✓\x1b[0m ${collName}: Seeded ${successCount}/${items.length} items`);
+    }
+  }
+
+  // Verification
+  console.log('');
+  console.log('\x1b[33m[5/5]\x1b[0m Verifying collection access...');
+
+  const requiredCollections = ['contacts', 'os_invoices', 'os_tasks', 'os_projects'];
+  let allOk = true;
+
+  for (const coll of requiredCollections) {
+    const testRes = await request(`${config.directusUrl}/items/${coll}?limit=1`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+    });
+
+    if (testRes.status === 200) {
+      const count = testRes.data?.data?.length || 0;
+      console.log(`  \x1b[32m✓\x1b[0m ${coll}: OK (${count} items)`);
+    } else {
+      console.log(`  \x1b[31m✗\x1b[0m ${coll}: ${testRes.status} - ${testRes.data?.errors?.[0]?.message || 'Error'}`);
+      allOk = false;
+    }
+  }
+
+  // Summary
+  console.log(`\n${'━'.repeat(52)}`);
+
+  if (options.dryRun) {
+    console.log('\x1b[33m\x1b[1m⚠ DRY RUN COMPLETE - No changes made\x1b[0m');
+  } else if (allOk) {
+    console.log('\x1b[32m\x1b[1m✓ AGENCY OS SEEDED SUCCESSFULLY\x1b[0m');
+    console.log('\nAll required collections are created and accessible.');
+    console.log('Run dot-spider to verify the Portal works correctly.');
+  } else {
+    console.log('\x1b[31m\x1b[1m✗ SOME COLLECTIONS FAILED\x1b[0m');
+    process.exit(1);
+  }
+}
+
+// Run
+main().catch((error) => {
+  console.error('Error:', error.message);
+  process.exit(1);
+});
