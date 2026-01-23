@@ -36,6 +36,9 @@ export DIRECTUS_BASE_URL="https://directus-test-pfne2mqwja-as.a.run.app"
 | dot/bin/dot-health-check | 4-layer health check (network, web, proxy, auth) | BASE_URL, DIRECTUS_ADMIN_EMAIL, DIRECTUS_ADMIN_PASSWORD | Yes | `dot/bin/dot-health-check` |
 | dot/bin/dot-test-login | Run Playwright login tests against production | PLAYWRIGHT_BASE_URL, BASE_URL | Yes | `dot/bin/dot-test-login` |
 | dot/bin/dot-cost-audit | Cloud Run configuration snapshot for cost review | GCP_PROJECT, GCP_REGION | Yes | `dot/bin/dot-cost-audit` |
+| dot/bin/dot-spider | Website health crawler with auth support | DIRECTUS_ADMIN_EMAIL, DIRECTUS_ADMIN_PASSWORD, BASE_URL | Yes | `dot/bin/dot-spider --max-pages 10` |
+| dot/bin/dot-fix-permissions | Fix Directus Public role permissions | DOT_TOKEN or DIRECTUS_ADMIN_PASSWORD, DIRECTUS_BASE_URL | Yes | `dot/bin/dot-fix-permissions` |
+| dot/bin/dot-seed-agency-os | Create Agency OS collections + seed data | DOT_TOKEN or DIRECTUS_ADMIN_PASSWORD, DIRECTUS_BASE_URL | Yes | `dot/bin/dot-seed-agency-os` |
 
 ## Safety and laws
 - No UI automation. These tools use Directus API only.
@@ -70,6 +73,9 @@ curl --globoff -sS \
 - dot/docs/health-check.md
 - dot/docs/test-login.md
 - dot/docs/cost-audit.md
+- dot/docs/spider.md
+- dot/docs/fix-permissions.md
+- dot/docs/seed-agency-os.md
 - Full toolchain map: docs/projects/web_tools/actions_tools.md
 
 ## Reports
