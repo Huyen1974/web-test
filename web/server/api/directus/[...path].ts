@@ -24,15 +24,21 @@ import {
  * - Removes Domain attribute (so browser uses current domain)
  * - Ensures Path is set to / for full site access
  * - Preserves HttpOnly, Secure, SameSite attributes
+ * - Ensures Secure is present for HTTPS contexts
  */
 function rewriteCookieForProxy(cookieString: string): string {
   const parts = cookieString.split(';').map(p => p.trim())
   const nameValue = parts[0]
   const newParts = [nameValue]
+  let hasSecure = false
 
   for (let i = 1; i < parts.length; i++) {
     const part = parts[i]
     const lowerPart = part.toLowerCase()
+
+    if (lowerPart === 'secure') {
+      hasSecure = true
+    }
 
     // Skip Domain attribute - let browser use current domain
     if (lowerPart.startsWith('domain=')) {
@@ -51,6 +57,10 @@ function rewriteCookieForProxy(cookieString: string): string {
 
   if (!newParts.some(p => p.toLowerCase().startsWith('path='))) {
     newParts.push('Path=/')
+  }
+
+  if (!hasSecure) {
+    newParts.push('Secure')
   }
 
   return newParts.join('; ')
@@ -128,7 +138,15 @@ export default defineEventHandler(async (event) => {
     }
 
     // Forward Set-Cookie headers with rewriting
-    const setCookieHeaders = response.headers.getSetCookie?.() || []
+    const rawSetCookie =
+      (response.headers as unknown as { getSetCookie?: () => string[] }).getSetCookie?.() ||
+      response.headers.get('set-cookie')
+    const setCookieHeaders = Array.isArray(rawSetCookie)
+      ? rawSetCookie
+      : rawSetCookie
+        ? [rawSetCookie]
+        : []
+
     if (setCookieHeaders.length > 0) {
       for (const cookie of setCookieHeaders) {
         const rewrittenCookie = rewriteCookieForProxy(cookie)
