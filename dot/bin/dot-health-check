@@ -1,0 +1,155 @@
+#!/usr/bin/env node
+'use strict'
+
+const dns = require('node:dns').promises
+const { URL } = require('node:url')
+
+const BASE_URL =
+  process.env.BASE_URL ||
+  process.env.NUXT_PUBLIC_SITE_URL ||
+  'https://ai.incomexsaigoncorp.vn'
+
+const AUTH_EMAIL = process.env.DIRECTUS_ADMIN_EMAIL || ''
+const AUTH_PASSWORD = process.env.DIRECTUS_ADMIN_PASSWORD || ''
+const LOGIN_PATH = process.env.DIRECTUS_LOGIN_PATH || '/api/directus/auth/login'
+const HEALTH_PATH =
+  process.env.DIRECTUS_HEALTH_PATH || '/api/directus/server/health'
+
+function fmtStatus(status) {
+  return status.toUpperCase().padEnd(5, ' ')
+}
+
+async function checkDns(hostname) {
+  const result = await dns.lookup(hostname)
+  return `resolved to ${result.address}`
+}
+
+async function checkHttp(url, options = {}) {
+  const response = await fetch(url, options)
+  return { status: response.status, headers: response.headers }
+}
+
+async function main() {
+  const results = []
+  const parsed = new URL(BASE_URL)
+
+  console.log('DOT HEALTH CHECK')
+  console.log(`Base URL: ${BASE_URL}`)
+  console.log('-'.repeat(60))
+
+  // Layer 1: Network (DNS)
+  try {
+    const detail = await checkDns(parsed.hostname)
+    results.push({ layer: 'Network (DNS)', status: 'pass', detail })
+  } catch (err) {
+    results.push({
+      layer: 'Network (DNS)',
+      status: 'fail',
+      detail: err.message || 'DNS lookup failed',
+    })
+  }
+
+  // Layer 2: Web Server
+  try {
+    const res = await checkHttp(BASE_URL)
+    const ok = res.status >= 200 && res.status < 400
+    results.push({
+      layer: 'Web Server',
+      status: ok ? 'pass' : 'fail',
+      detail: `HTTP ${res.status}`,
+    })
+  } catch (err) {
+    results.push({
+      layer: 'Web Server',
+      status: 'fail',
+      detail: err.message || 'Request failed',
+    })
+  }
+
+  // Layer 3: API Proxy
+  try {
+    const res = await checkHttp(`${BASE_URL}${HEALTH_PATH}`)
+    const ok = res.status === 200
+    results.push({
+      layer: 'API Proxy',
+      status: ok ? 'pass' : 'fail',
+      detail: `HTTP ${res.status}`,
+    })
+  } catch (err) {
+    results.push({
+      layer: 'API Proxy',
+      status: 'fail',
+      detail: err.message || 'Request failed',
+    })
+  }
+
+  // Layer 4: Auth Flow
+  if (!AUTH_EMAIL || !AUTH_PASSWORD) {
+    results.push({
+      layer: 'Auth Flow',
+      status: 'skip',
+      detail: 'Missing DIRECTUS_ADMIN_EMAIL or DIRECTUS_ADMIN_PASSWORD',
+    })
+  } else {
+    try {
+      const res = await checkHttp(`${BASE_URL}${LOGIN_PATH}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: AUTH_EMAIL,
+          password: AUTH_PASSWORD,
+          mode: 'session',
+        }),
+      })
+
+      const setCookie = res.headers.get('set-cookie') || ''
+      const hasSession =
+        /directus_session_token=/i.test(setCookie) ||
+        /__session=/i.test(setCookie)
+      const hasSecure = /;\s*Secure/i.test(setCookie)
+
+      const ok = res.status === 200 && hasSession && hasSecure
+      const detailParts = [`HTTP ${res.status}`]
+      detailParts.push(hasSession ? 'session cookie' : 'no session cookie')
+      detailParts.push(hasSecure ? 'Secure ok' : 'Secure missing')
+
+      results.push({
+        layer: 'Auth Flow',
+        status: ok ? 'pass' : 'fail',
+        detail: detailParts.join(', '),
+      })
+    } catch (err) {
+      results.push({
+        layer: 'Auth Flow',
+        status: 'fail',
+        detail: err.message || 'Request failed',
+      })
+    }
+  }
+
+  let hasFail = false
+  let hasSkip = false
+
+  for (const result of results) {
+    if (result.status === 'fail') hasFail = true
+    if (result.status === 'skip') hasSkip = true
+    console.log(
+      `${fmtStatus(result.status)} ${result.layer}: ${result.detail}`
+    )
+  }
+
+  console.log('-'.repeat(60))
+  if (hasFail) {
+    console.log('SUMMARY: FAIL')
+    process.exitCode = 1
+  } else if (hasSkip) {
+    console.log('SUMMARY: WARN (auth check skipped)')
+  } else {
+    console.log('SUMMARY: PASS')
+  }
+}
+
+main().catch((err) => {
+  console.error('FATAL:', err.message || err)
+  process.exit(1)
+})
