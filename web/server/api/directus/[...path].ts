@@ -99,32 +99,34 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    // E2 Task #014: Use native fetch to ensure headers are forwarded correctly
-    // $fetch (ofetch) may not properly forward all headers including cookies
-    const fetchOptions: RequestInit = {
-      method,
-      headers: forwardHeaders,
+    // E2 Task #014: Debug cookie forwarding
+    if (isAuthRequest) {
+      console.log('[Directus Proxy] Forwarding headers:', JSON.stringify(forwardHeaders))
     }
 
-    // Only add body for methods that support it
-    if (body && ['POST', 'PUT', 'PATCH'].includes(method)) {
-      fetchOptions.body = JSON.stringify(body)
-      // Ensure content-type is set for JSON body
-      if (!forwardHeaders['content-type']) {
-        (fetchOptions.headers as Record<string, string>)['content-type'] = 'application/json'
+    // Use $fetch with explicit headers - ensure cookie header is properly capitalized
+    const fetchHeaders: Record<string, string> = {}
+    for (const [key, value] of Object.entries(forwardHeaders)) {
+      // Capitalize header names for better compatibility
+      if (key === 'cookie') {
+        fetchHeaders['Cookie'] = value
+      } else if (key === 'content-type') {
+        fetchHeaders['Content-Type'] = value
+      } else {
+        fetchHeaders[key] = value
       }
     }
 
-    const fetchResponse = await fetch(fullUrl, fetchOptions)
-
-    // Convert to a format compatible with the rest of the code
-    const response = {
-      status: fetchResponse.status,
-      headers: fetchResponse.headers,
-      _data: fetchResponse.headers.get('content-type')?.includes('application/json')
-        ? await fetchResponse.json()
-        : await fetchResponse.text(),
+    if (isAuthRequest) {
+      console.log('[Directus Proxy] Final headers:', JSON.stringify(fetchHeaders))
     }
+
+    const response = await $fetch.raw(fullUrl, {
+      method,
+      body: body || undefined,
+      headers: fetchHeaders,
+      ignoreResponseError: true,
+    })
 
     // E2 Task #012 & #014: Handle Set-Cookie headers with domain rewriting
     // Directus returns cookies with Domain=directus-xxx.run.app which browser rejects
