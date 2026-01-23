@@ -10,6 +10,7 @@
  */
 import {
   defineEventHandler,
+  getCookie,
   getHeader,
   getHeaders,
   getQuery,
@@ -88,10 +89,12 @@ export default defineEventHandler(async (event) => {
     const method = event.method
     const incomingHeaders = getHeaders(event)
     const cookieHeader = getHeader(event, 'cookie')
+    const directusSessionCookie = getCookie(event, 'directus_session_token')
+    const firebaseSessionCookie = getCookie(event, '__session')
 
     if (isAuthRequest) {
       console.log('[Directus Proxy] Request:', method, path)
-      console.log('[Directus Proxy] Cookie header:', cookieHeader ? 'present (' + cookieHeader.substring(0, 50) + '...)' : 'MISSING')
+      console.log('[Directus Proxy] Cookie header:', cookieHeader ? 'present' : 'MISSING')
     }
 
     // Build headers for Directus request
@@ -100,11 +103,20 @@ export default defineEventHandler(async (event) => {
       'Content-Type': incomingHeaders['content-type'] || 'application/json',
     }
 
-    // CRITICAL: Forward Cookie header for session authentication
-    if (cookieHeader) {
-      headers['Cookie'] = cookieHeader
+    // CRITICAL: Forward Cookie header for session authentication.
+    // Firebase Hosting only forwards __session cookies, so map it to directus_session_token.
+    let forwardCookieHeader = cookieHeader || ''
+    const sessionToken = directusSessionCookie || firebaseSessionCookie
+    if (sessionToken && !/directus_session_token=/.test(forwardCookieHeader)) {
+      forwardCookieHeader = forwardCookieHeader
+        ? `${forwardCookieHeader}; directus_session_token=${sessionToken}`
+        : `directus_session_token=${sessionToken}`
+    }
+
+    if (forwardCookieHeader) {
+      headers['cookie'] = forwardCookieHeader
       if (isAuthRequest) {
-        console.log('[Directus Proxy] Forwarding Cookie to Directus')
+        console.log('[Directus Proxy] Forwarding session cookie to Directus')
       }
     }
 
@@ -124,7 +136,7 @@ export default defineEventHandler(async (event) => {
     // Using native fetch because $fetch/ofetch may strip cookie headers
     if (isAuthRequest) {
       console.log('[Directus Proxy] Target URL:', targetUrl)
-      console.log('[Directus Proxy] Headers:', JSON.stringify(headers))
+      console.log('[Directus Proxy] Headers:', Object.keys(headers))
     }
 
     const response = await fetch(targetUrl, {
@@ -151,8 +163,17 @@ export default defineEventHandler(async (event) => {
       for (const cookie of setCookieHeaders) {
         const rewrittenCookie = rewriteCookieForProxy(cookie)
         appendResponseHeader(event, 'set-cookie', rewrittenCookie)
+
+        // Firebase Hosting only forwards __session cookies to Cloud Run.
+        // Mirror the Directus session cookie to __session to keep auth working.
+        if (cookie.startsWith('directus_session_token=')) {
+          const firebaseCookie = rewriteCookieForProxy(cookie.replace(/^directus_session_token=/, '__session='))
+          appendResponseHeader(event, 'set-cookie', firebaseCookie)
+        }
+
         if (isAuthRequest) {
-          console.log('[Directus Proxy] Set-Cookie:', rewrittenCookie.substring(0, 80) + '...')
+          const cookieName = cookie.split('=')[0]
+          console.log('[Directus Proxy] Set-Cookie:', cookieName)
         }
       }
     }
