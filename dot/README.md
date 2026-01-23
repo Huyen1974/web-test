@@ -70,6 +70,7 @@ curl --globoff -sS \
 - dot/docs/health-check.md
 - dot/docs/test-login.md
 - dot/docs/cost-audit.md
+- Full toolchain map: docs/projects/web_tools/actions_tools.md
 
 ## Reports
 - dot/reports/DOT_APPLY_REPORT.md

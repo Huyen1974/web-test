@@ -1,3 +1,5 @@
+<!-- PROTECTED: MASTER MAP - DO NOT DELETE -->
+
 DOT TOOLCHAIN - BẢN ĐỒ HOÀN CHỈNH
 web-test/
 ├── dot/                              # 🛠️ KHO VŨ KHÍ (Digital Operations Toolkit)
@@ -8,7 +10,7 @@ web-test/
 │   │   │ ─────────── SCHEMA & DATA ───────────
 │   │   ├── dot-schema-ensure         # ✅ Kiểm tra Directus schema
 │   │   ├── dot-fix-gap3              # ✅ Migration sửa lỗi featured_post
-│   │   ├── dot-seed-agency-os        # 🚧 [IN PROGRESS] Hydrate Agency OS collections + dummy data
+│   │   ├── dot-seed-agency-os        # ✅ DONE Hydrate Agency OS collections + dummy data
 │   │   ├── dot-seed-data             # 📋 [PLANNED] Seed dữ liệu mẫu cho môi trường mới
 │   │   ├── dot-backup                # 📋 [PLANNED] Backup Directus data to GCS
 │   │   │
@@ -45,7 +47,7 @@ web-test/
 │       ├── cost-audit.md             # ✅
 │       ├── spider.md                 # ✅
 │       ├── fix-permissions.md        # ✅
-│       └── seed-agency-os.md         # 🚧 [IN PROGRESS]
+│       └── seed-agency-os.md         # ✅ DONE
 │
 ├── web/                              # Nuxt Application (VIEW ONLY)
 │   ├── package.json                  # npm scripts wrap DOT tools
@@ -75,7 +77,7 @@ TOOL MATRIX BY CATEGORY
 |------|--------|-----------|--------------|
 | dot-schema-ensure | ✅ | Verify Directus schema | Deploy mới, sau migration |
 | dot-fix-gap3 | ✅ | Fix specific data issues | Hotfix production |
-| dot-seed-agency-os | 🚧 | Create Agency OS collections + seed data | Deploy mới, fix 403 |
+| dot-seed-agency-os | ✅ | Create Agency OS collections + seed data | Deploy mới, fix 403 |
 | dot-seed-data | 📋 | Seed sample data | Deploy môi trường mới |
 | dot-backup | 📋 | Backup to GCS | Before major changes |
 
@@ -126,7 +128,7 @@ CURRENT PRIORITY
 | Priority | Tool | Reason | Status |
 |----------|------|--------|--------|
 | ~~P0~~ | ~~dot-fix-permissions~~ | ~~Blocking~~ | ✅ DONE |
-| **P0** | **dot-seed-agency-os** | **NEW BLOCKER - Collections không tồn tại** | 🚧 IN PROGRESS |
+| **P0** | **dot-seed-agency-os** | **Collections created** | ✅ DONE |
 | P1 | dot-seed-data | Cần cho deploy môi trường mới | 📋 PLANNED |
 | P2 | dot-smoke-test | Consolidate các test lẻ | 📋 PLANNED |
 | P3 | Others | Just-in-Time khi cần | |
