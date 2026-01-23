@@ -1,0 +1,525 @@
+#!/usr/bin/env node
+
+/**
+ * DOT Spider - Website Health Crawler
+ *
+ * Crawls a website after login and detects:
+ * - JavaScript errors
+ * - Console errors
+ * - Visible error text in page content
+ * - Slow loading pages
+ * - Empty pages
+ *
+ * Usage:
+ *   ./dot/bin/dot-spider [options]
+ *
+ * Options:
+ *   --max-pages <n>     Maximum pages to crawl (default: 50)
+ *   --profile <name>    Credential profile to use
+ *   --no-login          Skip login (for public pages only)
+ *   --verbose           Show all console output
+ *   --help              Show this help
+ */
+
+const path = require('path');
+const fs = require('fs');
+
+// Resolve paths relative to the project root
+const projectRoot = path.resolve(__dirname, '../../web');
+const reportsDir = path.resolve(__dirname, '../../reports');
+const screenshotsDir = path.resolve(reportsDir, 'screenshots');
+const configDir = path.resolve(__dirname, '../config');
+
+// Ensure screenshots directory exists
+if (!fs.existsSync(screenshotsDir)) {
+  fs.mkdirSync(screenshotsDir, { recursive: true });
+}
+
+// Load Playwright from the web project
+let chromium;
+try {
+  const playwrightPath = path.resolve(projectRoot, 'node_modules/playwright');
+  chromium = require(playwrightPath).chromium;
+} catch (e) {
+  console.error('Error: Playwright not found. Run "pnpm install" in the web directory first.');
+  console.error('  cd web && pnpm install');
+  process.exit(1);
+}
+
+// Parse command line arguments
+const args = process.argv.slice(2);
+const options = {
+  maxPages: 50,
+  profile: null,
+  noLogin: false,
+  verbose: false,
+  help: false,
+};
+
+for (let i = 0; i < args.length; i++) {
+  switch (args[i]) {
+    case '--max-pages':
+      options.maxPages = parseInt(args[++i], 10);
+      break;
+    case '--profile':
+      options.profile = args[++i];
+      break;
+    case '--no-login':
+      options.noLogin = true;
+      break;
+    case '--verbose':
+      options.verbose = true;
+      break;
+    case '--help':
+      options.help = true;
+      break;
+  }
+}
+
+if (options.help) {
+  console.log(`
+DOT Spider - Website Health Crawler
+
+Usage:
+  ./dot/bin/dot-spider [options]
+
+Options:
+  --max-pages <n>     Maximum pages to crawl (default: 50)
+  --profile <name>    Credential profile to use
+  --no-login          Skip login (for public pages only)
+  --verbose           Show all console output
+  --help              Show this help
+
+Examples:
+  ./dot/bin/dot-spider
+  ./dot/bin/dot-spider --max-pages 10
+  ./dot/bin/dot-spider --profile production-admin --verbose
+`);
+  process.exit(0);
+}
+
+// Load credentials
+function loadCredentials() {
+  // Try local credentials first
+  const localPath = path.resolve(configDir, 'credentials.local.json');
+  const examplePath = path.resolve(configDir, 'credentials.example.json');
+
+  if (fs.existsSync(localPath)) {
+    try {
+      return JSON.parse(fs.readFileSync(localPath, 'utf-8'));
+    } catch (e) {
+      console.error('Error parsing credentials.local.json:', e.message);
+    }
+  }
+
+  // Try environment variables
+  if (process.env.DIRECTUS_ADMIN_EMAIL && process.env.DIRECTUS_ADMIN_PASSWORD) {
+    return {
+      profiles: [{
+        name: 'env',
+        domain: process.env.SPIDER_DOMAIN || 'https://ai.incomexsaigoncorp.vn',
+        username: process.env.DIRECTUS_ADMIN_EMAIL,
+        password: process.env.DIRECTUS_ADMIN_PASSWORD,
+      }],
+      defaultProfile: 'env',
+    };
+  }
+
+  // Fail with helpful message
+  console.error('Error: No credentials found.');
+  console.error('');
+  console.error('Please create dot/config/credentials.local.json:');
+  console.error('  cp dot/config/credentials.example.json dot/config/credentials.local.json');
+  console.error('  # Then edit with your credentials');
+  console.error('');
+  console.error('Or set environment variables:');
+  console.error('  export DIRECTUS_ADMIN_EMAIL=your@email.com');
+  console.error('  export DIRECTUS_ADMIN_PASSWORD=yourpassword');
+  process.exit(1);
+}
+
+// Error patterns to detect in page content
+const ERROR_PATTERNS = [
+  'TypeError',
+  'ReferenceError',
+  'SyntaxError',
+  'RangeError',
+  'Internal Server Error',
+  'Unhandled Exception',
+  'Cannot read properties of null',
+  'Cannot read properties of undefined',
+  'is not defined',
+  'is not a function',
+  'An error occurred',
+  'Something went wrong',
+  '500 Error',
+  '404 Not Found',
+];
+
+// Health check for a single page
+async function checkPageHealth(page, url, verbose) {
+  const result = {
+    url,
+    status: 'OK',
+    errors: [],
+    warnings: [],
+    loadTime: 0,
+    linksFound: 0,
+  };
+
+  const jsErrors = [];
+  const consoleErrors = [];
+
+  // Capture JavaScript errors
+  const errorHandler = (error) => {
+    jsErrors.push({
+      type: 'JS_ERROR',
+      message: error.message,
+      stack: error.stack,
+    });
+  };
+  page.on('pageerror', errorHandler);
+
+  // Capture console errors
+  const consoleHandler = (msg) => {
+    if (msg.type() === 'error') {
+      consoleErrors.push({
+        type: 'CONSOLE_ERROR',
+        message: msg.text(),
+      });
+    } else if (verbose && msg.type() === 'warning') {
+      result.warnings.push({
+        type: 'CONSOLE_WARNING',
+        message: msg.text(),
+      });
+    }
+  };
+  page.on('console', consoleHandler);
+
+  const start = Date.now();
+
+  try {
+    // Navigate to page with timeout
+    await page.goto(url, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
+    });
+
+    // Wait for hydration - look for Nuxt app or main content
+    try {
+      await page.waitForSelector('#__nuxt, #app, main, .layout, [data-page]', {
+        timeout: 10000
+      });
+    } catch {
+      // Continue even if selector not found
+    }
+
+    // Wait a bit more for client-side JS to execute
+    await page.waitForTimeout(2000);
+
+    result.loadTime = Date.now() - start;
+
+    // Add collected JS errors
+    result.errors.push(...jsErrors);
+    result.errors.push(...consoleErrors);
+
+    // Check for error text in page
+    const pageText = await page.textContent('body').catch(() => '');
+
+    for (const pattern of ERROR_PATTERNS) {
+      if (pageText.includes(pattern)) {
+        // Check if it's in a code block or expected context
+        const isInCodeBlock = await page.evaluate((p) => {
+          const codeBlocks = document.querySelectorAll('pre, code, .code');
+          for (const block of codeBlocks) {
+            if (block.textContent.includes(p)) return true;
+          }
+          return false;
+        }, pattern);
+
+        if (!isInCodeBlock) {
+          result.errors.push({
+            type: 'VISIBLE_ERROR',
+            message: `Found "${pattern}" in page content`,
+          });
+        }
+      }
+    }
+
+    // Check load time
+    if (result.loadTime > 5000) {
+      result.warnings.push({
+        type: 'SLOW_PAGE',
+        message: `Load time ${result.loadTime}ms > 5000ms`,
+      });
+    } else if (result.loadTime > 3000) {
+      result.warnings.push({
+        type: 'SLOW_PAGE',
+        message: `Load time ${result.loadTime}ms > 3000ms`,
+      });
+    }
+
+    // Check main content exists
+    const hasMainContent = await page.$('main, #app, .content, [data-page], .layout');
+    if (!hasMainContent) {
+      const bodyContent = await page.textContent('body').catch(() => '');
+      if (bodyContent.trim().length < 100) {
+        result.warnings.push({
+          type: 'EMPTY_PAGE',
+          message: 'Page appears to have minimal content',
+        });
+      }
+    }
+
+    // Find links for crawling
+    const links = await page.$$eval('a[href]', (anchors) =>
+      anchors
+        .map(a => a.getAttribute('href'))
+        .filter(href =>
+          href &&
+          !href.startsWith('mailto:') &&
+          !href.startsWith('tel:') &&
+          !href.startsWith('javascript:') &&
+          !href.startsWith('#')
+        )
+    );
+    result.linksFound = links.length;
+
+  } catch (error) {
+    result.errors.push({
+      type: 'NAVIGATION_ERROR',
+      message: error.message,
+    });
+  }
+
+  // Cleanup listeners
+  page.removeListener('pageerror', errorHandler);
+  page.removeListener('console', consoleHandler);
+
+  // Determine status
+  if (result.errors.length > 0) {
+    result.status = 'FAIL';
+  } else if (result.warnings.length > 0) {
+    result.status = 'WARN';
+  }
+
+  return result;
+}
+
+// Take screenshot of error page
+async function takeErrorScreenshot(page, url) {
+  const slug = url.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').substring(0, 50);
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = `error-${slug}-${timestamp}.png`;
+  const filepath = path.resolve(screenshotsDir, filename);
+
+  try {
+    await page.screenshot({ path: filepath, fullPage: true });
+    return filepath;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Extract same-domain links
+function extractLinks(links, baseUrl, baseDomain) {
+  const result = [];
+  const base = new URL(baseUrl);
+
+  for (const href of links) {
+    try {
+      let url;
+      if (href.startsWith('/')) {
+        url = new URL(href, baseDomain);
+      } else if (href.startsWith('http')) {
+        url = new URL(href);
+      } else {
+        url = new URL(href, baseUrl);
+      }
+
+      // Only include same-domain links
+      if (url.hostname === base.hostname || url.hostname === new URL(baseDomain).hostname) {
+        // Normalize - remove trailing slash, query params for dedup
+        const normalized = url.pathname.replace(/\/$/, '') || '/';
+        result.push(normalized);
+      }
+    } catch {
+      // Invalid URL, skip
+    }
+  }
+
+  return [...new Set(result)];
+}
+
+// Main spider function
+async function runSpider() {
+  const credentials = loadCredentials();
+  const profileName = options.profile || credentials.defaultProfile;
+  const profile = credentials.profiles.find(p => p.name === profileName);
+
+  if (!profile) {
+    console.error(`Error: Profile "${profileName}" not found in credentials.`);
+    process.exit(1);
+  }
+
+  const baseDomain = profile.domain;
+
+  console.log(`
+\x1b[36m\x1b[1m  DOT SPIDER - ${baseDomain}\x1b[0m
+${''.padStart(52, '')}
+`);
+
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 720 },
+    userAgent: 'DOT-Spider/1.0 (Health Check Bot)',
+  });
+  const page = await context.newPage();
+
+  // Login if required
+  if (!options.noLogin) {
+    console.log(`\x1b[33m[LOGIN]\x1b[0m Authenticating as ${profile.username}...`);
+
+    try {
+      await page.goto(`${baseDomain}/auth/signin`, { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('input[name="email"], input[type="email"]', { timeout: 10000 });
+
+      await page.fill('input[name="email"], input[type="email"]', profile.username);
+      await page.fill('input[name="password"], input[type="password"]', profile.password);
+      await page.click('button[type="submit"]');
+
+      // Wait for navigation or error
+      await page.waitForTimeout(5000);
+
+      const currentUrl = page.url();
+      if (currentUrl.includes('/auth/signin') || currentUrl.includes('error=')) {
+        console.log(`\x1b[31m[LOGIN]\x1b[0m Login may have failed. Current URL: ${currentUrl}`);
+
+        // Take screenshot of login failure
+        const screenshotPath = await takeErrorScreenshot(page, currentUrl);
+        if (screenshotPath) {
+          console.log(`\x1b[33m[SCREENSHOT]\x1b[0m ${screenshotPath}`);
+        }
+
+        // Check for visible errors
+        const pageText = await page.textContent('body').catch(() => '');
+        for (const pattern of ERROR_PATTERNS) {
+          if (pageText.includes(pattern)) {
+            console.log(`\x1b[31m[ERROR]\x1b[0m Visible error on login page: "${pattern}"`);
+          }
+        }
+      } else {
+        console.log(`\x1b[32m[LOGIN]\x1b[0m Success! Redirected to: ${currentUrl}`);
+      }
+    } catch (error) {
+      console.log(`\x1b[31m[LOGIN]\x1b[0m Error during login: ${error.message}`);
+    }
+
+    console.log('');
+  }
+
+  // Crawl pages
+  const visitedUrls = new Set();
+  const queue = ['/portal', '/'];
+  const results = [];
+  let pageCount = 0;
+
+  console.log(`${''.padStart(52, '')}`);
+
+  while (queue.length > 0 && pageCount < options.maxPages) {
+    const path = queue.shift();
+
+    // Skip if already visited
+    const normalizedPath = path.replace(/\/$/, '') || '/';
+    if (visitedUrls.has(normalizedPath)) continue;
+    visitedUrls.add(normalizedPath);
+
+    pageCount++;
+    const url = `${baseDomain}${path}`;
+
+    console.log(`\x1b[36m[${pageCount}/${options.maxPages}]\x1b[0m ${path}`);
+
+    const result = await checkPageHealth(page, url, options.verbose);
+    results.push(result);
+
+    // Print status
+    if (result.status === 'OK') {
+      console.log(`  \x1b[32m OK\x1b[0m (${result.loadTime}ms)`);
+    } else if (result.status === 'WARN') {
+      console.log(`  \x1b[33m WARN\x1b[0m (${result.loadTime}ms)`);
+      for (const warn of result.warnings) {
+        console.log(`  \x1b[33m\x1b[0m ${warn.type}: ${warn.message}`);
+      }
+    } else {
+      console.log(`  \x1b[31m FAIL\x1b[0m (${result.loadTime}ms)`);
+      for (const err of result.errors) {
+        console.log(`  \x1b[31m\x1b[0m ${err.type}: ${err.message}`);
+      }
+
+      // Take screenshot of error page
+      const screenshotPath = await takeErrorScreenshot(page, url);
+      if (screenshotPath) {
+        const screenshotFilename = screenshotPath.split('/').pop();
+        console.log(`  \x1b[35m\x1b[0m Screenshot: ${screenshotFilename}`);
+        result.screenshot = screenshotPath;
+      }
+    }
+
+    // Add discovered links to queue
+    if (result.linksFound > 0) {
+      const links = await page.$$eval('a[href]', (anchors) =>
+        anchors.map(a => a.getAttribute('href'))
+      );
+      const newLinks = extractLinks(links, url, baseDomain)
+        .filter(link => !visitedUrls.has(link));
+
+      queue.push(...newLinks);
+      console.log(`  \x1b[34m\x1b[0m Found ${newLinks.length} new links`);
+    }
+
+    console.log('');
+  }
+
+  await browser.close();
+
+  // Print summary
+  console.log(`${''.padStart(52, '')}`);
+  console.log(`\x1b[1m SUMMARY\x1b[0m`);
+  console.log(`${''.padStart(52, '')}`);
+
+  const okCount = results.filter(r => r.status === 'OK').length;
+  const warnCount = results.filter(r => r.status === 'WARN').length;
+  const failCount = results.filter(r => r.status === 'FAIL').length;
+
+  console.log(`Total pages crawled: ${results.length}`);
+  console.log(`\x1b[32m OK:\x1b[0m ${okCount}`);
+  console.log(`\x1b[33m WARN:\x1b[0m ${warnCount}`);
+  console.log(`\x1b[31m FAIL:\x1b[0m ${failCount}`);
+
+  if (failCount > 0) {
+    console.log('');
+    console.log(`\x1b[31m ERRORS FOUND:\x1b[0m`);
+    for (const result of results.filter(r => r.status === 'FAIL')) {
+      const pathname = new URL(result.url).pathname;
+      for (const err of result.errors) {
+        console.log(`  ${pathname}  ${err.type}: ${err.message}`);
+      }
+    }
+  }
+
+  console.log('');
+
+  // Exit with error code if failures found
+  if (failCount > 0) {
+    process.exit(1);
+  }
+}
+
+// Run the spider
+runSpider().catch((error) => {
+  console.error('Spider crashed:', error.message);
+  process.exit(1);
+});

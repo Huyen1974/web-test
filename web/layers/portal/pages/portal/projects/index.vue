@@ -30,7 +30,12 @@ const { data: projects, error } = await useAsyncData(
 			}),
 		);
 	},
-	{},
+	{
+		// Skip SSR - authenticated API calls need browser cookies
+		server: false,
+		// Default to empty array to prevent null errors
+		default: () => [],
+	},
 );
 
 if (error) {

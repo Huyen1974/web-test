@@ -62,10 +62,14 @@ const { data, pending, error, refresh } = await useAsyncData(
 		return Promise.all([invoices, count]);
 	},
 	{
+		// Skip SSR - authenticated API calls need browser cookies
+		server: false,
+		// Default to prevent null errors
+		default: () => ({ invoices: [], count: 0 }),
 		transform: ([data, count]) => {
 			return {
-				invoices: data,
-				count: parseInt(count[0].count),
+				invoices: data ?? [],
+				count: parseInt(count?.[0]?.count) ?? 0,
 			};
 		},
 	},
@@ -73,7 +77,7 @@ const { data, pending, error, refresh } = await useAsyncData(
 
 const invoices = computed(() => data.value?.invoices ?? []);
 const totalCount = computed(() => data.value?.count ?? 0);
-const pageFrom = computed(() => (page.value - 1) * rowsPerPage.value + (invoices.value.length ? 1 : 0));
+const pageFrom = computed(() => (page.value - 1) * rowsPerPage.value + ((invoices.value?.length ?? 0) ? 1 : 0));
 const pageTo = computed(() => Math.min(page.value * rowsPerPage.value, totalCount.value));
 
 const statusOptions = [

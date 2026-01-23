@@ -40,10 +40,14 @@ const { data, pending, error, refresh } = await useAsyncData(
 		return Promise.all([tasks, count]);
 	},
 	{
+		// Skip SSR - authenticated API calls need browser cookies
+		server: false,
+		// Default to prevent null errors
+		default: () => ({ tasks: [], count: 0 }),
 		transform: ([data, count]) => {
 			return {
-				tasks: data,
-				count: parseInt(count[0].count) ?? 0,
+				tasks: data ?? [],
+				count: parseInt(count?.[0]?.count) ?? 0,
 			};
 		},
 	},

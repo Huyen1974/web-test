@@ -21,7 +21,12 @@ const {
 			}),
 		);
 	},
-	{},
+	{
+		// Skip SSR - authenticated API calls need browser cookies
+		server: false,
+		// Default to empty array to prevent null errors
+		default: () => [],
+	},
 );
 
 const totalAmountDue = computed(() => {
@@ -54,7 +59,7 @@ const columns = [
 			</dd>
 		</div>
 
-		<UTable :columns="columns" :rows="invoices as any">
+		<UTable :columns="columns" :rows="invoices ?? []">
 			<template #invoice_number-data="{ row }">
 				<UButton variant="outline" :to="`/portal/billing/invoices/${row.id}`">{{ row.invoice_number }}</UButton>
 			</template>
