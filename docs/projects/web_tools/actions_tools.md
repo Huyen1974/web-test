@@ -10,7 +10,7 @@ web-test/
 │   │   │ ─────────── SCHEMA & DATA ───────────
 │   │   ├── dot-schema-ensure         # ✅ Kiểm tra Directus schema
 │   │   ├── dot-fix-gap3              # ✅ Migration sửa lỗi featured_post
-│   │   ├── dot-seed-agency-os        # ✅ DONE Hydrate Agency OS collections + dummy data
+│   │   ├── dot-seed-agency-os        # ✅ Hydrate Agency OS collections + dummy data
 │   │   ├── dot-seed-data             # 📋 [PLANNED] Seed dữ liệu mẫu cho môi trường mới
 │   │   ├── dot-backup                # 📋 [PLANNED] Backup Directus data to GCS
 │   │   │
@@ -47,7 +47,7 @@ web-test/
 │       ├── cost-audit.md             # ✅
 │       ├── spider.md                 # ✅
 │       ├── fix-permissions.md        # ✅
-│       └── seed-agency-os.md         # ✅ DONE
+│       └── seed-agency-os.md         # ✅
 │
 ├── web/                              # Nuxt Application (VIEW ONLY)
 │   ├── package.json                  # npm scripts wrap DOT tools
@@ -128,7 +128,7 @@ CURRENT PRIORITY
 | Priority | Tool | Reason | Status |
 |----------|------|--------|--------|
 | ~~P0~~ | ~~dot-fix-permissions~~ | ~~Blocking~~ | ✅ DONE |
-| **P0** | **dot-seed-agency-os** | **Collections created** | ✅ DONE |
+| ~~P0~~ | ~~dot-seed-agency-os~~ | ~~Collections created~~ | ✅ DONE |
 | P1 | dot-seed-data | Cần cho deploy môi trường mới | 📋 PLANNED |
 | P2 | dot-smoke-test | Consolidate các test lẻ | 📋 PLANNED |
 | P3 | Others | Just-in-Time khi cần | |
