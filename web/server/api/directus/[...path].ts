@@ -6,9 +6,18 @@
  *
  * E2 Task #009 - User Approved Code Change
  * E2 Task #012 - Fix cookie handling for session authentication
- * E2 Task #014 - Use proxyRequest for proper header forwarding
+ * E2 Task #014 - Use $fetch for reliable header forwarding
  */
-import { proxyRequest, getHeader, appendResponseHeader, setResponseStatus, defineEventHandler } from 'h3'
+import {
+  defineEventHandler,
+  getHeader,
+  getHeaders,
+  getQuery,
+  readBody,
+  appendResponseHeader,
+  setResponseHeader,
+  setResponseStatus,
+} from 'h3'
 
 /**
  * Rewrites cookie attributes for proxy compatibility.
@@ -17,34 +26,34 @@ import { proxyRequest, getHeader, appendResponseHeader, setResponseStatus, defin
  * - Preserves HttpOnly, Secure, SameSite attributes
  */
 function rewriteCookieForProxy(cookieString: string): string {
-  const parts = cookieString.split(';').map(p => p.trim());
-  const nameValue = parts[0];
-  const newParts = [nameValue];
+  const parts = cookieString.split(';').map(p => p.trim())
+  const nameValue = parts[0]
+  const newParts = [nameValue]
 
   for (let i = 1; i < parts.length; i++) {
-    const part = parts[i];
-    const lowerPart = part.toLowerCase();
+    const part = parts[i]
+    const lowerPart = part.toLowerCase()
 
     // Skip Domain attribute - let browser use current domain
     if (lowerPart.startsWith('domain=')) {
-      continue;
+      continue
     }
 
     // Ensure Path is root for full access
     if (lowerPart.startsWith('path=')) {
-      newParts.push('Path=/');
-      continue;
+      newParts.push('Path=/')
+      continue
     }
 
     // Keep all other attributes
-    newParts.push(part);
+    newParts.push(part)
   }
 
   if (!newParts.some(p => p.toLowerCase().startsWith('path='))) {
-    newParts.push('Path=/');
+    newParts.push('Path=/')
   }
 
-  return newParts.join('; ');
+  return newParts.join('; ')
 }
 
 export default defineEventHandler(async (event) => {
@@ -56,48 +65,87 @@ export default defineEventHandler(async (event) => {
     process.env.DIRECTUS_INTERNAL_URL ||
     'https://directus-test-pfne2mqwja-as.a.run.app'
 
-  const targetUrl = `${directusUrl}/${path}`
+  // Build target URL with query parameters
+  const query = getQuery(event)
+  const queryString = new URLSearchParams(query as Record<string, string>).toString()
+  const targetUrl = `${directusUrl}/${path}${queryString ? '?' + queryString : ''}`
 
   // Debug logging for auth requests
   const isAuthRequest = path.startsWith('auth/') || path.startsWith('users/')
-  if (isAuthRequest) {
-    const cookieHeader = getHeader(event, 'cookie')
-    console.log('[Directus Proxy] Request:', event.method, path)
-    console.log('[Directus Proxy] Cookie header:', cookieHeader ? 'present (' + cookieHeader.substring(0, 50) + '...)' : 'MISSING')
-  }
 
   try {
-    // Get incoming cookie header to explicitly forward to Directus
-    // proxyRequest may not forward Cookie header automatically in all cases
+    // Get incoming request details
+    const method = event.method
+    const incomingHeaders = getHeaders(event)
     const cookieHeader = getHeader(event, 'cookie')
 
-    // Use h3's proxyRequest with explicit cookie forwarding
-    const response = await proxyRequest(event, targetUrl, {
-      // Explicitly forward cookie header to backend
-      headers: cookieHeader ? { cookie: cookieHeader } : undefined,
-      // Intercept response to rewrite cookies
-      onResponse: async (proxyEvent, response) => {
-        const cookies = response.headers.getSetCookie?.() || []
-        if (cookies.length > 0) {
-          // Clear original set-cookie headers from Directus
-          proxyEvent.node.res.removeHeader('set-cookie')
-          // Set rewritten cookies with our domain
-          for (const cookie of cookies) {
-            const rewrittenCookie = rewriteCookieForProxy(cookie)
-            appendResponseHeader(proxyEvent, 'set-cookie', rewrittenCookie)
-            if (isAuthRequest) {
-              console.log('[Directus Proxy] Rewritten cookie:', rewrittenCookie.substring(0, 80) + '...')
-            }
-          }
-        }
-      },
+    if (isAuthRequest) {
+      console.log('[Directus Proxy] Request:', method, path)
+      console.log('[Directus Proxy] Cookie header:', cookieHeader ? 'present (' + cookieHeader.substring(0, 50) + '...)' : 'MISSING')
+    }
+
+    // Build headers for Directus request
+    // Forward only safe headers, explicitly include Cookie
+    const headers: Record<string, string> = {
+      'Content-Type': incomingHeaders['content-type'] || 'application/json',
+    }
+
+    // CRITICAL: Forward Cookie header for session authentication
+    if (cookieHeader) {
+      headers['Cookie'] = cookieHeader
+      if (isAuthRequest) {
+        console.log('[Directus Proxy] Forwarding Cookie to Directus')
+      }
+    }
+
+    // Forward authorization header if present
+    const authHeader = getHeader(event, 'authorization')
+    if (authHeader) {
+      headers['Authorization'] = authHeader
+    }
+
+    // Get request body for POST/PUT/PATCH
+    let body: any = undefined
+    if (['POST', 'PUT', 'PATCH'].includes(method)) {
+      body = await readBody(event)
+    }
+
+    // Make request to Directus using $fetch
+    const response = await $fetch.raw(targetUrl, {
+      method: method as any,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      // Don't throw on error status codes
+      ignoreResponseError: true,
     })
 
     if (isAuthRequest) {
-      console.log('[Directus Proxy] Response status:', event.node.res.statusCode)
+      console.log('[Directus Proxy] Directus response status:', response.status)
     }
 
-    return response
+    // Forward Set-Cookie headers with rewriting
+    const setCookieHeaders = response.headers.getSetCookie?.() || []
+    if (setCookieHeaders.length > 0) {
+      for (const cookie of setCookieHeaders) {
+        const rewrittenCookie = rewriteCookieForProxy(cookie)
+        appendResponseHeader(event, 'set-cookie', rewrittenCookie)
+        if (isAuthRequest) {
+          console.log('[Directus Proxy] Set-Cookie:', rewrittenCookie.substring(0, 80) + '...')
+        }
+      }
+    }
+
+    // Forward content-type header
+    const contentType = response.headers.get('content-type')
+    if (contentType) {
+      setResponseHeader(event, 'content-type', contentType)
+    }
+
+    // Set response status
+    setResponseStatus(event, response.status)
+
+    // Return response body
+    return response._data
   } catch (error: any) {
     console.error('[Directus Proxy Error]', error.message)
     setResponseStatus(event, error.statusCode || 500)
