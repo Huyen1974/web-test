@@ -67,8 +67,14 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    // Use h3's proxyRequest which properly forwards all headers including cookies
+    // Get incoming cookie header to explicitly forward to Directus
+    // proxyRequest may not forward Cookie header automatically in all cases
+    const cookieHeader = getHeader(event, 'cookie')
+
+    // Use h3's proxyRequest with explicit cookie forwarding
     const response = await proxyRequest(event, targetUrl, {
+      // Explicitly forward cookie header to backend
+      headers: cookieHeader ? { cookie: cookieHeader } : undefined,
       // Intercept response to rewrite cookies
       onResponse: async (proxyEvent, response) => {
         const cookies = response.headers.getSetCookie?.() || []
