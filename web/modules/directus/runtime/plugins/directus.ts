@@ -38,18 +38,19 @@ export default defineNuxtPlugin((nuxtApp) => {
 
 	// Client-side only: Add session authentication and live preview support
 	if (import.meta.client) {
-		// E2 Task #012: Wrap $fetch to include credentials for session cookie handling
-		// This ensures cookies are sent with all requests for session-based authentication
-		const fetchWithCredentials = (url: string, options: any = {}) => {
-			return $fetch(url, {
-				...options,
+		// E2 Task #014: Use native fetch with credentials for proper cookie handling
+		// $fetch from ofetch doesn't properly send cookies with credentials: 'include'
+		// Native fetch ensures cookies are sent/received correctly for session auth
+		const fetchWithCredentials: typeof globalThis.fetch = (input, init) => {
+			return globalThis.fetch(input, {
+				...init,
 				credentials: 'include',
 			});
 		};
 
 		// Re-create with authentication for client-side using proxy URL
-		// Using fetchWithCredentials ensures session cookies are sent/received properly
-		const clientDirectus = createDirectus<Schema>(joinURL(clientDirectusUrl), { globals: { fetch: fetchWithCredentials as typeof $fetch } })
+		// Using native fetch with credentials ensures session cookies work properly
+		const clientDirectus = createDirectus<Schema>(joinURL(clientDirectusUrl), { globals: { fetch: fetchWithCredentials } })
 			.with(authentication('session', { credentials: 'include' }))
 			.with(rest());
 

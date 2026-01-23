@@ -9,7 +9,11 @@
 		"postinstall": "nuxt prepare",
 		"typecheck": "nuxt typecheck",
 		"lint": "eslint --cache .",
-		"format": "prettier --write \"**/*.{md,y?(a)ml,json,vue}\""
+		"format": "prettier --write \"**/*.{md,y?(a)ml,json,vue}\"",
+		"test:e2e": "playwright test",
+		"test:e2e:ui": "playwright test --ui",
+		"test:e2e:debug": "playwright test --debug",
+		"test:e2e:report": "playwright show-report"
 	},
 	"devDependencies": {
 		"@iconify-json/material-symbols": "^1.2.17",
@@ -17,6 +21,7 @@
 		"@nuxtjs/eslint-config-typescript": "^12.1.0",
 		"@nuxtjs/eslint-module": "^4.1.0",
 		"@nuxtjs/tailwindcss": "^6.13.2",
+		"@playwright/test": "^1.57.0",
 		"@tailwindcss/forms": "^0.5.10",
 		"@tailwindcss/typography": "^0.5.16",
 		"@types/diff": "^7.0.2",
@@ -42,6 +47,7 @@
 		"@nuxtjs/google-fonts": "^3.2.0",
 		"@nuxtjs/i18n": "^10.2.1",
 		"@nuxtjs/seo": "^3.0.1",
+		"@sentry/nuxt": "^10.36.0",
 		"@stripe/stripe-js": "^6.1.0",
 		"@vueuse/motion": "^3.0.3",
 		"diff": "^8.0.2",

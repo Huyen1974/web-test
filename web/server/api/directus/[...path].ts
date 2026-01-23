@@ -6,7 +6,51 @@
  *
  * E2 Task #009 - User Approved Code Change
  * E2 Task #012 - Fix cookie handling for session authentication
+ * E2 Task #014 - Fix cookie Domain attribute for cross-origin proxy
  */
+
+/**
+ * Rewrites cookie attributes for proxy compatibility.
+ * - Removes Domain attribute (so browser uses current domain)
+ * - Ensures Path is set to / for full site access
+ * - Preserves HttpOnly, Secure, SameSite attributes
+ */
+function rewriteCookieForProxy(cookieString: string): string {
+  // Parse the cookie into parts
+  const parts = cookieString.split(';').map(p => p.trim());
+
+  // First part is always name=value
+  const nameValue = parts[0];
+
+  // Filter and modify attributes
+  const newParts = [nameValue];
+
+  for (let i = 1; i < parts.length; i++) {
+    const part = parts[i];
+    const lowerPart = part.toLowerCase();
+
+    // Skip Domain attribute - let browser use current domain
+    if (lowerPart.startsWith('domain=')) {
+      continue;
+    }
+
+    // Ensure Path is root for full access
+    if (lowerPart.startsWith('path=')) {
+      newParts.push('Path=/');
+      continue;
+    }
+
+    // Keep all other attributes (HttpOnly, Secure, SameSite, Max-Age, Expires)
+    newParts.push(part);
+  }
+
+  // Ensure Path=/ is present if not already added
+  if (!newParts.some(p => p.toLowerCase().startsWith('path='))) {
+    newParts.push('Path=/');
+  }
+
+  return newParts.join('; ');
+}
 
 export default defineEventHandler(async (event) => {
   const path = event.context.params?.path || ''
@@ -60,25 +104,30 @@ export default defineEventHandler(async (event) => {
       ignoreResponseError: true,
     })
 
-    // E2 Task #012: Handle multiple Set-Cookie headers properly
-    // Directus returns multiple cookies (session_token, refresh_token)
-    // getSetCookie() returns an array of all Set-Cookie headers
+    // E2 Task #012 & #014: Handle Set-Cookie headers with domain rewriting
+    // Directus returns cookies with Domain=directus-xxx.run.app which browser rejects
+    // We rewrite to remove Domain attribute so browser uses current origin
     const cookies = response.headers.getSetCookie?.() || []
     if (cookies.length > 0) {
-      // Append each cookie header separately to preserve all cookies
       for (const cookie of cookies) {
-        appendResponseHeader(event, 'set-cookie', cookie)
+        const rewrittenCookie = rewriteCookieForProxy(cookie)
+        appendResponseHeader(event, 'set-cookie', rewrittenCookie)
+        if (isAuthRequest) {
+          console.log('[Directus Proxy] Original cookie:', cookie.substring(0, 100) + '...')
+          console.log('[Directus Proxy] Rewritten cookie:', rewrittenCookie.substring(0, 100) + '...')
+        }
       }
       if (isAuthRequest) {
-        console.log('[Directus Proxy] Setting', cookies.length, 'cookie(s)')
+        console.log('[Directus Proxy] Set', cookies.length, 'cookie(s) with rewritten attributes')
       }
     } else {
       // Fallback for environments where getSetCookie is not available
       const setCookie = response.headers.get('set-cookie')
       if (setCookie) {
-        setResponseHeader(event, 'set-cookie', setCookie)
+        const rewrittenCookie = rewriteCookieForProxy(setCookie)
+        setResponseHeader(event, 'set-cookie', rewrittenCookie)
         if (isAuthRequest) {
-          console.log('[Directus Proxy] Setting cookie (fallback)')
+          console.log('[Directus Proxy] Setting cookie (fallback, rewritten)')
         }
       }
     }

@@ -90,6 +90,10 @@ export default defineNuxtConfig({
 				appId: process.env.NUXT_PUBLIC_FIREBASE_APP_ID || '',
 				measurementId: process.env.NUXT_PUBLIC_FIREBASE_MEASUREMENT_ID || '',
 			},
+			// E2 Task #013: Sentry error tracking
+			// Set NUXT_PUBLIC_SENTRY_DSN with your Sentry project DSN
+			sentryDsn: process.env.NUXT_PUBLIC_SENTRY_DSN || '',
+			appVersion: process.env.npm_package_version || '1.0.0',
 		},
 	},
 
