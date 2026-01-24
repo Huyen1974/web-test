@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# =============================================================================
+# DOT-LOCAL-UP: Start local development environment
+# =============================================================================
+# Connects to production Cloud SQL and GCS for real data
+# =============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+cd "$PROJECT_ROOT"
+
+echo "=============================================="
+echo "  LOCAL DEVELOPMENT ENVIRONMENT"
+echo "=============================================="
+
+# Pre-flight checks
+echo "[1/5] Pre-flight checks..."
+
+if [[ ! -f "dot/config/google-credentials.json" ]]; then
+    echo "ERROR: Missing dot/config/google-credentials.json"
+    echo "Run: gcloud iam service-accounts keys create dot/config/google-credentials.json \\"
+    echo "     --iam-account=cursor-ci-builder@github-chatgpt-ggcloud.iam.gserviceaccount.com"
+    exit 1
+fi
+
+if [[ ! -f ".env.local" ]]; then
+    echo "ERROR: Missing .env.local"
+    echo "Run the secret fetch script or create manually."
+    exit 1
+fi
+
+# Check Docker
+if ! docker info >/dev/null 2>&1; then
+    echo "ERROR: Docker is not running. Please start Docker Desktop."
+    exit 1
+fi
+
+echo "[2/5] Pulling latest images..."
+docker pull gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2
+docker pull asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/web-test/directus:latest
+
+echo "[3/5] Starting services..."
+docker compose -f docker-compose.local.yml up -d
+
+echo "[4/5] Waiting for services to be healthy..."
+echo "This may take 30-60 seconds for first startup..."
+
+# Wait for Directus health
+MAX_WAIT=120
+WAITED=0
+while [[ $WAITED -lt $MAX_WAIT ]]; do
+    if curl -sf http://localhost:8055/server/health >/dev/null 2>&1; then
+        echo "Directus is healthy after ${WAITED}s"
+        break
+    fi
+    sleep 2
+    WAITED=$((WAITED + 2))
+    echo "  Waiting... (${WAITED}s / ${MAX_WAIT}s)"
+done
+
+if [[ $WAITED -ge $MAX_WAIT ]]; then
+    echo "WARNING: Directus health check timed out"
+    echo "Check logs: docker compose -f docker-compose.local.yml logs directus"
+fi
+
+echo "[5/5] Verification..."
+echo ""
+echo "=============================================="
+echo "  SERVICES STATUS"
+echo "=============================================="
+docker compose -f docker-compose.local.yml ps
+
+echo ""
+echo "=============================================="
+echo "  ENDPOINTS"
+echo "=============================================="
+echo "  Directus CMS:  http://localhost:8055"
+echo "  Directus Admin: http://localhost:8055/admin"
+echo "  Nuxt Frontend: http://localhost:3000"
+echo "  Cloud SQL Proxy: localhost:3307"
+echo ""
+echo "=============================================="
+echo "  QUICK TESTS"
+echo "=============================================="
+echo "  curl http://localhost:8055/server/health"
+echo "  curl http://localhost:3000"
+echo ""
+echo "To stop: ./dot/bin/dot-local-down"
+echo "Logs:    docker compose -f docker-compose.local.yml logs -f"
+echo "=============================================="

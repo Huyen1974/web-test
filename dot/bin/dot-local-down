@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# =============================================================================
+# DOT-LOCAL-DOWN: Stop local development environment
+# =============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+cd "$PROJECT_ROOT"
+
+echo "=============================================="
+echo "  STOPPING LOCAL DEVELOPMENT ENVIRONMENT"
+echo "=============================================="
+
+# Stop and remove containers
+docker compose -f docker-compose.local.yml down
+
+echo ""
+echo "All services stopped."
+echo ""
+echo "To restart: ./dot/bin/dot-local-up"
+echo "=============================================="
