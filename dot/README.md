@@ -39,6 +39,8 @@ export DIRECTUS_BASE_URL="https://directus-test-pfne2mqwja-as.a.run.app"
 | dot/bin/dot-spider | Website health crawler with auth support | DIRECTUS_ADMIN_EMAIL, DIRECTUS_ADMIN_PASSWORD, BASE_URL | Yes | `dot/bin/dot-spider --max-pages 10` |
 | dot/bin/dot-fix-permissions | Fix Directus Public role permissions | DOT_TOKEN or DIRECTUS_ADMIN_PASSWORD, DIRECTUS_BASE_URL | Yes | `dot/bin/dot-fix-permissions` |
 | dot/bin/dot-seed-agency-os | Create Agency OS collections + seed data | DOT_TOKEN or DIRECTUS_ADMIN_PASSWORD, DIRECTUS_BASE_URL | Yes | `dot/bin/dot-seed-agency-os` |
+| dot/bin/dot-backup | Backup Directus data to JSON | DOT_TOKEN, DIRECTUS_BASE_URL | Yes | `dot/bin/dot-backup` |
+| dot/bin/dot-clean-data | Wipe dummy data, keep schema intact | DOT_TOKEN, DIRECTUS_BASE_URL | Yes | `dot/bin/dot-clean-data` |
 
 ## Safety and laws
 - No UI automation. These tools use Directus API only.
