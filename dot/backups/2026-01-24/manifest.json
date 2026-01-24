@@ -1,0 +1,33 @@
+{
+  "timestamp": "2026-01-24T10:58:59.842Z",
+  "directusUrl": "https://directus-test-pfne2mqwja-as.a.run.app",
+  "collections": {
+    "os_projects": {
+      "count": 3,
+      "file": "os_projects.json"
+    },
+    "os_tasks": {
+      "count": 5,
+      "file": "os_tasks.json"
+    },
+    "os_invoices": {
+      "count": 3,
+      "file": "os_invoices.json"
+    },
+    "contacts": {
+      "count": 3,
+      "file": "contacts.json"
+    },
+    "globals": {
+      "file": "globals.json"
+    },
+    "pages": {
+      "count": 3,
+      "file": "pages.json"
+    },
+    "posts": {
+      "count": 2,
+      "file": "posts.json"
+    }
+  }
+}

@@ -1,0 +1,41 @@
+[
+  {
+    "date_created": null,
+    "date_updated": null,
+    "id": "715a5790-bde6-4f35-9aaa-534cd64f677b",
+    "permalink": "/",
+    "sort": null,
+    "status": "published",
+    "summary": null,
+    "title": "Home Page",
+    "user_created": null,
+    "user_updated": null,
+    "translations": []
+  },
+  {
+    "date_created": null,
+    "date_updated": null,
+    "id": "e06f8cee-1c46-4dc7-aea5-468802762a9b",
+    "permalink": "/privacy",
+    "sort": null,
+    "status": "published",
+    "summary": "Our commitment to protecting your privacy and personal data.",
+    "title": "Privacy Policy",
+    "user_created": null,
+    "user_updated": null,
+    "translations": []
+  },
+  {
+    "date_created": null,
+    "date_updated": null,
+    "id": "eaaa2297-d583-4299-8754-44fd8b447304",
+    "permalink": "/terms",
+    "sort": null,
+    "status": "published",
+    "summary": "Terms and conditions governing the use of our platform.",
+    "title": "Terms of Service",
+    "user_created": null,
+    "user_updated": null,
+    "translations": []
+  }
+]

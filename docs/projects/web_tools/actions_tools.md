@@ -1,6 +1,9 @@
 <!-- PROTECTED: MASTER MAP - DO NOT DELETE -->
 
 DOT TOOLCHAIN - BẢN ĐỒ HOÀN CHỈNH
+Status: 15/15 Tools Ready (E1 Complete)
+Last Updated: 2026-01-24
+
 web-test/
 ├── dot/                              # 🛠️ KHO VŨ KHÍ (Digital Operations Toolkit)
 │   ├── README.md                     # 🗺️ BẢN ĐỒ TỔNG (Bắt buộc đọc đầu tiên)
@@ -12,7 +15,8 @@ web-test/
 │   │   ├── dot-fix-gap3              # ✅ Migration sửa lỗi featured_post
 │   │   ├── dot-seed-agency-os        # ✅ Hydrate Agency OS collections + dummy data
 │   │   ├── dot-seed-data             # 📋 [PLANNED] Seed dữ liệu mẫu cho môi trường mới
-│   │   ├── dot-backup                # 📋 [PLANNED] Backup Directus data to GCS
+│   │   ├── dot-backup                # ✅ Backup Directus data to JSON
+│   │   ├── dot-clean-data            # ✅ Wipe dummy data, keep schema intact
 │   │   │
 │   │   │ ─────────── AUTH & PERMISSIONS ───────────
 │   │   ├── dot-fix-permissions       # ✅ Fix Directus role permissions
@@ -79,7 +83,8 @@ TOOL MATRIX BY CATEGORY
 | dot-fix-gap3 | ✅ | Fix specific data issues | Hotfix production |
 | dot-seed-agency-os | ✅ | Create Agency OS collections + seed data | Deploy mới, fix 403 |
 | dot-seed-data | 📋 | Seed sample data | Deploy môi trường mới |
-| dot-backup | 📋 | Backup to GCS | Before major changes |
+| dot-backup | ✅ | Backup data to JSON | Before major changes |
+| dot-clean-data | ✅ | Wipe business data | Before real data input |
 
 2. AUTH & PERMISSIONS (Quản lý quyền hạn)
 
@@ -129,6 +134,18 @@ CURRENT PRIORITY
 |----------|------|--------|--------|
 | ~~P0~~ | ~~dot-fix-permissions~~ | ~~Blocking~~ | ✅ DONE |
 | ~~P0~~ | ~~dot-seed-agency-os~~ | ~~Collections created~~ | ✅ DONE |
+| ~~P0~~ | ~~dot-backup~~ | ~~Checkpoint trước clean~~ | ✅ DONE |
+| ~~P0~~ | ~~dot-clean-data~~ | ~~Chuẩn bị Phase 3~~ | ✅ DONE |
 | P1 | dot-seed-data | Cần cho deploy môi trường mới | 📋 PLANNED |
 | P2 | dot-smoke-test | Consolidate các test lẻ | 📋 PLANNED |
 | P3 | Others | Just-in-Time khi cần | |
+
+## PHASE 3 READY TOOLS
+
+Các tool sẵn sàng cho giai đoạn Content & Operation:
+
+| Tool | Chức năng | Cách dùng |
+|------|-----------|-----------|
+| `dot-backup` | Tạo checkpoint | `./dot/bin/dot-backup` |
+| `dot-clean-data` | Xóa dummy data | `./dot/bin/dot-clean-data` |
+| `dot-spider` | Verify sau thay đổi | `./dot/bin/dot-spider` |
