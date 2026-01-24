@@ -1,0 +1,55 @@
+[
+  {
+    "billing": "retainer",
+    "date_created": "2026-01-23T15:21:38.000Z",
+    "date_updated": null,
+    "description": "Full-featured online store with payment integration",
+    "due_date": "2026-03-24",
+    "id": "03e339b7-4fcb-426c-b9a7-249a9a2e1468",
+    "name": "E-commerce Platform",
+    "sort": null,
+    "start_date": "2025-12-24",
+    "status": "active",
+    "user_created": "6abdec55-d911-44df-af96-3cf60b9654af",
+    "user_updated": null,
+    "tasks": [
+      "b862b32a-2017-42b9-b9a3-880e25719234"
+    ]
+  },
+  {
+    "billing": "hourly",
+    "date_created": "2026-01-23T15:21:38.000Z",
+    "date_updated": null,
+    "description": "Cross-platform mobile application for customer portal",
+    "due_date": "2026-04-23",
+    "id": "4db1587c-eb55-4d8a-a154-e48bbbe40643",
+    "name": "Mobile App Development",
+    "sort": null,
+    "start_date": "2026-01-23",
+    "status": "active",
+    "user_created": "6abdec55-d911-44df-af96-3cf60b9654af",
+    "user_updated": null,
+    "tasks": [
+      "b9ff2167-dc93-4274-a52e-4bc616d7348d",
+      "e423167f-9910-4615-a7c6-8b66c889ad56"
+    ]
+  },
+  {
+    "billing": "fixed",
+    "date_created": "2026-01-23T15:21:38.000Z",
+    "date_updated": null,
+    "description": "Complete overhaul of corporate website with modern design",
+    "due_date": "2026-02-22",
+    "id": "f8aec039-6641-46b6-b4a5-5ff2737f2fc1",
+    "name": "Website Redesign",
+    "sort": null,
+    "start_date": "2025-12-24",
+    "status": "active",
+    "user_created": "6abdec55-d911-44df-af96-3cf60b9654af",
+    "user_updated": null,
+    "tasks": [
+      "3d518b6e-a4f0-49c9-a4b5-6c8749e9e618",
+      "b5f80813-bba2-4907-b84b-00ff9aa750b2"
+    ]
+  }
+]

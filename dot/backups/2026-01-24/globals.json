@@ -1,0 +1,48 @@
+{
+  "address_country": null,
+  "address_locality": null,
+  "address_region": null,
+  "build_hook_url": null,
+  "contact": null,
+  "deployment": null,
+  "description": "AI-Powered Content Management System",
+  "email": null,
+  "id": "f4fa3dfd-eb85-4766-9f70-da4920ec6bc7",
+  "logo_on_dark_bg": null,
+  "logo_on_light_bg": "7fe9b4e2-6b62-44e9-a5bc-630d0c11387c",
+  "notice_deployment": null,
+  "og_image": null,
+  "phone": null,
+  "postal_code": null,
+  "project_description": "Cổng tri thức dùng chung giữa Con người và AI",
+  "project_name": "INCOMEX SAIGON CORP",
+  "routes": null,
+  "seo": null,
+  "social": null,
+  "social_links": [
+    {
+      "url": "/",
+      "icon": "home",
+      "label": "Home"
+    },
+    {
+      "url": "/knowledge",
+      "icon": "book",
+      "label": "Kho Tri Thức"
+    },
+    {
+      "url": "/tools",
+      "icon": "auto_awesome",
+      "label": "Công cụ AI"
+    },
+    {
+      "url": "/admin",
+      "icon": "admin_panel_settings",
+      "label": "Quản trị"
+    }
+  ],
+  "street_address": null,
+  "tagline": null,
+  "title": "Agency OS",
+  "url": "https://ai.incomexsaigoncorp.vn"
+}

@@ -1,0 +1,44 @@
+[
+  {
+    "date_created": "2026-01-23T15:21:38.000Z",
+    "date_updated": null,
+    "email": "john.smith@example.com",
+    "first_name": "John",
+    "id": "1f00ad73-60c4-48c4-845f-b2b8ec5bf749",
+    "job_title": "CEO",
+    "last_name": "Smith",
+    "phone": "+1-555-0101",
+    "sort": null,
+    "status": "active",
+    "user_created": "6abdec55-d911-44df-af96-3cf60b9654af",
+    "user_updated": null
+  },
+  {
+    "date_created": "2026-01-23T15:21:38.000Z",
+    "date_updated": null,
+    "email": "sarah.j@example.com",
+    "first_name": "Sarah",
+    "id": "5afe4a86-3121-4f11-bde4-dd669ba2a88a",
+    "job_title": "Project Manager",
+    "last_name": "Johnson",
+    "phone": "+1-555-0102",
+    "sort": null,
+    "status": "active",
+    "user_created": "6abdec55-d911-44df-af96-3cf60b9654af",
+    "user_updated": null
+  },
+  {
+    "date_created": "2026-01-23T15:21:38.000Z",
+    "date_updated": null,
+    "email": "mchen@example.com",
+    "first_name": "Michael",
+    "id": "9df33022-00a6-4ae1-ba38-b574c940e4c6",
+    "job_title": "CTO",
+    "last_name": "Chen",
+    "phone": "+1-555-0103",
+    "sort": null,
+    "status": "active",
+    "user_created": "6abdec55-d911-44df-af96-3cf60b9654af",
+    "user_updated": null
+  }
+]
