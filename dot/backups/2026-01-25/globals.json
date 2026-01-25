@@ -1,0 +1,48 @@
+{
+  "id": "f4fa3dfd-eb85-4766-9f70-da4920ec6bc7",
+  "title": "Incomex AI Portal",
+  "tagline": null,
+  "description": "Enterprise AI Management System",
+  "url": "https://ai.incomexsaigoncorp.vn",
+  "email": null,
+  "phone": null,
+  "street_address": null,
+  "address_locality": null,
+  "address_region": null,
+  "postal_code": null,
+  "address_country": null,
+  "og_image": null,
+  "logo_on_light_bg": "7fe9b4e2-6b62-44e9-a5bc-630d0c11387c",
+  "logo_on_dark_bg": null,
+  "social_links": [
+    {
+      "url": "/",
+      "icon": "home",
+      "label": "Home"
+    },
+    {
+      "url": "/knowledge",
+      "icon": "book",
+      "label": "Kho Tri Thức"
+    },
+    {
+      "url": "/tools",
+      "icon": "auto_awesome",
+      "label": "Công cụ AI"
+    },
+    {
+      "url": "/admin",
+      "icon": "admin_panel_settings",
+      "label": "Quản trị"
+    }
+  ],
+  "routes": null,
+  "build_hook_url": null,
+  "contact": null,
+  "deployment": null,
+  "seo": null,
+  "social": null,
+  "notice_deployment": null,
+  "project_name": "INCOMEX SAIGON CORP",
+  "project_description": "Cổng tri thức dùng chung giữa Con người và AI"
+}
