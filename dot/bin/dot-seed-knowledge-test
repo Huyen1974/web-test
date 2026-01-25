@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # DOT Seed Knowledge Test - Create test data for Knowledge Hub
 # Usage: ./dot/bin/dot-seed-knowledge-test [--local|--cloud]
@@ -8,14 +8,18 @@
 #   ├── [TEST] Guides (folder)
 #   │   └── [TEST] Getting Started Guide (document)
 #   └── [TEST] Overview (document)
+#
+# Works in both bash and zsh shells.
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# Source retry library
-if [[ -f "$SCRIPT_DIR/../lib/retry.sh" ]]; then
-  source "$SCRIPT_DIR/../lib/retry.sh"
+# Determine script directory (works in both bash and zsh)
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+elif [[ -n "${0:-}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+else
+  SCRIPT_DIR="$(pwd)/dot/bin"
 fi
 
 # Parse arguments
@@ -79,60 +83,18 @@ else
   echo -e "\033[33m  ⚠️  This will create test data in PRODUCTION\033[0m"
 fi
 
-# Get credentials
-get_credentials() {
-  local email password
-
-  if [[ "$ENV" == "local" ]]; then
-    local env_file="$SCRIPT_DIR/../../.env.local"
-    if [[ -f "$env_file" ]]; then
-      email=$(grep -E "^DIRECTUS_ADMIN_EMAIL=" "$env_file" | cut -d= -f2)
-      password=$(grep -E "^DIRECTUS_ADMIN_PASSWORD=" "$env_file" | cut -d= -f2)
-    fi
-  else
-    email="${DIRECTUS_ADMIN_EMAIL:-admin@example.com}"
-    password="${DIRECTUS_ADMIN_PASSWORD:-}"
-  fi
-
-  if [[ -z "$password" ]]; then
-    # Try credentials file
-    local creds_file="$SCRIPT_DIR/../config/credentials.local.json"
-    if [[ -f "$creds_file" ]]; then
-      password=$(jq -r '.profiles[0].password // empty' "$creds_file" 2>/dev/null)
-      email=$(jq -r '.profiles[0].username // empty' "$creds_file" 2>/dev/null)
-    fi
-  fi
-
-  echo "$email:$password"
-}
-
-CREDS=$(get_credentials)
-EMAIL="${CREDS%%:*}"
-PASSWORD="${CREDS#*:}"
-
-if [[ -z "$PASSWORD" ]]; then
-  echo -e "\033[31m[ERROR]\033[0m No password found. Set DIRECTUS_ADMIN_PASSWORD or create credentials file."
-  exit 1
-fi
-
 echo ""
 echo "------------------------------------------------------------"
 
-# Get token using retry
-if type auth_with_retry &>/dev/null; then
-  TOKEN=$(auth_with_retry "$DIRECTUS_URL" "$EMAIL" "$PASSWORD")
-else
-  # Fallback without retry lib
-  TMP_AUTH=$(mktemp)
-  printf '{"email":"%s","password":"%s"}' "$EMAIL" "$PASSWORD" > "$TMP_AUTH"
-  AUTH_RESPONSE=$(curl -sf --max-time 30 "${DIRECTUS_URL}/auth/login" \
-    -H "Content-Type: application/json" \
-    -d @"$TMP_AUTH" 2>/dev/null)
-  rm -f "$TMP_AUTH"
-  TOKEN=$(echo "$AUTH_RESPONSE" | jq -r '.data.access_token // empty')
-fi
+# Get token using dot-token (shell-agnostic)
+ENV_FLAG="--cloud"
+[[ "$ENV" == "local" ]] && ENV_FLAG="--local"
 
-if [[ -z "$TOKEN" ]]; then
+# Capture token (stdout only, stderr goes to terminal for retry messages)
+TOKEN=$("$SCRIPT_DIR/dot-token" "$ENV_FLAG")
+TOKEN_EXIT=$?
+
+if [[ $TOKEN_EXIT -ne 0 ]] || [[ -z "$TOKEN" ]]; then
   echo -e "\033[31m[ERROR]\033[0m Failed to authenticate"
   exit 1
 fi
