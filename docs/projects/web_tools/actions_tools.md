@@ -1,8 +1,8 @@
 <!-- PROTECTED: MASTER MAP - DO NOT DELETE -->
 
 DOT TOOLCHAIN - BẢN ĐỒ HOÀN CHỈNH
-Status: 15/15 Tools Ready (E1 Complete)
-Last Updated: 2026-01-24
+Status: 20/20 Tools Ready (E1 Complete + Local Dev)
+Last Updated: 2026-01-25
 
 web-test/
 ├── dot/                              # 🛠️ KHO VŨ KHÍ (Digital Operations Toolkit)
@@ -29,10 +29,17 @@ web-test/
 │   │   ├── dot-smoke-test            # 📋 [PLANNED] Quick smoke test all critical paths
 │   │   │
 │   │   │ ─────────── INFRASTRUCTURE ───────────
-│   │   ├── dot-health-check          # ✅ Health monitoring 4 layers
+│   │   ├── dot-health-check          # ✅ Health monitoring 4 layers (--local/--cloud)
 │   │   ├── dot-cost-audit            # ✅ Cloud cost analysis
 │   │   ├── dot-deploy-status         # 📋 [PLANNED] Check Cloud Run deployment status
 │   │   ├── dot-logs-tail             # 📋 [PLANNED] Tail logs from Cloud Run services
+│   │   │
+│   │   │ ─────────── LOCAL DEVELOPMENT ───────────
+│   │   ├── dot-local-up              # ✅ Start local Docker environment
+│   │   ├── dot-local-down            # ✅ Stop local Docker environment
+│   │   ├── dot-local-status          # ✅ Check container status & health
+│   │   ├── dot-local-logs            # ✅ View container logs
+│   │   ├── dot-local-restart         # ✅ Restart specific service
 │   │   │
 │   │   │ ─────────── CONTENT & FLOWS ───────────
 │   │   ├── dot-flow-trigger          # 📋 [PLANNED] Trigger Directus Flow manually
@@ -40,8 +47,10 @@ web-test/
 │   │   └── dot-publish-page          # 📋 [PLANNED] Publish/unpublish page via API
 │   │
 │   ├── config/                       # ⚙️ Configuration files
+│   │   ├── environment.sh            # ✅ Environment detection (--local/--cloud)
 │   │   ├── credentials.example.json  # ✅ Template for credentials
-│   │   └── credentials.local.json    # 🔒 [GITIGNORED] Local credentials
+│   │   ├── credentials.local.json    # 🔒 [GITIGNORED] Local credentials
+│   │   └── google-credentials.json   # 🔒 [GITIGNORED] GCP service account key
 │   │
 │   └── docs/                         # 📘 Hướng dẫn chi tiết
 │       ├── README.md                 # Index của tất cả docs
@@ -119,6 +128,56 @@ TOOL MATRIX BY CATEGORY
 | dot-cache-warm | 📋 | Warm page cache | After content update |
 | dot-publish-page | 📋 | Publish/unpublish page | Content management |
 
+6. LOCAL DEVELOPMENT (Môi trường phát triển)
+
+| Tool | Status | Chức năng | Khi nào dùng |
+|------|--------|-----------|--------------|
+| dot-local-up | ✅ | Start local Docker environment | Bắt đầu dev session |
+| dot-local-down | ✅ | Stop local Docker environment | Kết thúc dev session |
+| dot-local-status | ✅ | Check container status | Debug, monitoring |
+| dot-local-logs | ✅ | View container logs | Debugging |
+| dot-local-restart | ✅ | Restart specific service | After config changes |
+
+## HYBRID ENVIRONMENT USAGE
+
+### Cách dùng
+```bash
+# Auto-detect (kiểm tra local containers đang chạy không)
+./dot/bin/dot-health-check
+
+# Force local mode
+./dot/bin/dot-health-check --local
+
+# Force cloud mode
+./dot/bin/dot-health-check --cloud
+
+# Environment variable override
+export DOT_ENV=local
+./dot/bin/dot-schema-ensure
+```
+
+### Cơ chế hoạt động
+- File `dot/config/environment.sh` là "bộ não" detect môi trường
+- Tất cả tools đều source file này (Bash) hoặc implement detect logic (Node.js)
+- Token được load tự động theo môi trường
+- Safety banner hiển thị rõ đang target đâu:
+  - 🟢 **LOCAL MODE**: Green banner, localhost URLs
+  - 🔴 **CLOUD MODE**: Red banner với warning cho destructive operations
+
+### ⚠️ CẢNH BÁO QUAN TRỌNG: SHARED DATABASE
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  LOCAL MODE ≠ LOCAL DATABASE                                        │
+│                                                                     │
+│  Dù chạy "local", Directus vẫn kết nối TRỰC TIẾP tới Cloud SQL.   │
+│  Mọi thay đổi dữ liệu sẽ ảnh hưởng NGAY LẬP TỨC tới production!   │
+│                                                                     │
+│  → Đừng xóa data bừa bãi chỉ vì đang ở "local mode"                │
+│  → Luôn backup trước khi clean: ./dot/bin/dot-backup --local       │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
 NGUYÊN TẮC PHÁT TRIỂN TOOL
 ┌─────────────────────────────────────────────────────────────┐
 │  1. UI is for VIEWING → Tool is for ACTION                  │
@@ -146,6 +205,31 @@ Các tool sẵn sàng cho giai đoạn Content & Operation:
 
 | Tool | Chức năng | Cách dùng |
 |------|-----------|-----------|
-| `dot-backup` | Tạo checkpoint | `./dot/bin/dot-backup` |
-| `dot-clean-data` | Xóa dummy data | `./dot/bin/dot-clean-data` |
+| `dot-backup` | Tạo checkpoint | `./dot/bin/dot-backup --local` |
+| `dot-clean-data` | Xóa dummy data | `./dot/bin/dot-clean-data --local` |
 | `dot-spider` | Verify sau thay đổi | `./dot/bin/dot-spider` |
+
+## LOCAL DEV QUICK START
+
+```bash
+# 1. Start local environment
+./dot/bin/dot-local-up
+
+# 2. Check everything is running
+./dot/bin/dot-local-status
+
+# 3. Run tools in local mode
+./dot/bin/dot-health-check --local
+./dot/bin/dot-backup --local
+
+# 4. View logs if needed
+./dot/bin/dot-local-logs directus
+
+# 5. Stop when done
+./dot/bin/dot-local-down
+```
+
+Endpoints khi local:
+- Directus Admin: http://localhost:8055/admin
+- Directus API: http://localhost:8055
+- Nuxt Frontend: http://localhost:3000
