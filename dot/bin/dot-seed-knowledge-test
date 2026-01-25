@@ -1,0 +1,349 @@
+#!/bin/bash
+
+# DOT Seed Knowledge Test - Create test data for Knowledge Hub
+# Usage: ./dot/bin/dot-seed-knowledge-test [--local|--cloud]
+#
+# Creates hierarchical test data with [TEST] prefix:
+#   [TEST] Knowledge Base (folder)
+#   ├── [TEST] Guides (folder)
+#   │   └── [TEST] Getting Started Guide (document)
+#   └── [TEST] Overview (document)
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source retry library
+if [[ -f "$SCRIPT_DIR/../lib/retry.sh" ]]; then
+  source "$SCRIPT_DIR/../lib/retry.sh"
+fi
+
+# Parse arguments
+LOCAL_FLAG=""
+CLOUD_FLAG=""
+CLEAN_FLAG=""
+
+for arg in "$@"; do
+  case $arg in
+    --local)
+      LOCAL_FLAG="--local"
+      ;;
+    --cloud)
+      CLOUD_FLAG="--cloud"
+      ;;
+    --clean)
+      CLEAN_FLAG="yes"
+      ;;
+    --help|-h)
+      echo "DOT Seed Knowledge Test - Create test data for Knowledge Hub"
+      echo ""
+      echo "Usage: ./dot/bin/dot-seed-knowledge-test [options]"
+      echo ""
+      echo "Options:"
+      echo "  --local   Use local development environment"
+      echo "  --cloud   Use cloud/production environment"
+      echo "  --clean   Remove existing [TEST] items before creating new ones"
+      echo "  --help    Show this help"
+      echo ""
+      echo "Creates hierarchical test data with [TEST] prefix for testing"
+      echo "the Knowledge Hub pages (/knowledge, /knowledge/[id], /knowledge-tree)"
+      exit 0
+      ;;
+  esac
+done
+
+# Environment detection
+detect_env() {
+  if [[ -n "$LOCAL_FLAG" ]]; then echo "local"; return; fi
+  if [[ -n "$CLOUD_FLAG" ]]; then echo "cloud"; return; fi
+  if [[ "${DOT_ENV:-}" == "local" ]]; then echo "local"; return; fi
+  if [[ "${DOT_ENV:-}" == "cloud" ]]; then echo "cloud"; return; fi
+
+  # Auto-detect
+  if curl -sf --max-time 2 "http://localhost:8055/server/health" >/dev/null 2>&1; then
+    echo "local"
+  else
+    echo "cloud"
+  fi
+}
+
+ENV=$(detect_env)
+
+# Set URLs based on environment
+if [[ "$ENV" == "local" ]]; then
+  DIRECTUS_URL="http://localhost:8055"
+  echo -e "\n\033[32m\033[1m  DOT SEED KNOWLEDGE TEST - LOCAL MODE\033[0m"
+else
+  DIRECTUS_URL="https://directus-test-pfne2mqwja-as.a.run.app"
+  echo -e "\n\033[31m\033[1m  DOT SEED KNOWLEDGE TEST - CLOUD MODE (PRODUCTION)\033[0m"
+  echo -e "\033[33m  ⚠️  This will create test data in PRODUCTION\033[0m"
+fi
+
+# Get credentials
+get_credentials() {
+  local email password
+
+  if [[ "$ENV" == "local" ]]; then
+    local env_file="$SCRIPT_DIR/../../.env.local"
+    if [[ -f "$env_file" ]]; then
+      email=$(grep -E "^DIRECTUS_ADMIN_EMAIL=" "$env_file" | cut -d= -f2)
+      password=$(grep -E "^DIRECTUS_ADMIN_PASSWORD=" "$env_file" | cut -d= -f2)
+    fi
+  else
+    email="${DIRECTUS_ADMIN_EMAIL:-admin@example.com}"
+    password="${DIRECTUS_ADMIN_PASSWORD:-}"
+  fi
+
+  if [[ -z "$password" ]]; then
+    # Try credentials file
+    local creds_file="$SCRIPT_DIR/../config/credentials.local.json"
+    if [[ -f "$creds_file" ]]; then
+      password=$(jq -r '.profiles[0].password // empty' "$creds_file" 2>/dev/null)
+      email=$(jq -r '.profiles[0].username // empty' "$creds_file" 2>/dev/null)
+    fi
+  fi
+
+  echo "$email:$password"
+}
+
+CREDS=$(get_credentials)
+EMAIL="${CREDS%%:*}"
+PASSWORD="${CREDS#*:}"
+
+if [[ -z "$PASSWORD" ]]; then
+  echo -e "\033[31m[ERROR]\033[0m No password found. Set DIRECTUS_ADMIN_PASSWORD or create credentials file."
+  exit 1
+fi
+
+echo ""
+echo "------------------------------------------------------------"
+
+# Get token using retry
+if type auth_with_retry &>/dev/null; then
+  TOKEN=$(auth_with_retry "$DIRECTUS_URL" "$EMAIL" "$PASSWORD")
+else
+  # Fallback without retry lib
+  TMP_AUTH=$(mktemp)
+  printf '{"email":"%s","password":"%s"}' "$EMAIL" "$PASSWORD" > "$TMP_AUTH"
+  AUTH_RESPONSE=$(curl -sf --max-time 30 "${DIRECTUS_URL}/auth/login" \
+    -H "Content-Type: application/json" \
+    -d @"$TMP_AUTH" 2>/dev/null)
+  rm -f "$TMP_AUTH"
+  TOKEN=$(echo "$AUTH_RESPONSE" | jq -r '.data.access_token // empty')
+fi
+
+if [[ -z "$TOKEN" ]]; then
+  echo -e "\033[31m[ERROR]\033[0m Failed to authenticate"
+  exit 1
+fi
+
+echo -e "\033[32m[OK]\033[0m Authenticated successfully"
+
+# Clean existing [TEST] items if requested
+if [[ -n "$CLEAN_FLAG" ]]; then
+  echo ""
+  echo "Cleaning existing [TEST] items..."
+
+  # Get all items with [TEST] prefix
+  EXISTING=$(curl -sf --max-time 30 "${DIRECTUS_URL}/items/knowledge_documents?filter[title][_starts_with]=[TEST]" \
+    -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || echo '{"data":[]}')
+
+  COUNT=$(echo "$EXISTING" | jq '.data | length')
+
+  if [[ "$COUNT" -gt 0 ]]; then
+    # Delete each item
+    for id in $(echo "$EXISTING" | jq -r '.data[].id'); do
+      curl -sf --max-time 30 -X DELETE "${DIRECTUS_URL}/items/knowledge_documents/${id}" \
+        -H "Authorization: Bearer ${TOKEN}" >/dev/null 2>&1 || true
+      echo "  Deleted: $id"
+    done
+    echo -e "\033[32m[OK]\033[0m Cleaned $COUNT existing [TEST] items"
+  else
+    echo "  No existing [TEST] items found"
+  fi
+fi
+
+echo ""
+echo "Creating test data..."
+
+# Helper function to create item
+create_item() {
+  local payload="$1"
+  local response
+
+  response=$(curl -sf --max-time 30 -X POST "${DIRECTUS_URL}/items/knowledge_documents" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "$payload" 2>/dev/null)
+
+  if [[ -z "$response" ]]; then
+    echo ""
+    return 1
+  fi
+
+  echo "$response" | jq -r '.data.id // empty'
+}
+
+# Generate unique version_group_id
+gen_uuid() {
+  uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid 2>/dev/null || echo "$(date +%s)-$(( RANDOM ))-$(( RANDOM ))"
+}
+
+# 1. Create root folder: [TEST] Knowledge Base
+echo -n "  Creating [TEST] Knowledge Base (folder)... "
+ROOT_UUID=$(gen_uuid | tr '[:upper:]' '[:lower:]')
+ROOT_ID=$(create_item "{
+  \"title\": \"[TEST] Knowledge Base\",
+  \"slug\": \"test-knowledge-base\",
+  \"status\": \"published\",
+  \"is_folder\": true,
+  \"visibility\": \"public\",
+  \"language\": \"vn\",
+  \"category\": \"knowledge\",
+  \"tags\": [\"test\", \"root\"],
+  \"workflow_status\": \"published\",
+  \"version_group_id\": \"$ROOT_UUID\",
+  \"version_number\": 1,
+  \"is_current_version\": true
+}")
+
+if [[ -z "$ROOT_ID" ]]; then
+  echo -e "\033[31mFailed\033[0m"
+  exit 1
+fi
+echo -e "\033[32mID: $ROOT_ID\033[0m"
+
+# 2. Create subfolder: [TEST] Guides
+echo -n "  Creating [TEST] Guides (folder)... "
+GUIDES_UUID=$(gen_uuid | tr '[:upper:]' '[:lower:]')
+GUIDES_ID=$(create_item "{
+  \"title\": \"[TEST] Guides\",
+  \"slug\": \"test-guides\",
+  \"status\": \"published\",
+  \"is_folder\": true,
+  \"parent_document_id\": $ROOT_ID,
+  \"visibility\": \"public\",
+  \"language\": \"vn\",
+  \"category\": \"knowledge\",
+  \"tags\": [\"test\", \"guides\"],
+  \"workflow_status\": \"published\",
+  \"version_group_id\": \"$GUIDES_UUID\",
+  \"version_number\": 1,
+  \"is_current_version\": true
+}")
+
+if [[ -z "$GUIDES_ID" ]]; then
+  echo -e "\033[31mFailed\033[0m"
+else
+  echo -e "\033[32mID: $GUIDES_ID\033[0m"
+fi
+
+# 3. Create document: [TEST] Getting Started Guide
+echo -n "  Creating [TEST] Getting Started Guide (document)... "
+DOC1_UUID=$(gen_uuid | tr '[:upper:]' '[:lower:]')
+DOC1_ID=$(create_item "{
+  \"title\": \"[TEST] Getting Started Guide\",
+  \"slug\": \"test-getting-started\",
+  \"status\": \"published\",
+  \"is_folder\": false,
+  \"parent_document_id\": ${GUIDES_ID:-null},
+  \"visibility\": \"public\",
+  \"language\": \"vn\",
+  \"category\": \"knowledge\",
+  \"tags\": [\"test\", \"guides\", \"getting-started\"],
+  \"summary\": \"A test document for getting started with the Knowledge Hub.\",
+  \"content\": \"<h2>Welcome to Knowledge Hub</h2><p>This is a <strong>test document</strong> created to verify the Knowledge Hub pages work correctly.</p><h3>Features</h3><ul><li>Document listing</li><li>Tree navigation</li><li>Rich content display</li></ul><p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>\",
+  \"workflow_status\": \"published\",
+  \"version_group_id\": \"$DOC1_UUID\",
+  \"version_number\": 1,
+  \"is_current_version\": true
+}")
+
+if [[ -z "$DOC1_ID" ]]; then
+  echo -e "\033[31mFailed\033[0m"
+else
+  echo -e "\033[32mID: $DOC1_ID\033[0m"
+fi
+
+# 4. Create document: [TEST] Overview (at root level)
+echo -n "  Creating [TEST] Overview (document)... "
+DOC2_UUID=$(gen_uuid | tr '[:upper:]' '[:lower:]')
+DOC2_ID=$(create_item "{
+  \"title\": \"[TEST] Overview\",
+  \"slug\": \"test-overview\",
+  \"status\": \"published\",
+  \"is_folder\": false,
+  \"parent_document_id\": $ROOT_ID,
+  \"visibility\": \"public\",
+  \"language\": \"vn\",
+  \"category\": \"knowledge\",
+  \"tags\": [\"test\", \"overview\"],
+  \"summary\": \"An overview document for testing the Knowledge Hub detail page.\",
+  \"content\": \"<h2>Knowledge Hub Overview</h2><p>This document provides an overview of the Knowledge Hub functionality.</p><h3>Navigation</h3><p>Use the tree view at <code>/knowledge-tree</code> to browse all documents hierarchically.</p><h3>Searching</h3><p>The list view at <code>/knowledge</code> allows filtering by category and tags.</p>\",
+  \"workflow_status\": \"published\",
+  \"version_group_id\": \"$DOC2_UUID\",
+  \"version_number\": 1,
+  \"is_current_version\": true
+}")
+
+if [[ -z "$DOC2_ID" ]]; then
+  echo -e "\033[31mFailed\033[0m"
+else
+  echo -e "\033[32mID: $DOC2_ID\033[0m"
+fi
+
+# 5. Create another root document for variety
+echo -n "  Creating [TEST] FAQ (document at root)... "
+DOC3_UUID=$(gen_uuid | tr '[:upper:]' '[:lower:]')
+DOC3_ID=$(create_item "{
+  \"title\": \"[TEST] FAQ\",
+  \"slug\": \"test-faq\",
+  \"status\": \"published\",
+  \"is_folder\": false,
+  \"parent_document_id\": null,
+  \"visibility\": \"public\",
+  \"language\": \"vn\",
+  \"category\": \"knowledge\",
+  \"tags\": [\"test\", \"faq\"],
+  \"summary\": \"Frequently asked questions for testing.\",
+  \"content\": \"<h2>Frequently Asked Questions</h2><h3>Q: What is this?</h3><p>A: This is test data for the Knowledge Hub.</p><h3>Q: Why [TEST] prefix?</h3><p>A: To easily identify and clean up test data.</p>\",
+  \"workflow_status\": \"published\",
+  \"version_group_id\": \"$DOC3_UUID\",
+  \"version_number\": 1,
+  \"is_current_version\": true
+}")
+
+if [[ -z "$DOC3_ID" ]]; then
+  echo -e "\033[31mFailed\033[0m"
+else
+  echo -e "\033[32mID: $DOC3_ID\033[0m"
+fi
+
+echo ""
+echo "------------------------------------------------------------"
+echo -e "\033[32m[SUCCESS]\033[0m Test data created!"
+echo ""
+echo "Created structure:"
+echo "  [TEST] Knowledge Base (folder) - ID: $ROOT_ID"
+if [[ -n "$GUIDES_ID" ]]; then
+  echo "  ├── [TEST] Guides (folder) - ID: $GUIDES_ID"
+fi
+if [[ -n "$DOC1_ID" ]]; then
+  echo "  │   └── [TEST] Getting Started Guide - ID: $DOC1_ID"
+fi
+if [[ -n "$DOC2_ID" ]]; then
+  echo "  └── [TEST] Overview - ID: $DOC2_ID"
+fi
+if [[ -n "$DOC3_ID" ]]; then
+  echo "  [TEST] FAQ (root level) - ID: $DOC3_ID"
+fi
+echo ""
+echo "Verify at:"
+echo "  List:   ${DIRECTUS_URL/directus-test-pfne2mqwja-as.a.run.app/localhost:3000}/knowledge"
+echo "  Tree:   ${DIRECTUS_URL/directus-test-pfne2mqwja-as.a.run.app/localhost:3000}/knowledge-tree"
+if [[ -n "$DOC1_ID" ]]; then
+  echo "  Detail: ${DIRECTUS_URL/directus-test-pfne2mqwja-as.a.run.app/localhost:3000}/knowledge/$DOC1_ID"
+fi
+echo ""
+echo "To clean up test data later, run:"
+echo "  ./dot/bin/dot-seed-knowledge-test --clean"
