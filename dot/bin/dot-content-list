@@ -1,0 +1,196 @@
+#!/bin/bash
+
+# DOT Content List - List content by workflow status
+# Usage: ./dot/bin/dot-content-list [status] [collection]
+#
+# Arguments:
+#   status     - Filter by workflow_status: all, draft, review, approved, published (default: all)
+#   collection - Directus collection name (default: knowledge_documents)
+#
+# Examples:
+#   ./dot/bin/dot-content-list                          # List all from knowledge_documents
+#   ./dot/bin/dot-content-list published                # List published only
+#   ./dot/bin/dot-content-list draft pages              # List drafts from pages collection
+#   ./dot/bin/dot-content-list --local all posts        # Force local mode
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source retry library
+if [[ -f "$SCRIPT_DIR/../lib/retry.sh" ]]; then
+  source "$SCRIPT_DIR/../lib/retry.sh"
+fi
+
+# Source environment detection
+if [[ -f "$SCRIPT_DIR/../config/environment.sh" ]]; then
+  source "$SCRIPT_DIR/../config/environment.sh"
+fi
+
+# Parse arguments
+LOCAL_FLAG=""
+CLOUD_FLAG=""
+POSITIONAL_ARGS=()
+
+for arg in "$@"; do
+  case $arg in
+    --local)
+      LOCAL_FLAG="--local"
+      ;;
+    --cloud)
+      CLOUD_FLAG="--cloud"
+      ;;
+    --help|-h)
+      echo "DOT Content List - List content by workflow status"
+      echo ""
+      echo "Usage: ./dot/bin/dot-content-list [options] [status] [collection]"
+      echo ""
+      echo "Options:"
+      echo "  --local     Use local development environment"
+      echo "  --cloud     Use cloud/production environment"
+      echo "  --help, -h  Show this help"
+      echo ""
+      echo "Arguments:"
+      echo "  status      Filter: all, draft, review, approved, published (default: all)"
+      echo "  collection  Directus collection (default: knowledge_documents)"
+      echo ""
+      echo "Cold Start Protection:"
+      echo "  This tool automatically retries failed requests to handle Cloud Run cold starts."
+      echo "  Configure via environment variables:"
+      echo "    DOT_RETRY_MAX=3       Max retry attempts (default: 3)"
+      echo "    DOT_RETRY_TIMEOUT=30  Timeout per attempt in seconds (default: 30)"
+      echo "    DOT_RETRY_DELAY=5     Initial delay between retries (default: 5)"
+      echo ""
+      echo "Examples:"
+      echo "  ./dot/bin/dot-content-list published"
+      echo "  ./dot/bin/dot-content-list --local draft posts"
+      exit 0
+      ;;
+    *)
+      POSITIONAL_ARGS+=("$arg")
+      ;;
+  esac
+done
+
+STATUS="${POSITIONAL_ARGS[0]:-all}"
+COLLECTION="${POSITIONAL_ARGS[1]:-knowledge_documents}"
+
+# Environment detection
+detect_env() {
+  if [[ -n "$LOCAL_FLAG" ]]; then echo "local"; return; fi
+  if [[ -n "$CLOUD_FLAG" ]]; then echo "cloud"; return; fi
+  if [[ "${DOT_ENV:-}" == "local" ]]; then echo "local"; return; fi
+  if [[ "${DOT_ENV:-}" == "cloud" ]]; then echo "cloud"; return; fi
+
+  # Auto-detect
+  if curl -sf --max-time 2 "http://localhost:8055/server/health" >/dev/null 2>&1; then
+    echo "local"
+  else
+    echo "cloud"
+  fi
+}
+
+ENV=$(detect_env)
+
+# Set URLs based on environment
+if [[ "$ENV" == "local" ]]; then
+  DIRECTUS_URL="http://localhost:8055"
+  echo -e "\n\033[32m\033[1m  DOT CONTENT LIST - LOCAL MODE\033[0m"
+else
+  DIRECTUS_URL="https://directus-test-pfne2mqwja-as.a.run.app"
+  echo -e "\n\033[33m\033[1m  DOT CONTENT LIST - CLOUD MODE\033[0m"
+fi
+
+# Get credentials
+get_credentials() {
+  local email password
+
+  if [[ "$ENV" == "local" ]]; then
+    local env_file="$SCRIPT_DIR/../../.env.local"
+    if [[ -f "$env_file" ]]; then
+      email=$(grep -E "^DIRECTUS_ADMIN_EMAIL=" "$env_file" | cut -d= -f2)
+      password=$(grep -E "^DIRECTUS_ADMIN_PASSWORD=" "$env_file" | cut -d= -f2)
+    fi
+  else
+    email="${DIRECTUS_ADMIN_EMAIL:-admin@example.com}"
+    password="${DIRECTUS_ADMIN_PASSWORD:-}"
+  fi
+
+  if [[ -z "$password" ]]; then
+    # Try credentials file
+    local creds_file="$SCRIPT_DIR/../config/credentials.local.json"
+    if [[ -f "$creds_file" ]]; then
+      password=$(jq -r '.profiles[0].password // empty' "$creds_file" 2>/dev/null)
+      email=$(jq -r '.profiles[0].username // empty' "$creds_file" 2>/dev/null)
+    fi
+  fi
+
+  echo "$email:$password"
+}
+
+CREDS=$(get_credentials)
+EMAIL="${CREDS%%:*}"
+PASSWORD="${CREDS#*:}"
+
+if [[ -z "$PASSWORD" ]]; then
+  echo -e "\033[31m[ERROR]\033[0m No password found. Set DIRECTUS_ADMIN_PASSWORD or create credentials file."
+  exit 1
+fi
+
+echo "Collection: $COLLECTION"
+echo "Status Filter: $STATUS"
+echo "------------------------------------------------------------"
+
+# Get token using retry
+if type auth_with_retry &>/dev/null; then
+  TOKEN=$(auth_with_retry "$DIRECTUS_URL" "$EMAIL" "$PASSWORD")
+else
+  # Fallback without retry lib - use temp file to avoid shell escaping
+  TMP_AUTH=$(mktemp)
+  printf '{"email":"%s","password":"%s"}' "$EMAIL" "$PASSWORD" > "$TMP_AUTH"
+  AUTH_RESPONSE=$(curl -sf --max-time 30 "${DIRECTUS_URL}/auth/login" \
+    -H "Content-Type: application/json" \
+    -d @"$TMP_AUTH" 2>/dev/null)
+  rm -f "$TMP_AUTH"
+  TOKEN=$(echo "$AUTH_RESPONSE" | jq -r '.data.access_token // empty')
+fi
+
+if [[ -z "$TOKEN" ]]; then
+  echo -e "\033[31m[ERROR]\033[0m Failed to authenticate"
+  exit 1
+fi
+
+# Build query
+if [[ "$STATUS" == "all" ]]; then
+  QUERY=""
+else
+  QUERY="?filter[workflow_status][_eq]=${STATUS}"
+fi
+
+# Fetch data using retry
+if type api_with_retry &>/dev/null; then
+  RESPONSE=$(api_with_retry "GET" "${DIRECTUS_URL}/items/${COLLECTION}${QUERY}" "$TOKEN")
+else
+  # Fallback without retry lib
+  RESPONSE=$(curl -sf --max-time 30 "${DIRECTUS_URL}/items/${COLLECTION}${QUERY}" \
+    -H "Authorization: Bearer ${TOKEN}" 2>/dev/null)
+fi
+
+if [[ -z "$RESPONSE" ]]; then
+  echo -e "\033[31m[ERROR]\033[0m Failed to fetch data"
+  exit 1
+fi
+
+# Check if collection exists
+if echo "$RESPONSE" | jq -e '.errors' >/dev/null 2>&1; then
+  echo -e "\033[31m[ERROR]\033[0m $(echo "$RESPONSE" | jq -r '.errors[0].message')"
+  exit 1
+fi
+
+# Count and display
+COUNT=$(echo "$RESPONSE" | jq '.data | length')
+echo -e "\033[32mFound: $COUNT items\033[0m\n"
+
+if [[ "$COUNT" -gt 0 ]]; then
+  echo "$RESPONSE" | jq -r '.data[] | "ID: \(.id)\n  Title: \(.title // .name // "[no title]")\n  Status: \(.workflow_status // .status // "[no status]")\n"'
+fi

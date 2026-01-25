@@ -1,7 +1,7 @@
 <!-- PROTECTED: MASTER MAP - DO NOT DELETE -->
 
 DOT TOOLCHAIN - BẢN ĐỒ HOÀN CHỈNH
-Status: 20/20 Tools Ready (E1 Complete + Local Dev)
+Status: 22/22 Tools Ready (E1 Complete + Local Dev + Content Ops)
 Last Updated: 2026-01-25
 
 web-test/
@@ -40,6 +40,10 @@ web-test/
 │   │   ├── dot-local-status          # ✅ Check container status & health
 │   │   ├── dot-local-logs            # ✅ View container logs
 │   │   ├── dot-local-restart         # ✅ Restart specific service
+│   │   │
+│   │   │ ─────────── CONTENT OPERATIONS ───────────
+│   │   ├── dot-content-list          # ✅ List content by workflow_status
+│   │   ├── dot-content-approve       # ✅ Update workflow_status (approve/publish)
 │   │   │
 │   │   │ ─────────── CONTENT & FLOWS ───────────
 │   │   ├── dot-flow-trigger          # 📋 [PLANNED] Trigger Directus Flow manually
@@ -120,7 +124,14 @@ TOOL MATRIX BY CATEGORY
 | dot-deploy-status | 📋 | Check Cloud Run status | After deploy |
 | dot-logs-tail | 📋 | Tail service logs | Debugging |
 
-5. CONTENT & FLOWS (Nội dung & Workflow)
+5. CONTENT OPERATIONS (Quản lý nội dung)
+
+| Tool | Status | Chức năng | Khi nào dùng |
+|------|--------|-----------|--------------|
+| dot-content-list | ✅ | List content by workflow_status | Review pending content |
+| dot-content-approve | ✅ | Update workflow_status | Approve/publish content |
+
+6. CONTENT & FLOWS (Nội dung & Workflow)
 
 | Tool | Status | Chức năng | Khi nào dùng |
 |------|--------|-----------|--------------|
@@ -128,7 +139,7 @@ TOOL MATRIX BY CATEGORY
 | dot-cache-warm | 📋 | Warm page cache | After content update |
 | dot-publish-page | 📋 | Publish/unpublish page | Content management |
 
-6. LOCAL DEVELOPMENT (Môi trường phát triển)
+7. LOCAL DEVELOPMENT (Môi trường phát triển)
 
 | Tool | Status | Chức năng | Khi nào dùng |
 |------|--------|-----------|--------------|

@@ -1,0 +1,238 @@
+#!/bin/bash
+
+# DOT Content Approve - Update workflow status of content items
+# Usage: ./dot/bin/dot-content-approve <item_id> [collection] [new_status]
+#
+# Arguments:
+#   item_id    - Required. The ID of the item to update
+#   collection - Directus collection name (default: knowledge_documents)
+#   new_status - New workflow_status value (default: approved)
+#
+# Examples:
+#   ./dot/bin/dot-content-approve abc123                        # Approve item
+#   ./dot/bin/dot-content-approve abc123 posts published        # Publish post
+#   ./dot/bin/dot-content-approve --local abc123 pages draft    # Revert to draft
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source retry library
+if [[ -f "$SCRIPT_DIR/../lib/retry.sh" ]]; then
+  source "$SCRIPT_DIR/../lib/retry.sh"
+fi
+
+# Source environment detection
+if [[ -f "$SCRIPT_DIR/../config/environment.sh" ]]; then
+  source "$SCRIPT_DIR/../config/environment.sh"
+fi
+
+# Parse arguments
+LOCAL_FLAG=""
+CLOUD_FLAG=""
+DRY_RUN=""
+POSITIONAL_ARGS=()
+
+for arg in "$@"; do
+  case $arg in
+    --local)
+      LOCAL_FLAG="--local"
+      ;;
+    --cloud)
+      CLOUD_FLAG="--cloud"
+      ;;
+    --dry-run)
+      DRY_RUN="yes"
+      ;;
+    --help|-h)
+      echo "DOT Content Approve - Update workflow status of content items"
+      echo ""
+      echo "Usage: ./dot/bin/dot-content-approve [options] <item_id> [collection] [new_status]"
+      echo ""
+      echo "Options:"
+      echo "  --local     Use local development environment"
+      echo "  --cloud     Use cloud/production environment"
+      echo "  --dry-run   Show what would happen without making changes"
+      echo "  --help, -h  Show this help"
+      echo ""
+      echo "Arguments:"
+      echo "  item_id     Required. The item ID to update"
+      echo "  collection  Directus collection (default: knowledge_documents)"
+      echo "  new_status  New workflow_status: draft, review, approved, published (default: approved)"
+      echo ""
+      echo "Cold Start Protection:"
+      echo "  This tool automatically retries failed requests to handle Cloud Run cold starts."
+      echo "  Configure via environment variables:"
+      echo "    DOT_RETRY_MAX=3       Max retry attempts (default: 3)"
+      echo "    DOT_RETRY_TIMEOUT=30  Timeout per attempt in seconds (default: 30)"
+      echo "    DOT_RETRY_DELAY=5     Initial delay between retries (default: 5)"
+      echo ""
+      echo "Examples:"
+      echo "  ./dot/bin/dot-content-approve abc123"
+      echo "  ./dot/bin/dot-content-approve abc123 posts published"
+      echo "  ./dot/bin/dot-content-approve --dry-run abc123 pages review"
+      exit 0
+      ;;
+    *)
+      POSITIONAL_ARGS+=("$arg")
+      ;;
+  esac
+done
+
+ITEM_ID="${POSITIONAL_ARGS[0]:-}"
+COLLECTION="${POSITIONAL_ARGS[1]:-knowledge_documents}"
+NEW_STATUS="${POSITIONAL_ARGS[2]:-approved}"
+
+if [[ -z "$ITEM_ID" ]]; then
+  echo -e "\033[31m[ERROR]\033[0m Missing required argument: item_id"
+  echo "Usage: ./dot/bin/dot-content-approve <item_id> [collection] [new_status]"
+  exit 1
+fi
+
+# Environment detection
+detect_env() {
+  if [[ -n "$LOCAL_FLAG" ]]; then echo "local"; return; fi
+  if [[ -n "$CLOUD_FLAG" ]]; then echo "cloud"; return; fi
+  if [[ "${DOT_ENV:-}" == "local" ]]; then echo "local"; return; fi
+  if [[ "${DOT_ENV:-}" == "cloud" ]]; then echo "cloud"; return; fi
+
+  # Auto-detect
+  if curl -sf --max-time 2 "http://localhost:8055/server/health" >/dev/null 2>&1; then
+    echo "local"
+  else
+    echo "cloud"
+  fi
+}
+
+ENV=$(detect_env)
+
+# Set URLs based on environment
+if [[ "$ENV" == "local" ]]; then
+  DIRECTUS_URL="http://localhost:8055"
+  echo -e "\n\033[32m\033[1m  DOT CONTENT APPROVE - LOCAL MODE\033[0m"
+else
+  DIRECTUS_URL="https://directus-test-pfne2mqwja-as.a.run.app"
+  echo -e "\n\033[31m\033[1m  DOT CONTENT APPROVE - CLOUD MODE (PRODUCTION)\033[0m"
+  echo -e "\033[33m  ⚠️  Changes will affect PRODUCTION data\033[0m"
+fi
+
+# Get credentials
+get_credentials() {
+  local email password
+
+  if [[ "$ENV" == "local" ]]; then
+    local env_file="$SCRIPT_DIR/../../.env.local"
+    if [[ -f "$env_file" ]]; then
+      email=$(grep -E "^DIRECTUS_ADMIN_EMAIL=" "$env_file" | cut -d= -f2)
+      password=$(grep -E "^DIRECTUS_ADMIN_PASSWORD=" "$env_file" | cut -d= -f2)
+    fi
+  else
+    email="${DIRECTUS_ADMIN_EMAIL:-admin@example.com}"
+    password="${DIRECTUS_ADMIN_PASSWORD:-}"
+  fi
+
+  if [[ -z "$password" ]]; then
+    # Try credentials file
+    local creds_file="$SCRIPT_DIR/../config/credentials.local.json"
+    if [[ -f "$creds_file" ]]; then
+      password=$(jq -r '.profiles[0].password // empty' "$creds_file" 2>/dev/null)
+      email=$(jq -r '.profiles[0].username // empty' "$creds_file" 2>/dev/null)
+    fi
+  fi
+
+  echo "$email:$password"
+}
+
+CREDS=$(get_credentials)
+EMAIL="${CREDS%%:*}"
+PASSWORD="${CREDS#*:}"
+
+if [[ -z "$PASSWORD" ]]; then
+  echo -e "\033[31m[ERROR]\033[0m No password found. Set DIRECTUS_ADMIN_PASSWORD or create credentials file."
+  exit 1
+fi
+
+echo ""
+echo "Item ID:    $ITEM_ID"
+echo "Collection: $COLLECTION"
+echo "New Status: $NEW_STATUS"
+echo "------------------------------------------------------------"
+
+if [[ -n "$DRY_RUN" ]]; then
+  echo -e "\033[33m[DRY-RUN]\033[0m Would update workflow_status to '$NEW_STATUS'"
+  exit 0
+fi
+
+# Get token using retry
+if type auth_with_retry &>/dev/null; then
+  TOKEN=$(auth_with_retry "$DIRECTUS_URL" "$EMAIL" "$PASSWORD")
+else
+  # Fallback without retry lib - use temp file to avoid shell escaping
+  TMP_AUTH=$(mktemp)
+  printf '{"email":"%s","password":"%s"}' "$EMAIL" "$PASSWORD" > "$TMP_AUTH"
+  AUTH_RESPONSE=$(curl -sf --max-time 30 "${DIRECTUS_URL}/auth/login" \
+    -H "Content-Type: application/json" \
+    -d @"$TMP_AUTH" 2>/dev/null)
+  rm -f "$TMP_AUTH"
+  TOKEN=$(echo "$AUTH_RESPONSE" | jq -r '.data.access_token // empty')
+fi
+
+if [[ -z "$TOKEN" ]]; then
+  echo -e "\033[31m[ERROR]\033[0m Failed to authenticate"
+  exit 1
+fi
+
+# Get current item status first (with retry)
+if type api_with_retry &>/dev/null; then
+  CURRENT=$(api_with_retry "GET" "${DIRECTUS_URL}/items/${COLLECTION}/${ITEM_ID}?fields=id,title,workflow_status" "$TOKEN")
+else
+  CURRENT=$(curl -sf --max-time 30 "${DIRECTUS_URL}/items/${COLLECTION}/${ITEM_ID}?fields=id,title,workflow_status" \
+    -H "Authorization: Bearer ${TOKEN}" 2>/dev/null)
+fi
+
+if [[ -z "$CURRENT" ]] || echo "$CURRENT" | jq -e '.errors' >/dev/null 2>&1; then
+  echo -e "\033[31m[ERROR]\033[0m Item not found or access denied"
+  if [[ -n "$CURRENT" ]]; then
+    echo "$CURRENT" | jq -r '.errors[0].message // empty'
+  fi
+  exit 1
+fi
+
+CURRENT_STATUS=$(echo "$CURRENT" | jq -r '.data.workflow_status // "unknown"')
+CURRENT_TITLE=$(echo "$CURRENT" | jq -r '.data.title // "[no title]"')
+
+echo "Title:      $CURRENT_TITLE"
+echo "Current:    $CURRENT_STATUS → $NEW_STATUS"
+echo ""
+
+# Update the item (with retry)
+if type api_with_retry &>/dev/null; then
+  RESPONSE=$(api_with_retry "PATCH" "${DIRECTUS_URL}/items/${COLLECTION}/${ITEM_ID}" "$TOKEN" "{\"workflow_status\": \"${NEW_STATUS}\"}")
+else
+  RESPONSE=$(curl -sf --max-time 30 -X PATCH "${DIRECTUS_URL}/items/${COLLECTION}/${ITEM_ID}" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "{\"workflow_status\": \"${NEW_STATUS}\"}" 2>/dev/null)
+fi
+
+if [[ -z "$RESPONSE" ]]; then
+  echo -e "\033[31m[ERROR]\033[0m Failed to update item"
+  exit 1
+fi
+
+if echo "$RESPONSE" | jq -e '.errors' >/dev/null 2>&1; then
+  echo -e "\033[31m[ERROR]\033[0m $(echo "$RESPONSE" | jq -r '.errors[0].message')"
+  exit 1
+fi
+
+UPDATED_STATUS=$(echo "$RESPONSE" | jq -r '.data.workflow_status // empty')
+
+if [[ "$UPDATED_STATUS" == "$NEW_STATUS" ]]; then
+  echo -e "\033[32m[SUCCESS]\033[0m Status updated to '$NEW_STATUS'"
+  echo ""
+  echo "Timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+else
+  echo -e "\033[33m[WARNING]\033[0m Update may not have applied correctly"
+  echo "Expected: $NEW_STATUS"
+  echo "Got: $UPDATED_STATUS"
+fi
