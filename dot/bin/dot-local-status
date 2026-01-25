@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# =============================================================================
+# DOT-LOCAL-STATUS: Check status of local development containers
+# =============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Colors
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+show_help() {
+    cat << 'EOF'
+DOT-LOCAL-STATUS - Check local development environment status
+
+Usage:
+  dot-local-status [options]
+
+Options:
+  --help, -h    Show this help message
+
+Description:
+  Shows the status of all local development containers including:
+  - Container running state
+  - Health status
+  - Port mappings
+  - Quick connectivity checks
+EOF
+}
+
+# Parse arguments
+for arg in "$@"; do
+    case "$arg" in
+        --help|-h)
+            show_help
+            exit 0
+            ;;
+    esac
+done
+
+cd "$PROJECT_ROOT"
+
+echo ""
+echo -e "${GREEN}${BOLD}┌─────────────────────────────────────────────────────┐${NC}"
+echo -e "${GREEN}${BOLD}│  DOT LOCAL STATUS                                   │${NC}"
+echo -e "${GREEN}${BOLD}└─────────────────────────────────────────────────────┘${NC}"
+echo ""
+
+# Check if docker-compose.local.yml exists
+if [[ ! -f "docker-compose.local.yml" ]]; then
+    echo -e "${RED}[ERROR]${NC} docker-compose.local.yml not found"
+    echo "Run: ./dot/bin/dot-local-up to create the local environment"
+    exit 1
+fi
+
+# Check if Docker is running
+if ! docker info >/dev/null 2>&1; then
+    echo -e "${RED}[ERROR]${NC} Docker is not running"
+    echo "Please start Docker Desktop"
+    exit 1
+fi
+
+# Show container status
+echo -e "${BLUE}[CONTAINERS]${NC}"
+docker compose -f docker-compose.local.yml ps 2>/dev/null || echo "No containers running"
+
+echo ""
+echo -e "${BLUE}[HEALTH CHECKS]${NC}"
+
+# Check Cloud SQL Proxy
+echo -n "  Cloud SQL Proxy (3307): "
+if nc -z localhost 3307 2>/dev/null; then
+    echo -e "${GREEN}✓ Connected${NC}"
+else
+    echo -e "${RED}✗ Not available${NC}"
+fi
+
+# Check Directus
+echo -n "  Directus (8055):        "
+if curl -sf --max-time 2 "http://localhost:8055/server/health" >/dev/null 2>&1; then
+    echo -e "${GREEN}✓ Healthy${NC}"
+else
+    echo -e "${RED}✗ Not responding${NC}"
+fi
+
+# Check Nuxt
+echo -n "  Nuxt Frontend (3000):   "
+if curl -sf --max-time 2 "http://localhost:3000" >/dev/null 2>&1; then
+    echo -e "${GREEN}✓ Running${NC}"
+else
+    echo -e "${YELLOW}⚠ Not responding (may be building)${NC}"
+fi
+
+echo ""
+echo -e "${BLUE}[ENDPOINTS]${NC}"
+echo "  Directus Admin: http://localhost:8055/admin"
+echo "  Directus API:   http://localhost:8055"
+echo "  Nuxt Frontend:  http://localhost:3000"
+
+echo ""
+echo -e "${BLUE}[COMMANDS]${NC}"
+echo "  View logs:    docker compose -f docker-compose.local.yml logs -f"
+echo "  Stop:         ./dot/bin/dot-local-down"
+echo "  Restart:      ./dot/bin/dot-local-restart [service]"
+echo ""

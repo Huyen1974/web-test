@@ -3,11 +3,65 @@
 
 const dns = require('node:dns').promises
 const { URL } = require('node:url')
+const { execSync } = require('node:child_process')
+const path = require('node:path')
+
+// Parse command line arguments
+const args = process.argv.slice(2)
+const isLocal = args.includes('--local')
+const isCloud = args.includes('--cloud')
+const showHelp = args.includes('--help') || args.includes('-h')
+
+if (showHelp) {
+  console.log(`
+DOT-HEALTH-CHECK - Check system health across all layers
+
+Usage:
+  dot-health-check [options]
+
+Options:
+  --local       Use local development environment (localhost:3000)
+  --cloud       Use cloud/production environment (default)
+  --help, -h    Show this help message
+
+Layers Checked:
+  1. Network (DNS) - Hostname resolution
+  2. Web Server    - HTTP response
+  3. API Proxy     - Directus health endpoint
+  4. Auth Flow     - Login and session cookie
+`)
+  process.exit(0)
+}
+
+// Environment detection
+function detectEnvironment() {
+  if (isLocal) return 'local'
+  if (isCloud) return 'cloud'
+  if (process.env.DOT_ENV === 'local') return 'local'
+  if (process.env.DOT_ENV === 'cloud') return 'cloud'
+
+  // Auto-detect: check if local Directus is running
+  try {
+    execSync('curl -sf --max-time 1 http://localhost:8055/server/health', {
+      stdio: 'pipe',
+    })
+    return 'local'
+  } catch {
+    return 'cloud'
+  }
+}
+
+const ENV = detectEnvironment()
+
+// Configure URLs based on environment
+const LOCAL_NUXT_URL = 'http://localhost:3000'
+const CLOUD_NUXT_URL = 'https://ai.incomexsaigoncorp.vn'
 
 const BASE_URL =
+  process.env.NUXT_URL ||
   process.env.BASE_URL ||
   process.env.NUXT_PUBLIC_SITE_URL ||
-  'https://ai.incomexsaigoncorp.vn'
+  (ENV === 'local' ? LOCAL_NUXT_URL : CLOUD_NUXT_URL)
 
 const AUTH_EMAIL = process.env.DIRECTUS_ADMIN_EMAIL || ''
 const AUTH_PASSWORD = process.env.DIRECTUS_ADMIN_PASSWORD || ''
@@ -29,12 +83,35 @@ async function checkHttp(url, options = {}) {
   return { status: response.status, headers: response.headers }
 }
 
+function printEnvironmentBanner() {
+  const directusUrl =
+    ENV === 'local'
+      ? 'http://localhost:8055'
+      : 'https://directus-test-pfne2mqwja-as.a.run.app'
+
+  console.log('')
+  if (ENV === 'local') {
+    console.log('\x1b[32m\x1b[1m┌─────────────────────────────────────────────────────┐\x1b[0m')
+    console.log('\x1b[32m\x1b[1m│  🟢 LOCAL MODE                                      │\x1b[0m')
+    console.log(`\x1b[32m\x1b[1m│     Nuxt:     ${BASE_URL.padEnd(37)}│\x1b[0m`)
+    console.log(`\x1b[32m\x1b[1m│     Directus: ${directusUrl.padEnd(37)}│\x1b[0m`)
+    console.log('\x1b[32m\x1b[1m└─────────────────────────────────────────────────────┘\x1b[0m')
+  } else {
+    console.log('\x1b[31m\x1b[1m┌─────────────────────────────────────────────────────┐\x1b[0m')
+    console.log('\x1b[31m\x1b[1m│  🔴 CLOUD MODE (PRODUCTION)                         │\x1b[0m')
+    console.log(`\x1b[31m\x1b[1m│     Nuxt:     ${BASE_URL.padEnd(37)}│\x1b[0m`)
+    console.log(`\x1b[31m\x1b[1m│     Directus: ${directusUrl}│\x1b[0m`)
+    console.log('\x1b[31m\x1b[1m└─────────────────────────────────────────────────────┘\x1b[0m')
+  }
+  console.log('')
+}
+
 async function main() {
   const results = []
   const parsed = new URL(BASE_URL)
 
   console.log('DOT HEALTH CHECK')
-  console.log(`Base URL: ${BASE_URL}`)
+  printEnvironmentBanner()
   console.log('-'.repeat(60))
 
   // Layer 1: Network (DNS)

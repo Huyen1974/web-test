@@ -33,12 +33,16 @@ const CLEAN_COLLECTIONS = [
   'agency_about',
 ];
 
+const { execSync } = require('child_process');
+
 // Parse arguments
 const args = process.argv.slice(2);
 const options = {
-  help: args.includes('--help'),
+  help: args.includes('--help') || args.includes('-h'),
   yes: args.includes('--yes') || args.includes('-y'),
   dryRun: args.includes('--dry-run'),
+  local: args.includes('--local'),
+  cloud: args.includes('--cloud'),
 };
 
 if (options.help) {
@@ -49,9 +53,11 @@ Usage:
   ./dot/bin/dot-clean-data [options]
 
 Options:
+  --local       Use local development environment
+  --cloud       Use cloud/production environment (default)
   --yes, -y     Skip confirmation prompt
   --dry-run     Show what would be deleted without making changes
-  --help        Show this help
+  --help, -h    Show this help
 
 Collections that will be wiped:
   ${CLEAN_COLLECTIONS.join(', ')}
@@ -67,18 +73,79 @@ Environment Variables:
   process.exit(0);
 }
 
+// Environment detection
+function detectEnvironment() {
+  if (options.local) return 'local';
+  if (options.cloud) return 'cloud';
+  if (process.env.DOT_ENV === 'local') return 'local';
+  if (process.env.DOT_ENV === 'cloud') return 'cloud';
+
+  // Auto-detect
+  try {
+    execSync('curl -sf --max-time 1 http://localhost:8055/server/health', {
+      stdio: 'pipe',
+    });
+    return 'local';
+  } catch {
+    return 'cloud';
+  }
+}
+
+const ENV = detectEnvironment();
+const LOCAL_DIRECTUS_URL = 'http://localhost:8055';
+const CLOUD_DIRECTUS_URL = 'https://directus-test-pfne2mqwja-as.a.run.app';
+
+// Print environment banner
+function printEnvironmentBanner(directusUrl) {
+  console.log('');
+  if (ENV === 'local') {
+    console.log('\x1b[32m\x1b[1m┌─────────────────────────────────────────────────────┐\x1b[0m');
+    console.log('\x1b[32m\x1b[1m│  🟢 LOCAL MODE                                      │\x1b[0m');
+    console.log(`\x1b[32m\x1b[1m│     Directus: ${directusUrl.padEnd(37)}│\x1b[0m`);
+    console.log('\x1b[32m\x1b[1m└─────────────────────────────────────────────────────┘\x1b[0m');
+  } else {
+    console.log('\x1b[31m\x1b[1m┌─────────────────────────────────────────────────────┐\x1b[0m');
+    console.log('\x1b[31m\x1b[1m│  🔴 CLOUD MODE (PRODUCTION)                         │\x1b[0m');
+    console.log(`\x1b[31m\x1b[1m│     Directus: ${directusUrl}│\x1b[0m`);
+    console.log('\x1b[31m\x1b[1m└─────────────────────────────────────────────────────┘\x1b[0m');
+    console.log('');
+    console.log('\x1b[31m\x1b[1m⚠️  WARNING: This is a DESTRUCTIVE operation on PRODUCTION!\x1b[0m');
+    console.log('\x1b[31m   Data will be permanently deleted.\x1b[0m');
+  }
+  console.log('');
+}
+
 // Load credentials
 function loadConfig() {
   const configDir = path.resolve(__dirname, '../config');
   const localPath = path.resolve(configDir, 'credentials.local.json');
+  const projectRoot = path.resolve(__dirname, '../..');
+  const envLocalPath = path.resolve(projectRoot, '.env.local');
+
+  // Determine default URL based on environment
+  const defaultUrl = ENV === 'local' ? LOCAL_DIRECTUS_URL : CLOUD_DIRECTUS_URL;
 
   let config = {
-    directusUrl: process.env.DIRECTUS_URL || 'https://directus-test-pfne2mqwja-as.a.run.app',
+    directusUrl: process.env.DIRECTUS_URL || defaultUrl,
     email: process.env.DIRECTUS_ADMIN_EMAIL || 'admin@example.com',
     password: process.env.DIRECTUS_ADMIN_PASSWORD,
   };
 
-  if (fs.existsSync(localPath)) {
+  // For local mode, try .env.local first
+  if (ENV === 'local' && fs.existsSync(envLocalPath)) {
+    try {
+      const envContent = fs.readFileSync(envLocalPath, 'utf-8');
+      const emailMatch = envContent.match(/^DIRECTUS_ADMIN_EMAIL=(.+)$/m);
+      const passMatch = envContent.match(/^DIRECTUS_ADMIN_PASSWORD=(.+)$/m);
+      if (emailMatch) config.email = emailMatch[1];
+      if (passMatch) config.password = passMatch[1];
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  // Try credentials.local.json as fallback
+  if (!config.password && fs.existsSync(localPath)) {
     try {
       const creds = JSON.parse(fs.readFileSync(localPath, 'utf-8'));
       const profile = creds.profiles?.[0];
@@ -94,6 +161,8 @@ function loadConfig() {
 
   if (!config.password) {
     console.error('Error: DIRECTUS_ADMIN_PASSWORD is required');
+    console.error('For local mode: ensure .env.local exists');
+    console.error('For cloud mode: set DIRECTUS_ADMIN_PASSWORD env var');
     process.exit(1);
   }
 
@@ -147,8 +216,8 @@ function confirm(question) {
 async function main() {
   const config = loadConfig();
 
-  console.log('\n\x1b[36m\x1b[1m  DOT CLEAN DATA\x1b[0m\n');
-  console.log(`Target: ${config.directusUrl}`);
+  console.log('\n\x1b[36m\x1b[1m  DOT CLEAN DATA\x1b[0m');
+  printEnvironmentBanner(config.directusUrl);
   if (options.dryRun) {
     console.log('\x1b[33m[DRY-RUN MODE]\x1b[0m No data will be deleted\n');
   }
