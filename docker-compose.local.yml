@@ -67,7 +67,8 @@ services:
     depends_on:
       - directus
     environment:
-      NUXT_PUBLIC_DIRECTUS_URL: http://directus:8055
+      # NUXT_PUBLIC_DIRECTUS_URL: Use SSOT from web/.env (Cloud Run URL)
+      # To use local Directus instead, uncomment: NUXT_PUBLIC_DIRECTUS_URL: http://directus:8055
       NUXT_PUBLIC_SITE_URL: http://localhost:3000
       HOST: 0.0.0.0
       PORT: 3000
