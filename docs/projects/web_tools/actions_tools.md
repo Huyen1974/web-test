@@ -30,6 +30,7 @@ web-test/
 │   │   │
 │   │   │ ─────────── INFRASTRUCTURE ───────────
 │   │   ├── dot-health-check          # ✅ Health monitoring 4 layers (--local/--cloud)
+│   │   ├── dot-sync-check            # ✅ Verify Local ↔ Cloud sync (hash comparison)
 │   │   ├── dot-cost-audit            # ✅ Cloud cost analysis
 │   │   ├── dot-deploy-status         # 📋 [PLANNED] Check Cloud Run deployment status
 │   │   ├── dot-logs-tail             # 📋 [PLANNED] Tail logs from Cloud Run services
@@ -44,6 +45,9 @@ web-test/
 │   │   │ ─────────── CONTENT OPERATIONS ───────────
 │   │   ├── dot-content-list          # ✅ List content by workflow_status
 │   │   ├── dot-content-approve       # ✅ Update workflow_status (approve/publish)
+│   │   ├── dot-content-create        # ✅ Create new content item
+│   │   ├── dot-content-update        # ✅ Update existing content
+│   │   ├── dot-content-delete        # ✅ Delete content (soft/hard)
 │   │   │
 │   │   │ ─────────── CONTENT & FLOWS ───────────
 │   │   ├── dot-flow-trigger          # 📋 [PLANNED] Trigger Directus Flow manually
@@ -120,6 +124,7 @@ TOOL MATRIX BY CATEGORY
 | Tool | Status | Chức năng | Khi nào dùng |
 |------|--------|-----------|--------------|
 | dot-health-check | ✅ | 4-layer health check | Daily monitoring |
+| dot-sync-check | ✅ | Local ↔ Cloud sync verify | Before merge, after schema changes |
 | dot-cost-audit | ✅ | Cloud cost analysis | Monthly review |
 | dot-deploy-status | 📋 | Check Cloud Run status | After deploy |
 | dot-logs-tail | 📋 | Tail service logs | Debugging |
@@ -130,6 +135,9 @@ TOOL MATRIX BY CATEGORY
 |------|--------|-----------|--------------|
 | dot-content-list | ✅ | List content by workflow_status | Review pending content |
 | dot-content-approve | ✅ | Update workflow_status | Approve/publish content |
+| dot-content-create | ✅ | Create new content item | Agent content creation |
+| dot-content-update | ✅ | Update existing content | Agent content updates |
+| dot-content-delete | ✅ | Delete content (soft/hard) | Content cleanup |
 
 6. CONTENT & FLOWS (Nội dung & Workflow)
 
