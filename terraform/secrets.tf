@@ -159,6 +159,25 @@ resource "google_secret_manager_secret_iam_member" "directus_admin_password_acce
 }
 
 # ------------------------------------------------------------------------------
+# GCS Credentials Secret (for Directus Storage Driver)
+# ------------------------------------------------------------------------------
+# Note: This secret was created via gcloud CLI during Task G (GCS Fix)
+# HP-05 Compliance: Terraform references existing secret, doesn't create it
+# Value contains service account JSON for GCS access
+
+data "google_secret_manager_secret" "gcs_credentials" {
+  secret_id = "GCS_CREDENTIALS_${var.env}"
+  project   = var.project_id
+}
+
+resource "google_secret_manager_secret_iam_member" "gcs_credentials_accessor" {
+  secret_id = data.google_secret_manager_secret.gcs_credentials.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = local.chatgpt_deployer_sa
+  project   = var.project_id
+}
+
+# ------------------------------------------------------------------------------
 # Chatwoot Secrets (Postponed - Phase 2)
 # ------------------------------------------------------------------------------
 

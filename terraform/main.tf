@@ -52,7 +52,7 @@ resource "google_cloud_run_v2_service" "directus" {
     # Timestamp annotation ensures Cloud Run pulls latest :latest tag
     annotations = {
       "run.googleapis.com/client-name" = "terraform"
-      "deploy-time"                     = timestamp()
+      "deploy-time"                    = timestamp()
     }
 
     # Cloud SQL connection
@@ -60,6 +60,19 @@ resource "google_cloud_run_v2_service" "directus" {
       name = "cloudsql"
       cloud_sql_instance {
         instances = [module.mysql_directus.instance_connection_name]
+      }
+    }
+
+    # GCS Credentials secret volume (for Directus Storage Driver)
+    # Added for Hybrid Cloud Architecture (Task G)
+    volumes {
+      name = "gcs-credentials"
+      secret {
+        secret = data.google_secret_manager_secret.gcs_credentials.secret_id
+        items {
+          version = "latest"
+          path    = "gcs-key.json"
+        }
       }
     }
 
@@ -181,6 +194,39 @@ resource "google_cloud_run_v2_service" "directus" {
         value = "true"
       }
 
+      # GCS Storage Configuration (Added for Hybrid Cloud Architecture - Task G)
+      env {
+        name  = "STORAGE_LOCATIONS"
+        value = "gcs"
+      }
+
+      env {
+        name  = "STORAGE_GCS_DRIVER"
+        value = "gcs"
+      }
+
+      env {
+        name  = "STORAGE_GCS_BUCKET"
+        value = "directus-assets-${var.env}-20251223"
+      }
+
+      env {
+        name  = "STORAGE_GCS_KEY_FILENAME"
+        value = "/secrets/gcs-key.json"
+      }
+
+      # Agent Data Service Configuration (for Directus Flows)
+      env {
+        name  = "AGENT_DATA_URL"
+        value = "https://agent-data-${var.env}-pfne2mqwja-as.a.run.app"
+      }
+
+      # Deployment trigger (increment to force new revision)
+      env {
+        name  = "RESTART_TRIGGER"
+        value = "1768924658"
+      }
+
       # NOTE: PORT env is automatically set by Cloud Run (default: 8080)
       # Do NOT explicitly set PORT - it's a reserved environment variable
       # Cloud Run will inject PORT=8080, and Directus will respect it
@@ -226,10 +272,27 @@ resource "google_cloud_run_v2_service" "directus" {
         }
       }
 
+      # Agent Data API Key (for Directus Flows integration)
+      env {
+        name = "AGENT_DATA_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = "AGENT_DATA_API_KEY"
+            version = "latest"
+          }
+        }
+      }
+
       # Mount Cloud SQL Proxy volume
       volume_mounts {
         name       = "cloudsql"
         mount_path = "/cloudsql"
+      }
+
+      # Mount GCS credentials secret (for Directus Storage Driver)
+      volume_mounts {
+        name       = "gcs-credentials"
+        mount_path = "/secrets"
       }
     }
   }
@@ -246,6 +309,7 @@ resource "google_cloud_run_v2_service" "directus" {
     google_secret_manager_secret.directus_secret,
     google_secret_manager_secret.directus_db_password
     # Note: directus_admin_password is a data source (pre-existing secret)
+    # Note: gcs_credentials is a data source (pre-existing secret created via gcloud)
   ]
 }
 
