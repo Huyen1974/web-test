@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# =============================================================================
+# DOT-LOCAL-LOGS: View logs from local development containers
+# =============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+show_help() {
+    cat << 'EOF'
+DOT-LOCAL-LOGS - View local development container logs
+
+Usage:
+  dot-local-logs [service] [options]
+
+Services:
+  directus          Directus CMS logs
+  web               Nuxt frontend logs
+  cloud-sql-proxy   Cloud SQL Proxy logs
+  (empty)           All services
+
+Options:
+  --follow, -f    Follow log output (default)
+  --tail <n>      Number of lines to show (default: 100)
+  --help, -h      Show this help message
+
+Examples:
+  dot-local-logs                    # All services, follow mode
+  dot-local-logs directus           # Directus only
+  dot-local-logs web --tail 50      # Last 50 lines of Nuxt
+EOF
+}
+
+# Default values
+SERVICE=""
+FOLLOW=true
+TAIL=100
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --help|-h)
+            show_help
+            exit 0
+            ;;
+        --follow|-f)
+            FOLLOW=true
+            shift
+            ;;
+        --no-follow)
+            FOLLOW=false
+            shift
+            ;;
+        --tail)
+            TAIL="$2"
+            shift 2
+            ;;
+        directus|web|cloud-sql-proxy)
+            SERVICE="$1"
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1"
+            show_help
+            exit 1
+            ;;
+    esac
+done
+
+cd "$PROJECT_ROOT"
+
+# Check if docker-compose.local.yml exists
+if [[ ! -f "docker-compose.local.yml" ]]; then
+    echo "ERROR: docker-compose.local.yml not found"
+    echo "Run: ./dot/bin/dot-local-up to create the local environment"
+    exit 1
+fi
+
+# Build command
+CMD="docker compose -f docker-compose.local.yml logs"
+CMD+=" --tail $TAIL"
+
+if [[ "$FOLLOW" == "true" ]]; then
+    CMD+=" -f"
+fi
+
+if [[ -n "$SERVICE" ]]; then
+    CMD+=" $SERVICE"
+fi
+
+# Execute
+exec $CMD

@@ -1,0 +1,253 @@
+#!/usr/bin/env bash
+
+# dot-content-delete: Delete content item from Directus
+# Usage: ./dot/bin/dot-content-delete <collection> <id> [options]
+#
+# Arguments:
+#   collection  - Directus collection name (e.g., knowledge_documents, posts, pages)
+#   id          - Document ID to delete
+#
+# Options:
+#   --force     - Skip confirmation prompt
+#   --soft      - Soft delete (set status=archived instead of hard delete)
+#   --local     - Use local development environment
+#   --cloud     - Use cloud/production environment
+#   --help, -h  - Show this help
+#
+# Examples:
+#   ./dot/bin/dot-content-delete knowledge_documents 5           # Prompt confirm
+#   ./dot/bin/dot-content-delete knowledge_documents 5 --force   # No prompt
+#   ./dot/bin/dot-content-delete knowledge_documents 5 --soft    # Set archived
+
+set -euo pipefail
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# Determine script directory
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+elif [[ -n "${0:-}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+else
+  SCRIPT_DIR="$(pwd)/dot/bin"
+fi
+
+# Parse arguments
+LOCAL_FLAG=""
+CLOUD_FLAG=""
+COLLECTION=""
+ITEM_ID=""
+FORCE=""
+SOFT=""
+
+show_help() {
+  cat <<'EOF'
+dot-content-delete: Delete content item from Directus
+
+Usage: ./dot/bin/dot-content-delete <collection> <id> [options]
+
+Arguments:
+  collection  - Directus collection name (e.g., knowledge_documents, posts, pages)
+  id          - Document ID to delete
+
+Options:
+  --force     - Skip confirmation prompt
+  --soft      - Soft delete (set status=archived instead of hard delete)
+  --local     - Use local development environment
+  --cloud     - Use cloud/production environment
+  --help, -h  - Show this help
+
+Soft Delete:
+  When --soft is used, the document is not actually deleted. Instead,
+  its workflow_status is set to "archived". This preserves the data
+  but hides it from normal queries.
+
+Examples:
+  ./dot/bin/dot-content-delete knowledge_documents 5           # Prompt confirm
+  ./dot/bin/dot-content-delete knowledge_documents 5 --force   # No prompt
+  ./dot/bin/dot-content-delete knowledge_documents 5 --soft    # Set archived
+EOF
+  exit 0
+}
+
+# Parse arguments
+POSITIONAL_COUNT=0
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --local)
+      LOCAL_FLAG="--local"
+      shift
+      ;;
+    --cloud)
+      CLOUD_FLAG="--cloud"
+      shift
+      ;;
+    --force)
+      FORCE="yes"
+      shift
+      ;;
+    --soft)
+      SOFT="yes"
+      shift
+      ;;
+    --help|-h)
+      show_help
+      ;;
+    -*)
+      echo -e "${RED}[ERROR]${NC} Unknown option: $1" >&2
+      exit 1
+      ;;
+    *)
+      if [[ $POSITIONAL_COUNT -eq 0 ]]; then
+        COLLECTION="$1"
+      elif [[ $POSITIONAL_COUNT -eq 1 ]]; then
+        ITEM_ID="$1"
+      fi
+      ((POSITIONAL_COUNT++))
+      shift
+      ;;
+  esac
+done
+
+# Validate required args
+if [[ -z "$COLLECTION" ]]; then
+  echo -e "${RED}[ERROR]${NC} Collection is required" >&2
+  echo "Usage: ./dot/bin/dot-content-delete <collection> <id> [--force]" >&2
+  exit 1
+fi
+
+if [[ -z "$ITEM_ID" ]]; then
+  echo -e "${RED}[ERROR]${NC} Document ID is required" >&2
+  exit 1
+fi
+
+# Environment detection
+detect_env() {
+  if [[ -n "$LOCAL_FLAG" ]]; then echo "local"; return; fi
+  if [[ -n "$CLOUD_FLAG" ]]; then echo "cloud"; return; fi
+  if [[ "${DOT_ENV:-}" == "local" ]]; then echo "local"; return; fi
+  if [[ "${DOT_ENV:-}" == "cloud" ]]; then echo "cloud"; return; fi
+  if curl -sf --max-time 2 "http://localhost:8055/server/health" >/dev/null 2>&1; then
+    echo "local"
+  else
+    echo "cloud"
+  fi
+}
+
+ENV=$(detect_env)
+
+if [[ "$ENV" == "local" ]]; then
+  DIRECTUS_URL="http://localhost:8055"
+  echo -e "\n${GREEN}  DOT CONTENT DELETE - LOCAL MODE${NC}"
+else
+  DIRECTUS_URL="https://directus-test-pfne2mqwja-as.a.run.app"
+  echo -e "\n${YELLOW}  DOT CONTENT DELETE - CLOUD MODE${NC}"
+fi
+
+echo "Collection: $COLLECTION"
+echo "Item ID: $ITEM_ID"
+if [[ -n "$SOFT" ]]; then
+  echo -e "Mode: ${CYAN}Soft Delete (archive)${NC}"
+else
+  echo -e "Mode: ${RED}Hard Delete (permanent)${NC}"
+fi
+echo "------------------------------------------------------------"
+
+# Get token
+ENV_FLAG="--cloud"
+[[ "$ENV" == "local" ]] && ENV_FLAG="--local"
+
+TOKEN=$("$SCRIPT_DIR/dot-token" "$ENV_FLAG")
+if [[ -z "$TOKEN" ]]; then
+  echo -e "${RED}[ERROR]${NC} Failed to authenticate" >&2
+  exit 1
+fi
+
+# Verify document exists and get info
+echo -n "Verifying document exists... "
+EXISTING=$(curl -sf --max-time 15 \
+  "${DIRECTUS_URL}/items/${COLLECTION}/${ITEM_ID}?fields=id,title,slug,workflow_status" \
+  -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || echo "")
+
+if [[ -z "$EXISTING" ]]; then
+  echo -e "${RED}NOT FOUND${NC}"
+  echo -e "${RED}[ERROR]${NC} Document ID $ITEM_ID does not exist in $COLLECTION" >&2
+  exit 1
+fi
+
+if echo "$EXISTING" | jq -e '.errors' >/dev/null 2>&1; then
+  echo -e "${RED}ERROR${NC}"
+  ERROR_MSG=$(echo "$EXISTING" | jq -r '.errors[0].message // "Unknown error"')
+  echo -e "${RED}[ERROR]${NC} $ERROR_MSG" >&2
+  exit 1
+fi
+
+DOC_TITLE=$(echo "$EXISTING" | jq -r '.data.title // "[no title]"')
+DOC_SLUG=$(echo "$EXISTING" | jq -r '.data.slug // "[no slug]"')
+DOC_STATUS=$(echo "$EXISTING" | jq -r '.data.workflow_status // "[no status]"')
+echo -e "${GREEN}OK${NC}"
+
+echo ""
+echo -e "Document: ${CYAN}$DOC_TITLE${NC}"
+echo -e "Slug: $DOC_SLUG"
+echo -e "Status: $DOC_STATUS"
+echo ""
+
+# Confirmation prompt (unless --force)
+if [[ -z "$FORCE" ]]; then
+  if [[ -n "$SOFT" ]]; then
+    echo -n -e "${YELLOW}Archive this document? [y/N]: ${NC}"
+  else
+    echo -n -e "${RED}PERMANENTLY DELETE this document? [y/N]: ${NC}"
+  fi
+  read -r CONFIRM
+  if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
+    echo "Cancelled."
+    exit 0
+  fi
+fi
+
+# Perform delete
+if [[ -n "$SOFT" ]]; then
+  # Soft delete: update status to archived
+  echo "Archiving document..."
+  RESPONSE=$(curl -sf --max-time 30 -X PATCH \
+    "${DIRECTUS_URL}/items/${COLLECTION}/${ITEM_ID}" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d '{"workflow_status":"archived"}' 2>/dev/null || echo "")
+  
+  if [[ -z "$RESPONSE" ]]; then
+    echo -e "${RED}[ERROR]${NC} Failed to archive document (no response)" >&2
+    exit 1
+  fi
+  
+  if echo "$RESPONSE" | jq -e '.errors' >/dev/null 2>&1; then
+    ERROR_MSG=$(echo "$RESPONSE" | jq -r '.errors[0].message // "Unknown error"')
+    echo -e "${RED}[ERROR]${NC} $ERROR_MSG" >&2
+    exit 1
+  fi
+  
+  echo -e "${GREEN}[SUCCESS]${NC} Document archived"
+  echo -e "ID: ${GREEN}$ITEM_ID${NC}"
+  echo -e "New status: archived"
+else
+  # Hard delete
+  echo "Deleting document..."
+  HTTP_CODE=$(curl -sf --max-time 30 -X DELETE -o /dev/null -w "%{http_code}" \
+    "${DIRECTUS_URL}/items/${COLLECTION}/${ITEM_ID}" \
+    -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || echo "000")
+  
+  if [[ "$HTTP_CODE" == "204" || "$HTTP_CODE" == "200" ]]; then
+    echo -e "${GREEN}[SUCCESS]${NC} Document deleted permanently"
+    echo -e "ID: ${GREEN}$ITEM_ID${NC} (removed)"
+  else
+    echo -e "${RED}[ERROR]${NC} Failed to delete document (HTTP $HTTP_CODE)" >&2
+    exit 1
+  fi
+fi

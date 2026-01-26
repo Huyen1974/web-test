@@ -1,0 +1,30 @@
+name: Sync Check
+
+on:
+  schedule:
+    # Run every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Sync Check
+        run: |
+          chmod +x ./dot/bin/dot-sync-check
+          ./dot/bin/dot-sync-check
+        env:
+          # In CI, both point to Cloud (no local)
+          LOCAL_DIRECTUS_URL: "https://directus-test-pfne2mqwja-as.a.run.app"
+          CLOUD_DIRECTUS_URL: "https://directus-test-pfne2mqwja-as.a.run.app"
+          DIRECTUS_ADMIN_EMAIL: ${{ secrets.DIRECTUS_ADMIN_EMAIL }}
+          DIRECTUS_ADMIN_PASSWORD: ${{ secrets.DIRECTUS_ADMIN_PASSWORD }}
+
+      - name: Notify on Failure
+        if: failure()
+        run: |
+          echo "::error::Sync check failed! Directus instances may be out of sync."
+          echo "Check the logs above for details."

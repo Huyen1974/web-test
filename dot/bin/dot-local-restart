@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# =============================================================================
+# DOT-LOCAL-RESTART: Restart local development services
+# =============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Colors
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m'
+
+show_help() {
+    cat << 'EOF'
+DOT-LOCAL-RESTART - Restart local development services
+
+Usage:
+  dot-local-restart [service] [options]
+
+Services:
+  directus          Restart Directus CMS
+  web               Restart Nuxt frontend
+  cloud-sql-proxy   Restart Cloud SQL Proxy
+  all               Restart all services (default)
+
+Options:
+  --rebuild       Rebuild the service before restarting (for web only)
+  --help, -h      Show this help message
+
+Examples:
+  dot-local-restart                 # Restart all services
+  dot-local-restart directus        # Restart Directus only
+  dot-local-restart web --rebuild   # Rebuild and restart Nuxt
+EOF
+}
+
+# Default values
+SERVICE="all"
+REBUILD=false
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --help|-h)
+            show_help
+            exit 0
+            ;;
+        --rebuild)
+            REBUILD=true
+            shift
+            ;;
+        directus|web|cloud-sql-proxy|all)
+            SERVICE="$1"
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1"
+            show_help
+            exit 1
+            ;;
+    esac
+done
+
+cd "$PROJECT_ROOT"
+
+# Check if docker-compose.local.yml exists
+if [[ ! -f "docker-compose.local.yml" ]]; then
+    echo "ERROR: docker-compose.local.yml not found"
+    echo "Run: ./dot/bin/dot-local-up to create the local environment"
+    exit 1
+fi
+
+if [[ "$SERVICE" == "all" ]]; then
+    echo -e "${YELLOW}[RESTART]${NC} Restarting all services..."
+    if [[ "$REBUILD" == "true" ]]; then
+        docker compose -f docker-compose.local.yml up -d --build
+    else
+        docker compose -f docker-compose.local.yml restart
+    fi
+else
+    echo -e "${YELLOW}[RESTART]${NC} Restarting $SERVICE..."
+    if [[ "$REBUILD" == "true" && "$SERVICE" == "web" ]]; then
+        docker compose -f docker-compose.local.yml up -d --build "$SERVICE"
+    else
+        docker compose -f docker-compose.local.yml restart "$SERVICE"
+    fi
+fi
+
+echo -e "${GREEN}[DONE]${NC} Service(s) restarted"
+echo ""
+echo "View logs: ./dot/bin/dot-local-logs $SERVICE"

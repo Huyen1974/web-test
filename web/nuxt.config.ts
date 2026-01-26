@@ -60,8 +60,10 @@ export default defineNuxtConfig({
 	},
 
 	runtimeConfig: {
-		// Server-side Directus URL for proxy (E2 Task #009)
-		directusInternalUrl: process.env.DIRECTUS_INTERNAL_URL || 'https://directus-test-pfne2mqwja-as.a.run.app',
+		// Server-side Directus URL for SSR/proxy (Docker internal or Cloud Run)
+		// NUXT_DIRECTUS_URL is for Docker internal network (http://directus:8055)
+		// Falls back to public URL if not set
+		directusInternalUrl: process.env.NUXT_DIRECTUS_URL || process.env.DIRECTUS_INTERNAL_URL || process.env.NUXT_PUBLIC_DIRECTUS_URL || 'https://directus-test-pfne2mqwja-as.a.run.app',
 		agentData: {
 			apiKey: process.env.AGENT_DATA_API_KEY || '',
 		},
@@ -98,9 +100,10 @@ export default defineNuxtConfig({
 	},
 
 	// Directus Configuration
+	// Note: baseUrl is used for SSR calls. For browser, NUXT_PUBLIC_DIRECTUS_URL is used via runtimeConfig.
 	directus: {
 		rest: {
-			baseUrl: process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus-test-pfne2mqwja-as.a.run.app',
+			baseUrl: process.env.NUXT_DIRECTUS_URL || process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus-test-pfne2mqwja-as.a.run.app',
 			nuxtBaseUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
 		},
 		auth: {

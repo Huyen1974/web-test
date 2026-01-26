@@ -1,0 +1,238 @@
+#!/usr/bin/env bash
+
+# DOT Fix Knowledge Permissions - Add public read access for Knowledge Hub
+#
+# This script adds public read permissions for:
+#   - knowledge_documents (with workflow_status=published filter)
+#   - knowledge_categories
+#   - directus_files (for images)
+#
+# Usage:
+#   ./dot/bin/dot-fix-knowledge-permissions [options]
+#
+# Options:
+#   --local     Use local development environment
+#   --cloud     Use cloud/production environment
+#   --dry-run   Show what would happen without making changes
+#   --help, -h  Show this help
+#
+# Works in both bash and zsh shells.
+
+set -euo pipefail
+
+# Determine script directory (works in both bash and zsh)
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+elif [[ -n "${0:-}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+else
+  SCRIPT_DIR="$(pwd)/dot/bin"
+fi
+
+# Parse arguments
+LOCAL_FLAG=""
+CLOUD_FLAG=""
+DRY_RUN=""
+
+for arg in "$@"; do
+  case $arg in
+    --local)
+      LOCAL_FLAG="--local"
+      ;;
+    --cloud)
+      CLOUD_FLAG="--cloud"
+      ;;
+    --dry-run)
+      DRY_RUN="yes"
+      ;;
+    --help|-h)
+      echo "DOT Fix Knowledge Permissions - Add public read access for Knowledge Hub"
+      echo ""
+      echo "Usage: ./dot/bin/dot-fix-knowledge-permissions [options]"
+      echo ""
+      echo "Options:"
+      echo "  --local     Use local development environment"
+      echo "  --cloud     Use cloud/production environment"
+      echo "  --dry-run   Show what would happen without making changes"
+      echo "  --help, -h  Show this help"
+      echo ""
+      echo "This script adds public read permissions for:"
+      echo "  - knowledge_documents (only workflow_status=published)"
+      echo "  - knowledge_categories"
+      echo "  - directus_files (for images)"
+      exit 0
+      ;;
+  esac
+done
+
+# Environment detection
+detect_env() {
+  if [[ -n "$LOCAL_FLAG" ]]; then echo "local"; return; fi
+  if [[ -n "$CLOUD_FLAG" ]]; then echo "cloud"; return; fi
+  if [[ "${DOT_ENV:-}" == "local" ]]; then echo "local"; return; fi
+  if [[ "${DOT_ENV:-}" == "cloud" ]]; then echo "cloud"; return; fi
+
+  # Auto-detect
+  if curl -sf --max-time 2 "http://localhost:8055/server/health" >/dev/null 2>&1; then
+    echo "local"
+  else
+    echo "cloud"
+  fi
+}
+
+ENV=$(detect_env)
+
+# Set URLs based on environment
+if [[ "$ENV" == "local" ]]; then
+  DIRECTUS_URL="http://localhost:8055"
+  echo -e "\n\033[32m\033[1m  DOT FIX KNOWLEDGE PERMISSIONS - LOCAL MODE\033[0m"
+else
+  DIRECTUS_URL="https://directus-test-pfne2mqwja-as.a.run.app"
+  echo -e "\n\033[31m\033[1m  DOT FIX KNOWLEDGE PERMISSIONS - CLOUD MODE (PRODUCTION)\033[0m"
+  echo -e "\033[33m  ⚠️  Changes will affect PRODUCTION data\033[0m"
+fi
+
+echo "------------------------------------------------------------"
+
+if [[ -n "$DRY_RUN" ]]; then
+  echo -e "\033[33m[DRY-RUN]\033[0m No changes will be made"
+  echo ""
+fi
+
+# Get token using dot-token (shell-agnostic)
+ENV_FLAG="--cloud"
+[[ "$ENV" == "local" ]] && ENV_FLAG="--local"
+
+echo -e "\033[33m[1/5]\033[0m Authenticating..."
+TOKEN=$("$SCRIPT_DIR/dot-token" "$ENV_FLAG" 2>/dev/null)
+TOKEN_EXIT=$?
+
+if [[ $TOKEN_EXIT -ne 0 ]] || [[ -z "$TOKEN" ]]; then
+  echo -e "\033[31m[ERROR]\033[0m Failed to authenticate"
+  exit 1
+fi
+echo -e "\033[32m✓\033[0m Authenticated"
+
+# Step 2: Find the "Public Access" policy
+echo -e "\033[33m[2/5]\033[0m Finding Public Access policy..."
+
+POLICIES=$(curl -sf --max-time 30 "${DIRECTUS_URL}/policies" \
+  -H "Authorization: Bearer ${TOKEN}" 2>/dev/null)
+
+if [[ -z "$POLICIES" ]]; then
+  echo -e "\033[31m[ERROR]\033[0m Failed to fetch policies"
+  exit 1
+fi
+
+# Find the policy linked to null role (unauthenticated users)
+# Use jq filter since API filter syntax varies by version
+ACCESS=$(curl -sf --max-time 30 "${DIRECTUS_URL}/access" \
+  -H "Authorization: Bearer ${TOKEN}" 2>/dev/null)
+
+# Get policy named "Public Access" that's linked to null role
+PUBLIC_POLICY_ID=$(echo "$ACCESS" | jq -r '[.data[] | select(.role == null)] | .[0].policy // empty')
+
+if [[ -z "$PUBLIC_POLICY_ID" ]]; then
+  echo -e "\033[31m[ERROR]\033[0m No public policy found (no policy linked to null role)"
+  exit 1
+fi
+
+PUBLIC_POLICY_NAME=$(echo "$POLICIES" | jq -r ".data[] | select(.id==\"$PUBLIC_POLICY_ID\") | .name")
+echo -e "\033[32m✓\033[0m Found policy: \"$PUBLIC_POLICY_NAME\" ($PUBLIC_POLICY_ID)"
+
+# Step 3: Check existing permissions
+echo -e "\033[33m[3/5]\033[0m Checking existing permissions..."
+
+# Fetch all permissions and filter with jq (API filter may not work in all versions)
+ALL_PERMS=$(curl -sf --max-time 30 "${DIRECTUS_URL}/permissions?limit=500" \
+  -H "Authorization: Bearer ${TOKEN}" 2>/dev/null)
+
+if [[ -z "$ALL_PERMS" ]]; then
+  echo -e "\033[31m[ERROR]\033[0m Failed to fetch permissions"
+  exit 1
+fi
+
+EXISTING=$(echo "$ALL_PERMS" | jq "{data: [.data[] | select(.policy == \"$PUBLIC_POLICY_ID\")]}")
+
+PERM_COUNT=$(echo "$EXISTING" | jq '.data | length')
+echo -e "  Found $PERM_COUNT existing permissions on this policy"
+
+# Helper function to check if permission exists
+has_permission() {
+  local collection=$1
+  local action=$2
+  echo "$EXISTING" | jq -e ".data[] | select(.collection==\"$collection\" and .action==\"$action\")" >/dev/null 2>&1
+}
+
+# Step 4: Add missing permissions
+echo -e "\033[33m[4/5]\033[0m Adding missing permissions..."
+
+add_permission() {
+  local collection=$1
+  local action=$2
+  local filter=$3
+
+  if has_permission "$collection" "$action"; then
+    echo -e "  \033[33m⊘\033[0m $collection:$action - already exists"
+    return 0
+  fi
+
+  if [[ -n "$DRY_RUN" ]]; then
+    echo -e "  \033[33m○\033[0m $collection:$action - would add (filter: $filter)"
+    return 0
+  fi
+
+  local payload
+  if [[ "$filter" == "{}" ]]; then
+    payload=$(printf '{"policy":"%s","collection":"%s","action":"%s","fields":["*"],"permissions":{}}' \
+      "$PUBLIC_POLICY_ID" "$collection" "$action")
+  else
+    payload=$(printf '{"policy":"%s","collection":"%s","action":"%s","fields":["*"],"permissions":%s}' \
+      "$PUBLIC_POLICY_ID" "$collection" "$action" "$filter")
+  fi
+
+  RESULT=$(curl -sf --max-time 30 -X POST "${DIRECTUS_URL}/permissions" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "$payload" 2>/dev/null)
+
+  if [[ -z "$RESULT" ]] || echo "$RESULT" | jq -e '.errors' >/dev/null 2>&1; then
+    echo -e "  \033[31m✗\033[0m $collection:$action - FAILED"
+    return 1
+  fi
+
+  local new_id=$(echo "$RESULT" | jq -r '.data.id // empty')
+  echo -e "  \033[32m✓\033[0m $collection:$action - added (ID: $new_id)"
+  return 0
+}
+
+# Add permissions for Knowledge Hub collections
+add_permission "knowledge_documents" "read" '{"workflow_status":{"_eq":"published"}}'
+add_permission "knowledge_categories" "read" "{}"
+add_permission "directus_files" "read" "{}"
+
+# Step 5: Verify
+echo -e "\033[33m[5/5]\033[0m Verifying anonymous access..."
+
+if [[ -n "$DRY_RUN" ]]; then
+  echo -e "  \033[33m⊘\033[0m Skipped (dry-run mode)"
+else
+  # Test anonymous access
+  TEST_RESULT=$(curl -sf --max-time 10 "${DIRECTUS_URL}/items/knowledge_documents?limit=1" 2>/dev/null)
+
+  if [[ -z "$TEST_RESULT" ]] || echo "$TEST_RESULT" | jq -e '.errors' >/dev/null 2>&1; then
+    echo -e "  \033[31m✗\033[0m Anonymous access still failing"
+    exit 1
+  fi
+
+  COUNT=$(echo "$TEST_RESULT" | jq '.data | length')
+  echo -e "  \033[32m✓\033[0m Anonymous access working ($COUNT published items accessible)"
+fi
+
+echo ""
+echo "------------------------------------------------------------"
+if [[ -n "$DRY_RUN" ]]; then
+  echo -e "\033[33m[DRY-RUN COMPLETE]\033[0m No changes were made"
+else
+  echo -e "\033[32m[SUCCESS]\033[0m Knowledge Hub public permissions configured"
+fi

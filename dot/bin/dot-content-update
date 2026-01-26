@@ -1,0 +1,271 @@
+#!/usr/bin/env bash
+
+# dot-content-update: Update existing content item in Directus
+# Usage: ./dot/bin/dot-content-update <collection> <id> [options]
+#
+# Arguments:
+#   collection  - Directus collection name (e.g., knowledge_documents, posts, pages)
+#   id          - Document ID to update
+#
+# Options:
+#   --title     - Update title
+#   --slug      - Update slug
+#   --status    - Update workflow_status: draft, review, published
+#   --content   - Update content/body
+#   --json      - Raw JSON payload for partial update
+#   --local     - Use local development environment
+#   --cloud     - Use cloud/production environment
+#   --help, -h  - Show this help
+#
+# Examples:
+#   ./dot/bin/dot-content-update knowledge_documents 5 --title "New Title"
+#   ./dot/bin/dot-content-update knowledge_documents 5 --status published
+#   ./dot/bin/dot-content-update knowledge_documents 5 --json '{"title":"New","content":"Updated"}'
+
+set -euo pipefail
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# Determine script directory
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+elif [[ -n "${0:-}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+else
+  SCRIPT_DIR="$(pwd)/dot/bin"
+fi
+
+# Parse arguments
+LOCAL_FLAG=""
+CLOUD_FLAG=""
+COLLECTION=""
+ITEM_ID=""
+TITLE=""
+SLUG=""
+STATUS=""
+CONTENT=""
+JSON_PAYLOAD=""
+
+show_help() {
+  cat <<'EOF'
+dot-content-update: Update existing content item in Directus
+
+Usage: ./dot/bin/dot-content-update <collection> <id> [options]
+
+Arguments:
+  collection  - Directus collection name (e.g., knowledge_documents, posts, pages)
+  id          - Document ID to update
+
+Options:
+  --title     - Update title
+  --slug      - Update slug
+  --status    - Update workflow_status: draft, review, published
+  --content   - Update content/body
+  --json      - Raw JSON payload for partial update
+  --local     - Use local development environment
+  --cloud     - Use cloud/production environment
+  --help, -h  - Show this help
+
+Partial Update:
+  Only the fields you specify will be updated. Other fields remain unchanged.
+
+Examples:
+  ./dot/bin/dot-content-update knowledge_documents 5 --title "New Title"
+  ./dot/bin/dot-content-update knowledge_documents 5 --status published
+  ./dot/bin/dot-content-update knowledge_documents 5 --json '{"title":"New","content":"Updated"}'
+EOF
+  exit 0
+}
+
+# Parse arguments
+POSITIONAL_COUNT=0
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --local)
+      LOCAL_FLAG="--local"
+      shift
+      ;;
+    --cloud)
+      CLOUD_FLAG="--cloud"
+      shift
+      ;;
+    --title)
+      TITLE="$2"
+      shift 2
+      ;;
+    --slug)
+      SLUG="$2"
+      shift 2
+      ;;
+    --status)
+      STATUS="$2"
+      shift 2
+      ;;
+    --content)
+      CONTENT="$2"
+      shift 2
+      ;;
+    --json)
+      JSON_PAYLOAD="$2"
+      shift 2
+      ;;
+    --help|-h)
+      show_help
+      ;;
+    -*)
+      echo -e "${RED}[ERROR]${NC} Unknown option: $1" >&2
+      exit 1
+      ;;
+    *)
+      if [[ $POSITIONAL_COUNT -eq 0 ]]; then
+        COLLECTION="$1"
+      elif [[ $POSITIONAL_COUNT -eq 1 ]]; then
+        ITEM_ID="$1"
+      fi
+      ((POSITIONAL_COUNT++))
+      shift
+      ;;
+  esac
+done
+
+# Validate required args
+if [[ -z "$COLLECTION" ]]; then
+  echo -e "${RED}[ERROR]${NC} Collection is required" >&2
+  echo "Usage: ./dot/bin/dot-content-update <collection> <id> --title \"Title\"" >&2
+  exit 1
+fi
+
+if [[ -z "$ITEM_ID" ]]; then
+  echo -e "${RED}[ERROR]${NC} Document ID is required" >&2
+  exit 1
+fi
+
+# Check if any update fields provided
+if [[ -z "$JSON_PAYLOAD" && -z "$TITLE" && -z "$SLUG" && -z "$STATUS" && -z "$CONTENT" ]]; then
+  echo -e "${RED}[ERROR]${NC} No update fields provided" >&2
+  echo "Provide at least one of: --title, --slug, --status, --content, --json" >&2
+  exit 1
+fi
+
+# Environment detection
+detect_env() {
+  if [[ -n "$LOCAL_FLAG" ]]; then echo "local"; return; fi
+  if [[ -n "$CLOUD_FLAG" ]]; then echo "cloud"; return; fi
+  if [[ "${DOT_ENV:-}" == "local" ]]; then echo "local"; return; fi
+  if [[ "${DOT_ENV:-}" == "cloud" ]]; then echo "cloud"; return; fi
+  if curl -sf --max-time 2 "http://localhost:8055/server/health" >/dev/null 2>&1; then
+    echo "local"
+  else
+    echo "cloud"
+  fi
+}
+
+ENV=$(detect_env)
+
+if [[ "$ENV" == "local" ]]; then
+  DIRECTUS_URL="http://localhost:8055"
+  echo -e "\n${GREEN}  DOT CONTENT UPDATE - LOCAL MODE${NC}"
+else
+  DIRECTUS_URL="https://directus-test-pfne2mqwja-as.a.run.app"
+  echo -e "\n${YELLOW}  DOT CONTENT UPDATE - CLOUD MODE${NC}"
+fi
+
+echo "Collection: $COLLECTION"
+echo "Item ID: $ITEM_ID"
+echo "------------------------------------------------------------"
+
+# Get token
+ENV_FLAG="--cloud"
+[[ "$ENV" == "local" ]] && ENV_FLAG="--local"
+
+TOKEN=$("$SCRIPT_DIR/dot-token" "$ENV_FLAG")
+if [[ -z "$TOKEN" ]]; then
+  echo -e "${RED}[ERROR]${NC} Failed to authenticate" >&2
+  exit 1
+fi
+
+# Verify document exists
+echo -n "Verifying document exists... "
+EXISTING=$(curl -sf --max-time 15 \
+  "${DIRECTUS_URL}/items/${COLLECTION}/${ITEM_ID}?fields=id,title" \
+  -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || echo "")
+
+if [[ -z "$EXISTING" ]]; then
+  echo -e "${RED}NOT FOUND${NC}"
+  echo -e "${RED}[ERROR]${NC} Document ID $ITEM_ID does not exist in $COLLECTION" >&2
+  exit 1
+fi
+
+if echo "$EXISTING" | jq -e '.errors' >/dev/null 2>&1; then
+  echo -e "${RED}ERROR${NC}"
+  ERROR_MSG=$(echo "$EXISTING" | jq -r '.errors[0].message // "Unknown error"')
+  echo -e "${RED}[ERROR]${NC} $ERROR_MSG" >&2
+  exit 1
+fi
+
+CURRENT_TITLE=$(echo "$EXISTING" | jq -r '.data.title // "[no title]"')
+echo -e "${GREEN}OK${NC} (\"$CURRENT_TITLE\")"
+
+# Build JSON payload
+if [[ -n "$JSON_PAYLOAD" ]]; then
+  PAYLOAD="$JSON_PAYLOAD"
+else
+  # Build payload using jq (safe JSON handling)
+  PAYLOAD="{}"
+  
+  if [[ -n "$TITLE" ]]; then
+    PAYLOAD=$(echo "$PAYLOAD" | jq --arg v "$TITLE" '. + {title: $v}')
+  fi
+  if [[ -n "$SLUG" ]]; then
+    PAYLOAD=$(echo "$PAYLOAD" | jq --arg v "$SLUG" '. + {slug: $v}')
+  fi
+  if [[ -n "$STATUS" ]]; then
+    PAYLOAD=$(echo "$PAYLOAD" | jq --arg v "$STATUS" '. + {workflow_status: $v}')
+  fi
+  if [[ -n "$CONTENT" ]]; then
+    PAYLOAD=$(echo "$PAYLOAD" | jq --arg v "$CONTENT" '. + {content: $v}')
+  fi
+fi
+
+echo -e "${CYAN}Updating fields:${NC} $(echo "$PAYLOAD" | jq -c 'keys')"
+
+# Update the document
+TMP_PAYLOAD=$(mktemp)
+echo "$PAYLOAD" > "$TMP_PAYLOAD"
+trap 'rm -f "$TMP_PAYLOAD"' EXIT
+
+RESPONSE=$(curl -sf --max-time 30 -X PATCH \
+  "${DIRECTUS_URL}/items/${COLLECTION}/${ITEM_ID}" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d @"$TMP_PAYLOAD" 2>/dev/null || echo "")
+
+if [[ -z "$RESPONSE" ]]; then
+  echo -e "${RED}[ERROR]${NC} Failed to update document (no response)" >&2
+  exit 1
+fi
+
+# Check for errors
+if echo "$RESPONSE" | jq -e '.errors' >/dev/null 2>&1; then
+  ERROR_MSG=$(echo "$RESPONSE" | jq -r '.errors[0].message // "Unknown error"')
+  echo -e "${RED}[ERROR]${NC} $ERROR_MSG" >&2
+  exit 1
+fi
+
+# Extract updated data
+UPDATED_ID=$(echo "$RESPONSE" | jq -r '.data.id // empty')
+UPDATED_TITLE=$(echo "$RESPONSE" | jq -r '.data.title // empty')
+
+if [[ -z "$UPDATED_ID" || "$UPDATED_ID" == "null" ]]; then
+  echo -e "${RED}[ERROR]${NC} Failed to update document" >&2
+  exit 1
+fi
+
+echo -e "${GREEN}[SUCCESS]${NC} Document updated"
+echo -e "ID: ${GREEN}$UPDATED_ID${NC}"
+echo -e "Title: $UPDATED_TITLE"

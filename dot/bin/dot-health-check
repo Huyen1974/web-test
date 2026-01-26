@@ -3,11 +3,150 @@
 
 const dns = require('node:dns').promises
 const { URL } = require('node:url')
+const { execSync } = require('node:child_process')
+
+// Retry configuration from environment
+const RETRY_MAX = parseInt(process.env.DOT_RETRY_MAX || '3', 10)
+const RETRY_TIMEOUT = parseInt(process.env.DOT_RETRY_TIMEOUT || '30', 10) * 1000 // ms
+const RETRY_DELAY = parseInt(process.env.DOT_RETRY_DELAY || '5', 10) * 1000 // ms
+const RETRY_BACKOFF = parseInt(process.env.DOT_RETRY_BACKOFF || '2', 10)
+const RETRY_VERBOSE = process.env.DOT_RETRY_VERBOSE !== '0'
+
+// Parse command line arguments
+const args = process.argv.slice(2)
+const isLocal = args.includes('--local')
+const isCloud = args.includes('--cloud')
+const showHelp = args.includes('--help') || args.includes('-h')
+const isVerbose = args.includes('--verbose') || args.includes('-v')
+
+if (showHelp) {
+  console.log(`
+DOT-HEALTH-CHECK - Check system health across all layers
+
+Usage:
+  dot-health-check [options]
+
+Options:
+  --local       Use local development environment (localhost:3000)
+  --cloud       Use cloud/production environment (default)
+  --verbose, -v Show detailed retry information
+  --help, -h    Show this help message
+
+Layers Checked:
+  1. Network (DNS) - Hostname resolution
+  2. Web Server    - HTTP response
+  3. API Proxy     - Directus health endpoint
+  4. Auth Flow     - Login and session cookie
+
+Cold Start Protection:
+  This tool automatically retries failed requests to handle Cloud Run cold starts.
+  Configure via environment variables:
+    DOT_RETRY_MAX=3       Max retry attempts (default: 3)
+    DOT_RETRY_TIMEOUT=30  Timeout per attempt in seconds (default: 30)
+    DOT_RETRY_DELAY=5     Initial delay between retries (default: 5)
+    DOT_RETRY_BACKOFF=2   Backoff multiplier (default: 2)
+`)
+  process.exit(0)
+}
+
+// Colors
+const colors = {
+  red: '\x1b[31m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  cyan: '\x1b[36m',
+  reset: '\x1b[0m',
+  bold: '\x1b[1m',
+}
+
+function retryLog(level, ...args) {
+  if (!RETRY_VERBOSE && !isVerbose) return
+  const prefix = {
+    INFO: `${colors.cyan}[RETRY]${colors.reset}`,
+    WARN: `${colors.yellow}[RETRY]${colors.reset}`,
+    ERROR: `${colors.red}[RETRY]${colors.reset}`,
+    OK: `${colors.green}[RETRY]${colors.reset}`,
+  }
+  console.log(prefix[level] || '[RETRY]', ...args)
+}
+
+// Sleep helper
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+// Fetch with retry for cold start protection
+async function fetchWithRetry(url, options = {}) {
+  let lastError = null
+  let delay = RETRY_DELAY
+
+  for (let attempt = 1; attempt <= RETRY_MAX; attempt++) {
+    if (attempt > 1) {
+      retryLog('INFO', `Attempt ${attempt}/${RETRY_MAX} (waiting ${delay / 1000}s for cold start...)`)
+    }
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), RETRY_TIMEOUT)
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+
+      if (attempt > 1) {
+        retryLog('OK', `Success on attempt ${attempt}`)
+      }
+      return response
+    } catch (err) {
+      clearTimeout(timeoutId)
+      lastError = err
+
+      if (err.name === 'AbortError') {
+        retryLog('WARN', `Timeout after ${RETRY_TIMEOUT / 1000}s (cold start likely)`)
+      } else {
+        retryLog('WARN', `Failed: ${err.message}`)
+      }
+
+      if (attempt < RETRY_MAX) {
+        await sleep(delay)
+        delay *= RETRY_BACKOFF
+      }
+    }
+  }
+
+  retryLog('ERROR', `All ${RETRY_MAX} attempts failed`)
+  throw lastError
+}
+
+// Environment detection
+function detectEnvironment() {
+  if (isLocal) return 'local'
+  if (isCloud) return 'cloud'
+  if (process.env.DOT_ENV === 'local') return 'local'
+  if (process.env.DOT_ENV === 'cloud') return 'cloud'
+
+  // Auto-detect: check if local Directus is running
+  try {
+    execSync('curl -sf --max-time 2 http://localhost:8055/server/health', {
+      stdio: 'pipe',
+    })
+    return 'local'
+  } catch {
+    return 'cloud'
+  }
+}
+
+const ENV = detectEnvironment()
+
+// Configure URLs based on environment
+const LOCAL_NUXT_URL = 'http://localhost:3000'
+const CLOUD_NUXT_URL = 'https://ai.incomexsaigoncorp.vn'
 
 const BASE_URL =
+  process.env.NUXT_URL ||
   process.env.BASE_URL ||
   process.env.NUXT_PUBLIC_SITE_URL ||
-  'https://ai.incomexsaigoncorp.vn'
+  (ENV === 'local' ? LOCAL_NUXT_URL : CLOUD_NUXT_URL)
 
 const AUTH_EMAIL = process.env.DIRECTUS_ADMIN_EMAIL || ''
 const AUTH_PASSWORD = process.env.DIRECTUS_ADMIN_PASSWORD || ''
@@ -16,7 +155,12 @@ const HEALTH_PATH =
   process.env.DIRECTUS_HEALTH_PATH || '/api/directus/server/health'
 
 function fmtStatus(status) {
-  return status.toUpperCase().padEnd(5, ' ')
+  const colors_map = {
+    pass: `${colors.green}PASS ${colors.reset}`,
+    fail: `${colors.red}FAIL ${colors.reset}`,
+    skip: `${colors.yellow}SKIP ${colors.reset}`,
+  }
+  return colors_map[status] || status.toUpperCase().padEnd(5, ' ')
 }
 
 async function checkDns(hostname) {
@@ -25,8 +169,31 @@ async function checkDns(hostname) {
 }
 
 async function checkHttp(url, options = {}) {
-  const response = await fetch(url, options)
+  const response = await fetchWithRetry(url, options)
   return { status: response.status, headers: response.headers }
+}
+
+function printEnvironmentBanner() {
+  const directusUrl =
+    ENV === 'local'
+      ? 'http://localhost:8055'
+      : 'https://directus-test-pfne2mqwja-as.a.run.app'
+
+  console.log('')
+  if (ENV === 'local') {
+    console.log(`${colors.green}${colors.bold}┌─────────────────────────────────────────────────────┐${colors.reset}`)
+    console.log(`${colors.green}${colors.bold}│  🟢 LOCAL MODE                                      │${colors.reset}`)
+    console.log(`${colors.green}${colors.bold}│     Nuxt:     ${BASE_URL.padEnd(37)}│${colors.reset}`)
+    console.log(`${colors.green}${colors.bold}│     Directus: ${directusUrl.padEnd(37)}│${colors.reset}`)
+    console.log(`${colors.green}${colors.bold}└─────────────────────────────────────────────────────┘${colors.reset}`)
+  } else {
+    console.log(`${colors.red}${colors.bold}┌─────────────────────────────────────────────────────┐${colors.reset}`)
+    console.log(`${colors.red}${colors.bold}│  🔴 CLOUD MODE (PRODUCTION)                         │${colors.reset}`)
+    console.log(`${colors.red}${colors.bold}│     Nuxt:     ${BASE_URL.padEnd(37)}│${colors.reset}`)
+    console.log(`${colors.red}${colors.bold}│     Directus: ${directusUrl}│${colors.reset}`)
+    console.log(`${colors.red}${colors.bold}└─────────────────────────────────────────────────────┘${colors.reset}`)
+  }
+  console.log('')
 }
 
 async function main() {
@@ -34,7 +201,13 @@ async function main() {
   const parsed = new URL(BASE_URL)
 
   console.log('DOT HEALTH CHECK')
-  console.log(`Base URL: ${BASE_URL}`)
+  printEnvironmentBanner()
+
+  if (isVerbose) {
+    console.log(`Retry config: max=${RETRY_MAX}, timeout=${RETRY_TIMEOUT / 1000}s, delay=${RETRY_DELAY / 1000}s, backoff=${RETRY_BACKOFF}x`)
+    console.log('')
+  }
+
   console.log('-'.repeat(60))
 
   // Layer 1: Network (DNS)
@@ -62,7 +235,7 @@ async function main() {
     results.push({
       layer: 'Web Server',
       status: 'fail',
-      detail: err.message || 'Request failed',
+      detail: err.message || 'Request failed (after retries)',
     })
   }
 
@@ -79,7 +252,7 @@ async function main() {
     results.push({
       layer: 'API Proxy',
       status: 'fail',
-      detail: err.message || 'Request failed',
+      detail: err.message || 'Request failed (after retries)',
     })
   }
 
@@ -122,7 +295,7 @@ async function main() {
       results.push({
         layer: 'Auth Flow',
         status: 'fail',
-        detail: err.message || 'Request failed',
+        detail: err.message || 'Request failed (after retries)',
       })
     }
   }

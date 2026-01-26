@@ -227,6 +227,64 @@ Reasoning:
 
 ---
 
+## NHÓM 8: HYBRID LEAN ARCHITECTURE STATUS
+*(Cập nhật: 2026-01-26 | Web 13 Session)*
+
+### Kiến trúc đã xác nhận
+
+| Component | Local | Cloud | Sync Method |
+|-----------|-------|-------|-------------|
+| Directus Instance | ✅ localhost:8055 | ✅ directus-test-pfne2mqwja-as.a.run.app | - |
+| Database | Cloud SQL | Cloud SQL | **SAME DB** |
+| Schema (fields) | ✅ | ✅ | Auto (DB chung) |
+| Permissions | ✅ | ✅ | Auto (DB chung) |
+| Data (content) | ✅ | ✅ | Auto (DB chung) |
+
+### Knowledge Hub Status
+
+| Page | Route | Status | Notes |
+|------|-------|--------|-------|
+| List | `/knowledge` | ✅ OK | Tree structure loads |
+| Tree | `/knowledge/[slug]` | ✅ OK | Dynamic routing works |
+| Detail | `/knowledge/[slug]` | ✅ OK | Content renders |
+
+### Schema Changes (Web 13)
+
+| Field | Collection | Type | Purpose |
+|-------|------------|------|---------|
+| `date_created` | knowledge_documents | timestamp | Auto-fill on create |
+| `date_updated` | knowledge_documents | timestamp | Auto-fill on update |
+
+### DOT Tools Added
+
+| Tool | Purpose | Usage |
+|------|---------|-------|
+| `dot-sync-check` | Verify Local ↔ Cloud sync | `./dot/bin/dot-sync-check` |
+| `dot-fix-knowledge-permissions` | Apply public read permissions | `./dot/bin/dot-fix-knowledge-permissions` |
+
+### Lessons Learned
+
+1. **Schema sync tự động:** Vì dùng chung DB, không cần clear cache hay restart
+2. **Directus không cache schema lâu:** Đọc từ DB mỗi request
+3. **Anonymous read cần permissions:** Phải set Public role permissions cho collections
+
+### Gate Status
+
+| Check | Status |
+|-------|--------|
+| Local Directus healthy | ✅ |
+| Cloud Directus healthy | ✅ |
+| Schema synced (30 fields, hash match) | ✅ |
+| Anonymous API access | ✅ |
+| Website production | ✅ |
+
+**Trạng thái:** 🟢 **READY FOR CONTENT PHASE**
+
+### Tool Inventory Reference
+> Chi tiết: [`docs/investigations/TOOL_INVENTORY.md`](./investigations/TOOL_INVENTORY.md)
+
+---
+
 ## TỔNG KẾT TRẠNG THÁI
 
 ### BLOCKING ITEMS (Phải hoàn thành trước PR0)
@@ -404,3 +462,6 @@ PHASE 3: CONTENT & GO-LIVE
 *[Phụ lục 16 Version: v1.0 | Created: 2025-01-01 | Agent: Có thể cập nhật]*
 
 | 2026-01-15 | **E1 Readiness Locked** | **READY**. Smoke GREEN (9s @ 06:39:48Z). Wake-up sequence PASSED. Drift accepted (Option B). |
+| 2026-01-26 | **Web 13: Schema Fix** | **SUCCESS**. Added `date_created`, `date_updated` fields to `knowledge_documents`. Local ↔ Cloud sync verified. |
+| 2026-01-26 | **Web 13: Tooling** | **SUCCESS**. Created `dot-sync-check` (hash-based schema comparison). Created `TOOL_INVENTORY.md` audit report. |
+| 2026-01-26 | **Web 13: SSOT Update** | **SUCCESS**. Added NHÓM 8: Hybrid Lean Architecture Status. Documented lessons learned. |

@@ -4,6 +4,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOT_AUTH="${SCRIPT_DIR}/dot-auth"
 
+# Source environment configuration
+source "${SCRIPT_DIR}/../config/environment.sh"
+
 COLLECTION="agent_views"
 REQUIRED_FIELDS=(
   source_id
@@ -209,15 +212,44 @@ verify_fields() {
   log_ok "All required fields present: ${REQUIRED_FIELDS[*]}"
 }
 
+show_help() {
+  cat << 'EOF'
+DOT-SCHEMA-ENSURE - Ensure required Directus collections exist
+
+Usage:
+  dot-schema-ensure [options]
+
+Options:
+  --local       Use local development environment
+  --cloud       Use cloud/production environment (default)
+  --help, -h    Show this help message
+
+EOF
+  show_environment_help
+}
+
 main() {
+  # Parse arguments
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h)
+        show_help
+        exit 0
+        ;;
+    esac
+  done
+
   require_cmds
-  BASE_URL="${DIRECTUS_BASE_URL:-https://directus-test-pfne2mqwja-as.a.run.app}"
+
+  # Initialize environment (auto-detect or use flag)
+  init_environment "$@"
+  BASE_URL="$DIRECTUS_URL"
 
   echo "========================================="
   echo "DOT Tool: Schema Ensure"
   echo "========================================="
+  print_environment_banner "$@"
   echo "Ensuring required Directus collections exist"
-  echo "Target: ${BASE_URL}"
   echo ""
 
   if [[ -z "${DOT_TOKEN:-}" ]]; then

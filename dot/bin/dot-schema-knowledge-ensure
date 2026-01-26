@@ -1,0 +1,410 @@
+#!/usr/bin/env node
+
+/**
+ * DOT Schema Knowledge Ensure - Add content fields to knowledge_documents
+ *
+ * The knowledge_documents collection exists but only has workflow fields.
+ * This script adds the content fields required by the Knowledge Hub pages.
+ *
+ * Usage:
+ *   ./dot/bin/dot-schema-knowledge-ensure [options]
+ *
+ * Options:
+ *   --local       Use local development environment
+ *   --cloud       Use cloud/production environment
+ *   --dry-run     Show what would be done without making changes
+ *   --help        Show this help
+ */
+
+const path = require('path');
+const fs = require('fs');
+const https = require('https');
+const http = require('http');
+
+// Parse command line arguments
+const args = process.argv.slice(2);
+const options = {
+  local: args.includes('--local'),
+  cloud: args.includes('--cloud'),
+  dryRun: args.includes('--dry-run'),
+  help: args.includes('--help'),
+};
+
+if (options.help) {
+  console.log(`
+DOT Schema Knowledge Ensure - Add content fields to knowledge_documents
+
+Usage:
+  ./dot/bin/dot-schema-knowledge-ensure [options]
+
+Options:
+  --local       Use local development environment
+  --cloud       Use cloud/production environment
+  --dry-run     Show what would be done without making changes
+  --help        Show this help
+
+This script adds content fields (title, slug, content, etc.) to the
+knowledge_documents collection, which only has workflow fields.
+`);
+  process.exit(0);
+}
+
+// Colors
+const colors = {
+  red: '\x1b[31m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  cyan: '\x1b[36m',
+  reset: '\x1b[0m',
+  bold: '\x1b[1m',
+};
+
+function log(level, message) {
+  const prefixes = {
+    INFO: `${colors.cyan}[INFO]${colors.reset}`,
+    OK: `${colors.green}[OK]${colors.reset}`,
+    WARN: `${colors.yellow}[WARN]${colors.reset}`,
+    ERROR: `${colors.red}[ERROR]${colors.reset}`,
+    SKIP: `${colors.yellow}[SKIP]${colors.reset}`,
+  };
+  console.log(`${prefixes[level] || '[LOG]'} ${message}`);
+}
+
+// Load credentials
+function loadConfig() {
+  const configDir = path.resolve(__dirname, '../config');
+  const localPath = path.resolve(configDir, 'credentials.local.json');
+
+  let directusUrl;
+  if (options.local) {
+    directusUrl = 'http://localhost:8055';
+  } else if (options.cloud) {
+    directusUrl = 'https://directus-test-pfne2mqwja-as.a.run.app';
+  } else {
+    directusUrl = process.env.DIRECTUS_URL || 'https://directus-test-pfne2mqwja-as.a.run.app';
+  }
+
+  let config = {
+    directusUrl,
+    email: process.env.DIRECTUS_ADMIN_EMAIL,
+    password: process.env.DIRECTUS_ADMIN_PASSWORD,
+  };
+
+  if (fs.existsSync(localPath)) {
+    try {
+      const creds = JSON.parse(fs.readFileSync(localPath, 'utf-8'));
+      const profile = creds.profiles?.[0];
+      if (profile) {
+        config.email = config.email || profile.username;
+        config.password = config.password || profile.password;
+      }
+    } catch (e) {
+      // Ignore parse errors
+    }
+  }
+
+  if (!config.email || !config.password) {
+    console.error('Error: DIRECTUS_ADMIN_EMAIL and DIRECTUS_ADMIN_PASSWORD are required');
+    console.error('Or create dot/config/credentials.local.json with profiles array');
+    process.exit(1);
+  }
+
+  return config;
+}
+
+// HTTP request helper with timeout
+function request(url, requestOptions = {}) {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    const client = urlObj.protocol === 'https:' ? https : http;
+
+    const req = client.request(url, {
+      method: requestOptions.method || 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...requestOptions.headers,
+      },
+      timeout: 60000, // 60s for cold start
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          resolve({ status: res.statusCode, data: json });
+        } catch {
+          resolve({ status: res.statusCode, data: data });
+        }
+      });
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Request timeout'));
+    });
+    req.on('error', reject);
+
+    if (requestOptions.body) {
+      req.write(JSON.stringify(requestOptions.body));
+    }
+    req.end();
+  });
+}
+
+// Fields to add to knowledge_documents
+const CONTENT_FIELDS = [
+  {
+    field: 'title',
+    type: 'string',
+    meta: {
+      interface: 'input',
+      required: true,
+      width: 'full',
+      note: 'Document title',
+    },
+    schema: { is_nullable: false },
+  },
+  {
+    field: 'slug',
+    type: 'string',
+    meta: {
+      interface: 'input',
+      required: false,
+      width: 'half',
+      note: 'URL-friendly identifier',
+    },
+    schema: { is_nullable: true, is_unique: true },
+  },
+  {
+    field: 'content',
+    type: 'text',
+    meta: {
+      interface: 'input-rich-text-html',
+      required: false,
+      width: 'full',
+      note: 'Document content (HTML)',
+    },
+    schema: { is_nullable: true },
+  },
+  {
+    field: 'summary',
+    type: 'text',
+    meta: {
+      interface: 'input-multiline',
+      required: false,
+      width: 'full',
+      note: 'Brief summary for list views',
+    },
+    schema: { is_nullable: true },
+  },
+  {
+    field: 'status',
+    type: 'string',
+    meta: {
+      interface: 'select-dropdown',
+      options: {
+        choices: [
+          { text: 'Draft', value: 'draft' },
+          { text: 'Published', value: 'published' },
+          { text: 'Archived', value: 'archived' },
+        ],
+      },
+      width: 'half',
+      note: 'Publication status',
+    },
+    schema: { default_value: 'draft', is_nullable: true },
+  },
+  {
+    field: 'visibility',
+    type: 'string',
+    meta: {
+      interface: 'select-dropdown',
+      options: {
+        choices: [
+          { text: 'Public', value: 'public' },
+          { text: 'Private', value: 'private' },
+        ],
+      },
+      width: 'half',
+      note: 'Visibility setting',
+    },
+    schema: { default_value: 'public', is_nullable: true },
+  },
+  {
+    field: 'language',
+    type: 'string',
+    meta: {
+      interface: 'select-dropdown',
+      options: {
+        choices: [
+          { text: 'Vietnamese', value: 'vn' },
+          { text: 'English', value: 'en' },
+          { text: 'Japanese', value: 'ja' },
+        ],
+      },
+      width: 'half',
+      note: 'Document language',
+    },
+    schema: { default_value: 'vn', is_nullable: true },
+  },
+  {
+    field: 'category',
+    type: 'string',
+    meta: {
+      interface: 'input',
+      width: 'half',
+      note: 'Document category for filtering',
+    },
+    schema: { is_nullable: true },
+  },
+  {
+    field: 'tags',
+    type: 'json',
+    meta: {
+      interface: 'tags',
+      width: 'full',
+      note: 'Tags for filtering and search',
+    },
+    schema: { is_nullable: true },
+  },
+  {
+    field: 'published_at',
+    type: 'timestamp',
+    meta: {
+      interface: 'datetime',
+      width: 'half',
+      note: 'Publication date',
+    },
+    schema: { is_nullable: true },
+  },
+  {
+    field: 'is_folder',
+    type: 'boolean',
+    meta: {
+      interface: 'boolean',
+      width: 'half',
+      note: 'Mark as folder (container for other documents)',
+    },
+    schema: { default_value: false, is_nullable: true },
+  },
+];
+
+async function main() {
+  const config = loadConfig();
+
+  console.log('');
+  if (options.local) {
+    console.log(`${colors.green}${colors.bold}  DOT SCHEMA KNOWLEDGE ENSURE - LOCAL MODE${colors.reset}`);
+  } else {
+    console.log(`${colors.red}${colors.bold}  DOT SCHEMA KNOWLEDGE ENSURE - CLOUD MODE${colors.reset}`);
+  }
+  console.log(`  Target: ${config.directusUrl}`);
+  if (options.dryRun) {
+    console.log(`${colors.yellow}  DRY RUN - No changes will be made${colors.reset}`);
+  }
+  console.log('');
+  console.log('-'.repeat(60));
+
+  // Authenticate
+  log('INFO', 'Authenticating...');
+  let authResponse;
+  try {
+    authResponse = await request(`${config.directusUrl}/auth/login`, {
+      method: 'POST',
+      body: { email: config.email, password: config.password },
+    });
+  } catch (err) {
+    log('ERROR', `Authentication failed: ${err.message}`);
+    process.exit(1);
+  }
+
+  if (authResponse.status !== 200 || !authResponse.data?.data?.access_token) {
+    log('ERROR', 'Authentication failed');
+    console.error(authResponse.data);
+    process.exit(1);
+  }
+
+  const token = authResponse.data.data.access_token;
+  log('OK', 'Authenticated successfully');
+
+  // Check if collection exists
+  log('INFO', 'Checking knowledge_documents collection...');
+  const collectionsResponse = await request(`${config.directusUrl}/collections/knowledge_documents`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (collectionsResponse.status !== 200) {
+    log('ERROR', 'Collection knowledge_documents does not exist');
+    log('INFO', 'Run dot-seed-agency-os or create the collection first');
+    process.exit(1);
+  }
+
+  log('OK', 'Collection exists');
+
+  // Get existing fields
+  log('INFO', 'Getting existing fields...');
+  const fieldsResponse = await request(`${config.directusUrl}/fields/knowledge_documents`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (fieldsResponse.status !== 200) {
+    log('ERROR', 'Failed to get fields');
+    console.error(fieldsResponse.data);
+    process.exit(1);
+  }
+
+  const existingFields = new Set(fieldsResponse.data.data.map(f => f.field));
+  log('INFO', `Existing fields: ${Array.from(existingFields).join(', ')}`);
+
+  // Add missing fields
+  console.log('');
+  log('INFO', 'Adding missing content fields...');
+
+  let addedCount = 0;
+  let skippedCount = 0;
+
+  for (const field of CONTENT_FIELDS) {
+    if (existingFields.has(field.field)) {
+      log('SKIP', `Field '${field.field}' already exists`);
+      skippedCount++;
+      continue;
+    }
+
+    if (options.dryRun) {
+      log('INFO', `Would add field: ${field.field}`);
+      addedCount++;
+      continue;
+    }
+
+    try {
+      const response = await request(`${config.directusUrl}/fields/knowledge_documents`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: field,
+      });
+
+      if (response.status === 200) {
+        log('OK', `Added field: ${field.field}`);
+        addedCount++;
+      } else {
+        log('ERROR', `Failed to add field '${field.field}': ${JSON.stringify(response.data?.errors || response.data)}`);
+      }
+    } catch (err) {
+      log('ERROR', `Failed to add field '${field.field}': ${err.message}`);
+    }
+  }
+
+  console.log('');
+  console.log('-'.repeat(60));
+  if (options.dryRun) {
+    log('INFO', `Would add ${addedCount} fields, skip ${skippedCount} existing`);
+  } else {
+    log('OK', `Added ${addedCount} fields, skipped ${skippedCount} existing`);
+  }
+  console.log('');
+}
+
+main().catch(err => {
+  log('ERROR', err.message || err);
+  process.exit(1);
+});

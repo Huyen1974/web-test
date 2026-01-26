@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 is_sourced() {
   [[ "${BASH_SOURCE[0]}" != "$0" ]]
 }
@@ -23,7 +25,7 @@ set -euo pipefail
 
 if ! is_sourced; then
   echo "ERROR: Please source this script to export DOT_TOKEN in the current shell." >&2
-  echo "Run: source dot/bin/dot-auth" >&2
+  echo "Run: source dot/bin/dot-auth [--local|--cloud]" >&2
   exit 1
 fi
 
@@ -31,9 +33,20 @@ for cmd in curl jq; do
   command -v "$cmd" >/dev/null 2>&1 || die "Missing required command: $cmd"
 done
 
-BASE_URL="${DIRECTUS_BASE_URL:-https://directus-test-pfne2mqwja-as.a.run.app}"
-EMAIL="${DIRECTUS_ADMIN_EMAIL:-admin@example.com}"
-PASSWORD="${DIRECTUS_ADMIN_PASSWORD:-}"
+# Source environment configuration if available
+if [[ -f "${SCRIPT_DIR}/../config/environment.sh" ]]; then
+  # shellcheck source=/dev/null
+  source "${SCRIPT_DIR}/../config/environment.sh"
+  init_environment "$@"
+  BASE_URL="$DIRECTUS_URL"
+  EMAIL="${DIRECTUS_ADMIN_EMAIL:-admin@example.com}"
+  PASSWORD="${DIRECTUS_ADMIN_PASSWORD:-}"
+else
+  # Fallback to old behavior
+  BASE_URL="${DIRECTUS_BASE_URL:-https://directus-test-pfne2mqwja-as.a.run.app}"
+  EMAIL="${DIRECTUS_ADMIN_EMAIL:-admin@example.com}"
+  PASSWORD="${DIRECTUS_ADMIN_PASSWORD:-}"
+fi
 
 if [[ -z "$PASSWORD" ]]; then
   die "DIRECTUS_ADMIN_PASSWORD not set"

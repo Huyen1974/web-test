@@ -1,0 +1,192 @@
+#!/usr/bin/env bash
+
+# dot-token: Get Directus access token (shell-agnostic)
+#
+# This script works in both bash and zsh by outputting the token to stdout
+# instead of requiring shell sourcing.
+#
+# Usage:
+#   TOKEN=$(./dot/bin/dot-token --local)
+#   TOKEN=$(./dot/bin/dot-token --cloud)
+#   TOKEN=$(./dot/bin/dot-token)  # defaults to --cloud
+#
+# Exit codes:
+#   0 - Success, token printed to stdout
+#   1 - Authentication failed
+
+set -euo pipefail
+
+# Determine script directory (works in both bash and zsh)
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+elif [[ -n "${0:-}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+else
+  SCRIPT_DIR="$(pwd)/dot/bin"
+fi
+
+# Parse arguments
+LOCAL_FLAG=""
+CLOUD_FLAG=""
+SHOW_HELP=""
+
+for arg in "$@"; do
+  case $arg in
+    --local)
+      LOCAL_FLAG="yes"
+      ;;
+    --cloud)
+      CLOUD_FLAG="yes"
+      ;;
+    --help|-h)
+      SHOW_HELP="yes"
+      ;;
+  esac
+done
+
+if [[ -n "$SHOW_HELP" ]]; then
+  cat <<'EOF'
+dot-token: Get Directus access token (shell-agnostic)
+
+Usage:
+  TOKEN=$(./dot/bin/dot-token --local)
+  TOKEN=$(./dot/bin/dot-token --cloud)
+
+Options:
+  --local   Use local development environment (localhost:8055)
+  --cloud   Use cloud/production environment (default)
+  --help    Show this help
+
+Environment Variables:
+  DIRECTUS_ADMIN_EMAIL     Admin email (default: admin@example.com)
+  DIRECTUS_ADMIN_PASSWORD  Admin password (required for cloud, optional for local)
+
+Credential Sources (in order of priority):
+  1. Environment variables
+  2. .env.local file (for local mode)
+  3. dot/config/credentials.local.json
+
+Exit codes:
+  0 - Success, token printed to stdout
+  1 - Authentication failed
+EOF
+  exit 0
+fi
+
+# Environment detection
+detect_env() {
+  if [[ -n "$LOCAL_FLAG" ]]; then echo "local"; return; fi
+  if [[ -n "$CLOUD_FLAG" ]]; then echo "cloud"; return; fi
+  if [[ "${DOT_ENV:-}" == "local" ]]; then echo "local"; return; fi
+  if [[ "${DOT_ENV:-}" == "cloud" ]]; then echo "cloud"; return; fi
+
+  # Auto-detect: check if local Directus is running
+  if curl -sf --max-time 2 "http://localhost:8055/server/health" >/dev/null 2>&1; then
+    echo "local"
+  else
+    echo "cloud"
+  fi
+}
+
+ENV=$(detect_env)
+
+# Set URLs based on environment
+if [[ "$ENV" == "local" ]]; then
+  DIRECTUS_URL="http://localhost:8055"
+else
+  DIRECTUS_URL="${DIRECTUS_URL:-https://directus-test-pfne2mqwja-as.a.run.app}"
+fi
+
+# Get credentials
+get_credentials() {
+  local email password
+
+  if [[ "$ENV" == "local" ]]; then
+    # Try .env.local first
+    local env_file="$SCRIPT_DIR/../../.env.local"
+    if [[ -f "$env_file" ]]; then
+      email=$(grep -E "^DIRECTUS_ADMIN_EMAIL=" "$env_file" 2>/dev/null | cut -d= -f2 || true)
+      password=$(grep -E "^DIRECTUS_ADMIN_PASSWORD=" "$env_file" 2>/dev/null | cut -d= -f2 || true)
+    fi
+  fi
+
+  # Override with environment variables if set
+  email="${DIRECTUS_ADMIN_EMAIL:-${email:-admin@example.com}}"
+  password="${DIRECTUS_ADMIN_PASSWORD:-${password:-}}"
+
+  # Try credentials file as fallback
+  if [[ -z "$password" ]]; then
+    local creds_file="$SCRIPT_DIR/../config/credentials.local.json"
+    if [[ -f "$creds_file" ]]; then
+      password=$(jq -r '.profiles[0].password // empty' "$creds_file" 2>/dev/null || true)
+      if [[ -z "$email" ]] || [[ "$email" == "admin@example.com" ]]; then
+        email=$(jq -r '.profiles[0].username // empty' "$creds_file" 2>/dev/null || true)
+      fi
+    fi
+  fi
+
+  echo "$email:$password"
+}
+
+CREDS=$(get_credentials)
+EMAIL="${CREDS%%:*}"
+PASSWORD="${CREDS#*:}"
+
+if [[ -z "$PASSWORD" ]]; then
+  echo "ERROR: No password found. Set DIRECTUS_ADMIN_PASSWORD or create credentials file." >&2
+  exit 1
+fi
+
+# Create temp file for JSON payload to handle special characters properly
+TMP_AUTH=$(mktemp)
+trap 'rm -f "$TMP_AUTH"' EXIT
+
+# Clean shell-escaped characters (e.g., \! -> !)
+clean_password="${PASSWORD//\\!/!}"
+clean_password="${clean_password//\\\$/\$}"
+clean_password="${clean_password//\\\`/\`}"
+
+# Write JSON payload
+printf '{"email":"%s","password":"%s"}' "$EMAIL" "$clean_password" > "$TMP_AUTH"
+
+# Authenticate with retry for cold start
+MAX_ATTEMPTS=3
+TIMEOUT=30
+DELAY=5
+attempt=1
+
+while [[ $attempt -le $MAX_ATTEMPTS ]]; do
+  if [[ $attempt -gt 1 ]]; then
+    echo "[RETRY] Attempt $attempt/$MAX_ATTEMPTS (waiting ${DELAY}s for cold start...)" >&2
+  fi
+
+  RESPONSE=$(curl -sf --max-time "$TIMEOUT" "${DIRECTUS_URL}/auth/login" \
+    -H "Content-Type: application/json" \
+    -d @"$TMP_AUTH" 2>/dev/null) || true
+
+  if [[ -n "$RESPONSE" ]]; then
+    TOKEN=$(echo "$RESPONSE" | jq -r '.data.access_token // empty' 2>/dev/null)
+    if [[ -n "$TOKEN" && "$TOKEN" != "null" ]]; then
+      if [[ $attempt -gt 1 ]]; then
+        echo "[RETRY] Success on attempt $attempt" >&2
+      fi
+      # Output token only (no newline for clean capture)
+      printf '%s' "$TOKEN"
+      exit 0
+    fi
+  fi
+
+  if [[ $attempt -lt $MAX_ATTEMPTS ]]; then
+    sleep "$DELAY"
+    DELAY=$((DELAY * 2))
+  fi
+
+  ((attempt++))
+done
+
+# Failed after all attempts
+echo "ERROR: Authentication failed after $MAX_ATTEMPTS attempts" >&2
+if [[ -n "${RESPONSE:-}" ]]; then
+  echo "Response: $RESPONSE" >&2
+fi
+exit 1

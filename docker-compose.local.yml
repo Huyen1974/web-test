@@ -1,0 +1,88 @@
+# =============================================================================
+# LOCAL DEVELOPMENT DOCKER COMPOSE
+# Connects to production Cloud SQL and GCS for real data
+# =============================================================================
+# Usage:
+#   ./dot/bin/dot-local-up   - Start all services
+#   ./dot/bin/dot-local-down - Stop all services
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Cloud SQL Proxy - Secure tunnel to production database
+  # ---------------------------------------------------------------------------
+  cloud-sql-proxy:
+    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.2
+    command:
+      - --credentials-file=/config/google-credentials.json
+      - --address=0.0.0.0
+      - --port=3306
+      - github-chatgpt-ggcloud:asia-southeast1:mysql-directus-web-test
+    volumes:
+      - ./dot/config/google-credentials.json:/config/google-credentials.json:ro
+    ports:
+      - "3307:3306"  # Expose on 3307 to avoid conflicts with local MySQL
+    restart: unless-stopped
+    networks:
+      - local-dev
+
+  # ---------------------------------------------------------------------------
+  # Directus CMS - Headless CMS
+  # ---------------------------------------------------------------------------
+  directus:
+    image: asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/web-test/directus:latest
+    platform: linux/amd64
+    depends_on:
+      - cloud-sql-proxy
+    env_file:
+      - .env.local
+    environment:
+      # Override for Docker networking
+      DB_HOST: cloud-sql-proxy
+      DB_PORT: 3306
+      PORT: 8055
+      # GCS credentials path inside container
+      STORAGE_GCS_KEY_FILENAME: /app/config/google-credentials.json
+    volumes:
+      - ./dot/config/google-credentials.json:/app/config/google-credentials.json:ro
+      - ./scripts:/directus/scripts:ro
+    ports:
+      - "8055:8055"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8055/server/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+    networks:
+      - local-dev
+
+  # ---------------------------------------------------------------------------
+  # Nuxt Frontend - SSR Web Application
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.local
+    depends_on:
+      - directus
+    environment:
+      # === MODE B: Hybrid Lean (Local Directus) ===
+      NUXT_DIRECTUS_URL: http://directus:8055           # SSR calls (Docker network)
+      NUXT_PUBLIC_DIRECTUS_URL: http://localhost:8055   # Browser calls (Host machine)
+      # To switch to Cloud Run, change both to: https://directus-test-pfne2mqwja-as.a.run.app
+      NUXT_PUBLIC_SITE_URL: http://localhost:3000
+      HOST: 0.0.0.0
+      PORT: 3000
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+      - /app/.nuxt
+    ports:
+      - "3000:3000"
+    networks:
+      - local-dev
+
+networks:
+  local-dev:
+    driver: bridge
