@@ -218,7 +218,7 @@ AI Model wants to review document
 ┌───────────────────────────────────────────────────────┐
 │ Nuxt UI: Click "Copy Context Link"                    │
 │                                                       │
-│ Generated URL:                                        │
+│ Generated URL:
 │ /api/context?ref=main&paths=docs/plan.md,docs/ref.md │
 │ &token_budget=8000                                    │
 └───────────────────────────────────────────────────────┘
@@ -226,21 +226,36 @@ AI Model wants to review document
         ▼
 ┌───────────────────────────────────────────────────────┐
 │ AI Model calls URL → Receives:                        │
-│ {                                                     │
-│   "repo": "web-test",                                 │
-│   "ref": "main",                                      │
-│   "commit": "abc123",                                 │
-│   "files": [                                          │
-│     {"path": "docs/plan.md", "content": "..."},       │
-│     {"path": "docs/ref.md", "content": "..."}         │
-│   ],                                                  │
+│ {
+│   "repo": "web-test",
+│   "ref": "main",
+│   "commit": "abc123",
+│   "files": [
+│     {"path": "docs/plan.md", "content": "..."},
+│     {"path": "docs/ref.md", "content": "..."}
+│   ],
 │   "packed_context": "... (within token budget) ..."   │
-│ }                                                     │
+│ }
 └───────────────────────────────────────────────────────┘
         │
         ▼
 AI Model can now analyze with full context
 (No copy-paste needed)
+
+### 4.4 Canonical Workflow: "Sửa đổi Hiến pháp"
+**Scenario:** Agent đề xuất sửa HP-05 trong `ALL_LAWs_MD.md`
+
+1. **TRIGGER:** Agent gọi MCP endpoint với proposal
+2. **DRAFT:** Agent Data tạo entry trong Draft Zone
+3. **PR CREATION:** System tạo branch `docs/update-hp05-secret-model`
+4. **REVIEW:** 
+   - QualityReviewer Agent: Check format ✅
+   - Human (Owner): Required approval ⏳
+5. **MERGE:** After approval → auto-merge
+6. **SYNC:** `docs.pr.merged` → Agent Data promotes to Official Zone
+7. **LIVE:** Nuxt displays updated content
+
+**Total Steps:** 7 | **Human Touch Points:** 1 (approval) = 14%
 
 ## 5. WORKFLOW STATE MACHINE
 ### 5.1 Document Lifecycle States
@@ -390,11 +405,13 @@ Phase 5: Scale & Optimize (E5 - Ongoing)
 	◦	Agents chỉ làm được những gì được phép
 	◦	Registry-driven permissions
 
-## 9. NEXT QUESTIONS (For Phase 2)
-	1	Docs API: Cloud Run hay Cloud Functions?
-	2	Auth for Context Link: Public hay token-based?
-	3	PR on Nuxt: GitHub API direct hay proxy qua Agent Data?
-	4	First Custom Agents: Nên bắt đầu với agents nào?
+## 9. DECISIONS (Resolved)
+| # | Question | Decision | Rationale |
+|---|----------|----------|-----------|
+| 1 | Docs API hosting | **Cloud Run** | Consistent with existing infra (Agent Data) |
+| 2 | Auth for Context Link | **Rate-limited + Optional Token** | Public for convenience, token for private repos |
+| 3 | PR on Nuxt | **Proxy qua Agent Data** | Single gateway, audit logging, no direct GitHub exposure |
+| 4 | First Custom Agents | **DocReviewer → CustomerCare** | DocReviewer aligns with Phase 2 (Content Pipeline) |
 
 ---
 
@@ -439,7 +456,6 @@ Phase 5: Scale & Optimize (E5 - Ongoing)
 | `/api/docs/context` | GET | Context Link (packed) | `{files: [], packed_context}` |
 
 #### Query Parameters
-
 ```yaml
 # /api/docs/tree
 ref: string          # main | pr-123 | commit-sha
@@ -453,6 +469,40 @@ path: string         # Required: docs/plans/q2-2026.md
 ref: string
 paths: string[]      # Multiple files
 token_budget: number # Max tokens for packed context (default: 8000)
+```
+
+#### Response Schemas
+**GET /api/docs/tree**
+```json
+{
+  "ref": "main",
+  "commit": "abc123",
+  "path": "docs/",
+  "folders": [
+    {"name": "plans", "path": "docs/plans", "item_count": 12},
+    {"name": "processes", "path": "docs/processes", "item_count": 847}
+  ],
+  "files": [
+    {"name": "README.md", "path": "docs/README.md", "size": 1024, "updated_at": "2026-01-27"}
+  ]
+}
+```
+
+**GET /api/docs/file**
+```json
+{
+  "path": "docs/plans/q2-2026.md",
+  "ref": "main",
+  "commit": "abc123",
+  "content": "# Q2 2026 Plan\n...",
+  "metadata": {
+    "size": 2048,
+    "encoding": "utf-8",
+    "updated_at": "2026-01-27",
+    "author": "agent-antigravity"
+  }
+}
+```
 
 ### Security & Auth
 | Component | Auth Strategy | Limits |
@@ -559,3 +609,11 @@ token_budget: number # Max tokens for packed context (default: 8000)
 | PR Conflicts | Medium | Rebase strategy (not merge), conflict resolver agent |
 | Token Budget Exceeded | High | "Context Link" must support aggressive packing/summarization |
 | Agent Hallucination | Medium | Strict "Reviewer" agents required before Human loop |
+
+### Cost-Control Notes
+| Strategy | Implementation | Impact |
+|----------|----------------|--------|
+| Cache by SHA/ETag | GitHub API responses cached by commit SHA | -70% API calls |
+| Avoid sync dư thừa | Only sync on `docs.pr.merged` event | -50% redundant syncs |
+| Token budget enforcement | Context Link hard limit 30k tokens | Predictable costs |
+| CDN for docs | Static docs cached at edge (1h TTL) | -80% origin requests |
