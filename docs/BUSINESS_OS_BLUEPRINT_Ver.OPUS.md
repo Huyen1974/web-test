@@ -1,9 +1,11 @@
-BUSINESS OS ARCHITECTURE v2.0
+BUSINESS OS ARCHITECTURE v2.1
 "Nền tảng cho Xã hội Agent"
 Status: Draft Architecture
 Vision: Một nền tảng nơi hàng trăm Agents tự động xử lý công việc, con người chỉ giám sát và phê duyệt.
 
-1. NORTH STAR (Tầm nhìn)
+# LAYER A: ARCHITECTURE
+
+## 1. NORTH STAR (Tầm nhìn)
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         BUSINESS OS                                     │
 │                                                                         │
@@ -17,8 +19,8 @@ Vision: Một nền tảng nơi hàng trăm Agents tự động xử lý công v
 │  • Context Accuracy: 100% agents có đủ ngữ cảnh để làm việc            │
 └─────────────────────────────────────────────────────────────────────────┘
 
-2. ACTORS (Đối tượng tham gia)
-2.1 Agent Hierarchy
+## 2. ACTORS (Đối tượng tham gia)
+### 2.1 Agent Hierarchy
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                        AGENT ECOSYSTEM                                  │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -59,47 +61,19 @@ Vision: Một nền tảng nơi hàng trăm Agents tự động xử lý công v
 │  └─────────────────────────────────────────────────────────────────┘   │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
-2.2 Actor Capabilities Matrix
-Actor
-Read
-Write
-Approve
-Orchestrate
-Create Agent
-Human
-✅
-❌ (via Agent)
-✅
-❌
-❌
-Orchestrator
-✅
-✅
-✅
-✅
-✅
-Commercial Agent
-✅
-✅
-❌
-❌
-❌
-Custom Agent
-✅
-✅*
-❌
-❌
-❌
-AI Model (Readonly)
-✅
-❌
-❌
-❌
-❌
+
+### 2.2 Actor Capabilities Matrix
+| Actor | Read | Write | Approve | Orchestrate | Create Agent |
+|-------|------|-------|---------|-------------|--------------|
+| Human | ✅ | ❌ (via Agent) | ✅ | ❌ | ❌ |
+| Orchestrator | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Commercial Agent | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Custom Agent | ✅ | ✅* | ❌ | ❌ | ❌ |
+| AI Model (Readonly) | ✅ | ❌ | ❌ | ❌ | ❌ |
 *Write permission based on Agent's role/scope
 
-3. CORE COMPONENTS
-3.1 Component Architecture
+## 3. CORE COMPONENTS
+### 3.1 Component Architecture
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                                                                         │
 │  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐            │
@@ -133,37 +107,42 @@ AI Model (Readonly)
 │  └─────────────────────────────────────────────────────────────────┘   │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
-3.2 Agent Data Sub-Systems
-Sub-system
-Responsibility
-Technology
-Vector/RAG Index
-Semantic search, context retrieval
-Qdrant + OpenAI Embeddings
-Task Queue
-Job distribution, priority handling
-Redis/Cloud Tasks
-Event Bus
-Inter-agent communication
-Pub/Sub
-State Machine
-Workflow state tracking
-Firestore
-Agent Registry
-Agent metadata, capabilities, permissions
-Firestore
-Workflow Engine
-Process definition & execution
-Custom (Langroid)
-Context Builder
-Pack context for token budget
-Custom
-Audit Log
-Complete activity history
-BigQuery/Firestore
 
-4. DATA FLOW PATTERNS
-4.1 Pattern: Document Creation (Agent-First)
+### 3.2 Agent Data Sub-Systems
+| Sub-system | Responsibility | Technology |
+|------------|----------------|------------|
+| Vector/RAG Index | Semantic search, context retrieval | Qdrant + OpenAI Embeddings |
+| Task Queue | Job distribution, priority handling | Redis/Cloud Tasks |
+| Event Bus | Inter-agent communication | Pub/Sub |
+| State Machine | Workflow state tracking | Firestore |
+| Agent Registry | Agent metadata, capabilities, permissions | Firestore |
+| Workflow Engine | Process definition & execution | Custom (Langroid) |
+| Context Builder | Pack context for token budget | Custom |
+| Audit Log | Complete activity history | BigQuery/Firestore |
+
+### 3.3 FOLDER CONVENTIONS (web-test repo)
+```
+web-test/
+├── docs/                 # Knowledge Base (SSOT)
+│   ├── plans/            # Kế hoạch
+│   ├── reports/          # Báo cáo
+│   ├── processes/        # Quy trình (potentially thousands)
+│   ├── policies/         # Chính sách
+│   ├── contracts/        # Hợp đồng
+│   └── templates/        # Mẫu tài liệu
+├── .github/
+│   ├── workflows/        # CI/CD
+│   └── CODEOWNERS        # Protected files
+└── web/                  # Nuxt application
+```
+**Naming Convention:**
+- Folder: `kebab-case`
+- File: `kebab-case.md`
+- No spaces, no special characters
+- Example: `docs/plans/q2-2026-marketing.md`
+
+## 4. DATA FLOW PATTERNS
+### 4.1 Pattern: Document Creation (Agent-First)
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  DOCUMENT CREATION FLOW                                                 │
 │                                                                         │
@@ -212,37 +191,27 @@ BigQuery/Firestore
 │     └─────────────────────────────────────────────────────────────┘    │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
-4.2 Pattern: Human Feedback Processing
-Human comments on Nuxt
-        │
-        ▼
-┌───────────────────┐
-│ Directus captures │
-│ comment metadata  │
-└─────────┬─────────┘
-          │
-          ▼
-┌───────────────────┐
-│ Event Bus:        │
-│ "feedback.new"    │
-└─────────┬─────────┘
-          │
-          ▼
-┌───────────────────┐     ┌───────────────────┐
-│ FeedbackClassifier│────►│ Route to:         │
-│ Agent             │     │ • Bug? → BugFixer │
-│                   │     │ • Q? → Answerer   │
-│                   │     │ • Suggestion? →   │
-│                   │     │   ContentImprover │
-└───────────────────┘     └─────────┬─────────┘
-                                    │
-                                    ▼
-                          ┌───────────────────┐
-                          │ Assigned Agent    │
-                          │ creates PR        │
-                          │ addressing issue  │
-                          └───────────────────┘
-4.3 Pattern: Context Link (Zero Copy-Paste)
+
+### 4.2 FEEDBACK PROCESSING (2 Types)
+
+#### Type 1: Doc-Change Feedback → GitHub PR
+**Trigger:** User comments on specific document content
+**Flow:**
+User comment (Nuxt) → Directus captures metadata (source, doc_id, content) → Event: feedback.doc_change → FeedbackRouter Agent analyzes → Creates GitHub Issue/PR with proposed fix → Normal PR review cycle
+
+#### Type 2: Structured Feedback → Directus
+**Trigger:** User fills form, rates content, general feedback
+**Flow:**
+User feedback (Nuxt form) → Direct to Directus collection feedback → Event: feedback.structured → Agent processes (no GitHub PR needed) → Response stored in Directus
+
+**Decision Rule:**
+| Feedback About | Route To |
+|----------------|----------|
+| Content accuracy, typo, update request | GitHub PR |
+| General opinion, rating, feature request | Directus |
+| Bug report (technical) | GitHub Issue |
+
+### 4.3 Pattern: Context Link (Zero Copy-Paste)
 AI Model wants to review document
         │
         ▼
@@ -273,8 +242,8 @@ AI Model wants to review document
 AI Model can now analyze with full context
 (No copy-paste needed)
 
-5. WORKFLOW STATE MACHINE
-5.1 Document Lifecycle States
+## 5. WORKFLOW STATE MACHINE
+### 5.1 Document Lifecycle States
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                     DOCUMENT STATE MACHINE                              │
 │                                                                         │
@@ -316,27 +285,21 @@ AI Model can now analyze with full context
 │                   └──────────┘                                          │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
-5.2 State Transitions (Who Can Trigger)
-Transition
-Triggerable By
-create_task
-Human, Orchestrator, Event
-start_draft
-Assigned Agent
-submit_pr
-Assigned Agent
-request_changes
-Reviewer Agent, Human
-approve_all
-Reviewer Agent (auto), Human
-re_submit
-Assigned Agent
-merge
-System (auto when approved)
-sync_complete
-System (auto when merge)
 
-6. AGENT REGISTRY SCHEMA
+### 5.2 State Transitions (Who Can Trigger)
+| Transition | Triggerable By |
+|------------|----------------|
+| create_task | Human, Orchestrator, Event |
+| start_draft | Assigned Agent |
+| submit_pr | Assigned Agent |
+| request_changes | Reviewer Agent, Human |
+| approve_all | Reviewer Agent (auto), Human |
+| re_submit | Assigned Agent |
+| merge | System (auto when approved) |
+| sync_complete | System (auto when merge) |
+
+## 6. AGENT REGISTRY SCHEMA
+```json
 {
   "agent_id": "customer-care-v1",
   "name": "CustomerCare Agent",
@@ -377,8 +340,9 @@ System (auto when merge)
     "version": "1.2.0"
   }
 }
+```
 
-7. IMPLEMENTATION PHASES
+## 7. IMPLEMENTATION PHASES
 Phase 1: Foundation (Current - E1 Complete ✅)
 	•	[x] Nuxt + Agency OS UI
 	•	[x] Directus CMS
@@ -406,7 +370,7 @@ Phase 5: Scale & Optimize (E5 - Ongoing)
 	•	[ ] Conflict resolution
 	•	[ ] Analytics & monitoring
 
-8. DESIGN PRINCIPLES
+## 8. DESIGN PRINCIPLES
 	1	GitHub PR = Vùng nháp chuẩn
 	◦	Không tạo "vùng nháp copy" riêng
 	◦	Tận dụng branch/PR/review flow có sẵn
@@ -426,8 +390,166 @@ Phase 5: Scale & Optimize (E5 - Ongoing)
 	◦	Agents chỉ làm được những gì được phép
 	◦	Registry-driven permissions
 
-9. NEXT QUESTIONS (For Phase 2)
+## 9. NEXT QUESTIONS (For Phase 2)
 	1	Docs API: Cloud Run hay Cloud Functions?
 	2	Auth for Context Link: Public hay token-based?
 	3	PR on Nuxt: GitHub API direct hay proxy qua Agent Data?
 	4	First Custom Agents: Nên bắt đầu với agents nào?
+
+---
+
+# LAYER B: EXECUTION SPEC
+
+## B1: HARD RULES (Decision Log)
+
+### R1: SSOT Definition
+| Data Type | SSOT Location | Consumers |
+|-----------|---------------|-----------|
+| **Docs/Markdown** | GitHub (`web-test/docs/`) | Agent Data, Nuxt |
+| **Structured Data** | Directus | Nuxt, Agents |
+| **Vector/Index** | Agent Data | MCP Clients |
+| **State/Workflow** | Agent Data | All |
+
+### R2: Directus Role (Strict)
+- ✅ Structured data UI (forms, tables)
+- ✅ Metadata storage (permissions, status)
+- ✅ Flows automation
+- ❌ KHÔNG là SSOT cho docs Markdown
+- ❌ KHÔNG nằm trong đường đọc docs (Nuxt → GitHub direct)
+
+### R3: Agent Data Two-Zone Architecture
+| Zone | Purpose | Write Access | Read Access |
+|------|---------|--------------|-------------|
+| **Draft** | Proposals, revisions, comments | All Agents | All |
+| **Official** | Verified content | System only (after GH merge) | All |
+
+### R4: PR = Official Draft Space
+- Mọi thay đổi docs đi qua GitHub PR
+- KHÔNG tạo "vùng nháp copy" riêng ngoài PR
+- Branch naming: `docs/<action>-<topic>`
+
+## B2: API CONTRACTS (MVP Phase 1)
+
+### Docs API (Gateway to GitHub)
+
+| Endpoint | Method | Purpose | Response |
+|----------|--------|---------|----------|
+| `/api/docs/tree` | GET | Lấy cấu trúc thư mục | `{folders: [], files: []}` |
+| `/api/docs/file` | GET | Lấy nội dung file | `{path, content, metadata}` |
+| `/api/docs/context` | GET | Context Link (packed) | `{files: [], packed_context}` |
+
+#### Query Parameters
+
+```yaml
+# /api/docs/tree
+ref: string          # main | pr-123 | commit-sha
+path: string         # docs/plans (optional, default: docs/)
+
+# /api/docs/file
+ref: string
+path: string         # Required: docs/plans/q2-2026.md
+
+# /api/docs/context
+ref: string
+paths: string[]      # Multiple files
+token_budget: number # Max tokens for packed context (default: 8000)
+```
+
+### PR API (Phase 2)
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/prs` | GET | List open PRs |
+| `/api/prs/{id}` | GET | PR details + diff |
+| `/api/prs/{id}/comments` | GET/POST | PR comments |
+
+## B3: EVENT SCHEMA (Chuẩn hóa)
+
+### Event Envelope (Bắt buộc)
+```json
+{
+  "event_id": "uuid-v4",
+  "event_type": "docs.pr.merged",
+  "correlation_id": "uuid-v4",
+  "source": "github-webhook | directus-flow | agent-data",
+  "timestamp": "ISO-8601",
+  "payload": { ... }
+}
+```
+
+### Event Types
+| Event | Trigger | Consumer Actions |
+|-------|---------|------------------|
+| docs.pr.created | PR opened | Index draft, notify reviewers |
+| docs.pr.updated | PR pushed | Re-index draft |
+| docs.pr.merged | PR merged | Promote to Official, sync Directus |
+| docs.pr.closed | PR closed (no merge) | Cleanup draft index |
+| feedback.new | Comment on Nuxt | Route to appropriate agent |
+| context.requested | Context Link called | Log for analytics |
+
+### Idempotency Rule
+- Consumer PHẢI check event_id trước khi xử lý
+- Nếu đã xử lý → return cached result
+- Tránh: double PR creation, duplicate index
+
+## B4: GUARDRAILS (Chống Agent Làm Bậy)
+
+### GitHub Protection
+| Rule | Config | Purpose |
+|------|--------|---------|
+| Branch Protection | `main` required PR | Không commit trực tiếp |
+| Required Reviews | 1 approval minimum | Human oversight |
+| Status Checks | CI must pass | Quality gate |
+| CODEOWNERS | `docs/` → @.github/CODEOWNERS | Critical files protection |
+
+### CI Guard Rules
+```yaml
+# .github/workflows/guard.yml
+- name: Prevent Blueprint Deletion
+  run: |
+    DELETED=$(git diff --name-only --diff-filter=D HEAD~1)
+    if echo "$DELETED" | grep -E "BLUEPRINT|CONSTITUTION|LAW"; then
+      echo "❌ Cannot delete protected files"
+      exit 1
+    fi
+```
+
+### Agent Permissions Matrix
+| Agent Tier | Can Create PR | Can Merge | Can Delete Files |
+|------------|---------------|-----------|------------------|
+| Orchestrator | ✅ | ✅ (with approval) | ❌ |
+| Commercial Agent | ✅ | ❌ | ❌ |
+| Custom Agent | ✅ | ❌ | ❌ |
+| AI Model (Readonly) | ❌ | ❌ | ❌ |
+
+## B5: PHASE 1 DoD (Definition of Done)
+
+### Functional Requirements
+| # | Requirement | Acceptance Criteria |
+|---|-------------|---------------------|
+| F1 | Tree View | Hiển thị cấu trúc `docs/` từ GitHub |
+| F2 | Document Viewer | Render Markdown với syntax highlight |
+| F3 | Context Link | Copy button → URL với token_budget |
+| F4 | Branch Selector | Switch giữa `main` và `pr-xxx` |
+
+### Metrics (Đo lường)
+| Metric | Target | How to Measure |
+|--------|--------|----------------|
+| Human Touch Points | < 5% | `(manual_actions / total_workflow_steps) * 100` |
+| Context Accuracy | 100% | `agents_with_sufficient_context / total_agents` |
+| API Latency P95 | < 500ms | Cloud Monitoring |
+
+### NOT in Phase 1 (Defer)
+- [ ] PR diff viewer
+- [ ] Inline comments on docs
+- [ ] Full-text search
+- [ ] Agent Registry UI
+
+## B6: TECHNICAL DEBT & KNOWN ISSUES
+
+### Failure Modes & Mitigation
+| Mode | Risk | Mitigation |
+|------|------|------------|
+| GitHub Rate Limit | High | Cache heavily (Layer A 4.1), use multiple tokens if needed |
+| PR Conflicts | Medium | Rebase strategy (not merge), conflict resolver agent |
+| Token Budget Exceeded | High | "Context Link" must support aggressive packing/summarization |
+| Agent Hallucination | Medium | Strict "Reviewer" agents required before Human loop |
