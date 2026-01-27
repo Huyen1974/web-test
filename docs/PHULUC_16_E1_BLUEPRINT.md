@@ -101,8 +101,8 @@
 
 | ID | Biến | Giá trị | Trạng thái | Ghi chú |
 |----|------|---------|------------|---------|
-| E1 | WEB_URL | `https://ai.incomexsaigoncorp.vn` | ❌ DEFERRED (E2 / Hardening Phase – No Terraform Apply in E1) | We are not injecting/rotating/changing env vars in this phase unless a new decision explicitly authorizes it. |
-| E2 | AGENT_DATA_URL | `https://agent-data-test-pfne2mqwja-as.a.run.app/api` | ❌ DEFERRED (E2 / Hardening Phase – No Terraform Apply in E1) | We are not injecting/rotating/changing env vars in this phase unless a new decision explicitly authorizes it. |
+| E1 | WEB_URL | `https://ai.incomexsaigoncorp.vn` | ✅ INJECTED (2026-01-27) | Injected via WEB18 override. |
+| E2 | AGENT_DATA_URL | `https://agent-data-test-pfne2mqwja-as.a.run.app` | ✅ INJECTED (2026-01-27) | Injected via WEB18 override. |
 | E3 | AGENT_DATA_API_KEY | *(Secret)* | ❌ DEFERRED (E2 / Hardening Phase – No Terraform Apply in E1) | We are not injecting/rotating/changing env vars in this phase unless a new decision explicitly authorizes it. |
 | E4 | FLOWS_ENV_ALLOW_LIST | `WEB_URL,AGENT_DATA_URL,AGENT_DATA_API_KEY,GITHUB_TOKEN` | ❌ DEFERRED (E2 / Hardening Phase – No Terraform Apply in E1) | We are not injecting/rotating/changing env vars in this phase unless a new decision explicitly authorizes it. |
 
@@ -465,3 +465,4 @@ PHASE 3: CONTENT & GO-LIVE
 | 2026-01-26 | **Web 13: Schema Fix** | **SUCCESS**. Added `date_created`, `date_updated` fields to `knowledge_documents`. Local ↔ Cloud sync verified. |
 | 2026-01-26 | **Web 13: Tooling** | **SUCCESS**. Created `dot-sync-check` (hash-based schema comparison). Created `TOOL_INVENTORY.md` audit report. |
 | 2026-01-26 | **Web 13: SSOT Update** | **SUCCESS**. Added NHÓM 8: Hybrid Lean Architecture Status. Documented lessons learned. |
+| 2026-01-27 | **ENV Injection Complete** | AGENT_DATA_URL và FLOWS_ENV_ALLOW_LIST injected vào Directus. Override DEFERRED status để hoàn thành kết nối. |
