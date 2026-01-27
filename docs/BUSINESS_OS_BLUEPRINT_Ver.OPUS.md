@@ -453,7 +453,13 @@ path: string         # Required: docs/plans/q2-2026.md
 ref: string
 paths: string[]      # Multiple files
 token_budget: number # Max tokens for packed context (default: 8000)
-```
+
+### Security & Auth
+| Component | Auth Strategy | Limits |
+|-----------|---------------|--------|
+| **Docs API (Read)** | Public (cached) or Token (if private) | CDN Cache: 1h |
+| **Context Link** | Rate-limited + Optional Temp Token | 100 req/IP/hour; Max 30k tokens/req |
+| **PR Operations** | GitHub App Token / PAT (System) | Strict role-based access |
 
 ### PR API (Phase 2)
 | Endpoint | Method | Purpose |
