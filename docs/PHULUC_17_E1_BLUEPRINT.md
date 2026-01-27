@@ -394,6 +394,7 @@ PHASE B: FLOW WIRING (Directus UI) ───────────────
 │
 ├── B2. ✅ Run test (manual UI run; async by design)
 │       Result: Wiring confirmed
+│       Note: Manual API trigger requires JSON body: `{"collection":"directus_users","keys":["UUID"]}`.
 │
 ├── B3. ✅ Create [DOT] Agent Data Chat Test flow
 │       ID: b13237cb-e5f3-45d0-b83f-739d0a6cb93e

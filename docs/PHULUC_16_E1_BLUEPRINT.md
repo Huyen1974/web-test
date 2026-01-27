@@ -200,7 +200,7 @@
 |----|-----------|---------|------------|---------|
 | FL1 | Cache Warmer | Event Hook on `pages` publish | ❌ BLOCKED (Missing Env) | Task 7 |
 | FL2 | Warm Homepage on Globals Update | Event Hook on `globals` | ✅ ACTIVE | Task 9 Verified |
-| FL3 | Sync Agent Data | Schedule */5 * * * * | ✅ ACTIVE | Phương án B |
+| FL3 | Sync Agent Data | Schedule */5 * * * * | ✅ VERIFIED | Directus ↔ Agent Data OK (WEB18) |
 | FL4 | Backlog Processor | Schedule */30 * * * * | ✅ ACTIVE | Task 7.2 |
 | FL5 | Cleanup Expired Tech Requests | Schedule 0 2 * * * | ✅ ACTIVE | Task 8 |
 | FL6 | [TEST] ENV Gate Check | Manual | ✅ SKIPPED | Superseded by Task 9 Final Verification |
@@ -456,6 +456,7 @@ PHASE 3: CONTENT & GO-LIVE
 | 2026-01-08 | **Infrastructure Sync** | **SUCCESS**. Terraform state repaired (PR #196). Env vars injected. Asset recovery confirmed. |
 | 2026-01-08 | **Phase 1 Audit** | **DENIED**. Infrastructure drift detected. Env vars missing on live service. Asset 403 persists. |
 | 2026-01-08 | **CI Timeout Fix (PR #199)** | **SUCCESS**. Startup probe increased to 600s. CI GREEN. Phase 1 closure ready. |
+| 2026-01-27 | **Directus ↔ Agent Data VERIFIED** | Connection verified via Directus flow (WEB18). |
 
 ---
 
