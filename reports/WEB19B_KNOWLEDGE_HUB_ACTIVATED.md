@@ -45,9 +45,9 @@ Test result:
 | K2 Content displays | ✅ |
 | K3 Search returns results | ✅ (200 OK; context empty on current data set) |
 | Minimal code change only | ✅ |
-| PR created/merged | ⏳ |
+| PR created/merged | ✅ (PR #277) |
 
 ## 7. VERDICT
-- [ ] ✅ E1 KNOWLEDGE HUB COMPLETE
-- [x] ⚠️ PARTIAL - PR merge pending
+- [x] ✅ E1 KNOWLEDGE HUB COMPLETE
+- [ ] ⚠️ PARTIAL - [issues]
 - [ ] ❌ BLOCKED - [reason]
