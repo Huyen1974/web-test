@@ -4,6 +4,26 @@ import { getAuth } from 'firebase/auth';
 export default defineNuxtPlugin((nuxtApp) => {
     const config = useRuntimeConfig();
 
+    const hasFirebaseConfig = Boolean(
+        config.public.firebase.apiKey &&
+            config.public.firebase.authDomain &&
+            config.public.firebase.projectId,
+    );
+
+    if (!hasFirebaseConfig) {
+        if (import.meta.dev) {
+            // eslint-disable-next-line no-console
+            console.warn('[Firebase] Missing config; skipping initialization.');
+        }
+
+        return {
+            provide: {
+                auth: null,
+                firebaseApp: null,
+            },
+        };
+    }
+
     const firebaseConfig = {
         apiKey: config.public.firebase.apiKey,
         authDomain: config.public.firebase.authDomain,
