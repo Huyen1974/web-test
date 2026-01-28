@@ -38,7 +38,7 @@ Call log: waiting for locator('input[name="email"]')
 |--------|--------|
 | Fix type | code fix (guard Firebase init when config missing) |
 | PR | #278 |
-| Result | CI pending |
+| Result | CI green, merged (commit e6b04d1ada66b75fe2319228f450f8d3eb8a21ab) |
 
 ## 3. DATA POPULATION
 
@@ -83,7 +83,7 @@ Call log: waiting for locator('input[name="email"]')
 | Tiêu chí | Result |
 |----------|--------|
 | CI failure diagnosed | ✅ |
-| CI fixed or documented | ⚠️ PR open, CI pending |
+| CI fixed or documented | ✅ |
 | Data indexed | ❌ |
 | Search returns results | ❌ |
 
