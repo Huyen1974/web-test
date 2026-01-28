@@ -65,7 +65,7 @@ export class AgentDataClient {
 	}
 
 	/**
-	 * Search for documents
+	 * Search for documents via /chat
 	 * Returns IDs only - caller must fetch actual content from Directus
 	 */
 	async search(request: AgentDataSearchRequest): Promise<AgentDataSearchResponse> {
@@ -79,24 +79,23 @@ export class AgentDataClient {
 		}
 
 		try {
-			const params = new URLSearchParams({
-				q: request.query,
-				...(request.zone && { zone: request.zone }),
-				...(request.subZone && { subZone: request.subZone }),
-				...(request.topic && { topic: request.topic }),
-				...(request.limit && { limit: request.limit.toString() }),
-				...(request.language && { language: request.language }),
-			});
+			const tags = [request.zone, request.subZone, request.topic].filter(Boolean) as string[];
 
-			const url = joinURL(this.config.baseUrl, '/search');
-			const fullUrl = `${url}?${params.toString()}`;
+			const url = joinURL(this.config.baseUrl, '/chat');
+			const payload: Record<string, unknown> = {
+				query: request.query,
+				...(tags.length > 0 ? { filters: { tags } } : {}),
+				...(request.language ? { context_hints: { language: request.language } } : {}),
+				...(request.limit ? { top_k: request.limit } : {}),
+			};
 
-			const response = await fetch(fullUrl, {
-				method: 'GET',
+			const response = await fetch(url, {
+				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 					...(this.config.apiKey && { Authorization: `Bearer ${this.config.apiKey}` }),
 				},
+				body: JSON.stringify(payload),
 				signal: AbortSignal.timeout(this.config.timeout || 5000),
 			});
 
@@ -111,16 +110,15 @@ export class AgentDataClient {
 			}
 
 			const data = await response.json();
+			const context = Array.isArray(data.context) ? data.context : [];
 
-			// Map response to our expected format
-			// Adjust field names based on actual Agent Data API response
 			return {
-				results: (data.results || []).map((item: any) => ({
+				results: context.map((item: any) => ({
 					documentId: item.document_id || item.id,
 					score: item.score || 0,
-					source: item.source || 'knowledge',
+					source: item.metadata?.source || 'knowledge',
 				})),
-				total: data.total || 0,
+				total: context.length,
 				query: request.query,
 			};
 		} catch (error) {
