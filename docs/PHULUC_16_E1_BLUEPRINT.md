@@ -244,9 +244,11 @@ Reasoning:
 
 | Page | Route | Status | Notes |
 |------|-------|--------|-------|
-| List | `/knowledge` | ✅ OK | Tree structure loads |
-| Tree | `/knowledge/[slug]` | ✅ OK | Dynamic routing works |
-| Detail | `/knowledge/[slug]` | ✅ OK | Content renders |
+| List | `/knowledge` | ✅ OK | Tree structure loads (knowledge_documents) |
+| Tree | `/knowledge/[slug]` | ✅ OK | Dynamic routing works (knowledge_documents) |
+| Detail | `/knowledge/[slug]` | ✅ OK | Content renders from knowledge_documents |
+
+**Decision:** Knowledge Hub uses `knowledge_documents` as primary data source (2026-01-28). `agent_views` deprecated for Knowledge Hub.
 
 ### Schema Changes (Web 13)
 
@@ -327,9 +329,9 @@ Reasoning:
 ### TASKS SUMMARY
 | Code | Task Name | Status | Description |
 |------|-----------|--------|-------------|
-| K1 | Treeview Logic | ❌ | Fetch & Render Folder Tree (Zones/Topics) from `agent_views` |
-| K2 | Content Renderer | ❌ | Dynamic Routing `[...permalink].vue` to render content |
-| K3 | Search UI | ❌ | Basic keyword search interface |
+| K1 | Treeview Logic | ✅ | Fetch & Render Folder Tree (Zones/Topics) from `knowledge_documents` |
+| K2 | Content Renderer | ✅ | Dynamic Routing `/knowledge/[slug]` renders `knowledge_documents` |
+| K3 | Search UI | ✅ | Search via Agent Data `/chat` endpoint |
 
 ### PHASE 1: BOOTSTRAP
 
@@ -456,6 +458,7 @@ PHASE 3: CONTENT & GO-LIVE
 | 2026-01-08 | **Infrastructure Sync** | **SUCCESS**. Terraform state repaired (PR #196). Env vars injected. Asset recovery confirmed. |
 | 2026-01-08 | **Phase 1 Audit** | **DENIED**. Infrastructure drift detected. Env vars missing on live service. Asset 403 persists. |
 | 2026-01-08 | **CI Timeout Fix (PR #199)** | **SUCCESS**. Startup probe increased to 600s. CI GREEN. Phase 1 closure ready. |
+| 2026-01-28 | **WEB19B: Knowledge Hub Activation** | Approved `knowledge_documents` as source and `/chat` as search endpoint. |
 
 ---
 
