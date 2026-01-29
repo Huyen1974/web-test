@@ -1,5 +1,6 @@
 import type { Config } from 'tailwindcss';
 import tailwindcssForms from '@tailwindcss/forms';
+import tailwindcssTypography from '@tailwindcss/typography';
 import defaultTheme from 'tailwindcss/defaultTheme';
 
 export default {
@@ -50,6 +51,7 @@ export default {
 	},
 	plugins: [
 		tailwindcssForms,
+		tailwindcssTypography,
 		// Formkit Plugin for Tailwind
 		// https://formkit.com/guides/create-a-tailwind-theme
 		// require('@formkit/themes/tailwindcss'),
