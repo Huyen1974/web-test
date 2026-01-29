@@ -8,7 +8,7 @@ export interface Theme {
 	fonts: {
 		display: string;
 		sans: string;
-		code: string;
+		mono: string;
 		signature: string;
 	};
 }
@@ -26,7 +26,7 @@ export const theme = {
 	fonts: {
 		display: 'Poppins',
 		sans: 'Inter',
-		code: 'Fira Code',
+		mono: 'Fira Code',
 		signature: 'Nothing You Could Do',
 	},
 } as Theme;
