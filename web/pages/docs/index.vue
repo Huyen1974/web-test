@@ -20,6 +20,9 @@ const router = useRouter();
 // Search state
 const searchQuery = ref('');
 
+// Mobile sidebar state
+const sidebarOpen = ref(false);
+
 // Selected document state
 const selectedDoc = ref<AgentView | null>(null);
 const selectedPath = ref('');
@@ -54,6 +57,8 @@ function selectDocument(node: DocsTreeNode) {
 	if (node.document) {
 		selectedDoc.value = node.document;
 		selectedPath.value = node.path;
+		// Close mobile sidebar
+		sidebarOpen.value = false;
 		// Update URL without navigation
 		router.replace({ query: { doc: node.document.source_id } });
 	}
@@ -141,11 +146,25 @@ useServerSeoMeta({
 				</div>
 			</header>
 
+			<!-- Mobile sidebar toggle -->
+			<div class="lg:hidden mt-6">
+				<button
+					class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+					@click="sidebarOpen = !sidebarOpen"
+				>
+					<Icon :name="sidebarOpen ? 'heroicons:x-mark' : 'heroicons:bars-3'" class="w-5 h-5" />
+					{{ sidebarOpen ? 'Close' : 'Browse Contents' }}
+				</button>
+			</div>
+
 			<!-- Two-column layout -->
 			<div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mt-8">
 				<!-- Left sidebar: Tree Navigation -->
-				<aside class="lg:col-span-1">
-					<div class="sticky top-4 max-h-[calc(100vh-8rem)] overflow-auto">
+				<aside
+					class="lg:col-span-1"
+					:class="{ 'hidden lg:block': !sidebarOpen }"
+				>
+					<div class="sticky top-4 max-h-[calc(100vh-8rem)] overflow-auto bg-white dark:bg-gray-900 lg:bg-transparent rounded-lg p-4 lg:p-0 border border-gray-200 dark:border-gray-700 lg:border-0">
 						<h2 class="text-sm font-semibold text-gray-900 dark:text-white mb-4 uppercase tracking-wider">
 							Contents
 						</h2>
