@@ -29,6 +29,7 @@ import type { Page, PageBlock, Category, Form, Post, Team, Testimonial, PagesPro
 import type { Inbox, HelpArticle, HelpCollection, HelpFeedback } from './help';
 import type { File, User } from './system';
 import type { ContentRequest, KnowledgeDocument } from './content-requests';
+import type { AgentView } from './agent-views';
 import type {
 	Conversation,
 	Message,
@@ -149,6 +150,9 @@ export interface Schema {
 	// E1: Content Operations (Growth Zone)
 	content_requests: ContentRequest[];
 	knowledge_documents: KnowledgeDocument[];
+
+	// E1: GitHub-synced Documentation (WEB-20)
+	agent_views: AgentView[];
 
 	// System
 	directus_files: File[];
