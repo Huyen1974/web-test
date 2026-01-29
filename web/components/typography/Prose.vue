@@ -73,7 +73,7 @@ onMounted(() => {
 		'prose-code:before:content-none prose-code:after:content-none',
 		'prose-code:bg-gray-100 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:font-mono',
 		'dark:prose-code:bg-gray-800',
-		'prose-pre:bg-gray-900 prose-pre:text-gray-100 prose-pre:rounded-lg prose-pre:overflow-x-auto',
+		'prose-pre:bg-gray-900 prose-pre:text-gray-100 prose-pre:rounded-lg prose-pre:overflow-x-auto prose-pre:whitespace-pre',
 		'dark:prose-pre:bg-gray-950 dark:prose-pre:border dark:prose-pre:border-gray-800',
 		// Tables - proper borders and spacing
 		'prose-table:border-collapse prose-table:w-full prose-table:my-6',
