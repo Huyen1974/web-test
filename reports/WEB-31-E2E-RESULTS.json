@@ -1,0 +1,126 @@
+{
+  "report": "WEB-31-E2E-RESULTS",
+  "generated": "2026-01-30T08:52:00Z",
+  "tool": "dot-e2e-test v1.0.0",
+  "summary": {
+    "total": 10,
+    "passed": 8,
+    "failed": 2,
+    "skipped": 0,
+    "status": "PARTIAL_PASS"
+  },
+  "tests": [
+    {
+      "id": "T1.1",
+      "category": "Static Files",
+      "name": "llms.txt",
+      "endpoint": "https://ai.incomexsaigoncorp.vn/llms.txt",
+      "method": "GET",
+      "expected": 200,
+      "actual": 200,
+      "status": "PASS"
+    },
+    {
+      "id": "T1.2",
+      "category": "Static Files",
+      "name": "openapi.yaml",
+      "endpoint": "https://ai.incomexsaigoncorp.vn/agent_data_openapi.yaml",
+      "method": "GET",
+      "expected": 200,
+      "actual": 200,
+      "status": "PASS"
+    },
+    {
+      "id": "T2.1",
+      "category": "Nuxt Proxy (No Auth)",
+      "name": "/api/ai/info (public)",
+      "endpoint": "https://ai.incomexsaigoncorp.vn/api/ai/info",
+      "method": "GET",
+      "expected": 200,
+      "actual": 200,
+      "status": "PASS"
+    },
+    {
+      "id": "T2.2",
+      "category": "Nuxt Proxy (No Auth)",
+      "name": "/api/ai/search (no auth)",
+      "endpoint": "https://ai.incomexsaigoncorp.vn/api/ai/search",
+      "method": "POST",
+      "expected": 401,
+      "actual": 503,
+      "status": "FAIL",
+      "note": "Agent Data backend unavailable - returns 503 instead of 401"
+    },
+    {
+      "id": "T3.1",
+      "category": "Nuxt Proxy (With Auth)",
+      "name": "/api/ai/search (with auth)",
+      "endpoint": "https://ai.incomexsaigoncorp.vn/api/ai/search",
+      "method": "POST",
+      "expected": 200,
+      "actual": 503,
+      "status": "FAIL",
+      "note": "Agent Data backend IAM protected or unavailable"
+    },
+    {
+      "id": "T4.1",
+      "category": "Directus Read (Public)",
+      "name": "agent_views (public)",
+      "endpoint": "https://directus-test-pfne2mqwja-as.a.run.app/items/agent_views",
+      "method": "GET",
+      "expected": 200,
+      "actual": 200,
+      "status": "PASS"
+    },
+    {
+      "id": "T5.1",
+      "category": "Directus Auth Required",
+      "name": "feedbacks (no auth)",
+      "endpoint": "https://directus-test-pfne2mqwja-as.a.run.app/items/feedbacks",
+      "method": "POST",
+      "expected": 403,
+      "actual": 403,
+      "status": "PASS"
+    },
+    {
+      "id": "T6.1",
+      "category": "Directus Write (Full E2E)",
+      "name": "Create feedback",
+      "endpoint": "https://directus-test-pfne2mqwja-as.a.run.app/items/feedbacks",
+      "method": "POST",
+      "expected": "id returned",
+      "actual": "id: 5",
+      "status": "PASS"
+    },
+    {
+      "id": "T6.2",
+      "category": "Directus Write (Full E2E)",
+      "name": "Read feedback",
+      "endpoint": "https://directus-test-pfne2mqwja-as.a.run.app/items/feedbacks/{id}",
+      "method": "GET",
+      "expected": 200,
+      "actual": 200,
+      "status": "PASS"
+    },
+    {
+      "id": "T6.3",
+      "category": "Directus Write (Full E2E)",
+      "name": "Delete feedback (cleanup)",
+      "endpoint": "https://directus-test-pfne2mqwja-as.a.run.app/items/feedbacks/{id}",
+      "method": "DELETE",
+      "expected": 204,
+      "actual": 204,
+      "status": "PASS",
+      "note": "Test record cleaned up successfully"
+    }
+  ],
+  "issues": [
+    {
+      "severity": "HIGH",
+      "component": "Agent Data Service",
+      "issue": "Returns 503 (Service Unavailable) via Nuxt proxy",
+      "direct_check": "HTTP 403 (IAM protected)",
+      "recommendation": "Verify Cloud Run service is running and properly configured"
+    }
+  ]
+}
