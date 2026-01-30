@@ -1,0 +1,228 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-ai-gateway-setup - Setup AI_GATEWAY_TOKEN in Google Secret Manager
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-01-30): Initial version for WEB-28-AUTOMATION
+#     - Generates secure 64-char token
+#     - Creates/updates secret in GCP Secret Manager
+#     - Grants access to Cloud Run service account
+#     - Prints instructions for Cloud Run update
+# =============================================================================
+
+set -euo pipefail
+
+VERSION="1.0.0"
+SECRET_NAME="AI_GATEWAY_TOKEN"
+PROJECT_ID="${GCP_PROJECT_ID:-github-chatgpt-ggcloud}"
+SERVICE_ACCOUNT="chatgpt-deployer@${PROJECT_ID}.iam.gserviceaccount.com"
+CLOUD_RUN_SERVICE="nuxt-ssr-pfne2mqwja"
+REGION="asia-southeast1"
+
+# Logging functions
+log_info() { echo "ℹ️  [INFO] $1"; }
+log_ok() { echo "✅ [OK] $1"; }
+log_warn() { echo "⚠️  [WARN] $1"; }
+log_skip() { echo "⏭️  [SKIP] $1"; }
+log_err() { echo "❌ [ERR] $1" >&2; }
+
+require_cmds() {
+  for cmd in gcloud openssl; do
+    command -v "$cmd" >/dev/null 2>&1 || { log_err "Missing required command: $cmd"; exit 1; }
+  done
+}
+
+check_gcloud_auth() {
+  if ! gcloud auth print-identity-token &>/dev/null; then
+    log_err "gcloud CLI not authenticated. Run: gcloud auth login"
+    exit 1
+  fi
+}
+
+secret_exists() {
+  gcloud secrets describe "$SECRET_NAME" --project="$PROJECT_ID" &>/dev/null
+}
+
+create_secret() {
+  local token="$1"
+
+  log_info "Creating secret ${SECRET_NAME} in project ${PROJECT_ID}..."
+
+  echo -n "$token" | gcloud secrets create "$SECRET_NAME" \
+    --project="$PROJECT_ID" \
+    --data-file=- \
+    --replication-policy=automatic
+
+  log_ok "Secret ${SECRET_NAME} created"
+}
+
+update_secret() {
+  local token="$1"
+
+  log_info "Adding new version to secret ${SECRET_NAME}..."
+
+  echo -n "$token" | gcloud secrets versions add "$SECRET_NAME" \
+    --project="$PROJECT_ID" \
+    --data-file=-
+
+  log_ok "New secret version added"
+}
+
+grant_access() {
+  log_info "Granting access to service account ${SERVICE_ACCOUNT}..."
+
+  gcloud secrets add-iam-policy-binding "$SECRET_NAME" \
+    --project="$PROJECT_ID" \
+    --member="serviceAccount:${SERVICE_ACCOUNT}" \
+    --role="roles/secretmanager.secretAccessor" \
+    --quiet
+
+  log_ok "Access granted to ${SERVICE_ACCOUNT}"
+}
+
+show_help() {
+  cat << EOF
+dot-ai-gateway-setup v${VERSION} - Setup AI_GATEWAY_TOKEN in Google Secret Manager
+
+Usage:
+  dot-ai-gateway-setup [options]
+
+Options:
+  --dry-run         Show what would be done without making changes
+  --rotate          Rotate existing token (add new version)
+  --project ID      GCP project ID (default: github-chatgpt-ggcloud)
+  --help, -h        Show this help message
+
+Prerequisites:
+  - gcloud CLI installed and authenticated
+  - Permissions to create secrets and modify IAM
+
+Environment Variables:
+  GCP_PROJECT_ID    Override default project ID
+
+What it does:
+  1. Generates a secure 64-character random token
+  2. Creates/updates secret in Google Secret Manager
+  3. Grants Cloud Run service account access to read secret
+  4. Prints instructions for Cloud Run deployment
+
+EOF
+}
+
+main() {
+  local dry_run=false
+  local rotate=false
+
+  # Parse arguments
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h)
+        show_help
+        exit 0
+        ;;
+      --dry-run)
+        dry_run=true
+        ;;
+      --rotate)
+        rotate=true
+        ;;
+      --project)
+        # Next arg handling would go here
+        ;;
+      --project=*)
+        PROJECT_ID="${arg#*=}"
+        SERVICE_ACCOUNT="chatgpt-deployer@${PROJECT_ID}.iam.gserviceaccount.com"
+        ;;
+    esac
+  done
+
+  require_cmds
+
+  echo "========================================="
+  echo "DOT Tool: AI Gateway Setup v${VERSION}"
+  echo "========================================="
+  echo ""
+  echo "🔧 Project:         ${PROJECT_ID}"
+  echo "🔐 Secret:          ${SECRET_NAME}"
+  echo "👤 Service Account: ${SERVICE_ACCOUNT}"
+  echo ""
+
+  if [[ "$dry_run" == "true" ]]; then
+    log_warn "DRY RUN MODE - No changes will be made"
+    echo ""
+  fi
+
+  # Check gcloud auth
+  if [[ "$dry_run" != "true" ]]; then
+    check_gcloud_auth
+  fi
+
+  # Generate token
+  log_info "Generating secure token (64 chars)..."
+  local token
+  token=$(openssl rand -base64 48 | tr -d '\n' | head -c 64)
+
+  if [[ "$dry_run" == "true" ]]; then
+    log_ok "Would generate token: ${token:0:8}..."
+  else
+    log_ok "Token generated: ${token:0:8}..."
+  fi
+
+  # Check if secret exists
+  if secret_exists; then
+    if [[ "$rotate" == "true" ]]; then
+      if [[ "$dry_run" == "true" ]]; then
+        log_info "Would add new version to existing secret"
+      else
+        update_secret "$token"
+      fi
+    else
+      log_skip "Secret ${SECRET_NAME} already exists"
+      log_info "Use --rotate to add a new version"
+      echo ""
+      echo "========================================="
+      echo "DOT Tool: AI Gateway Setup - SKIPPED"
+      echo "========================================="
+      exit 0
+    fi
+  else
+    if [[ "$dry_run" == "true" ]]; then
+      log_info "Would create secret ${SECRET_NAME}"
+    else
+      create_secret "$token"
+    fi
+  fi
+
+  # Grant access to service account
+  if [[ "$dry_run" == "true" ]]; then
+    log_info "Would grant access to ${SERVICE_ACCOUNT}"
+  else
+    grant_access
+  fi
+
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: AI Gateway Setup - COMPLETE"
+  echo "========================================="
+  echo ""
+
+  if [[ "$dry_run" != "true" ]]; then
+    echo "🔑 AI GATEWAY TOKEN:"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "$token"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+  fi
+
+  echo "⚠️  NEXT STEP - Redeploy Cloud Run to pick up new secret:"
+  echo ""
+  echo "   gcloud run services update ${CLOUD_RUN_SERVICE} \\"
+  echo "     --region=${REGION} \\"
+  echo "     --update-secrets=AI_GATEWAY_TOKEN=${SECRET_NAME}:latest"
+  echo ""
+  echo "Or redeploy via GitHub Actions (CI/CD will pick up the secret)"
+  echo ""
+}
+
+main "$@"
