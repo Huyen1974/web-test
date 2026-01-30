@@ -1,6 +1,23 @@
 
 ---
 
+## ADR-007: Universal Feedback System (UFS) as Core (2026-01-30)
+
+### Status
+ACCEPTED
+
+### Context
+- Need a single feedback SSOT across Business OS
+- UFS design is defined in `docs/FEEDBACK_SYSTEM.md`
+
+### Decision
+- Adopt UFS as a core architecture component for Business OS
+- Reference SSOT design: `docs/FEEDBACK_SYSTEM.md`
+
+### Consequences
+- Feedback features must align with UFS schema and flows
+- Future modules must reference the UFS SSOT
+
 ## ADR-006: Directus Boot Optimization (2026-01-12)
 
 ### Status
@@ -27,4 +44,3 @@ ACCEPTED
 | Cold Start | 172s | 20s |
 | RAM | 2048Mi | 1024Mi |
 | ops-smoke | UNSTABLE | STABLE |
-
