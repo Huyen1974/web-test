@@ -106,7 +106,15 @@ export default defineEventHandler(async (event) => {
 	let retryCount = 0;
 
 	// Check if Agent Data is enabled
-	if (!config.public.agentData?.enabled || !config.public.agentData?.baseUrl) {
+	// Read env vars directly (server-side) because runtimeConfig.public is bundled at build time
+	const agentDataEnabled =
+		process.env.NUXT_PUBLIC_AGENT_DATA_ENABLED === 'true' ||
+		config.public.agentData?.enabled;
+	const agentDataBaseUrl =
+		process.env.NUXT_PUBLIC_AGENT_DATA_BASE_URL ||
+		config.public.agentData?.baseUrl;
+
+	if (!agentDataEnabled || !agentDataBaseUrl) {
 		logAudit({
 			timestamp: new Date().toISOString(),
 			endpoint: '/api/ai/search',
@@ -116,7 +124,7 @@ export default defineEventHandler(async (event) => {
 			ip,
 			user_agent: userAgent,
 			status: 'error',
-			error: 'Agent Data service disabled',
+			error: `Agent Data service disabled (enabled=${agentDataEnabled}, baseUrl=${!!agentDataBaseUrl})`,
 		});
 
 		throw createError({
@@ -234,7 +242,8 @@ export default defineEventHandler(async (event) => {
 	};
 
 	try {
-		const baseUrl = config.public.agentData.baseUrl;
+		// Use the env var-aware baseUrl we already extracted
+		const baseUrl = agentDataBaseUrl;
 		const apiKey = config.agentData?.apiKey;
 
 		// Get the Cloud Run service URL for Identity Token audience
