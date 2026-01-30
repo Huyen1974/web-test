@@ -78,7 +78,12 @@ jobs:
             --cpu=1 \
             --min-instances=0 \
             --max-instances=3 \
-            --set-env-vars="NODE_ENV=production,NUXT_PUBLIC_SITE_URL=https://ai.incomexsaigoncorp.vn,NUXT_PUBLIC_DIRECTUS_URL=https://directus-test-pfne2mqwja-as.a.run.app"
+            --set-env-vars="NODE_ENV=production" \
+            --set-env-vars="NUXT_PUBLIC_SITE_URL=https://ai.incomexsaigoncorp.vn" \
+            --set-env-vars="NUXT_PUBLIC_DIRECTUS_URL=https://directus-test-pfne2mqwja-as.a.run.app" \
+            --set-env-vars="NUXT_PUBLIC_AGENT_DATA_BASE_URL=https://agent-data-test-pfne2mqwja-as.a.run.app" \
+            --set-env-vars="NUXT_PUBLIC_AGENT_DATA_ENABLED=true" \
+            --update-secrets="AI_GATEWAY_TOKEN=AI_GATEWAY_TOKEN:latest"
 
   # ===========================================================================
   # Deploy Firebase Hosting (Static Assets Only + Cloud Run Rewrite)
