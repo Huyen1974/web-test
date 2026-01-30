@@ -142,6 +142,32 @@ export DIRECTUS_ADMIN_PASSWORD="your-password"
 ./dot/bin/dot-ai-bridge-check --cloud
 ```
 
+### Zero-Touch Automation Tools (WEB-30)
+
+| Tool | Purpose | Flags | Idempotent |
+| --- | --- | --- | --- |
+| `dot-permissions-setup` | Configure AI_Agent role permissions | `--local`, `--cloud`, `--dry-run` | Yes |
+| `dot-ai-manifest` | Generate AI integration manifest with tokens | `--json` | Yes |
+| `dot-e2e-test` | Full end-to-end test of AI Gateway | `--skip-write`, `--verbose` | Yes |
+
+**Quick Start (WEB-30 Zero-Touch):**
+```bash
+# Set Directus admin password
+export DIRECTUS_ADMIN_PASSWORD="your-password"
+
+# Configure permissions for AI_Agent
+./dot/bin/dot-permissions-setup --cloud
+
+# Generate manifest for GPT/Gemini integration
+./dot/bin/dot-ai-manifest
+
+# Run E2E tests
+./dot/bin/dot-e2e-test
+```
+
+**Flow Specs (WEB-30):**
+- `dot/specs/feedback_notification_flow.v2.json` - Feedback action request handler with webhook
+
 ### Local Development Tools
 
 | Tool | Purpose | Options |
