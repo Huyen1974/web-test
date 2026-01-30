@@ -1,0 +1,409 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-ai-user-setup - Create AI_Agent role and user in Directus
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-01-30): Initial version for WEB-28-AUTOMATION
+#     - Creates AI_Agent role with appropriate permissions
+#     - Creates ai_agent@system.local user
+#     - Generates and outputs static token
+#     - Idempotent: skips existing resources
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOT_AUTH="${SCRIPT_DIR}/dot-auth"
+
+# Source environment configuration
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+ROLE_NAME="AI_Agent"
+USER_EMAIL="ai_agent@system.local"
+
+# Logging functions
+log_info() { echo "ℹ️  [INFO] $1"; }
+log_ok() { echo "✅ [OK] $1"; }
+log_warn() { echo "⚠️  [WARN] $1"; }
+log_skip() { echo "⏭️  [SKIP] $1"; }
+log_err() { echo "❌ [ERR] $1" >&2; }
+
+require_cmds() {
+  for cmd in curl jq openssl; do
+    command -v "$cmd" >/dev/null 2>&1 || { log_err "Missing required command: $cmd"; exit 1; }
+  done
+}
+
+api_request() {
+  local method="$1"
+  local url="$2"
+  local data="${3-}"
+  local resp
+
+  if [[ -n "${data-}" ]]; then
+    resp=$(curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "$data" \
+      -w "\n%{http_code}")
+  else
+    resp=$(curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -w "\n%{http_code}")
+  fi
+
+  printf '%s' "$resp"
+}
+
+get_role_id() {
+  local role_name="$1"
+  local resp body code
+
+  resp=$(api_request GET "${BASE_URL}/roles")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" == "200" ]]; then
+    echo "$body" | jq -r --arg name "$role_name" '.data[]? | select(.name == $name) | .id // empty'
+  else
+    echo ""
+  fi
+}
+
+get_user_id() {
+  local email="$1"
+  local resp body code
+
+  resp=$(api_request GET "${BASE_URL}/users?filter[email][_eq]=${email}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" == "200" ]]; then
+    echo "$body" | jq -r '.data[0]?.id // empty'
+  else
+    echo ""
+  fi
+}
+
+create_role() {
+  local payload resp body code
+
+  payload=$(jq -nc '{
+    name: "AI_Agent",
+    description: "Role for external AI models (GPT, Gemini, Claude) - Created by DOT",
+    admin_access: false,
+    app_access: false
+  }')
+
+  log_info "Creating role ${ROLE_NAME}..."
+  resp=$(api_request POST "${BASE_URL}/roles" "$payload")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to create role ${ROLE_NAME} (HTTP $code)"
+    echo "$body" | head -c 300 >&2
+    exit 1
+  fi
+
+  local role_id
+  role_id=$(echo "$body" | jq -r '.data.id // empty')
+  log_ok "Role ${ROLE_NAME} created (ID: ${role_id})"
+  echo "$role_id"
+}
+
+setup_permissions() {
+  local role_id="$1"
+
+  log_info "Setting up permissions for ${ROLE_NAME}..."
+
+  # Permission: feedbacks - CREATE (limited fields)
+  local feedback_create
+  feedback_create=$(jq -nc --arg role "$role_id" '{
+    role: $role,
+    collection: "feedbacks",
+    action: "create",
+    fields: ["feedback_type", "content", "context_snippet", "linked_entity_ref", "entity_type", "source_model", "fingerprint_id", "metadata", "parent_id"],
+    permissions: {}
+  }')
+
+  local resp code
+  resp=$(api_request POST "${BASE_URL}/permissions" "$feedback_create")
+  code="${resp##*$'\n'}"
+  if [[ "$code" == "200" ]]; then
+    log_ok "Permission: feedbacks.create"
+  else
+    log_warn "Could not set feedbacks.create permission (HTTP $code)"
+  fi
+
+  # Permission: feedbacks - READ (non-archived, own records)
+  local feedback_read
+  feedback_read=$(jq -nc --arg role "$role_id" '{
+    role: $role,
+    collection: "feedbacks",
+    action: "read",
+    fields: ["*"],
+    permissions: {
+      "_and": [
+        {"status": {"_neq": "rejected"}}
+      ]
+    }
+  }')
+
+  resp=$(api_request POST "${BASE_URL}/permissions" "$feedback_read")
+  code="${resp##*$'\n'}"
+  if [[ "$code" == "200" ]]; then
+    log_ok "Permission: feedbacks.read"
+  else
+    log_warn "Could not set feedbacks.read permission (HTTP $code)"
+  fi
+
+  # Permission: agent_views - READ (public docs)
+  local agent_views_read
+  agent_views_read=$(jq -nc --arg role "$role_id" '{
+    role: $role,
+    collection: "agent_views",
+    action: "read",
+    fields: ["*"],
+    permissions: {
+      "status": {"_eq": "published"}
+    }
+  }')
+
+  resp=$(api_request POST "${BASE_URL}/permissions" "$agent_views_read")
+  code="${resp##*$'\n'}"
+  if [[ "$code" == "200" ]]; then
+    log_ok "Permission: agent_views.read"
+  else
+    log_warn "Could not set agent_views.read permission (HTTP $code)"
+  fi
+}
+
+create_user() {
+  local role_id="$1"
+  local password token payload resp body code
+
+  # Generate secure password (user won't use it, only token)
+  password=$(openssl rand -base64 32)
+
+  # Generate static token
+  token=$(openssl rand -hex 32)
+
+  payload=$(jq -nc \
+    --arg email "$USER_EMAIL" \
+    --arg password "$password" \
+    --arg role "$role_id" \
+    --arg token "$token" \
+    '{
+      email: $email,
+      password: $password,
+      first_name: "AI",
+      last_name: "Agent",
+      role: $role,
+      status: "active",
+      token: $token
+    }')
+
+  log_info "Creating user ${USER_EMAIL}..."
+  resp=$(api_request POST "${BASE_URL}/users" "$payload")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to create user ${USER_EMAIL} (HTTP $code)"
+    echo "$body" | head -c 300 >&2
+    exit 1
+  fi
+
+  local user_id
+  user_id=$(echo "$body" | jq -r '.data.id // empty')
+  log_ok "User ${USER_EMAIL} created (ID: ${user_id})"
+
+  # Output the token
+  echo "$token"
+}
+
+get_user_token() {
+  local user_id="$1"
+  local resp body code
+
+  resp=$(api_request GET "${BASE_URL}/users/${user_id}?fields=token")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" == "200" ]]; then
+    echo "$body" | jq -r '.data.token // empty'
+  else
+    echo ""
+  fi
+}
+
+regenerate_token() {
+  local user_id="$1"
+  local token resp body code
+
+  token=$(openssl rand -hex 32)
+
+  local payload
+  payload=$(jq -nc --arg token "$token" '{token: $token}')
+
+  log_info "Regenerating token for user..."
+  resp=$(api_request PATCH "${BASE_URL}/users/${user_id}" "$payload")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" == "200" ]]; then
+    log_ok "Token regenerated"
+    echo "$token"
+  else
+    log_err "Failed to regenerate token (HTTP $code)"
+    echo ""
+  fi
+}
+
+show_help() {
+  cat << EOF
+dot-ai-user-setup v${VERSION} - Setup AI_Agent role and user in Directus
+
+Usage:
+  dot-ai-user-setup [options]
+
+Options:
+  --local           Use local development environment
+  --cloud           Use cloud/production environment (default)
+  --regenerate      Regenerate token for existing user
+  --dry-run         Show what would be done without making changes
+  --help, -h        Show this help message
+
+Creates:
+  - Role: AI_Agent (no admin/app access, API only)
+  - User: ai_agent@system.local with static token
+  - Permissions:
+    - feedbacks: CREATE (limited fields), READ (non-rejected)
+    - agent_views: READ (published only)
+
+Output:
+  Prints the static token to stdout for Secret Manager storage.
+
+EOF
+  show_environment_help
+}
+
+main() {
+  local dry_run=false
+  local regenerate=false
+
+  # Parse arguments
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h)
+        show_help
+        exit 0
+        ;;
+      --dry-run)
+        dry_run=true
+        ;;
+      --regenerate)
+        regenerate=true
+        ;;
+    esac
+  done
+
+  require_cmds
+
+  # Initialize environment
+  init_environment "$@"
+  BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: AI User Setup v${VERSION}"
+  echo "========================================="
+  print_environment_banner "$@"
+  echo ""
+
+  if [[ "$dry_run" == "true" ]]; then
+    log_warn "DRY RUN MODE - No changes will be made"
+    echo ""
+  fi
+
+  # Get authentication token
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    if [[ ! -f "$DOT_AUTH" ]]; then
+      log_err "dot-auth not found at ${DOT_AUTH}"
+      exit 1
+    fi
+    log_info "Authenticating with Directus..."
+    # shellcheck source=/dev/null
+    source "$DOT_AUTH" "$@"
+  fi
+
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "DOT_TOKEN is empty after authentication"
+    exit 1
+  fi
+
+  local role_id user_id ai_token=""
+
+  # Step 1: Check/Create Role
+  role_id=$(get_role_id "$ROLE_NAME")
+  if [[ -n "$role_id" ]]; then
+    log_skip "Role ${ROLE_NAME} already exists (ID: ${role_id})"
+  else
+    if [[ "$dry_run" == "true" ]]; then
+      log_info "Would create role ${ROLE_NAME}"
+      role_id="dry-run-id"
+    else
+      role_id=$(create_role)
+      setup_permissions "$role_id"
+    fi
+  fi
+
+  # Step 2: Check/Create User
+  user_id=$(get_user_id "$USER_EMAIL")
+  if [[ -n "$user_id" ]]; then
+    log_skip "User ${USER_EMAIL} already exists (ID: ${user_id})"
+
+    if [[ "$regenerate" == "true" ]]; then
+      if [[ "$dry_run" == "true" ]]; then
+        log_info "Would regenerate token for ${USER_EMAIL}"
+      else
+        ai_token=$(regenerate_token "$user_id")
+      fi
+    else
+      # Try to get existing token
+      ai_token=$(get_user_token "$user_id")
+      if [[ -z "$ai_token" || "$ai_token" == "null" ]]; then
+        log_warn "Existing user has no token. Use --regenerate to create one."
+      fi
+    fi
+  else
+    if [[ "$dry_run" == "true" ]]; then
+      log_info "Would create user ${USER_EMAIL}"
+      ai_token="dry-run-token"
+    else
+      ai_token=$(create_user "$role_id")
+    fi
+  fi
+
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: AI User Setup - COMPLETE"
+  echo "========================================="
+
+  if [[ -n "$ai_token" && "$ai_token" != "null" ]]; then
+    echo ""
+    echo "🔑 DIRECTUS AI TOKEN:"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "$ai_token"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "⚠️  SAVE THIS TOKEN TO SECRET MANAGER:"
+    echo "   gcloud secrets create DIRECTUS_AI_AGENT_TOKEN \\"
+    echo "     --data-file=- <<< \"${ai_token}\""
+    echo ""
+  fi
+}
+
+main "$@"

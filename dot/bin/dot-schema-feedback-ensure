@@ -1,0 +1,428 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-schema-feedback-ensure - Ensure feedbacks collection exists in Directus
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-01-30): Initial version for WEB-28-AUTOMATION
+#     - 14 fields including parent_id (threading) and context_snippet
+#     - Idempotent: checks existence before create, patches missing fields
+#     - Based on dot-schema-ensure pattern
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOT_AUTH="${SCRIPT_DIR}/dot-auth"
+
+# Source environment configuration
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+COLLECTION="feedbacks"
+VERSION="1.0.0"
+
+# Required fields for feedbacks collection
+# Format: field_name:type:nullable:special
+declare -a REQUIRED_FIELDS=(
+  "linked_entity_ref:string:true:"
+  "entity_type:string:true:"
+  "feedback_type:string:false:"
+  "content:text:false:"
+  "context_snippet:text:true:"
+  "source_model:string:true:"
+  "fingerprint_id:string:true:"
+  "metadata:json:true:"
+  "status:string:false:"
+  "resolved_by:uuid:true:m2o"
+  "parent_id:uuid:true:m2o"
+  "user_created:uuid:true:user-created"
+  "date_created:timestamp:false:date-created"
+  "date_updated:timestamp:true:date-updated"
+)
+
+# Logging functions
+log_info() { echo "ℹ️  [INFO] $1"; }
+log_ok() { echo "✅ [OK] $1"; }
+log_warn() { echo "⚠️  [WARN] $1"; }
+log_skip() { echo "⏭️  [SKIP] $1"; }
+log_err() { echo "❌ [ERR] $1" >&2; }
+
+require_cmds() {
+  for cmd in curl jq; do
+    command -v "$cmd" >/dev/null 2>&1 || { log_err "Missing required command: $cmd"; exit 1; }
+  done
+}
+
+api_request() {
+  local method="$1"
+  local url="$2"
+  local data="${3-}"
+  local resp
+
+  if [[ -n "${data-}" ]]; then
+    resp=$(curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "$data" \
+      -w "\n%{http_code}")
+  else
+    resp=$(curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -w "\n%{http_code}")
+  fi
+
+  printf '%s' "$resp"
+}
+
+# Generate field payload based on field spec
+field_payload() {
+  local spec="$1"
+  local field_name field_type nullable special
+
+  IFS=':' read -r field_name field_type nullable special <<< "$spec"
+
+  local is_nullable="true"
+  [[ "$nullable" == "false" ]] && is_nullable="false"
+
+  local meta_json='{"required":false}'
+  local schema_json="{\"is_nullable\":$is_nullable}"
+
+  # Handle special field types
+  case "$special" in
+    "m2o")
+      meta_json='{"interface":"select-dropdown-m2o","special":["m2o"]}'
+      ;;
+    "user-created")
+      meta_json='{"interface":"select-dropdown-m2o","special":["user-created"],"readonly":true,"hidden":true}'
+      schema_json='{"foreign_key_table":"directus_users","foreign_key_column":"id"}'
+      ;;
+    "date-created")
+      meta_json='{"interface":"datetime","special":["date-created"],"readonly":true}'
+      ;;
+    "date-updated")
+      meta_json='{"interface":"datetime","special":["date-updated"],"readonly":true}'
+      ;;
+  esac
+
+  # Build final payload
+  jq -nc \
+    --arg field "$field_name" \
+    --arg type "$field_type" \
+    --argjson meta "$meta_json" \
+    --argjson schema "$schema_json" \
+    '{field:$field, type:$type, meta:$meta, schema:$schema}'
+}
+
+collection_exists() {
+  local resp body code
+  resp=$(api_request GET "${BASE_URL}/collections/${COLLECTION}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" == "200" ]]; then
+    return 0
+  elif [[ "$code" == "403" ]]; then
+    # Collection doesn't exist or no permission
+    return 1
+  fi
+
+  log_err "Failed to check collection ${COLLECTION} (HTTP $code)"
+  return 1
+}
+
+field_exists() {
+  local field_name="$1"
+  local resp body code
+
+  resp=$(api_request GET "${BASE_URL}/fields/${COLLECTION}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" == "200" ]]; then
+    if echo "$body" | jq -e --arg field "$field_name" '.data[]? | select(.field == $field)' >/dev/null 2>&1; then
+      return 0
+    fi
+    return 1
+  fi
+
+  log_err "Failed to check field ${COLLECTION}.${field_name} (HTTP $code)"
+  return 1
+}
+
+create_collection() {
+  local fields_json payload resp body code
+
+  # Build minimal collection first (no fields)
+  payload=$(jq -nc \
+    --arg collection "$COLLECTION" \
+    --arg note "Universal Feedback System - Created by DOT v${VERSION}" \
+    '{
+      collection: $collection,
+      schema: {},
+      meta: {
+        collection: $collection,
+        icon: "chat_bubble",
+        note: $note,
+        display_template: "{{feedback_type}} - {{content}}",
+        archive_field: "status",
+        archive_value: "rejected",
+        sort_field: "date_created"
+      }
+    }')
+
+  log_info "Creating collection ${COLLECTION}"
+  resp=$(api_request POST "${BASE_URL}/collections" "$payload")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to create collection ${COLLECTION} (HTTP $code)"
+    echo "$body" | head -c 300 >&2
+    exit 1
+  fi
+
+  log_ok "Collection ${COLLECTION} created"
+}
+
+create_field() {
+  local spec="$1"
+  local field_name
+  field_name=$(echo "$spec" | cut -d':' -f1)
+
+  local payload resp body code
+
+  payload=$(field_payload "$spec")
+  log_info "Creating field ${COLLECTION}.${field_name}"
+  resp=$(api_request POST "${BASE_URL}/fields/${COLLECTION}" "$payload")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to create field ${COLLECTION}.${field_name} (HTTP $code)"
+    echo "$body" | head -c 200 >&2
+    exit 1
+  fi
+
+  log_ok "Field ${COLLECTION}.${field_name} created"
+}
+
+setup_relations() {
+  log_info "Setting up relations..."
+
+  # parent_id -> feedbacks (self-referential for threading)
+  local parent_relation
+  parent_relation=$(jq -nc '{
+    collection: "feedbacks",
+    field: "parent_id",
+    related_collection: "feedbacks",
+    meta: {
+      one_field: "replies",
+      sort_field: null,
+      one_deselect_action: "nullify"
+    },
+    schema: {
+      on_delete: "SET NULL"
+    }
+  }')
+
+  local resp body code
+  resp=$(api_request POST "${BASE_URL}/relations" "$parent_relation")
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" == "200" ]]; then
+    log_ok "Relation parent_id -> feedbacks created"
+  elif [[ "$code" == "400" ]]; then
+    log_skip "Relation parent_id -> feedbacks already exists"
+  else
+    log_warn "Could not create parent_id relation (HTTP $code)"
+  fi
+
+  # resolved_by -> directus_users
+  local resolved_relation
+  resolved_relation=$(jq -nc '{
+    collection: "feedbacks",
+    field: "resolved_by",
+    related_collection: "directus_users",
+    schema: {
+      on_delete: "SET NULL"
+    }
+  }')
+
+  resp=$(api_request POST "${BASE_URL}/relations" "$resolved_relation")
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" == "200" ]]; then
+    log_ok "Relation resolved_by -> directus_users created"
+  elif [[ "$code" == "400" ]]; then
+    log_skip "Relation resolved_by -> directus_users already exists"
+  else
+    log_warn "Could not create resolved_by relation (HTTP $code)"
+  fi
+}
+
+verify_fields() {
+  local resp body code missing=()
+
+  resp=$(api_request GET "${BASE_URL}/fields/${COLLECTION}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to list fields for ${COLLECTION} (HTTP $code)"
+    exit 1
+  fi
+
+  local field_count
+  field_count=$(echo "$body" | jq '.data | length')
+
+  for spec in "${REQUIRED_FIELDS[@]}"; do
+    local field_name
+    field_name=$(echo "$spec" | cut -d':' -f1)
+    if ! echo "$body" | jq -e --arg field "$field_name" '.data[]? | select(.field == $field)' >/dev/null 2>&1; then
+      missing+=("$field_name")
+    fi
+  done
+
+  if [[ "${#missing[@]}" -gt 0 ]]; then
+    log_err "Missing required fields: ${missing[*]}"
+    exit 1
+  fi
+
+  log_ok "All required fields present (${field_count} total)"
+}
+
+show_help() {
+  cat << EOF
+dot-schema-feedback-ensure v${VERSION} - Ensure feedbacks collection exists
+
+Usage:
+  dot-schema-feedback-ensure [options]
+
+Options:
+  --local       Use local development environment
+  --cloud       Use cloud/production environment (default)
+  --dry-run     Show what would be done without making changes
+  --help, -h    Show this help message
+
+Fields Created (14 total):
+  - linked_entity_ref   Reference to linked entity (type:id)
+  - entity_type         Extracted entity type
+  - feedback_type       Type: helpful, not_helpful, suggestion, error, action_request
+  - content             Feedback content (required)
+  - context_snippet     Content snapshot (max 2000 chars)
+  - source_model        AI model name (gemini-2.0, gpt-4o, etc.)
+  - fingerprint_id      Anonymous user tracking
+  - metadata            Flexible JSON data
+  - status              pending, in_review, resolved, rejected
+  - resolved_by         M2O to directus_users
+  - parent_id           M2O to feedbacks (threading)
+  - user_created        Auto: creator user
+  - date_created        Auto: creation timestamp
+  - date_updated        Auto: update timestamp
+
+EOF
+  show_environment_help
+}
+
+main() {
+  local dry_run=false
+
+  # Parse arguments
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h)
+        show_help
+        exit 0
+        ;;
+      --dry-run)
+        dry_run=true
+        ;;
+    esac
+  done
+
+  require_cmds
+
+  # Initialize environment
+  init_environment "$@"
+  BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: Schema Feedback Ensure v${VERSION}"
+  echo "========================================="
+  print_environment_banner "$@"
+  echo "Ensuring feedbacks collection exists"
+  echo ""
+
+  if [[ "$dry_run" == "true" ]]; then
+    log_warn "DRY RUN MODE - No changes will be made"
+    echo ""
+  fi
+
+  # Get authentication token
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    if [[ ! -f "$DOT_AUTH" ]]; then
+      log_err "dot-auth not found at ${DOT_AUTH}"
+      exit 1
+    fi
+    log_info "Authenticating with Directus..."
+    # shellcheck source=/dev/null
+    source "$DOT_AUTH" "$@"
+  fi
+
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "DOT_TOKEN is empty after authentication"
+    exit 1
+  fi
+
+  # Check/Create collection
+  if collection_exists; then
+    log_skip "Collection '${COLLECTION}' already exists"
+  else
+    if [[ "$dry_run" == "true" ]]; then
+      log_info "Would create collection '${COLLECTION}'"
+    else
+      create_collection
+    fi
+  fi
+
+  # Ensure all required fields exist
+  log_info "Ensuring required fields exist..."
+  for spec in "${REQUIRED_FIELDS[@]}"; do
+    local field_name
+    field_name=$(echo "$spec" | cut -d':' -f1)
+
+    if field_exists "$field_name"; then
+      log_skip "Field ${COLLECTION}.${field_name} already exists"
+    else
+      if [[ "$dry_run" == "true" ]]; then
+        log_info "Would create field ${COLLECTION}.${field_name}"
+      else
+        create_field "$spec"
+      fi
+    fi
+  done
+
+  # Setup relations (idempotent)
+  if [[ "$dry_run" != "true" ]]; then
+    setup_relations
+  fi
+
+  # Final verification
+  if [[ "$dry_run" != "true" ]]; then
+    log_info "Running final verification..."
+    if ! collection_exists; then
+      log_err "Collection ${COLLECTION} missing after ensure"
+      exit 1
+    fi
+    verify_fields
+  fi
+
+  log_ok "Collection feedbacks ready"
+
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Schema Feedback Ensure - COMPLETE"
+  echo "========================================="
+}
+
+main "$@"

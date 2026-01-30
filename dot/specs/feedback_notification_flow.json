@@ -1,0 +1,83 @@
+{
+  "directus": {
+    "base_url": "https://directus-test-pfne2mqwja-as.a.run.app"
+  },
+  "flows": [
+    {
+      "name": "[DOT] Feedback Action Request Notification",
+      "status": "active",
+      "trigger": "event",
+      "accountability": "all",
+      "options": {
+        "type": "action",
+        "scope": ["items.create"],
+        "collections": ["feedbacks"]
+      },
+      "operations": [
+        {
+          "name": "Check Action Request Type",
+          "key": "check_type",
+          "type": "condition",
+          "position_x": 10,
+          "position_y": 10,
+          "options": {
+            "filter": {
+              "_and": [
+                { "feedback_type": { "_eq": "action_request" } }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Log Action Request",
+          "key": "log_action",
+          "type": "log",
+          "position_x": 20,
+          "position_y": 10,
+          "options": {
+            "message": "[AI-Feedback] New action_request: {{$trigger.payload.linked_entity_ref}} from {{$trigger.payload.source_model}}"
+          },
+          "resolve": "check_type"
+        }
+      ]
+    },
+    {
+      "name": "[DOT] Feedback Status Change Notification",
+      "status": "active",
+      "trigger": "event",
+      "accountability": "all",
+      "options": {
+        "type": "action",
+        "scope": ["items.update"],
+        "collections": ["feedbacks"]
+      },
+      "operations": [
+        {
+          "name": "Check Status Changed to Resolved",
+          "key": "check_resolved",
+          "type": "condition",
+          "position_x": 10,
+          "position_y": 10,
+          "options": {
+            "filter": {
+              "_and": [
+                { "status": { "_eq": "resolved" } }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Log Resolution",
+          "key": "log_resolved",
+          "type": "log",
+          "position_x": 20,
+          "position_y": 10,
+          "options": {
+            "message": "[AI-Feedback] Resolved: {{$trigger.keys[0]}} by {{$trigger.payload.resolved_by}}"
+          },
+          "resolve": "check_resolved"
+        }
+      ]
+    }
+  ]
+}

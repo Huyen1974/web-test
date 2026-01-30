@@ -1,0 +1,264 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-web28-complete - Complete WEB-28 post-deployment setup
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-01-30): Initial version for WEB-28-AUTOMATION
+#     - Orchestrates all WEB-28 setup steps
+#     - Runs: dot-auth, dot-schema-feedback-ensure, dot-ai-user-setup
+#     - Optionally runs: dot-ai-gateway-setup, dot-apply, dot-ai-bridge-check
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+VERSION="1.0.0"
+
+# Tool paths
+DOT_AUTH="${SCRIPT_DIR}/dot-auth"
+DOT_SCHEMA_FEEDBACK="${SCRIPT_DIR}/dot-schema-feedback-ensure"
+DOT_AI_USER="${SCRIPT_DIR}/dot-ai-user-setup"
+DOT_AI_GATEWAY="${SCRIPT_DIR}/dot-ai-gateway-setup"
+DOT_APPLY="${SCRIPT_DIR}/dot-apply"
+DOT_BRIDGE_CHECK="${SCRIPT_DIR}/dot-ai-bridge-check"
+FLOW_SPEC="${DOT_ROOT}/specs/feedback_notification_flow.json"
+
+# Source environment configuration
+if [[ -f "${SCRIPT_DIR}/../config/environment.sh" ]]; then
+  source "${SCRIPT_DIR}/../config/environment.sh"
+fi
+
+# Logging functions
+log_step() { echo -e "\n\033[1;36m━━━ STEP $1: $2 ━━━\033[0m"; }
+log_info() { echo "ℹ️  [INFO] $1"; }
+log_ok() { echo "✅ [OK] $1"; }
+log_warn() { echo "⚠️  [WARN] $1"; }
+log_err() { echo "❌ [ERR] $1" >&2; }
+log_skip() { echo "⏭️  [SKIP] $1"; }
+
+show_help() {
+  cat << EOF
+dot-web28-complete v${VERSION} - Complete WEB-28 post-deployment setup
+
+Usage:
+  dot-web28-complete [options]
+
+Options:
+  --local           Use local development environment
+  --cloud           Use cloud/production environment (default)
+  --skip-gateway    Skip AI Gateway token setup (gcloud)
+  --skip-flow       Skip Directus Flow deployment
+  --skip-verify     Skip final verification
+  --dry-run         Show what would be done without making changes
+  --help, -h        Show this help message
+
+Prerequisites:
+  - DIRECTUS_ADMIN_PASSWORD set (for Directus operations)
+  - gcloud CLI authenticated (for Secret Manager)
+
+Steps performed:
+  1. Authenticate with Directus (dot-auth)
+  2. Ensure feedbacks collection exists (dot-schema-feedback-ensure)
+  3. Create AI_Agent user and role (dot-ai-user-setup)
+  4. Setup AI Gateway token in GCP (dot-ai-gateway-setup) [optional]
+  5. Deploy notification flow (dot-apply) [optional]
+  6. Verify AI Gateway readiness (dot-ai-bridge-check) [optional]
+
+Example:
+  export DIRECTUS_ADMIN_PASSWORD="your-password"
+  ./dot/bin/dot-web28-complete --cloud
+
+EOF
+}
+
+main() {
+  local env_flag=""
+  local skip_gateway=false
+  local skip_flow=false
+  local skip_verify=false
+  local dry_run=false
+
+  # Parse arguments
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h)
+        show_help
+        exit 0
+        ;;
+      --local)
+        env_flag="--local"
+        ;;
+      --cloud)
+        env_flag="--cloud"
+        ;;
+      --skip-gateway)
+        skip_gateway=true
+        ;;
+      --skip-flow)
+        skip_flow=true
+        ;;
+      --skip-verify)
+        skip_verify=true
+        ;;
+      --dry-run)
+        dry_run=true
+        ;;
+    esac
+  done
+
+  local dry_run_flag=""
+  [[ "$dry_run" == "true" ]] && dry_run_flag="--dry-run"
+
+  echo "═══════════════════════════════════════════════════════════════"
+  echo "DOT WEB-28 COMPLETE v${VERSION}"
+  echo "═══════════════════════════════════════════════════════════════"
+  echo ""
+  echo "🎯 Purpose: Complete WEB-28 AI Gateway post-deployment setup"
+  echo ""
+
+  if [[ "$dry_run" == "true" ]]; then
+    log_warn "DRY RUN MODE - No changes will be made"
+  fi
+
+  # Check prerequisites
+  if [[ -z "${DIRECTUS_ADMIN_PASSWORD:-}" ]]; then
+    log_err "DIRECTUS_ADMIN_PASSWORD not set"
+    echo ""
+    echo "Set it with:"
+    echo "  export DIRECTUS_ADMIN_PASSWORD=\"your-password\""
+    exit 1
+  fi
+
+  # Verify tools exist
+  for tool in "$DOT_AUTH" "$DOT_SCHEMA_FEEDBACK" "$DOT_AI_USER"; do
+    if [[ ! -f "$tool" ]]; then
+      log_err "Required tool not found: $tool"
+      exit 1
+    fi
+  done
+
+  local directus_token=""
+  local ai_agent_token=""
+
+  # ───────────────────────────────────────────────────────────────────
+  log_step "1/6" "Authenticate with Directus"
+  # ───────────────────────────────────────────────────────────────────
+
+  if [[ "$dry_run" == "true" ]]; then
+    log_info "Would authenticate with Directus"
+    export DOT_TOKEN="dry-run-token"
+  else
+    # shellcheck source=/dev/null
+    source "$DOT_AUTH" $env_flag
+    log_ok "Authenticated with Directus"
+  fi
+
+  # ───────────────────────────────────────────────────────────────────
+  log_step "2/6" "Ensure feedbacks collection"
+  # ───────────────────────────────────────────────────────────────────
+
+  if [[ -x "$DOT_SCHEMA_FEEDBACK" ]]; then
+    "$DOT_SCHEMA_FEEDBACK" $env_flag $dry_run_flag
+  else
+    bash "$DOT_SCHEMA_FEEDBACK" $env_flag $dry_run_flag
+  fi
+
+  # ───────────────────────────────────────────────────────────────────
+  log_step "3/6" "Setup AI_Agent user and role"
+  # ───────────────────────────────────────────────────────────────────
+
+  if [[ -x "$DOT_AI_USER" ]]; then
+    "$DOT_AI_USER" $env_flag $dry_run_flag
+  else
+    bash "$DOT_AI_USER" $env_flag $dry_run_flag
+  fi
+
+  # ───────────────────────────────────────────────────────────────────
+  log_step "4/6" "Setup AI Gateway token (GCP Secret Manager)"
+  # ───────────────────────────────────────────────────────────────────
+
+  if [[ "$skip_gateway" == "true" ]]; then
+    log_skip "Skipped (--skip-gateway)"
+  elif [[ ! -f "$DOT_AI_GATEWAY" ]]; then
+    log_warn "dot-ai-gateway-setup not found, skipping"
+  else
+    if command -v gcloud &>/dev/null; then
+      if [[ -x "$DOT_AI_GATEWAY" ]]; then
+        "$DOT_AI_GATEWAY" $dry_run_flag
+      else
+        bash "$DOT_AI_GATEWAY" $dry_run_flag
+      fi
+    else
+      log_warn "gcloud CLI not found, skipping gateway setup"
+      echo "  Install gcloud: https://cloud.google.com/sdk/docs/install"
+    fi
+  fi
+
+  # ───────────────────────────────────────────────────────────────────
+  log_step "5/6" "Deploy notification flow"
+  # ───────────────────────────────────────────────────────────────────
+
+  if [[ "$skip_flow" == "true" ]]; then
+    log_skip "Skipped (--skip-flow)"
+  elif [[ ! -f "$FLOW_SPEC" ]]; then
+    log_warn "Flow spec not found: $FLOW_SPEC"
+    log_info "Create it with feedback notification configuration"
+  else
+    if [[ "$dry_run" == "true" ]]; then
+      log_info "Would apply flow spec: $FLOW_SPEC"
+    else
+      if [[ -x "$DOT_APPLY" ]]; then
+        "$DOT_APPLY" "$FLOW_SPEC"
+      else
+        bash "$DOT_APPLY" "$FLOW_SPEC"
+      fi
+    fi
+  fi
+
+  # ───────────────────────────────────────────────────────────────────
+  log_step "6/6" "Verify AI Gateway readiness"
+  # ───────────────────────────────────────────────────────────────────
+
+  if [[ "$skip_verify" == "true" ]]; then
+    log_skip "Skipped (--skip-verify)"
+  elif [[ ! -f "$DOT_BRIDGE_CHECK" ]]; then
+    log_warn "dot-ai-bridge-check not found, skipping verification"
+  else
+    echo ""
+    log_info "Running verification (may take a moment)..."
+    echo ""
+
+    if [[ -x "$DOT_BRIDGE_CHECK" ]]; then
+      "$DOT_BRIDGE_CHECK" $env_flag || true
+    else
+      bash "$DOT_BRIDGE_CHECK" $env_flag || true
+    fi
+  fi
+
+  # ───────────────────────────────────────────────────────────────────
+  echo ""
+  echo "═══════════════════════════════════════════════════════════════"
+  echo "DOT WEB-28 COMPLETE - FINISHED"
+  echo "═══════════════════════════════════════════════════════════════"
+  echo ""
+
+  if [[ "$dry_run" != "true" ]]; then
+    echo "📋 NEXT STEPS:"
+    echo ""
+    echo "  1. Save the tokens printed above to Secret Manager"
+    echo ""
+    echo "  2. Redeploy Cloud Run to pick up new secrets:"
+    echo "     gcloud run services update nuxt-ssr-pfne2mqwja \\"
+    echo "       --region=asia-southeast1 \\"
+    echo "       --update-secrets=AI_GATEWAY_TOKEN=AI_GATEWAY_TOKEN:latest"
+    echo ""
+    echo "  3. Test the AI Gateway:"
+    echo "     curl https://ai.incomexsaigoncorp.vn/api/ai/info"
+    echo ""
+  fi
+}
+
+main "$@"
