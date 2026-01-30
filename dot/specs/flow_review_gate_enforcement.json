@@ -1,0 +1,94 @@
+{
+  "directus": {
+    "base_url": "https://directus-test-pfne2mqwja-as.a.run.app"
+  },
+  "flows": [
+    {
+      "name": "[DOT] Review Gate Audit Logger",
+      "icon": "verified",
+      "color": "#2ECDA7",
+      "status": "active",
+      "trigger": "event",
+      "accountability": "all",
+      "options": {
+        "type": "action",
+        "scope": ["items.update"],
+        "collections": ["feedbacks"]
+      },
+      "operations": [
+        {
+          "name": "Check Status Change to Resolved",
+          "key": "check_resolved",
+          "type": "condition",
+          "position_x": 19,
+          "position_y": 1,
+          "options": {
+            "filter": {
+              "_and": [
+                {
+                  "status": {
+                    "_eq": "resolved"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Log Resolution with Gate Status",
+          "key": "log_resolution",
+          "type": "log",
+          "position_x": 37,
+          "position_y": 1,
+          "options": {
+            "message": "[REVIEW-GATE] RESOLVED | ID={{$trigger.keys[0]}} | R1={{$trigger.payload.reviewer_1_status}} | R2={{$trigger.payload.reviewer_2_status}} | Approver={{$trigger.payload.approver_status}} | By={{$accountability.user}}"
+          },
+          "resolve": "check_resolved"
+        }
+      ]
+    },
+    {
+      "name": "[DOT] Review Gate Assignment Notifier",
+      "icon": "assignment_ind",
+      "color": "#FF9800",
+      "status": "active",
+      "trigger": "event",
+      "accountability": "all",
+      "options": {
+        "type": "action",
+        "scope": ["items.update"],
+        "collections": ["feedbacks"]
+      },
+      "operations": [
+        {
+          "name": "Check Reviewer Assignment",
+          "key": "check_assignment",
+          "type": "condition",
+          "position_x": 19,
+          "position_y": 1,
+          "options": {
+            "filter": {
+              "_or": [
+                {"reviewer_1_id": {"_nnull": true}},
+                {"reviewer_2_id": {"_nnull": true}},
+                {"approver_id": {"_nnull": true}}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Log Assignment",
+          "key": "log_assignment",
+          "type": "log",
+          "position_x": 37,
+          "position_y": 1,
+          "options": {
+            "message": "[REVIEW-GATE] ASSIGNED | ID={{$trigger.keys[0]}} | R1={{$trigger.payload.reviewer_1_id}} | R2={{$trigger.payload.reviewer_2_id}} | Approver={{$trigger.payload.approver_id}}"
+          },
+          "resolve": "check_assignment"
+        }
+      ]
+    }
+  ],
+  "note": "IMPORTANT: True enforcement of review gates requires Directus Permissions. These flows provide audit logging only. See feedbacks_review_gates.json for permission setup instructions."
+}

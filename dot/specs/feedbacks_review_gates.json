@@ -1,0 +1,176 @@
+{
+  "description": "WEB-34 Review Gates Schema Extension for feedbacks collection",
+  "note": "These fields must be added manually via Directus Admin UI (Settings > Data Model > feedbacks)",
+  "collection": "feedbacks",
+  "fields": [
+    {
+      "field": "reviewer_1_id",
+      "type": "uuid",
+      "meta": {
+        "interface": "select-dropdown-m2o",
+        "special": ["m2o"],
+        "options": {
+          "template": "{{first_name}} {{last_name}}"
+        },
+        "note": "First reviewer"
+      },
+      "schema": {
+        "foreign_key_table": "directus_users",
+        "is_nullable": true
+      }
+    },
+    {
+      "field": "reviewer_1_status",
+      "type": "string",
+      "meta": {
+        "interface": "select-dropdown",
+        "options": {
+          "choices": [
+            {"text": "Pending", "value": "pending"},
+            {"text": "Approved", "value": "approved"},
+            {"text": "Rejected", "value": "rejected"}
+          ]
+        },
+        "default_value": "pending",
+        "note": "First reviewer decision"
+      }
+    },
+    {
+      "field": "reviewer_1_comment",
+      "type": "text",
+      "meta": {
+        "interface": "input-multiline",
+        "note": "First reviewer comment"
+      }
+    },
+    {
+      "field": "reviewer_1_at",
+      "type": "timestamp",
+      "meta": {
+        "interface": "datetime",
+        "readonly": true,
+        "note": "First review timestamp"
+      }
+    },
+    {
+      "field": "reviewer_2_id",
+      "type": "uuid",
+      "meta": {
+        "interface": "select-dropdown-m2o",
+        "special": ["m2o"],
+        "options": {
+          "template": "{{first_name}} {{last_name}}"
+        },
+        "note": "Second reviewer"
+      },
+      "schema": {
+        "foreign_key_table": "directus_users",
+        "is_nullable": true
+      }
+    },
+    {
+      "field": "reviewer_2_status",
+      "type": "string",
+      "meta": {
+        "interface": "select-dropdown",
+        "options": {
+          "choices": [
+            {"text": "Pending", "value": "pending"},
+            {"text": "Approved", "value": "approved"},
+            {"text": "Rejected", "value": "rejected"}
+          ]
+        },
+        "default_value": "pending",
+        "note": "Second reviewer decision"
+      }
+    },
+    {
+      "field": "reviewer_2_comment",
+      "type": "text",
+      "meta": {
+        "interface": "input-multiline",
+        "note": "Second reviewer comment"
+      }
+    },
+    {
+      "field": "reviewer_2_at",
+      "type": "timestamp",
+      "meta": {
+        "interface": "datetime",
+        "readonly": true,
+        "note": "Second review timestamp"
+      }
+    },
+    {
+      "field": "approver_id",
+      "type": "uuid",
+      "meta": {
+        "interface": "select-dropdown-m2o",
+        "special": ["m2o"],
+        "options": {
+          "template": "{{first_name}} {{last_name}}"
+        },
+        "note": "Final approver"
+      },
+      "schema": {
+        "foreign_key_table": "directus_users",
+        "is_nullable": true
+      }
+    },
+    {
+      "field": "approver_status",
+      "type": "string",
+      "meta": {
+        "interface": "select-dropdown",
+        "options": {
+          "choices": [
+            {"text": "Pending", "value": "pending"},
+            {"text": "Approved", "value": "approved"},
+            {"text": "Rejected", "value": "rejected"}
+          ]
+        },
+        "default_value": "pending",
+        "note": "Final approver decision"
+      }
+    },
+    {
+      "field": "approver_comment",
+      "type": "text",
+      "meta": {
+        "interface": "input-multiline",
+        "note": "Final approver comment"
+      }
+    },
+    {
+      "field": "approved_at",
+      "type": "timestamp",
+      "meta": {
+        "interface": "datetime",
+        "readonly": true,
+        "note": "Final approval timestamp"
+      }
+    }
+  ],
+  "manual_steps": [
+    "1. Go to Directus Admin > Settings > Data Model > feedbacks",
+    "2. Add each field from the 'fields' array above",
+    "3. For M2O fields (reviewer_1_id, reviewer_2_id, approver_id):",
+    "   - Set Related Collection: directus_users",
+    "   - Set Display Template: {{first_name}} {{last_name}}",
+    "4. For status fields, add the dropdown choices: pending, approved, rejected",
+    "5. For timestamp fields, check 'Readonly'",
+    "6. Save changes"
+  ],
+  "permissions_setup": {
+    "description": "Restrict status=resolved to Approver role only",
+    "steps": [
+      "1. Go to Settings > Access Control > Roles",
+      "2. Create role 'Approver' if not exists",
+      "3. Edit 'Reviewer' role permissions for feedbacks:",
+      "   - Update: Allow all fields EXCEPT status (when value would be 'resolved')",
+      "4. Edit 'Approver' role permissions for feedbacks:",
+      "   - Update: Allow all fields including status",
+      "5. This ensures only Approvers can set status=resolved"
+    ]
+  }
+}
