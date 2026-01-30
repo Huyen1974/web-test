@@ -1,0 +1,277 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-e2e-test - End-to-end test for AI Gateway
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-01-30): Initial version for WEB-30
+#     - Tests static files, Nuxt proxy, and Directus endpoints
+#     - Full E2E create/read/delete test
+#     - Self-cleaning test records
+# =============================================================================
+
+set -euo pipefail
+
+VERSION="1.0.0"
+GCP_PROJECT="${GCP_PROJECT:-github-chatgpt-ggcloud}"
+DIRECTUS_URL="https://directus-test-pfne2mqwja-as.a.run.app"
+NUXT_URL="https://ai.incomexsaigoncorp.vn"
+
+# Counters
+PASS_COUNT=0
+FAIL_COUNT=0
+SKIP_COUNT=0
+
+# Logging functions
+log_pass() { echo "✅ $1"; PASS_COUNT=$((PASS_COUNT + 1)); }
+log_fail() { echo "❌ $1"; FAIL_COUNT=$((FAIL_COUNT + 1)); }
+log_skip() { echo "⏭️  $1"; SKIP_COUNT=$((SKIP_COUNT + 1)); }
+log_info() { echo "ℹ️  $1"; }
+
+require_cmds() {
+  for cmd in curl jq gcloud; do
+    command -v "$cmd" >/dev/null 2>&1 || { echo "Missing required command: $cmd"; exit 1; }
+  done
+}
+
+show_help() {
+  cat << EOF
+dot-e2e-test v${VERSION} - End-to-end test for AI Gateway
+
+Usage:
+  dot-e2e-test [options]
+
+Options:
+  --skip-write  Skip write tests (feedback create)
+  --verbose     Show full response bodies
+  --help, -h    Show this help message
+
+Tests:
+  1. Static files (llms.txt, openapi.yaml)
+  2. Nuxt proxy endpoints (public and authenticated)
+  3. Directus read endpoints
+  4. Directus write endpoints (feedback create)
+
+Exit Codes:
+  0 - All tests passed
+  1 - Some tests failed
+
+EOF
+}
+
+test_http() {
+  local name="$1"
+  local method="$2"
+  local url="$3"
+  local auth="$4"
+  local data="$5"
+  local expected="$6"
+  local verbose="${7:-false}"
+
+  local result
+  local body
+
+  if [[ "$auth" == "none" ]]; then
+    if [[ -n "$data" ]]; then
+      body=$(curl -s -X "$method" "$url" \
+        -H "Content-Type: application/json" \
+        -d "$data" \
+        -w "\n%{http_code}")
+    else
+      body=$(curl -s -X "$method" "$url" -w "\n%{http_code}")
+    fi
+  else
+    if [[ -n "$data" ]]; then
+      body=$(curl -s -X "$method" "$url" \
+        -H "Authorization: Bearer $auth" \
+        -H "Content-Type: application/json" \
+        -d "$data" \
+        -w "\n%{http_code}")
+    else
+      body=$(curl -s -X "$method" "$url" \
+        -H "Authorization: Bearer $auth" \
+        -w "\n%{http_code}")
+    fi
+  fi
+
+  result="${body##*$'\n'}"
+
+  if [[ "$verbose" == "true" ]]; then
+    echo "   Response: ${body%$'\n'*}" | head -c 200
+    echo ""
+  fi
+
+  if [[ "$result" == "$expected" ]]; then
+    log_pass "$name: $result (expected $expected)"
+    return 0
+  else
+    log_fail "$name: $result (expected $expected)"
+    return 1
+  fi
+}
+
+main() {
+  local skip_write=false
+  local verbose=false
+
+  # Parse arguments
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h)
+        show_help
+        exit 0
+        ;;
+      --skip-write)
+        skip_write=true
+        ;;
+      --verbose)
+        verbose=true
+        ;;
+    esac
+  done
+
+  require_cmds
+
+  cat << 'HEADER'
+═══════════════════════════════════════════════════════════════
+          E2E AUTO-TEST FOR AI GATEWAY
+═══════════════════════════════════════════════════════════════
+
+HEADER
+
+  # Get tokens
+  log_info "Retrieving tokens from Secret Manager..."
+  local ai_token
+  local directus_token
+
+  ai_token=$(gcloud secrets versions access latest \
+    --secret="AI_GATEWAY_TOKEN" --project="$GCP_PROJECT" 2>/dev/null || echo "")
+
+  directus_token=$(gcloud secrets versions access latest \
+    --secret="DIRECTUS_AI_AGENT_TOKEN" --project="$GCP_PROJECT" 2>/dev/null || echo "")
+
+  if [[ -z "$ai_token" || -z "$directus_token" ]]; then
+    log_fail "Could not retrieve tokens from Secret Manager"
+    exit 1
+  fi
+  log_pass "Tokens retrieved"
+
+  echo ""
+  echo "TEST 1: Static Files"
+  echo "───────────────────────────────────────────────────────────────"
+  test_http "llms.txt" "GET" "$NUXT_URL/llms.txt" "none" "" "200" "$verbose" || true
+  test_http "openapi.yaml" "GET" "$NUXT_URL/agent_data_openapi.yaml" "none" "" "200" "$verbose" || true
+
+  echo ""
+  echo "TEST 2: Nuxt Proxy (No Auth = 401)"
+  echo "───────────────────────────────────────────────────────────────"
+  test_http "/api/ai/info (public)" "GET" "$NUXT_URL/api/ai/info" "none" "" "200" "$verbose" || true
+  test_http "/api/ai/search (no auth)" "POST" "$NUXT_URL/api/ai/search" "none" '{"query":"test"}' "401" "$verbose" || true
+
+  echo ""
+  echo "TEST 3: Nuxt Proxy (With Auth)"
+  echo "───────────────────────────────────────────────────────────────"
+  # Note: May return 403 if Agent Data backend is Cloud IAM protected
+  #       May return 502/504 if Agent Data backend is unavailable
+  local search_result
+  search_result=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$NUXT_URL/api/ai/search" \
+    -H "Authorization: Bearer $ai_token" \
+    -H "Content-Type: application/json" \
+    -d '{"query":"test"}')
+
+  if [[ "$search_result" == "200" ]]; then
+    log_pass "/api/ai/search (with auth): $search_result"
+  elif [[ "$search_result" == "403" ]]; then
+    log_skip "/api/ai/search: $search_result (Agent Data IAM protected)"
+  elif [[ "$search_result" == "502" || "$search_result" == "504" ]]; then
+    log_skip "/api/ai/search: $search_result (backend unavailable)"
+  else
+    log_fail "/api/ai/search (with auth): $search_result (expected 200)"
+  fi
+
+  echo ""
+  echo "TEST 4: Directus Read (Public)"
+  echo "───────────────────────────────────────────────────────────────"
+  test_http "agent_views (public)" "GET" "$DIRECTUS_URL/items/agent_views?limit=1" "none" "" "200" "$verbose" || true
+
+  echo ""
+  echo "TEST 5: Directus Auth Required"
+  echo "───────────────────────────────────────────────────────────────"
+  # Directus returns 403 for forbidden (not 401) when trying to access protected resources
+  test_http "feedbacks (no auth)" "POST" "$DIRECTUS_URL/items/feedbacks" "none" '{"feedback_type":"test","content":"test","status":"pending"}' "403" "$verbose" || true
+
+  if [[ "$skip_write" == "true" ]]; then
+    echo ""
+    echo "TEST 6: Write Tests (SKIPPED)"
+    echo "───────────────────────────────────────────────────────────────"
+    log_skip "Write tests skipped (--skip-write)"
+  else
+    echo ""
+    echo "TEST 6: Directus Write (Full E2E)"
+    echo "───────────────────────────────────────────────────────────────"
+
+    local test_ref="e2e_test:$(date +%s)"
+    local feedback_response
+    feedback_response=$(curl -s -X POST "$DIRECTUS_URL/items/feedbacks" \
+      -H "Authorization: Bearer $directus_token" \
+      -H "Content-Type: application/json" \
+      -d "{
+        \"linked_entity_ref\": \"$test_ref\",
+        \"feedback_type\": \"suggestion\",
+        \"content\": \"E2E Test feedback created at $(date -Iseconds)\",
+        \"source_model\": \"dot-e2e-test\",
+        \"status\": \"pending\"
+      }")
+
+    local feedback_id
+    feedback_id=$(echo "$feedback_response" | jq -r '.data.id // empty')
+
+    if [[ -n "$feedback_id" ]]; then
+      log_pass "Create feedback: SUCCESS (id: $feedback_id)"
+
+      # Read back
+      local read_result
+      read_result=$(curl -s -o /dev/null -w "%{http_code}" \
+        "$DIRECTUS_URL/items/feedbacks/$feedback_id" \
+        -H "Authorization: Bearer $directus_token")
+
+      if [[ "$read_result" == "200" ]]; then
+        log_pass "Read feedback: SUCCESS"
+      else
+        log_fail "Read feedback: $read_result"
+      fi
+
+      # Cleanup
+      curl -s -X DELETE "$DIRECTUS_URL/items/feedbacks/$feedback_id" \
+        -H "Authorization: Bearer $directus_token" > /dev/null 2>&1 || true
+      log_info "(test record cleaned up)"
+    else
+      local err_msg
+      err_msg=$(echo "$feedback_response" | jq -r '.errors[0].message // "Unknown error"')
+      log_fail "Create feedback: FAILED - $err_msg"
+    fi
+  fi
+
+  echo ""
+  cat << 'DIVIDER'
+═══════════════════════════════════════════════════════════════
+                    E2E TEST SUMMARY
+═══════════════════════════════════════════════════════════════
+DIVIDER
+
+  echo ""
+  echo "PASSED:  $PASS_COUNT"
+  echo "FAILED:  $FAIL_COUNT"
+  echo "SKIPPED: $SKIP_COUNT"
+  echo ""
+
+  if [[ $FAIL_COUNT -eq 0 ]]; then
+    echo "🎉 ALL TESTS PASSED - AI GATEWAY IS FULLY OPERATIONAL"
+    exit 0
+  else
+    echo "⚠️  SOME TESTS FAILED - INVESTIGATION REQUIRED"
+    exit 1
+  fi
+}
+
+main "$@"

@@ -1,0 +1,199 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-ai-manifest - Generate AI integration manifest
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-01-30): Initial version for WEB-30
+#     - Retrieves tokens from Secret Manager
+#     - Generates complete integration manifest
+#     - Includes instruction snippet for GPT/Gemini
+# =============================================================================
+
+set -euo pipefail
+
+VERSION="1.0.0"
+GCP_PROJECT="${GCP_PROJECT:-github-chatgpt-ggcloud}"
+
+# Logging functions
+log_info() { echo "ℹ️  [INFO] $1"; }
+log_ok() { echo "✅ [OK] $1"; }
+log_err() { echo "❌ [ERR] $1" >&2; }
+
+require_cmds() {
+  for cmd in gcloud; do
+    command -v "$cmd" >/dev/null 2>&1 || { log_err "Missing required command: $cmd"; exit 1; }
+  done
+}
+
+show_help() {
+  cat << EOF
+dot-ai-manifest v${VERSION} - Generate AI integration manifest
+
+Usage:
+  dot-ai-manifest [options]
+
+Options:
+  --json        Output in JSON format (for programmatic use)
+  --help, -h    Show this help message
+
+Output:
+  - OpenAPI spec URL
+  - AI Gateway token
+  - Directus AI Agent token
+  - Quick test commands
+  - Instruction snippet for GPT/Gemini
+
+Prerequisites:
+  - gcloud CLI authenticated
+  - Access to Secret Manager
+
+EOF
+}
+
+main() {
+  local json_output=false
+
+  # Parse arguments
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h)
+        show_help
+        exit 0
+        ;;
+      --json)
+        json_output=true
+        ;;
+    esac
+  done
+
+  require_cmds
+
+  # Get tokens from Secret Manager
+  local ai_gateway_token
+  local directus_ai_token
+
+  ai_gateway_token=$(gcloud secrets versions access latest \
+    --secret="AI_GATEWAY_TOKEN" \
+    --project="$GCP_PROJECT" 2>/dev/null || echo "ERROR_RETRIEVING")
+
+  directus_ai_token=$(gcloud secrets versions access latest \
+    --secret="DIRECTUS_AI_AGENT_TOKEN" \
+    --project="$GCP_PROJECT" 2>/dev/null || echo "ERROR_RETRIEVING")
+
+  if [[ "$json_output" == "true" ]]; then
+    # JSON output for programmatic use
+    cat << EOF
+{
+  "version": "${VERSION}",
+  "openapi_spec_url": "https://ai.incomexsaigoncorp.vn/agent_data_openapi.yaml",
+  "llms_txt_url": "https://ai.incomexsaigoncorp.vn/llms.txt",
+  "endpoints": {
+    "nuxt_proxy": {
+      "base_url": "https://ai.incomexsaigoncorp.vn",
+      "info": "/api/ai/info",
+      "search": "/api/ai/search",
+      "auth_type": "Bearer",
+      "token": "${ai_gateway_token}"
+    },
+    "directus": {
+      "base_url": "https://directus-test-pfne2mqwja-as.a.run.app",
+      "feedbacks": "/items/feedbacks",
+      "agent_views": "/items/agent_views",
+      "auth_type": "Bearer",
+      "token": "${directus_ai_token}"
+    }
+  }
+}
+EOF
+    exit 0
+  fi
+
+  # Human-readable output
+  cat << 'HEADER'
+═══════════════════════════════════════════════════════════════
+          AI GATEWAY INTEGRATION MANIFEST
+═══════════════════════════════════════════════════════════════
+
+HEADER
+
+  echo "🔐 Tokens retrieved from Secret Manager"
+  echo ""
+
+  cat << EOF
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 FOR GPT ACTIONS / GEMINI EXTENSIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. OpenAPI Spec URL (import this):
+   https://ai.incomexsaigoncorp.vn/agent_data_openapi.yaml
+
+2. Authentication Type: Bearer Token
+
+3. AI Gateway Token (for /api/ai/* endpoints):
+   ${ai_gateway_token}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 FOR DIRECT DIRECTUS ACCESS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Base URL:
+   https://directus-test-pfne2mqwja-as.a.run.app
+
+2. Directus AI Agent Token (for /items/* endpoints):
+   ${directus_ai_token}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 INSTRUCTION SNIPPET (Paste into GPT/Gemini system prompt)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+You are an AI Agent for Incomex Saigon Corp. Your capabilities:
+
+1. KNOWLEDGE SEARCH: Use /api/ai/search to find relevant documents
+   from the company knowledge base. Always search before answering
+   domain-specific questions.
+
+2. FEEDBACK SUBMISSION: Use /items/feedbacks to submit:
+   - Suggestions for improving content
+   - Error reports when information is outdated
+   - Action requests when human review is needed
+
+3. DOCUMENT ACCESS: Use /items/agent_views to read published
+   documents directly when you have a specific document ID.
+
+Guidelines:
+- Cite sources using linked_entity_ref when available
+- Submit feedback_type="action_request" for tasks requiring human action
+- Use context_snippet to preserve relevant excerpts (max 2000 chars)
+- Include source_model in all feedback submissions
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 QUICK TEST COMMANDS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# Test Vector Search (via Nuxt proxy)
+curl -X POST https://ai.incomexsaigoncorp.vn/api/ai/search \\
+  -H "Authorization: Bearer ${ai_gateway_token}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"query": "Hien phap he thong la gi?", "top_k": 3}'
+
+# Test Create Feedback (via Directus)
+curl -X POST https://directus-test-pfne2mqwja-as.a.run.app/items/feedbacks \\
+  -H "Authorization: Bearer ${directus_ai_token}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"linked_entity_ref": "test:001", "feedback_type": "suggestion", "content": "Test from CLI", "source_model": "manual-test", "status": "pending"}'
+
+# Test Read Agent Views
+curl https://directus-test-pfne2mqwja-as.a.run.app/items/agent_views \\
+  -H "Authorization: Bearer ${directus_ai_token}"
+
+EOF
+
+  cat << 'FOOTER'
+═══════════════════════════════════════════════════════════════
+              MANIFEST GENERATED SUCCESSFULLY
+═══════════════════════════════════════════════════════════════
+FOOTER
+}
+
+main "$@"

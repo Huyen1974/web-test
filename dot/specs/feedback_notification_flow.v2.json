@@ -1,0 +1,122 @@
+{
+  "directus": {
+    "base_url": "https://directus-test-pfne2mqwja-as.a.run.app"
+  },
+  "flows": [
+    {
+      "name": "[DOT] Feedback Action Request Handler",
+      "icon": "notifications",
+      "color": "#FF5722",
+      "status": "active",
+      "trigger": "event",
+      "accountability": "all",
+      "options": {
+        "type": "action",
+        "scope": ["items.create"],
+        "collections": ["feedbacks"]
+      },
+      "operations": [
+        {
+          "name": "Filter Action Requests",
+          "key": "filter_action",
+          "type": "condition",
+          "position_x": 19,
+          "position_y": 1,
+          "options": {
+            "filter": {
+              "_and": [
+                {
+                  "feedback_type": {
+                    "_eq": "action_request"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Log Action Request",
+          "key": "log_action",
+          "type": "log",
+          "position_x": 37,
+          "position_y": 1,
+          "options": {
+            "message": "[AI-FEEDBACK] ACTION REQUEST | Entity={{$trigger.payload.linked_entity_ref}} | Content={{$trigger.payload.content}} | Model={{$trigger.payload.source_model}}"
+          },
+          "resolve": "filter_action"
+        },
+        {
+          "name": "Send Webhook Alert",
+          "key": "webhook_alert",
+          "type": "request",
+          "position_x": 55,
+          "position_y": 1,
+          "options": {
+            "url": "{{$env.FEEDBACK_WEBHOOK_URL}}",
+            "method": "POST",
+            "headers": [
+              {
+                "header": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "type": "ai_feedback_action_request",
+              "entity_ref": "{{$trigger.payload.linked_entity_ref}}",
+              "content": "{{$trigger.payload.content}}",
+              "source_model": "{{$trigger.payload.source_model}}",
+              "context": "{{$trigger.payload.context_snippet}}",
+              "feedback_id": "{{$trigger.key}}",
+              "created_at": "{{$trigger.payload.date_created}}"
+            }
+          },
+          "resolve": "log_action"
+        }
+      ]
+    },
+    {
+      "name": "[DOT] Feedback Status Change Notification",
+      "icon": "check_circle",
+      "color": "#4CAF50",
+      "status": "active",
+      "trigger": "event",
+      "accountability": "all",
+      "options": {
+        "type": "action",
+        "scope": ["items.update"],
+        "collections": ["feedbacks"]
+      },
+      "operations": [
+        {
+          "name": "Check Status Changed to Resolved",
+          "key": "check_resolved",
+          "type": "condition",
+          "position_x": 19,
+          "position_y": 1,
+          "options": {
+            "filter": {
+              "_and": [
+                {
+                  "status": {
+                    "_eq": "resolved"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Log Resolution",
+          "key": "log_resolved",
+          "type": "log",
+          "position_x": 37,
+          "position_y": 1,
+          "options": {
+            "message": "[AI-FEEDBACK] RESOLVED | ID={{$trigger.keys[0]}} | By={{$trigger.payload.resolved_by}}"
+          },
+          "resolve": "check_resolved"
+        }
+      ]
+    }
+  ]
+}

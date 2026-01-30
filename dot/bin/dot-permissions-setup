@@ -1,0 +1,233 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-permissions-setup - Configure AI_Agent role permissions via API
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-01-30): Initial version for WEB-30
+#     - Creates feedbacks.create, feedbacks.read, agent_views.read permissions
+#     - Links to existing Agent Policy
+#     - Idempotent: checks before create
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source environment configuration
+if [[ -f "${SCRIPT_DIR}/../config/environment.sh" ]]; then
+  source "${SCRIPT_DIR}/../config/environment.sh"
+fi
+
+VERSION="1.0.0"
+
+# Agent Policy ID (where permissions are linked)
+AGENT_POLICY_ID="74d6c90f-1481-49f6-8b86-ee7d0f1ed269"
+
+# Logging functions
+log_info() { echo "ℹ️  [INFO] $1"; }
+log_ok() { echo "✅ [OK] $1"; }
+log_warn() { echo "⚠️  [WARN] $1"; }
+log_skip() { echo "⏭️  [SKIP] $1"; }
+log_err() { echo "❌ [ERR] $1" >&2; }
+
+require_cmds() {
+  for cmd in curl jq; do
+    command -v "$cmd" >/dev/null 2>&1 || { log_err "Missing required command: $cmd"; exit 1; }
+  done
+}
+
+get_admin_token() {
+  local base_url="$1"
+  local email="${DIRECTUS_ADMIN_EMAIL:-admin@example.com}"
+  local password="${DIRECTUS_ADMIN_PASSWORD:-}"
+
+  if [[ -z "$password" ]]; then
+    log_err "DIRECTUS_ADMIN_PASSWORD not set"
+    exit 1
+  fi
+
+  # Create temp file for payload to handle special characters
+  local temp_file=$(mktemp)
+  cat > "$temp_file" << EOF
+{"email":"${email}","password":"${password}"}
+EOF
+
+  local response
+  response=$(curl -s -X POST "${base_url}/auth/login" \
+    -H "Content-Type: application/json" \
+    -d @"$temp_file")
+  rm "$temp_file"
+
+  echo "$response" | jq -r '.data.access_token // empty'
+}
+
+permission_exists() {
+  local token="$1"
+  local base_url="$2"
+  local collection="$3"
+  local action="$4"
+  local policy="$5"
+
+  local count
+  count=$(curl -s "${base_url}/permissions?filter[policy][_eq]=${policy}&filter[collection][_eq]=${collection}&filter[action][_eq]=${action}" \
+    -H "Authorization: Bearer $token" | jq '.data | length')
+
+  [[ "$count" -gt 0 ]]
+}
+
+create_permission() {
+  local token="$1"
+  local base_url="$2"
+  local collection="$3"
+  local action="$4"
+  local fields="$5"
+  local permissions_filter="$6"
+
+  if permission_exists "$token" "$base_url" "$collection" "$action" "$AGENT_POLICY_ID"; then
+    log_skip "Permission ${collection}.${action} already exists"
+    return 0
+  fi
+
+  log_info "Creating permission: ${collection}.${action}"
+
+  local payload
+  payload=$(jq -nc \
+    --arg policy "$AGENT_POLICY_ID" \
+    --arg collection "$collection" \
+    --arg action "$action" \
+    --argjson fields "$fields" \
+    --argjson permissions "$permissions_filter" \
+    '{
+      policy: $policy,
+      collection: $collection,
+      action: $action,
+      fields: $fields,
+      permissions: $permissions,
+      validation: {}
+    }')
+
+  local response
+  response=$(curl -s -X POST "${base_url}/permissions" \
+    -H "Authorization: Bearer $token" \
+    -H "Content-Type: application/json" \
+    -d "$payload")
+
+  local perm_id
+  perm_id=$(echo "$response" | jq -r '.data.id // empty')
+
+  if [[ -n "$perm_id" ]]; then
+    log_ok "Permission ${collection}.${action} created (ID: $perm_id)"
+  else
+    local err_msg
+    err_msg=$(echo "$response" | jq -r '.errors[0].message // "Unknown error"')
+    log_warn "Could not create ${collection}.${action}: $err_msg"
+  fi
+}
+
+show_help() {
+  cat << EOF
+dot-permissions-setup v${VERSION} - Configure AI_Agent role permissions
+
+Usage:
+  dot-permissions-setup [options]
+
+Options:
+  --local       Use local development environment
+  --cloud       Use cloud/production environment (default)
+  --dry-run     Show what would be done without making changes
+  --help, -h    Show this help message
+
+Permissions Created:
+  - feedbacks.create  (fields: linked_entity_ref, entity_type, feedback_type,
+                       content, context_snippet, source_model, fingerprint_id,
+                       metadata, parent_id, status)
+  - feedbacks.read    (filter: own records only)
+  - agent_views.read  (all published)
+
+Prerequisites:
+  - DIRECTUS_ADMIN_PASSWORD must be set
+  - Admin token with permission to create permissions
+
+EOF
+}
+
+main() {
+  local dry_run=false
+
+  # Parse arguments
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h)
+        show_help
+        exit 0
+        ;;
+      --dry-run)
+        dry_run=true
+        ;;
+    esac
+  done
+
+  require_cmds
+
+  # Initialize environment
+  if type init_environment &>/dev/null; then
+    init_environment "$@"
+    BASE_URL="$DIRECTUS_URL"
+  else
+    BASE_URL="${DIRECTUS_BASE_URL:-https://directus-test-pfne2mqwja-as.a.run.app}"
+  fi
+
+  echo "========================================="
+  echo "DOT Tool: Permissions Setup v${VERSION}"
+  echo "========================================="
+  echo ""
+  echo "Directus URL: $BASE_URL"
+  echo "Agent Policy: $AGENT_POLICY_ID"
+  echo ""
+
+  if [[ "$dry_run" == "true" ]]; then
+    log_warn "DRY RUN MODE - No changes will be made"
+    echo ""
+  fi
+
+  # Get admin token
+  log_info "Authenticating with Directus..."
+  local token
+  token=$(get_admin_token "$BASE_URL")
+
+  if [[ -z "$token" ]]; then
+    log_err "Failed to authenticate with Directus"
+    exit 1
+  fi
+  log_ok "Authenticated (token: ${token:0:8}...)"
+
+  if [[ "$dry_run" == "true" ]]; then
+    log_info "Would create: feedbacks.create"
+    log_info "Would create: feedbacks.read"
+    log_info "Would create: agent_views.read"
+  else
+    # Permission 1: feedbacks.create
+    # Include all writeable fields including parent_id for threading and status
+    create_permission "$token" "$BASE_URL" "feedbacks" "create" \
+      '["linked_entity_ref", "entity_type", "feedback_type", "content", "context_snippet", "source_model", "fingerprint_id", "metadata", "parent_id", "status"]' \
+      '{}'
+
+    # Permission 2: feedbacks.read (own records)
+    create_permission "$token" "$BASE_URL" "feedbacks" "read" \
+      '["*"]' \
+      '{"_and":[{"user_created":{"_eq":"$CURRENT_USER"}}]}'
+
+    # Permission 3: agent_views.read (published only)
+    create_permission "$token" "$BASE_URL" "agent_views" "read" \
+      '["*"]' \
+      '{"status":{"_eq":"published"}}'
+  fi
+
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Permissions Setup - COMPLETE"
+  echo "========================================="
+}
+
+main "$@"
