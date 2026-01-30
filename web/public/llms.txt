@@ -1,0 +1,96 @@
+# Agent Data Knowledge Base
+# AI-readable index for GPT Actions, Gemini Extensions, and web crawlers
+# Last Updated: 2026-01-30
+# Maintainer: Agency OS Team
+
+## OVERVIEW
+This knowledge base contains business documentation for Business Operating System (Business OS).
+Primary language: Vietnamese
+Total documents: ~900 files
+Source of Truth: GitHub repository (Huyen1974/web-test)
+
+## STRUCTURE
+/docs/policies/    - Chinh sach & Luat (Policies & Laws)
+/docs/plans/       - Ke hoach chien luoc (Strategic Plans)
+/docs/processes/   - Quy trinh van hanh (Operating Procedures)
+/docs/guides/      - Huong dan su dung (User Guides)
+
+## KEY DOCUMENTS (MUST READ)
+- ALL_LAWs_MD.md - Hien phap ha tang (Infrastructure Constitution) - Source of Truth for all rules
+- BUSINESS_OS_BLUEPRINT.md - Kien truc tong the he thong (System Architecture)
+- ARCHITECTURE_DECISIONS.md - Cac quyet dinh kien truc (ADRs)
+- BUCKETS_MASTER_BLUEPRINT.md - Quy hoach GCS Buckets
+
+## API ENDPOINTS
+
+### Agent Data Service
+Base URL: https://agent-data-test-pfne2mqwja-as.a.run.app
+Note: Requires Cloud IAM authentication or internal access
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| /info | GET | IAM | System information and health |
+| /health | GET | None | Health check |
+| /chat | POST | IAM | RAG query with vector search |
+| /api/docs/tree | GET | IAM | Folder structure from GitHub |
+| /api/docs/file | GET | IAM | File content from GitHub |
+| /documents | POST | API Key | Create knowledge document |
+| /documents/{id} | PUT | API Key | Update document |
+| /documents/{id} | DELETE | API Key | Delete document |
+
+### Directus CMS (Public Read)
+Base URL: https://directus-test-pfne2mqwja-as.a.run.app
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| /items/agent_views | GET | Public | Read synced documents |
+| /items/feedbacks | POST | Token | Create feedback/comment |
+| /items/knowledge_documents | GET | Public | Read knowledge documents |
+
+### Production Website
+Base URL: https://ai.incomexsaigoncorp.vn
+
+| Path | Description |
+|------|-------------|
+| /docs | Documentation viewer with TreeView |
+| /knowledge | Knowledge Hub with filtering |
+| /approval-desk | Document approval workflow |
+| /help | Help center articles |
+
+## AUTHENTICATION
+
+### For Read Operations
+- Directus public collections: No auth required
+- Agent Data endpoints: Cloud IAM or internal service account
+- Production website: Public access
+
+### For Write Operations
+- Agent Data CRUD: Requires `x-api-key` header
+- Directus feedbacks: Requires Bearer Token (Directus Static Token)
+- Token source: Directus User [Agent] static token or Secret Manager
+
+## RECOMMENDED AI WORKFLOW
+
+### Option A: Direct Directus Access (Recommended for Public Read)
+1. GET /items/agent_views to list all documents
+2. Filter by path, status, or search content
+3. POST /items/feedbacks to contribute insights (requires token)
+
+### Option B: Agent Data RAG (Requires IAM)
+1. GET /info to check system status
+2. POST /chat with semantic query
+3. Response includes relevant context and sources
+
+## DATA FRESHNESS
+- agent_views synced from GitHub via webhook
+- Last sync visible in `last_synced` field
+- SHA checksum ensures content integrity
+
+## OPENAPI SPECIFICATION
+Full API specification available at:
+https://ai.incomexsaigoncorp.vn/agent_data_openapi.yaml
+
+## CONTACT
+- Technical issues: Create feedback via Directus API
+- Urgent: admin@incomexsaigoncorp.vn
+- Repository: https://github.com/Huyen1974/web-test
