@@ -1,61 +1,67 @@
 openapi: 3.1.0
 info:
-  title: Agent Data Knowledge API
+  title: Business OS Knowledge API
   description: |
     API for AI models (GPT, Gemini, Claude) to access and contribute to
     Business OS knowledge base. Supports reading documents, semantic search,
     and creating feedback/comments.
 
-    ## Authentication Notes
-    - **Agent Data Service**: Protected by Cloud IAM. External access requires
-      service account or internal network.
-    - **Directus CMS**: Public read for `agent_views`, write requires Bearer Token.
-    - **Bearer Token Source**: Directus Static Token from User [Agent] or
-      Secret Manager key `DIRECTUS_ADMIN_TOKEN`.
+    ## Architecture Overview
+    - **AI Gateway** (`/api/ai/*`): Public proxy with Bearer token auth
+    - **Directus CMS**: Public read for `agent_views`, write requires Bearer Token
+    - **Agent Data Service**: Internal vector search (proxied via AI Gateway)
 
-    ## Known Limitations
-    - `/api/docs/context` endpoint does NOT exist. Use `/chat` for context retrieval.
-    - Agent Data requires IAM auth; for public access, use Directus endpoints.
-  version: 1.0.0
+    ## Recommended Workflow for AI Models
+    1. `GET /api/ai/info` - Check system status
+    2. `GET /items/agent_views` - Read documents (public, no auth)
+    3. `POST /api/ai/search` - Semantic search (requires AI_GATEWAY_TOKEN)
+    4. `POST /items/feedbacks` - Submit feedback (requires Directus token)
+
+    ## Authentication
+    - **AI Gateway** (`/api/ai/*`): Bearer token from `AI_GATEWAY_TOKEN`
+    - **Directus Write**: Bearer token from Directus AI_Agent user
+    - **Directus Read**: Public access for `agent_views`
+
+  version: 2.0.0
   contact:
     email: admin@incomexsaigoncorp.vn
 
 servers:
-  - url: https://agent-data-test-pfne2mqwja-as.a.run.app
-    description: Agent Data Service (IAM Protected)
+  - url: https://ai.incomexsaigoncorp.vn
+    description: Production AI Gateway (Recommended)
   - url: https://directus-test-pfne2mqwja-as.a.run.app
     description: Directus CMS (Public Read)
+  - url: https://agent-data-test-pfne2mqwja-as.a.run.app
+    description: Agent Data Service (Internal - IAM Protected)
 
 components:
   securitySchemes:
-    BearerAuth:
+    AIGatewayAuth:
       type: http
       scheme: bearer
       description: |
-        Directus Static Token for write operations.
-        Obtain from Directus Admin UI > Users > [Agent] > Token
+        AI Gateway Token for search operations.
+        Obtain from: Secret Manager key `AI_GATEWAY_TOKEN`
+        Rate limit: 100 requests/minute
+    DirectusAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Directus Static Token for feedback/write operations.
+        Obtain from: Directus Admin UI > Users > AI_Agent > Token
     ApiKeyAuth:
       type: apiKey
       in: header
       name: x-api-key
-      description: API Key for Agent Data CRUD operations
+      description: API Key for Agent Data CRUD operations (internal)
 
   schemas:
-    HealthResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          example: "healthy"
-        timestamp:
-          type: string
-          format: date-time
-
     SystemInfo:
       type: object
       properties:
         status:
           type: string
+          enum: [healthy, degraded, disabled]
           example: "healthy"
         version:
           type: string
@@ -65,49 +71,154 @@ components:
         environment:
           type: string
           example: "test"
-
-    ChatRequest:
-      type: object
-      required:
-        - message
-      properties:
+        timestamp:
+          type: string
+          format: date-time
         message:
           type: string
-          description: Question to ask the knowledge base
-          example: "Hien phap he thong co nhung nguyen tac gi?"
+          description: Status message (present when degraded/disabled)
+
+    SearchRequest:
+      type: object
+      required:
+        - query
+      properties:
         query:
           type: string
-          description: Alternative field for message
-        text:
-          type: string
-          description: Alternative field for message
-        filters:
-          type: object
-          description: Optional tag/tenant filtering
+          maxLength: 2000
+          description: Search query (max 2000 characters)
+          example: "Hien phap he thong co nhung nguyen tac gi?"
         top_k:
           type: integer
           default: 5
           minimum: 1
           maximum: 20
-          description: Number of context results
+          description: Number of results to return
+        filters:
+          type: object
+          description: Optional filtering by tags, tenant, etc.
         session_id:
           type: string
-          description: Session identifier for conversation history
+          description: Session ID for conversation context
 
-    ChatResponse:
+    SearchResponse:
       type: object
       properties:
         response:
           type: string
-          description: AI-generated answer
+          description: AI-generated answer based on retrieved context
         sources:
           type: array
           items:
             type: string
-          description: Source documents used
+          description: Source document paths used for the response
         context:
           type: string
           description: Retrieved context passages
+
+    AgentView:
+      type: object
+      description: Document synced from GitHub to Directus
+      properties:
+        id:
+          type: integer
+        source_id:
+          type: string
+          description: Original filename
+        permalink:
+          type: string
+          description: URL-friendly path
+        title:
+          type: string
+        content:
+          type: string
+          description: Full markdown content
+        summary:
+          type: string
+          description: First 500 chars
+        path:
+          type: string
+          description: File path in repository
+        sha:
+          type: string
+          description: Git commit SHA
+        status:
+          type: string
+          enum: [published, draft]
+        last_synced:
+          type: string
+          format: date-time
+
+    FeedbackCreate:
+      type: object
+      required:
+        - content
+        - feedback_type
+      properties:
+        title:
+          type: string
+          maxLength: 500
+          description: Optional title/subject
+        content:
+          type: string
+          description: Feedback content (Markdown supported)
+        feedback_type:
+          type: string
+          enum: [comment, review, request, suggestion, question, praise, ai_analysis]
+          default: comment
+        priority:
+          type: string
+          enum: [low, normal, high, urgent]
+          default: normal
+        linked_entity_ref:
+          type: string
+          description: "Reference format: entity_type:entity_id (e.g., doc:abc123, agent_view:45)"
+        linked_entity_url:
+          type: string
+          format: uri
+          description: URL to the referenced entity
+        parent_id:
+          type: string
+          format: uuid
+          description: |
+            Parent feedback ID for threading (reply-to).
+            Use this to create conversation threads.
+            Null for root-level feedback.
+        context_snippet:
+          type: string
+          maxLength: 2000
+          description: |
+            Snapshot of referenced content at time of feedback (max 2000 chars).
+            Prevents AI hallucination when source document changes later.
+            Store the exact text you're commenting on.
+        fingerprint_id:
+          type: string
+          maxLength: 64
+          description: |
+            Anonymous user fingerprint for tracking feedback from
+            non-authenticated users. Used for future merge with user accounts.
+        author_type:
+          type: string
+          enum: [human, ai_agent, system]
+          default: ai_agent
+          description: Type of feedback author
+        author_name:
+          type: string
+          maxLength: 255
+          description: Display name (for AI, use model name like 'GPT-4', 'Claude')
+
+    FeedbackResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        feedback_code:
+          type: string
+          example: "FB-2026-00042"
+        status:
+          type: string
+          example: "open"
 
     TreeResponse:
       type: object
@@ -153,188 +264,273 @@ components:
         size:
           type: integer
 
-    AgentView:
+    ErrorResponse:
       type: object
-      description: Document synced from GitHub to Directus
       properties:
-        id:
+        statusCode:
           type: integer
-        source_id:
+        statusMessage:
           type: string
-          description: Original filename
-        permalink:
-          type: string
-          description: URL-friendly path
-        title:
-          type: string
-        content:
-          type: string
-          description: Full markdown content
-        summary:
-          type: string
-          description: First 500 chars
-        path:
-          type: string
-          description: File path in repository
-        sha:
-          type: string
-          description: Git commit SHA
-        status:
-          type: string
-          enum: [published, draft]
-        last_synced:
-          type: string
-          format: date-time
-
-    FeedbackCreate:
-      type: object
-      required:
-        - content
-        - feedback_type
-      properties:
-        title:
-          type: string
-          maxLength: 500
-        content:
-          type: string
-          description: Feedback content (Markdown supported)
-        feedback_type:
-          type: string
-          enum: [comment, review, request, suggestion, question, praise]
-          default: comment
-        linked_entity_ref:
-          type: string
-          description: "Format: entity_type:entity_id (e.g., doc:abc123)"
-        priority:
-          type: string
-          enum: [low, normal, high, urgent]
-          default: normal
-        fingerprint_id:
-          type: string
-          description: |
-            Anonymous user fingerprint for tracking feedback from
-            non-authenticated users. Used for future merge of anonymous
-            feedback with user accounts.
-
-    FeedbackResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        feedback_code:
-          type: string
-          example: "FB-2026-00042"
-        status:
-          type: string
-          example: "open"
-
-    DocumentCreate:
-      type: object
-      required:
-        - document_id
-        - content
-      properties:
-        document_id:
-          type: string
-          description: Unique document identifier
-        parent_id:
-          type: string
-          description: Parent document ID in tree
-        content:
-          type: object
-          properties:
-            mime_type:
-              type: string
-              example: "text/markdown"
-            body:
-              type: string
-        metadata:
-          type: object
-          properties:
-            title:
-              type: string
-            tags:
-              type: array
-              items:
-                type: string
-            source:
-              type: string
-        is_human_readable:
-          type: boolean
-          default: true
-
-    DocumentResponse:
-      type: object
-      properties:
-        id:
-          type: string
-        status:
-          type: string
-        revision:
-          type: integer
 
 paths:
-  /health:
+  # ============================================
+  # AI GATEWAY ENDPOINTS (Recommended for AI)
+  # ============================================
+
+  /api/ai/info:
     get:
-      operationId: healthCheck
-      summary: Health check endpoint
-      description: Returns basic health status (no auth required)
+      operationId: getAIGatewayInfo
+      summary: Get AI Gateway system status
+      description: |
+        Returns system status of the AI Gateway and backend vector service.
+        **Public endpoint** - no authentication required.
+        Cached for 30 seconds. Use this to check health before making search requests.
       servers:
-        - url: https://agent-data-test-pfne2mqwja-as.a.run.app
+        - url: https://ai.incomexsaigoncorp.vn
       security: []
       responses:
         '200':
-          description: Service is healthy
-          content:
-            application/json:
+          description: System information
+          headers:
+            X-Cache:
               schema:
-                $ref: '#/components/schemas/HealthResponse'
-
-  /info:
-    get:
-      operationId: getSystemInfo
-      summary: Get system information
-      description: |
-        Returns detailed system info including version and dependencies.
-        **Note**: Requires Cloud IAM authentication.
-      servers:
-        - url: https://agent-data-test-pfne2mqwja-as.a.run.app
-      responses:
-        '200':
-          description: System info
+                type: string
+                enum: [HIT, MISS]
+              description: Cache status
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SystemInfo'
-        '403':
-          description: IAM authentication required
+        '429':
+          description: Rate limit exceeded (200 req/min by IP)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
-  /chat:
+  /api/ai/search:
     post:
-      operationId: queryKnowledge
-      summary: Query knowledge base using RAG
+      operationId: searchKnowledge
+      summary: Semantic search in knowledge base
       description: |
-        Semantic search across all documents using vector search.
+        Performs semantic/vector search across all documents in the knowledge base.
         Returns AI-generated response with source citations.
-        **Note**: Requires Cloud IAM authentication.
+
+        **Rate Limit**: 100 requests/minute per token
+        **Query Limit**: Max 2000 characters
+        **Timeout**: 60 seconds (RAG processing)
+
+        This endpoint proxies to the internal Agent Data vector search service
+        and adds authentication, rate limiting, and audit logging.
       servers:
-        - url: https://agent-data-test-pfne2mqwja-as.a.run.app
+        - url: https://ai.incomexsaigoncorp.vn
+      security:
+        - AIGatewayAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ChatRequest'
+              $ref: '#/components/schemas/SearchRequest'
+            examples:
+              basic:
+                summary: Basic search
+                value:
+                  query: "Hien phap he thong co nhung nguyen tac gi?"
+              with_options:
+                summary: Search with options
+                value:
+                  query: "Quy trinh phe duyet tai lieu"
+                  top_k: 10
+                  session_id: "session-123"
       responses:
         '200':
-          description: AI response with sources
+          description: Search results with AI response
+          headers:
+            X-RateLimit-Limit:
+              schema:
+                type: integer
+              description: Request limit per window
+            X-RateLimit-Remaining:
+              schema:
+                type: integer
+              description: Remaining requests in current window
+            X-RateLimit-Reset:
+              schema:
+                type: integer
+              description: Unix timestamp when limit resets
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ChatResponse'
+                $ref: '#/components/schemas/SearchResponse'
+        '400':
+          description: Invalid request (missing/empty query)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid Bearer token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Backend service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ============================================
+  # DIRECTUS PUBLIC ENDPOINTS
+  # ============================================
+
+  /items/agent_views:
+    get:
+      operationId: listAgentViews
+      summary: List synced documents (Public)
+      description: |
+        Returns documents synced from GitHub. **Public read access** - no auth required.
+        This is the recommended endpoint for AI models to read document content
+        without needing authentication.
+
+        Documents are synced from the `docs/` folder in the web-test GitHub repository.
+      servers:
+        - url: https://directus-test-pfne2mqwja-as.a.run.app
+      security: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+          description: Number of items to return
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: Pagination offset
+        - name: filter[status][_eq]
+          in: query
+          schema:
+            type: string
+            default: "published"
+          description: Filter by status
+        - name: filter[path][_contains]
+          in: query
+          schema:
+            type: string
+          description: Filter by path pattern (e.g., "policies/")
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Full-text search in content
+        - name: fields
+          in: query
+          schema:
+            type: string
+            example: "id,title,path,summary,last_synced"
+          description: Fields to return (comma-separated)
+        - name: sort
+          in: query
+          schema:
+            type: string
+            example: "-last_synced"
+          description: Sort field (prefix with - for descending)
+      responses:
+        '200':
+          description: List of documents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AgentView'
+
+  # ============================================
+  # DIRECTUS FEEDBACK ENDPOINTS
+  # ============================================
+
+  /items/feedbacks:
+    post:
+      operationId: createFeedback
+      summary: Create feedback/comment
+      description: |
+        Creates feedback entry in Business OS. Can be linked to any document
+        using `linked_entity_ref`. Supports threading via `parent_id`.
+
+        **Token Acquisition**:
+        1. Admin creates user in Directus with role `AI_Agent`
+        2. Generate static token: Directus Admin > Users > AI_Agent > Token
+        3. Store token in Secret Manager as `DIRECTUS_AI_AGENT_TOKEN`
+
+        **Best Practices for AI**:
+        - Always include `context_snippet` with the exact text being commented on
+        - Set `author_type: "ai_agent"` and `author_name` to your model name
+        - Use `linked_entity_ref` format: `agent_view:{id}` for documents
+      servers:
+        - url: https://directus-test-pfne2mqwja-as.a.run.app
+      security:
+        - DirectusAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedbackCreate'
+            examples:
+              ai_feedback:
+                summary: AI providing feedback on a document
+                value:
+                  content: "This document lacks clarity on the approval workflow steps. Consider adding a flowchart."
+                  feedback_type: "suggestion"
+                  priority: "normal"
+                  linked_entity_ref: "agent_view:42"
+                  linked_entity_url: "https://ai.incomexsaigoncorp.vn/docs/processes/approval"
+                  context_snippet: "The approval process involves multiple stakeholders..."
+                  author_type: "ai_agent"
+                  author_name: "GPT-4"
+              reply_to_feedback:
+                summary: Reply to existing feedback (threading)
+                value:
+                  content: "Thank you for the suggestion. I've added a Mermaid diagram in the next version."
+                  feedback_type: "comment"
+                  parent_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                  author_type: "human"
+                  author_name: "Documentation Team"
+      responses:
+        '201':
+          description: Feedback created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/FeedbackResponse'
+        '401':
+          description: Missing or invalid Bearer Token
         '403':
-          description: IAM authentication required
+          description: Permission denied (role lacks create permission)
+        '422':
+          description: Validation error (missing required fields)
+
+  # ============================================
+  # AGENT DATA INTERNAL ENDPOINTS (IAM Protected)
+  # ============================================
 
   /api/docs/tree:
     get:
@@ -342,7 +538,7 @@ paths:
       summary: Get folder structure from GitHub
       description: |
         Returns hierarchical tree of documents from GitHub repository.
-        **Note**: Requires Cloud IAM authentication.
+        **Internal endpoint** - requires Cloud IAM or use AI Gateway instead.
       servers:
         - url: https://agent-data-test-pfne2mqwja-as.a.run.app
       parameters:
@@ -374,7 +570,7 @@ paths:
       summary: Get file content from GitHub
       description: |
         Returns decoded file content from GitHub repository.
-        **Note**: Requires Cloud IAM authentication.
+        **Internal endpoint** - requires Cloud IAM or use Directus agent_views instead.
       servers:
         - url: https://agent-data-test-pfne2mqwja-as.a.run.app
       parameters:
@@ -402,178 +598,3 @@ paths:
           description: IAM authentication required
         '404':
           description: File not found
-
-  /documents:
-    post:
-      operationId: createDocument
-      summary: Create a new knowledge document
-      description: |
-        Creates a new document in the knowledge base with automatic
-        vector indexing. Requires API key authentication.
-      servers:
-        - url: https://agent-data-test-pfne2mqwja-as.a.run.app
-      security:
-        - ApiKeyAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DocumentCreate'
-      responses:
-        '201':
-          description: Document created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DocumentResponse'
-        '401':
-          description: Invalid API key
-        '403':
-          description: API key not configured
-
-  /documents/{doc_id}:
-    put:
-      operationId: updateDocument
-      summary: Update an existing document
-      servers:
-        - url: https://agent-data-test-pfne2mqwja-as.a.run.app
-      security:
-        - ApiKeyAuth: []
-      parameters:
-        - name: doc_id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DocumentCreate'
-      responses:
-        '200':
-          description: Document updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DocumentResponse'
-    delete:
-      operationId: deleteDocument
-      summary: Soft-delete a document
-      servers:
-        - url: https://agent-data-test-pfne2mqwja-as.a.run.app
-      security:
-        - ApiKeyAuth: []
-      parameters:
-        - name: doc_id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Document deleted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DocumentResponse'
-
-  /items/agent_views:
-    get:
-      operationId: listAgentViews
-      summary: List synced documents (Public)
-      description: |
-        Returns documents synced from GitHub. Public read access.
-        This is the recommended endpoint for AI models to read documents
-        without IAM authentication.
-      servers:
-        - url: https://directus-test-pfne2mqwja-as.a.run.app
-      security: []
-      parameters:
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 100
-          description: Number of items to return
-        - name: offset
-          in: query
-          schema:
-            type: integer
-            default: 0
-          description: Pagination offset
-        - name: filter[status][_eq]
-          in: query
-          schema:
-            type: string
-            default: "published"
-          description: Filter by status
-        - name: filter[path][_contains]
-          in: query
-          schema:
-            type: string
-          description: Filter by path pattern
-        - name: search
-          in: query
-          schema:
-            type: string
-          description: Full-text search in content
-        - name: fields
-          in: query
-          schema:
-            type: string
-            example: "id,title,path,summary,last_synced"
-          description: Fields to return (comma-separated)
-      responses:
-        '200':
-          description: List of documents
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AgentView'
-
-  /items/feedbacks:
-    post:
-      operationId: createFeedback
-      summary: Create a new feedback/comment
-      description: |
-        Creates feedback entry in Business OS. Can be linked to any document
-        or entity using linked_entity_ref. Requires Bearer Token.
-
-        **Token Acquisition**:
-        - Create a Directus user with role [Agent]
-        - Generate static token in Directus Admin UI
-        - Or retrieve from Secret Manager key `DIRECTUS_ADMIN_TOKEN`
-      servers:
-        - url: https://directus-test-pfne2mqwja-as.a.run.app
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/FeedbackCreate'
-      responses:
-        '201':
-          description: Feedback created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/FeedbackResponse'
-        '401':
-          description: Missing or invalid Bearer Token
-        '403':
-          description: Permission denied
-        '422':
-          description: Validation error
