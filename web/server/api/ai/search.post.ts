@@ -7,6 +7,10 @@
  * - Rate limiting: 100 requests per minute per token
  * - All requests logged for audit trail
  *
+ * CLOUD RUN AUTHENTICATION:
+ * - Uses Google Identity Token for service-to-service auth
+ * - Includes retry with exponential backoff for Cold Start handling
+ *
  * @endpoint POST /api/ai/search
  * @auth Bearer token required
  * @body { query: string, top_k?: number, filters?: object }
@@ -15,6 +19,12 @@
 
 import { joinURL } from 'ufo';
 import { H3Event } from 'h3';
+import {
+	getIdentityToken,
+	isRunningOnGoogleCloud,
+	getCloudRunServiceUrl,
+} from '~/server/utils/googleAuth';
+import { retryWithBackoff, warmUp } from '~/server/utils/retryWithBackoff';
 
 // Simple in-memory rate limiter (per-token)
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -39,15 +49,23 @@ interface AuditLog {
 	status: 'success' | 'error' | 'rate_limited' | 'unauthorized';
 	latency_ms?: number;
 	error?: string;
+	retries?: number;
 }
 
 function logAudit(log: AuditLog): void {
 	// Structured logging for Cloud Run / Cloud Logging
-	console.log(JSON.stringify({
-		severity: log.status === 'error' ? 'ERROR' : log.status === 'rate_limited' ? 'WARNING' : 'INFO',
-		message: `[AI-Gateway] ${log.method} ${log.endpoint}`,
-		...log,
-	}));
+	console.log(
+		JSON.stringify({
+			severity:
+				log.status === 'error'
+					? 'ERROR'
+					: log.status === 'rate_limited'
+						? 'WARNING'
+						: 'INFO',
+			message: `[AI-Gateway] ${log.method} ${log.endpoint}`,
+			...log,
+		})
+	);
 }
 
 function getClientIp(event: H3Event): string {
@@ -58,7 +76,11 @@ function getClientIp(event: H3Event): string {
 	return getHeader(event, 'x-real-ip') || 'unknown';
 }
 
-function checkRateLimit(tokenPrefix: string): { allowed: boolean; remaining: number; resetAt: number } {
+function checkRateLimit(tokenPrefix: string): {
+	allowed: boolean;
+	remaining: number;
+	resetAt: number;
+} {
 	const now = Date.now();
 	const entry = rateLimitMap.get(tokenPrefix);
 
@@ -81,6 +103,7 @@ export default defineEventHandler(async (event) => {
 	const config = useRuntimeConfig();
 	const ip = getClientIp(event);
 	const userAgent = getHeader(event, 'user-agent') || 'unknown';
+	let retryCount = 0;
 
 	// Check if Agent Data is enabled
 	if (!config.public.agentData?.enabled || !config.public.agentData?.baseUrl) {
@@ -213,17 +236,67 @@ export default defineEventHandler(async (event) => {
 	try {
 		const baseUrl = config.public.agentData.baseUrl;
 		const apiKey = config.agentData?.apiKey;
-		const chatUrl = joinURL(baseUrl, '/chat');
 
-		// Forward to Agent Data backend
-		const response = await $fetch(chatUrl, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				...(apiKey && { Authorization: `Bearer ${apiKey}` }),
+		// Get the Cloud Run service URL for Identity Token audience
+		// IMPORTANT: Identity Token audience MUST be the Cloud Run URL, not custom domain
+		const cloudRunUrl = getCloudRunServiceUrl(baseUrl);
+		const chatUrl = joinURL(baseUrl, '/chat');
+		const healthUrl = joinURL(baseUrl, '/health');
+
+		// Prepare headers for the request
+		const requestHeaders: Record<string, string> = {
+			'Content-Type': 'application/json',
+		};
+
+		// Add Google Identity Token if running on Cloud Run
+		// This is required for service-to-service authentication
+		if (isRunningOnGoogleCloud()) {
+			try {
+				const idToken = await getIdentityToken(cloudRunUrl);
+				requestHeaders['Authorization'] = `Bearer ${idToken}`;
+				console.log('[AI-Gateway] Using Google Identity Token for authentication');
+			} catch (authError) {
+				console.error('[AI-Gateway] Failed to get identity token:', authError);
+				// Fall back to API key if available
+				if (apiKey) {
+					requestHeaders['Authorization'] = `Bearer ${apiKey}`;
+					console.log('[AI-Gateway] Falling back to API key authentication');
+				}
+			}
+		} else if (apiKey) {
+			// Local development: use API key if available
+			requestHeaders['Authorization'] = `Bearer ${apiKey}`;
+		}
+
+		// Define the search operation with retry support
+		const searchOperation = async () => {
+			const response = await $fetch(chatUrl, {
+				method: 'POST',
+				headers: requestHeaders,
+				body: sanitizedBody,
+				timeout: 60000, // 60s timeout for RAG
+			});
+			return response;
+		};
+
+		// Execute with retry and exponential backoff
+		// This handles Cold Start scenarios where service may take 10-30s to start
+		const response = await retryWithBackoff(searchOperation, {
+			maxRetries: 3,
+			initialDelayMs: 2000, // 2s initial delay
+			maxDelayMs: 15000, // 15s max wait
+			onRetry: async (attempt, error, delayMs) => {
+				retryCount = attempt;
+				console.warn(
+					`[AI-Gateway] Retry ${attempt}/3: ${error.message}, waiting ${delayMs}ms...`
+				);
+
+				// On first retry, try a warm-up request to wake the service
+				if (attempt === 1) {
+					console.log('[AI-Gateway] Sending warm-up request to Agent Data...');
+					await warmUp(healthUrl, requestHeaders);
+				}
 			},
-			body: sanitizedBody,
-			timeout: 60000, // 60s timeout for RAG
 		});
 
 		const latency = Date.now() - startTime;
@@ -238,6 +311,7 @@ export default defineEventHandler(async (event) => {
 			user_agent: userAgent,
 			status: 'success',
 			latency_ms: latency,
+			retries: retryCount,
 		});
 
 		return response;
@@ -255,17 +329,23 @@ export default defineEventHandler(async (event) => {
 			status: 'error',
 			latency_ms: latency,
 			error: error instanceof Error ? error.message : 'Unknown error',
+			retries: retryCount,
 		});
 
-		console.error('[AI-Gateway] Search failed:', error);
+		console.error('[AI-Gateway] Search failed after retries:', error);
 
-		const statusCode = typeof error === 'object' && error !== null && 'statusCode' in error
-			? (error.statusCode as number)
-			: 502;
+		const statusCode =
+			typeof error === 'object' && error !== null && 'statusCode' in error
+				? (error.statusCode as number)
+				: 503;
 
 		throw createError({
 			statusCode,
-			statusMessage: 'Agent Data backend error',
+			statusMessage: 'Knowledge search temporarily unavailable. Please try again.',
+			data: {
+				hint: 'Service may be warming up. Retry in 30 seconds.',
+				retryAfter: 30,
+			},
 		});
 	}
 });
