@@ -7,6 +7,10 @@
  * - Rate limiting: 200 requests per minute (higher limit for status checks)
  * - Cached for 30 seconds to reduce backend load
  *
+ * CLOUD RUN AUTHENTICATION:
+ * - Uses Google Identity Token for service-to-service auth
+ * - Includes retry for Cold Start handling
+ *
  * @endpoint GET /api/ai/info
  * @auth None required (public)
  * @returns System information from Agent Data backend
@@ -14,6 +18,12 @@
 
 import { joinURL } from 'ufo';
 import { H3Event } from 'h3';
+import {
+	getIdentityToken,
+	isRunningOnGoogleCloud,
+	getCloudRunServiceUrl,
+} from '~/server/utils/googleAuth';
+import { retryWithBackoff } from '~/server/utils/retryWithBackoff';
 
 // Simple cache for info endpoint
 let cachedInfo: { data: unknown; timestamp: number } | null = null;
@@ -72,7 +82,7 @@ export default defineEventHandler(async (event) => {
 
 	// Return cached response if valid
 	const now = Date.now();
-	if (cachedInfo && (now - cachedInfo.timestamp) < CACHE_TTL) {
+	if (cachedInfo && now - cachedInfo.timestamp < CACHE_TTL) {
 		setHeader(event, 'X-Cache', 'HIT');
 		return cachedInfo.data;
 	}
@@ -82,16 +92,46 @@ export default defineEventHandler(async (event) => {
 	try {
 		const baseUrl = config.public.agentData.baseUrl;
 		const apiKey = config.agentData?.apiKey;
+
+		// Get the Cloud Run service URL for Identity Token audience
+		const cloudRunUrl = getCloudRunServiceUrl(baseUrl);
 		const infoUrl = joinURL(baseUrl, '/info');
 
-		const response = await $fetch(infoUrl, {
-			method: 'GET',
-			headers: {
-				'Content-Type': 'application/json',
-				...(apiKey && { Authorization: `Bearer ${apiKey}` }),
+		// Prepare headers
+		const requestHeaders: Record<string, string> = {
+			'Content-Type': 'application/json',
+		};
+
+		// Add Google Identity Token if running on Cloud Run
+		if (isRunningOnGoogleCloud()) {
+			try {
+				const idToken = await getIdentityToken(cloudRunUrl);
+				requestHeaders['Authorization'] = `Bearer ${idToken}`;
+			} catch (authError) {
+				console.error('[AI-Gateway] Info: Failed to get identity token:', authError);
+				if (apiKey) {
+					requestHeaders['Authorization'] = `Bearer ${apiKey}`;
+				}
+			}
+		} else if (apiKey) {
+			requestHeaders['Authorization'] = `Bearer ${apiKey}`;
+		}
+
+		// Execute with retry (shorter retries for info endpoint)
+		const response = await retryWithBackoff(
+			async () => {
+				return await $fetch(infoUrl, {
+					method: 'GET',
+					headers: requestHeaders,
+					timeout: 30000,
+				});
 			},
-			timeout: 30000,
-		});
+			{
+				maxRetries: 2,
+				initialDelayMs: 1000,
+				maxDelayMs: 5000,
+			}
+		);
 
 		// Cache the response
 		cachedInfo = { data: response, timestamp: now };
