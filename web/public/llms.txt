@@ -1,96 +1,122 @@
-# Agent Data Knowledge Base
-# AI-readable index for GPT Actions, Gemini Extensions, and web crawlers
+# Business OS Knowledge Base
+# AI-readable index for GPT Actions, Gemini Extensions, and LLM integrations
+# Version: 2.0.0
 # Last Updated: 2026-01-30
 # Maintainer: Agency OS Team
 
 ## OVERVIEW
-This knowledge base contains business documentation for Business Operating System (Business OS).
-Primary language: Vietnamese
-Total documents: ~900 files
-Source of Truth: GitHub repository (Huyen1974/web-test)
+Business Operating System (Business OS) knowledge base containing organizational
+documentation, policies, processes, and guidelines.
 
-## STRUCTURE
-/docs/policies/    - Chinh sach & Luat (Policies & Laws)
-/docs/plans/       - Ke hoach chien luoc (Strategic Plans)
-/docs/processes/   - Quy trinh van hanh (Operating Procedures)
+- Primary language: Vietnamese
+- Total documents: ~900 files
+- Source of Truth: GitHub (Huyen1974/web-test)
+- Sync method: Webhook-triggered to Directus
+
+## DOCUMENT STRUCTURE
+/docs/policies/    - Chinh sach & Luat (Policies & Laws) - ~23 files
+/docs/plans/       - Ke hoach chien luoc (Strategic Plans) - ~12 files
+/docs/processes/   - Quy trinh van hanh (Operating Procedures) - ~847 files
 /docs/guides/      - Huong dan su dung (User Guides)
 
-## KEY DOCUMENTS (MUST READ)
-- ALL_LAWs_MD.md - Hien phap ha tang (Infrastructure Constitution) - Source of Truth for all rules
-- BUSINESS_OS_BLUEPRINT.md - Kien truc tong the he thong (System Architecture)
-- ARCHITECTURE_DECISIONS.md - Cac quyet dinh kien truc (ADRs)
-- BUCKETS_MASTER_BLUEPRINT.md - Quy hoach GCS Buckets
+## KEY DOCUMENTS (MUST READ FIRST)
+1. ALL_LAWs_MD.md - Hien phap ha tang (Infrastructure Constitution)
+2. BUSINESS_OS_BLUEPRINT.md - Kien truc tong the (System Architecture)
+3. ARCHITECTURE_DECISIONS.md - Cac quyet dinh kien truc (ADRs)
+4. UNIVERSAL_FEEDBACK_SYSTEM.md - He thong gop y (Feedback System)
 
-## API ENDPOINTS
+## API QUICK START
 
-### Agent Data Service
-Base URL: https://agent-data-test-pfne2mqwja-as.a.run.app
-Note: Requires Cloud IAM authentication or internal access
+### Step 1: Check System Status (No Auth)
+GET https://ai.incomexsaigoncorp.vn/api/ai/info
+
+### Step 2: Read Documents (No Auth)
+GET https://directus-test-pfne2mqwja-as.a.run.app/items/agent_views?limit=100
+
+### Step 3: Semantic Search (Requires Token)
+POST https://ai.incomexsaigoncorp.vn/api/ai/search
+Authorization: Bearer <AI_GATEWAY_TOKEN>
+Content-Type: application/json
+{"query": "Your question here", "top_k": 5}
+
+### Step 4: Submit Feedback (Requires Token)
+POST https://directus-test-pfne2mqwja-as.a.run.app/items/feedbacks
+Authorization: Bearer <DIRECTUS_AI_AGENT_TOKEN>
+Content-Type: application/json
+{
+  "content": "Your feedback",
+  "feedback_type": "suggestion",
+  "author_type": "ai_agent",
+  "author_name": "GPT-4"
+}
+
+## ENDPOINT REFERENCE
+
+### AI Gateway (Production - Recommended)
+Base: https://ai.incomexsaigoncorp.vn
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
-| /info | GET | IAM | System information and health |
-| /health | GET | None | Health check |
-| /chat | POST | IAM | RAG query with vector search |
-| /api/docs/tree | GET | IAM | Folder structure from GitHub |
-| /api/docs/file | GET | IAM | File content from GitHub |
-| /documents | POST | API Key | Create knowledge document |
-| /documents/{id} | PUT | API Key | Update document |
-| /documents/{id} | DELETE | API Key | Delete document |
+| /api/ai/info | GET | None | System status (cached 30s) |
+| /api/ai/search | POST | Bearer | Semantic search (100 req/min) |
 
-### Directus CMS (Public Read)
-Base URL: https://directus-test-pfne2mqwja-as.a.run.app
+### Directus CMS
+Base: https://directus-test-pfne2mqwja-as.a.run.app
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
-| /items/agent_views | GET | Public | Read synced documents |
-| /items/feedbacks | POST | Token | Create feedback/comment |
-| /items/knowledge_documents | GET | Public | Read knowledge documents |
+| /items/agent_views | GET | None | Read synced documents |
+| /items/feedbacks | POST | Bearer | Create feedback with threading |
 
 ### Production Website
-Base URL: https://ai.incomexsaigoncorp.vn
+Base: https://ai.incomexsaigoncorp.vn
 
 | Path | Description |
 |------|-------------|
 | /docs | Documentation viewer with TreeView |
 | /knowledge | Knowledge Hub with filtering |
 | /approval-desk | Document approval workflow |
-| /help | Help center articles |
+| /llms.txt | This file |
+| /agent_data_openapi.yaml | OpenAPI 3.1 specification |
 
 ## AUTHENTICATION
 
-### For Read Operations
-- Directus public collections: No auth required
-- Agent Data endpoints: Cloud IAM or internal service account
-- Production website: Public access
+### AI Gateway Token (for /api/ai/search)
+- Token name: AI_GATEWAY_TOKEN
+- Rate limit: 100 requests per minute
+- Source: Secret Manager or environment variable
+- Header: Authorization: Bearer <token>
 
-### For Write Operations
-- Agent Data CRUD: Requires `x-api-key` header
-- Directus feedbacks: Requires Bearer Token (Directus Static Token)
-- Token source: Directus User [Agent] static token or Secret Manager
+### Directus Token (for /items/feedbacks)
+- Create user in Directus with role: AI_Agent
+- Generate static token in Directus Admin UI
+- Store in Secret Manager as: DIRECTUS_AI_AGENT_TOKEN
+- Header: Authorization: Bearer <token>
 
-## RECOMMENDED AI WORKFLOW
+## FEEDBACK THREADING
+The feedback system supports conversation threads:
+- Use parent_id field to reply to existing feedback
+- Use context_snippet (max 2000 chars) to capture referenced content
+- Set author_type to "ai_agent" and author_name to your model name
 
-### Option A: Direct Directus Access (Recommended for Public Read)
-1. GET /items/agent_views to list all documents
-2. Filter by path, status, or search content
-3. POST /items/feedbacks to contribute insights (requires token)
+## BEST PRACTICES FOR AI MODELS
 
-### Option B: Agent Data RAG (Requires IAM)
-1. GET /info to check system status
-2. POST /chat with semantic query
-3. Response includes relevant context and sources
-
-## DATA FRESHNESS
-- agent_views synced from GitHub via webhook
-- Last sync visible in `last_synced` field
-- SHA checksum ensures content integrity
+1. Always check /api/ai/info before making search requests
+2. Use context_snippet when creating feedback to prevent hallucination
+3. Reference documents using linked_entity_ref: "agent_view:{id}"
+4. Respect rate limits (100 req/min for search)
+5. Include author_name to identify your AI model
 
 ## OPENAPI SPECIFICATION
-Full API specification available at:
-https://ai.incomexsaigoncorp.vn/agent_data_openapi.yaml
+Full API specification: https://ai.incomexsaigoncorp.vn/agent_data_openapi.yaml
+Import this into GPT Actions or Gemini Extensions for structured API access.
+
+## DATA FRESHNESS
+- Documents synced from GitHub via webhook
+- Check last_synced field in agent_views
+- SHA field provides content integrity verification
 
 ## CONTACT
-- Technical issues: Create feedback via Directus API
+- Technical issues: Create feedback via API
 - Urgent: admin@incomexsaigoncorp.vn
 - Repository: https://github.com/Huyen1974/web-test
