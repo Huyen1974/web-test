@@ -1,0 +1,71 @@
+{
+  "report": "WEB-31-GATEWAY-STATUS",
+  "generated": "2026-01-30T08:52:00Z",
+  "overall_status": "PARTIAL",
+  "components": {
+    "nuxt_frontend": {
+      "url": "https://ai.incomexsaigoncorp.vn",
+      "status": "HEALTHY",
+      "endpoints": {
+        "/llms.txt": {"status": 200, "healthy": true},
+        "/agent_data_openapi.yaml": {"status": 200, "healthy": true},
+        "/api/ai/info": {"status": 200, "healthy": true},
+        "/api/ai/search": {"status": 503, "healthy": false, "note": "Backend unavailable"}
+      }
+    },
+    "directus_cms": {
+      "url": "https://directus-test-pfne2mqwja-as.a.run.app",
+      "status": "HEALTHY",
+      "endpoints": {
+        "/items/agent_views": {"status": 200, "healthy": true, "auth": "public"},
+        "/items/feedbacks (read)": {"status": 200, "healthy": true, "auth": "bearer"},
+        "/items/feedbacks (create)": {"status": 201, "healthy": true, "auth": "bearer"}
+      }
+    },
+    "agent_data_service": {
+      "url": "https://agent-data-test-pfne2mqwja-as.a.run.app",
+      "status": "IAM_PROTECTED",
+      "direct_access": {
+        "/health": {"status": 403, "note": "Cloud IAM protected - expected"}
+      },
+      "proxy_access": {
+        "/api/ai/search": {"status": 503, "note": "Nuxt proxy returns 503 when backend unavailable"}
+      }
+    }
+  },
+  "tokens": {
+    "AI_GATEWAY_TOKEN": {
+      "source": "GCP Secret Manager",
+      "secret_name": "AI_GATEWAY_TOKEN",
+      "accessible": true
+    },
+    "DIRECTUS_AI_AGENT_TOKEN": {
+      "source": "GCP Secret Manager",
+      "secret_name": "DIRECTUS_AI_AGENT_TOKEN",
+      "accessible": true
+    }
+  },
+  "flows": {
+    "active_count": 7,
+    "feedback_notification": {
+      "deployed": false,
+      "spec_exists": true,
+      "spec_path": "dot/specs/feedback_notification_flow.v2.json",
+      "note": "Spec created in WEB-30 but not applied to Directus"
+    },
+    "existing_flows": [
+      {"name": "E1: Content Request Audit Log", "trigger": "event", "status": "active"},
+      {"name": "E1: Content Request → Agent Trigger", "trigger": "event", "status": "active"},
+      {"name": "[DOT] Agent Data Health Check", "trigger": "webhook", "status": "active"},
+      {"name": "[DOT] Agent Data Chat Test", "trigger": "webhook", "status": "active"},
+      {"name": "[TEST] Agent Data Health Check", "trigger": "manual", "status": "active"},
+      {"name": "[TEST] Agent Data Chat", "trigger": "manual", "status": "active"},
+      {"name": "Review Notification", "trigger": "event", "status": "active"}
+    ]
+  },
+  "recommendations": [
+    "Apply feedback_notification_flow.v2.json using dot-apply when FEEDBACK_WEBHOOK_URL is configured",
+    "Investigate Agent Data service 503 errors - may need to check Cloud Run scaling",
+    "Consider adding health check endpoint that doesn't require IAM"
+  ]
+}
