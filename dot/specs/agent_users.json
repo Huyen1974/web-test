@@ -1,0 +1,82 @@
+{
+  "description": "AI Agent Users Configuration for DOT automation",
+  "version": "1.0",
+  "created_by": "WEB-35-ULTRA",
+  "created_at": "2026-01-31",
+  "directus": {
+    "role": {
+      "id": "70b25a71-9d69-4b1f-8b50-79dbd0c1347a",
+      "name": "AI_AGENT",
+      "description": "Role for AI Agents (read/write items, no schema access)"
+    },
+    "policy": {
+      "id": "6de9d877-962a-4c50-946f-3df2da7af945",
+      "name": "AI_AGENT Policy"
+    },
+    "permissions": {
+      "read": ["agent_views", "feedbacks", "pages", "globals"],
+      "create": ["feedbacks"],
+      "update": ["feedbacks:own"]
+    }
+  },
+  "agents": {
+    "planning_team": [
+      {
+        "id": "chatgpt",
+        "email": "agent.chatgpt@incomexsaigoncorp.vn",
+        "name": "ChatGPT",
+        "purpose": "Strategy & Architecture",
+        "secret": "DIRECTUS_AGENT_CHATGPT_TOKEN"
+      },
+      {
+        "id": "gemini",
+        "email": "agent.gemini@incomexsaigoncorp.vn",
+        "name": "Gemini",
+        "purpose": "Review & Supervision",
+        "secret": "DIRECTUS_AGENT_GEMINI_TOKEN"
+      },
+      {
+        "id": "claude_desktop",
+        "email": "agent.claude_desktop@incomexsaigoncorp.vn",
+        "name": "Claude Desktop",
+        "purpose": "Analysis & Orchestration",
+        "secret": "DIRECTUS_AGENT_CLAUDE_DESKTOP_TOKEN"
+      }
+    ],
+    "execution_team": [
+      {
+        "id": "codex_cli",
+        "email": "agent.codex_cli@incomexsaigoncorp.vn",
+        "name": "Codex CLI",
+        "purpose": "Development",
+        "secret": "DIRECTUS_AGENT_CODEX_CLI_TOKEN"
+      },
+      {
+        "id": "claude_code_cli",
+        "email": "agent.claude_code_cli@incomexsaigoncorp.vn",
+        "name": "Claude Code CLI",
+        "purpose": "Development",
+        "secret": "DIRECTUS_AGENT_CLAUDE_CODE_CLI_TOKEN"
+      },
+      {
+        "id": "antigravity",
+        "email": "agent.antigravity@incomexsaigoncorp.vn",
+        "name": "Antigravity",
+        "purpose": "Local Automation",
+        "secret": "DIRECTUS_AGENT_ANTIGRAVITY_TOKEN"
+      },
+      {
+        "id": "gemini_cli",
+        "email": "agent.gemini_cli@incomexsaigoncorp.vn",
+        "name": "Gemini CLI",
+        "purpose": "Local Tasks",
+        "secret": "DIRECTUS_AGENT_GEMINI_CLI_TOKEN"
+      }
+    ]
+  },
+  "secret_manager": {
+    "project": "github-chatgpt-ggcloud",
+    "admin_secret": "DIRECTUS_ADMIN_TOKEN_test",
+    "agent_secret_pattern": "DIRECTUS_AGENT_{ID}_TOKEN"
+  }
+}

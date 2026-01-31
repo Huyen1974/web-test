@@ -1,7 +1,7 @@
 # Business OS Knowledge Base
 # AI-readable index for GPT Actions, Gemini Extensions, and LLM integrations
-# Version: 2.0.0
-# Last Updated: 2026-01-30
+# Version: 2.1.0
+# Last Updated: 2026-01-31
 # Maintainer: Agency OS Team
 
 ## OVERVIEW
@@ -26,6 +26,11 @@ documentation, policies, processes, and guidelines.
 4. UNIVERSAL_FEEDBACK_SYSTEM.md - He thong gop y (Feedback System)
 
 ## API QUICK START
+
+### Step 0: Get KB Structure First (RECOMMENDED - Saves Tokens!)
+GET https://ai.incomexsaigoncorp.vn/api/docs/context
+Returns: Total documents, zones/categories, recent updates, key topics
+Purpose: Understand KB structure before searching - reduces token usage
 
 ### Step 1: Check System Status (No Auth)
 GET https://ai.incomexsaigoncorp.vn/api/ai/info
@@ -57,6 +62,7 @@ Base: https://ai.incomexsaigoncorp.vn
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
+| /api/docs/context | GET | None | KB structure summary (CALL FIRST!) |
 | /api/ai/info | GET | None | System status (cached 30s) |
 | /api/ai/search | POST | Bearer | Semantic search (100 req/min) |
 
