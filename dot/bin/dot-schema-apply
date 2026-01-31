@@ -1,0 +1,307 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-schema-apply - Automatically apply schema changes via Directus API
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-01-31): Initial version for WEB-34B
+#     - Creates fields from JSON spec file
+#     - Idempotent: skips existing fields
+#     - Supports M2O relations
+# =============================================================================
+#
+# Usage: ./dot/bin/dot-schema-apply <spec-file.json> [--cloud|--local]
+#
+# Example:
+#   ./dot/bin/dot-schema-apply dot/specs/feedbacks_review_gates.json --cloud
+#
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VERSION="1.0.0"
+
+# Source environment configuration
+if [[ -f "${SCRIPT_DIR}/../config/environment.sh" ]]; then
+    source "${SCRIPT_DIR}/../config/environment.sh"
+fi
+
+# Logging functions
+log_info() { echo "ℹ️  [INFO] $1"; }
+log_ok() { echo "✅ [OK] $1"; }
+log_warn() { echo "⚠️  [WARN] $1"; }
+log_skip() { echo "⏭️  [SKIP] $1"; }
+log_err() { echo "❌ [ERR] $1" >&2; }
+
+show_help() {
+    cat << EOF
+dot-schema-apply v${VERSION} - Apply schema changes via Directus API
+
+Usage:
+  dot-schema-apply <spec-file.json> [options]
+
+Options:
+  --local       Use local development environment
+  --cloud       Use cloud/production environment (default)
+  --dry-run     Show what would be done without making changes
+  --help, -h    Show this help message
+
+Examples:
+  ./dot/bin/dot-schema-apply dot/specs/feedbacks_review_gates.json
+  ./dot/bin/dot-schema-apply dot/specs/feedbacks_review_gates.json --cloud
+  ./dot/bin/dot-schema-apply dot/specs/feedbacks_review_gates.json --dry-run
+
+Spec file format:
+{
+  "collection": "feedbacks",
+  "fields": [
+    {
+      "field": "field_name",
+      "type": "string",
+      "schema": { "is_nullable": true },
+      "meta": { "interface": "input" }
+    }
+  ]
+}
+
+EOF
+}
+
+# Parse arguments
+SPEC_FILE=""
+DRY_RUN=false
+USE_CLOUD=true
+
+for arg in "$@"; do
+    case "$arg" in
+        --help|-h)
+            show_help
+            exit 0
+            ;;
+        --dry-run)
+            DRY_RUN=true
+            ;;
+        --local)
+            USE_CLOUD=false
+            ;;
+        --cloud)
+            USE_CLOUD=true
+            ;;
+        *)
+            if [[ -z "$SPEC_FILE" && ! "$arg" =~ ^-- ]]; then
+                SPEC_FILE="$arg"
+            fi
+            ;;
+    esac
+done
+
+# Validate spec file
+if [[ -z "$SPEC_FILE" ]]; then
+    log_err "No spec file provided"
+    echo "Usage: $0 <spec-file.json> [--cloud|--local]"
+    exit 1
+fi
+
+if [[ ! -f "$SPEC_FILE" ]]; then
+    log_err "Spec file not found: $SPEC_FILE"
+    exit 1
+fi
+
+# Validate JSON
+if ! jq empty "$SPEC_FILE" 2>/dev/null; then
+    log_err "Invalid JSON in spec file: $SPEC_FILE"
+    exit 1
+fi
+
+# Set Directus URL based on environment
+if [[ "$USE_CLOUD" == "true" ]]; then
+    DIRECTUS_URL="${DIRECTUS_URL:-https://directus-test-pfne2mqwja-as.a.run.app}"
+else
+    DIRECTUS_URL="${DIRECTUS_URL:-http://localhost:8055}"
+fi
+
+# Get admin token
+get_admin_token() {
+    # First try environment variable
+    if [[ -n "${DIRECTUS_ADMIN_TOKEN:-}" ]]; then
+        echo "$DIRECTUS_ADMIN_TOKEN"
+        return
+    fi
+
+    # Try Secret Manager (cloud)
+    if [[ "$USE_CLOUD" == "true" ]]; then
+        local token
+        token=$(gcloud secrets versions access latest \
+            --secret="DIRECTUS_ADMIN_TOKEN_test" \
+            --project="github-chatgpt-ggcloud" 2>/dev/null || echo "")
+
+        if [[ -n "$token" ]]; then
+            echo "$token"
+            return
+        fi
+
+        # Try alternative secret name
+        token=$(gcloud secrets versions access latest \
+            --secret="DIRECTUS_AI_AGENT_TOKEN" \
+            --project="github-chatgpt-ggcloud" 2>/dev/null || echo "")
+
+        if [[ -n "$token" ]]; then
+            echo "$token"
+            return
+        fi
+    fi
+
+    # Try dot-auth
+    if [[ -f "${SCRIPT_DIR}/dot-auth" ]]; then
+        source "${SCRIPT_DIR}/dot-auth" "$@" 2>/dev/null || true
+        if [[ -n "${DOT_TOKEN:-}" ]]; then
+            echo "$DOT_TOKEN"
+            return
+        fi
+    fi
+
+    log_err "Could not obtain Directus admin token"
+    log_err "Set DIRECTUS_ADMIN_TOKEN environment variable or ensure gcloud access"
+    exit 1
+}
+
+# API request helper
+api_request() {
+    local method="$1"
+    local url="$2"
+    local data="${3:-}"
+    local resp
+
+    if [[ -n "$data" ]]; then
+        resp=$(curl -sS --globoff -X "$method" "$url" \
+            -H "Authorization: Bearer $ADMIN_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$data" \
+            -w "\n%{http_code}" 2>&1)
+    else
+        resp=$(curl -sS --globoff -X "$method" "$url" \
+            -H "Authorization: Bearer $ADMIN_TOKEN" \
+            -w "\n%{http_code}" 2>&1)
+    fi
+
+    printf '%s' "$resp"
+}
+
+# Main execution
+echo "╔════════════════════════════════════════════════════════════════╗"
+echo "║       DOT SCHEMA APPLY v${VERSION} - Directus Field Automation       ║"
+echo "╠════════════════════════════════════════════════════════════════╣"
+echo "║ Spec: $(basename "$SPEC_FILE")"
+echo "║ Target: $DIRECTUS_URL"
+echo "║ Mode: $(if $DRY_RUN; then echo "DRY RUN"; else echo "LIVE"; fi)"
+echo "╚════════════════════════════════════════════════════════════════╝"
+echo ""
+
+# Get token
+log_info "Authenticating..."
+ADMIN_TOKEN=$(get_admin_token)
+log_ok "Token obtained"
+
+# Read spec file
+COLLECTION=$(jq -r '.collection' "$SPEC_FILE")
+FIELD_COUNT=$(jq -r '.fields | length' "$SPEC_FILE")
+
+log_info "Collection: $COLLECTION"
+log_info "Fields to process: $FIELD_COUNT"
+echo ""
+
+# Check if collection exists
+log_info "Checking collection exists..."
+COLLECTION_RESP=$(api_request GET "$DIRECTUS_URL/collections/$COLLECTION")
+COLLECTION_CODE="${COLLECTION_RESP##*$'\n'}"
+
+if [[ "$COLLECTION_CODE" != "200" ]]; then
+    log_err "Collection '$COLLECTION' not found or no access (HTTP $COLLECTION_CODE)"
+    exit 1
+fi
+log_ok "Collection '$COLLECTION' exists"
+
+# Get existing fields
+log_info "Fetching existing fields..."
+FIELDS_RESP=$(api_request GET "$DIRECTUS_URL/fields/$COLLECTION")
+FIELDS_BODY="${FIELDS_RESP%$'\n'*}"
+FIELDS_CODE="${FIELDS_RESP##*$'\n'}"
+
+if [[ "$FIELDS_CODE" != "200" ]]; then
+    log_err "Failed to fetch fields (HTTP $FIELDS_CODE)"
+    exit 1
+fi
+
+EXISTING_FIELDS=$(echo "$FIELDS_BODY" | jq -r '.data[].field' 2>/dev/null || echo "")
+EXISTING_COUNT=$(echo "$EXISTING_FIELDS" | grep -c '^' || echo "0")
+log_ok "Found $EXISTING_COUNT existing fields"
+echo ""
+
+# Process each field
+SUCCESS_COUNT=0
+SKIP_COUNT=0
+FAIL_COUNT=0
+
+echo "Processing fields..."
+echo "────────────────────────────────────────────────────────────────"
+
+while IFS= read -r FIELD_JSON; do
+    [[ -z "$FIELD_JSON" ]] && continue
+
+    FIELD_NAME=$(echo "$FIELD_JSON" | jq -r '.field')
+
+    # Check if field already exists
+    if echo "$EXISTING_FIELDS" | grep -q "^${FIELD_NAME}$"; then
+        log_skip "$FIELD_NAME (already exists)"
+        SKIP_COUNT=$((SKIP_COUNT + 1))
+        continue
+    fi
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        log_info "Would create: $FIELD_NAME"
+        SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+        continue
+    fi
+
+    # Create field via API
+    RESPONSE=$(api_request POST "$DIRECTUS_URL/fields/$COLLECTION" "$FIELD_JSON")
+    BODY="${RESPONSE%$'\n'*}"
+    CODE="${RESPONSE##*$'\n'}"
+
+    # Check response
+    if [[ "$CODE" == "200" ]]; then
+        CREATED_FIELD=$(echo "$BODY" | jq -r '.data.field // empty' 2>/dev/null)
+        if [[ -n "$CREATED_FIELD" ]]; then
+            log_ok "Created: $FIELD_NAME"
+            SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+        else
+            log_warn "Created: $FIELD_NAME (response unclear)"
+            SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+        fi
+    else
+        ERROR_MSG=$(echo "$BODY" | jq -r '.errors[0].message // .message // "Unknown error"' 2>/dev/null)
+        log_err "Failed: $FIELD_NAME - $ERROR_MSG (HTTP $CODE)"
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+    fi
+
+done < <(jq -c '.fields[]' "$SPEC_FILE")
+
+echo ""
+echo "════════════════════════════════════════════════════════════════"
+echo "Summary:"
+echo "  Created: $SUCCESS_COUNT"
+echo "  Skipped: $SKIP_COUNT"
+echo "  Failed:  $FAIL_COUNT"
+echo "════════════════════════════════════════════════════════════════"
+
+if [[ "$FAIL_COUNT" -gt 0 ]]; then
+    log_err "Some fields failed to create"
+    exit 1
+fi
+
+if [[ "$DRY_RUN" == "true" ]]; then
+    log_warn "DRY RUN - No changes were made"
+else
+    log_ok "Schema apply complete"
+fi
