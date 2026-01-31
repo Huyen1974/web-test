@@ -1,0 +1,185 @@
+{
+  "collection": "feedbacks",
+  "description": "WEB-34B: Review Gates fields for 2-Reviewer + 1-Approver workflow",
+  "fields": [
+    {
+      "field": "reviewer_1_id",
+      "type": "uuid",
+      "schema": {
+        "is_nullable": true
+      },
+      "meta": {
+        "interface": "select-dropdown-m2o",
+        "special": ["m2o"],
+        "display": "related-values",
+        "display_options": {
+          "template": "{{first_name}} {{last_name}}"
+        },
+        "note": "First reviewer (technical review)"
+      }
+    },
+    {
+      "field": "reviewer_1_status",
+      "type": "string",
+      "schema": {
+        "default_value": "pending",
+        "is_nullable": true
+      },
+      "meta": {
+        "interface": "select-dropdown",
+        "display": "labels",
+        "options": {
+          "choices": [
+            {"text": "Pending", "value": "pending"},
+            {"text": "Approved", "value": "approved"},
+            {"text": "Changes Requested", "value": "changes_requested"},
+            {"text": "Rejected", "value": "rejected"}
+          ]
+        },
+        "note": "Status of first review"
+      }
+    },
+    {
+      "field": "reviewer_1_comment",
+      "type": "text",
+      "schema": {
+        "is_nullable": true
+      },
+      "meta": {
+        "interface": "input-multiline",
+        "note": "First reviewer's feedback"
+      }
+    },
+    {
+      "field": "reviewer_1_at",
+      "type": "timestamp",
+      "schema": {
+        "is_nullable": true
+      },
+      "meta": {
+        "interface": "datetime",
+        "readonly": true,
+        "note": "When first review was submitted"
+      }
+    },
+    {
+      "field": "reviewer_2_id",
+      "type": "uuid",
+      "schema": {
+        "is_nullable": true
+      },
+      "meta": {
+        "interface": "select-dropdown-m2o",
+        "special": ["m2o"],
+        "display": "related-values",
+        "display_options": {
+          "template": "{{first_name}} {{last_name}}"
+        },
+        "note": "Second reviewer (quality review)"
+      }
+    },
+    {
+      "field": "reviewer_2_status",
+      "type": "string",
+      "schema": {
+        "default_value": "pending",
+        "is_nullable": true
+      },
+      "meta": {
+        "interface": "select-dropdown",
+        "display": "labels",
+        "options": {
+          "choices": [
+            {"text": "Pending", "value": "pending"},
+            {"text": "Approved", "value": "approved"},
+            {"text": "Changes Requested", "value": "changes_requested"},
+            {"text": "Rejected", "value": "rejected"}
+          ]
+        },
+        "note": "Status of second review"
+      }
+    },
+    {
+      "field": "reviewer_2_comment",
+      "type": "text",
+      "schema": {
+        "is_nullable": true
+      },
+      "meta": {
+        "interface": "input-multiline",
+        "note": "Second reviewer's feedback"
+      }
+    },
+    {
+      "field": "reviewer_2_at",
+      "type": "timestamp",
+      "schema": {
+        "is_nullable": true
+      },
+      "meta": {
+        "interface": "datetime",
+        "readonly": true,
+        "note": "When second review was submitted"
+      }
+    },
+    {
+      "field": "approver_id",
+      "type": "uuid",
+      "schema": {
+        "is_nullable": true
+      },
+      "meta": {
+        "interface": "select-dropdown-m2o",
+        "special": ["m2o"],
+        "display": "related-values",
+        "display_options": {
+          "template": "{{first_name}} {{last_name}}"
+        },
+        "note": "Final approver (manager/owner)"
+      }
+    },
+    {
+      "field": "approver_status",
+      "type": "string",
+      "schema": {
+        "default_value": "pending",
+        "is_nullable": true
+      },
+      "meta": {
+        "interface": "select-dropdown",
+        "display": "labels",
+        "options": {
+          "choices": [
+            {"text": "Pending", "value": "pending"},
+            {"text": "Approved", "value": "approved"},
+            {"text": "Rejected", "value": "rejected"}
+          ]
+        },
+        "note": "Final approval status"
+      }
+    },
+    {
+      "field": "approver_comment",
+      "type": "text",
+      "schema": {
+        "is_nullable": true
+      },
+      "meta": {
+        "interface": "input-multiline",
+        "note": "Approver's final comments"
+      }
+    },
+    {
+      "field": "approved_at",
+      "type": "timestamp",
+      "schema": {
+        "is_nullable": true
+      },
+      "meta": {
+        "interface": "datetime",
+        "readonly": true,
+        "note": "When final approval was given"
+      }
+    }
+  ]
+}
