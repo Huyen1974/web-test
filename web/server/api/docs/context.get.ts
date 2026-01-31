@@ -12,8 +12,6 @@
  * - Key topics overview (Vietnamese-aware)
  */
 
-import { getIdentityToken, isRunningOnGoogleCloud } from '../../utils/googleAuth';
-
 export default defineEventHandler(async (event) => {
 	const config = useRuntimeConfig();
 
@@ -24,26 +22,13 @@ export default defineEventHandler(async (event) => {
 		'https://directus-test-pfne2mqwja-as.a.run.app';
 
 	try {
-		// Prepare headers - use identity token on Cloud Run for authenticated access
-		const headers: Record<string, string> = {
-			'Content-Type': 'application/json',
-		};
-
-		// On Cloud Run, use service-to-service auth if needed
-		if (isRunningOnGoogleCloud() && directusUrl.includes('.run.app')) {
-			try {
-				const token = await getIdentityToken(directusUrl);
-				headers['Authorization'] = `Bearer ${token}`;
-			} catch (authError) {
-				// Continue without auth - agent_views is public read
-				console.warn('[docs/context] Identity token fetch failed, continuing without auth:', authError);
-			}
-		}
+		// agent_views is publicly readable - no auth needed
+		// Note: Do NOT use Cloud Run identity tokens for Directus
+		// Directus uses its own token system, not Cloud Run identity tokens
 
 		// Fetch all published documents with minimal fields
 		const docsResponse = await fetch(
-			`${directusUrl}/items/agent_views?fields=id,title,doc_type,status,date_updated,tags&filter[status][_eq]=published&limit=-1`,
-			{ headers }
+			`${directusUrl}/items/agent_views?fields=id,title,doc_type,status,date_updated,tags&filter[status][_eq]=published&limit=-1`
 		);
 
 		if (!docsResponse.ok) {
