@@ -1,0 +1,51 @@
+{
+  "name": "AI Review Notification",
+  "icon": "notifications",
+  "description": "Notify AI reviewers when discussion enters reviewing status",
+  "status": "active",
+  "trigger": "event",
+  "accountability": "all",
+  "options": {
+    "type": "action",
+    "scope": ["items.update"],
+    "collections": ["ai_discussions"]
+  },
+  "operations": [
+    {
+      "name": "Check Reviewing Status",
+      "key": "check_status",
+      "type": "condition",
+      "options": {
+        "filter": {
+          "$trigger.payload.status": {
+            "_eq": "reviewing"
+          }
+        }
+      },
+      "resolve": "read_discussion",
+      "reject": null
+    },
+    {
+      "name": "Read Discussion Details",
+      "key": "read_discussion",
+      "type": "item-read",
+      "options": {
+        "collection": "ai_discussions",
+        "key": "{{$trigger.key}}",
+        "query": {
+          "fields": ["*", "drafter_id.*", "approver_id.*"]
+        }
+      },
+      "resolve": "log_notification"
+    },
+    {
+      "name": "Log Reviewer Notification",
+      "key": "log_notification",
+      "type": "log",
+      "options": {
+        "message": "Discussion '{{read_discussion.topic}}' is now in reviewing status. Reviewers: {{read_discussion.reviewers}}"
+      }
+    }
+  ],
+  "notes": "This flow notifies AI reviewers when a discussion transitions to 'reviewing' status. In production, the log operation can be replaced with a webhook to trigger external AI agent notifications."
+}

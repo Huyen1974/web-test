@@ -1,0 +1,86 @@
+{
+  "name": "AI Discussion Auto-Approval Timer",
+  "icon": "timer",
+  "description": "Auto-approve discussion after 5 minutes if no human response",
+  "status": "active",
+  "trigger": "event",
+  "accountability": "all",
+  "options": {
+    "type": "action",
+    "scope": ["items.create", "items.update"],
+    "collections": ["ai_discussions"]
+  },
+  "operations": [
+    {
+      "name": "Check Pending Human Status",
+      "key": "check_status",
+      "type": "condition",
+      "options": {
+        "filter": {
+          "$trigger.payload.status": {
+            "_eq": "pending_human"
+          }
+        }
+      },
+      "resolve": "send_notification",
+      "reject": null
+    },
+    {
+      "name": "Send Human Notification",
+      "key": "send_notification",
+      "type": "log",
+      "options": {
+        "message": "Discussion {{$trigger.key}} needs human review within 5 minutes"
+      },
+      "resolve": "wait_5_minutes"
+    },
+    {
+      "name": "Wait 5 Minutes",
+      "key": "wait_5_minutes",
+      "type": "sleep",
+      "options": {
+        "milliseconds": 300000
+      },
+      "resolve": "read_current_state"
+    },
+    {
+      "name": "Read Current Discussion State",
+      "key": "read_current_state",
+      "type": "item-read",
+      "options": {
+        "collection": "ai_discussions",
+        "key": "{{$trigger.key}}"
+      },
+      "resolve": "check_human_responded"
+    },
+    {
+      "name": "Check If Human Responded",
+      "key": "check_human_responded",
+      "type": "condition",
+      "options": {
+        "filter": {
+          "_and": [
+            { "{{read_current_state.human_comment}}": { "_null": true } },
+            { "{{read_current_state.status}}": { "_eq": "pending_human" } }
+          ]
+        }
+      },
+      "resolve": "auto_approve",
+      "reject": null
+    },
+    {
+      "name": "Auto Approve Discussion",
+      "key": "auto_approve",
+      "type": "item-update",
+      "options": {
+        "collection": "ai_discussions",
+        "key": "{{$trigger.key}}",
+        "payload": {
+          "status": "reviewing",
+          "human_comment": "[AUTO-APPROVED: No human response within 5 minutes]"
+        }
+      }
+    }
+  ],
+  "notes": "This flow implements the 5-minute hybrid human-AI decision mechanism. When a discussion enters 'pending_human' status, the user has 5 minutes to respond. If no response, the discussion auto-approves and moves to 'reviewing' status for AI reviewers."
+}
