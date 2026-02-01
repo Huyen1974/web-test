@@ -6,22 +6,52 @@ on:
     - cron: '0 */6 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: github-chatgpt-ggcloud
+
 jobs:
   sync-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: projects/812872501910/locations/global/workloadIdentityPools/agent-data-pool/providers/github-provider
+          service_account: chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Get Admin Token from Secret Manager
+        id: token
+        run: |
+          ADMIN_TOKEN=$(gcloud secrets versions access latest \
+            --secret="DIRECTUS_ADMIN_TOKEN_test" \
+            --project="${{ env.PROJECT_ID }}")
+          echo "::add-mask::$ADMIN_TOKEN"
+          echo "admin_token=$ADMIN_TOKEN" >> $GITHUB_OUTPUT
+
       - name: Run Sync Check
         run: |
           chmod +x ./dot/bin/dot-sync-check
           ./dot/bin/dot-sync-check
         env:
-          # In CI, both point to Cloud (no local)
+          # In CI, both point to Cloud (no local instance)
           LOCAL_DIRECTUS_URL: "https://directus-test-pfne2mqwja-as.a.run.app"
           CLOUD_DIRECTUS_URL: "https://directus-test-pfne2mqwja-as.a.run.app"
-          DIRECTUS_ADMIN_EMAIL: ${{ secrets.DIRECTUS_ADMIN_EMAIL }}
-          DIRECTUS_ADMIN_PASSWORD: ${{ secrets.DIRECTUS_ADMIN_PASSWORD }}
+          # Use static token from Secret Manager ONLY (no fallback)
+          DIRECTUS_STATIC_TOKEN: ${{ steps.token.outputs.admin_token }}
+          # CI mode flag for fail-fast behavior
+          CI: "true"
 
       - name: Notify on Failure
         if: failure()
