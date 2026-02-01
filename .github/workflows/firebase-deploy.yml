@@ -83,7 +83,7 @@ jobs:
             --set-env-vars="NUXT_PUBLIC_DIRECTUS_URL=https://directus-test-pfne2mqwja-as.a.run.app" \
             --set-env-vars="NUXT_PUBLIC_AGENT_DATA_BASE_URL=https://agent-data-test-pfne2mqwja-as.a.run.app" \
             --set-env-vars="NUXT_PUBLIC_AGENT_DATA_ENABLED=true" \
-            --update-secrets="AI_GATEWAY_TOKEN=AI_GATEWAY_TOKEN:latest"
+            --update-secrets="AI_GATEWAY_TOKEN=ai-gateway-token:latest"
 
   # ===========================================================================
   # Deploy Firebase Hosting (Static Assets Only + Cloud Run Rewrite)
