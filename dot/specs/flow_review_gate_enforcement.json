@@ -1,0 +1,13 @@
+{
+  "name": "Review Gate Enforcement",
+  "icon": "shield",
+  "description": "Block status change to 'resolved' without proper reviews (2 Reviewers + 1 Approver)",
+  "status": "active",
+  "trigger": "event",
+  "accountability": "all",
+  "options": {
+    "type": "action",
+    "scope": ["items.update"],
+    "collections": ["feedbacks"]
+  }
+}

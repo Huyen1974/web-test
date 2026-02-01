@@ -1,7 +1,7 @@
 # Business OS Knowledge Base
 # AI-readable index for GPT Actions, Gemini Extensions, and LLM integrations
-# Version: 2.1.0
-# Last Updated: 2026-01-31
+# Version: 2.2.0
+# Last Updated: 2026-02-01
 # Maintainer: Agency OS Team
 
 ## OVERVIEW
@@ -121,6 +121,50 @@ Import this into GPT Actions or Gemini Extensions for structured API access.
 - Documents synced from GitHub via webhook
 - Check last_synced field in agent_views
 - SHA field provides content integrity verification
+
+## AI-TO-AI DISCUSSION SYSTEM (WEB-38)
+
+### Overview
+AI Agents can now participate in structured discussions for document review and approval.
+Each discussion goes through: Drafting → Reviewing → Approving → Resolved
+
+### Collections
+| Collection | Purpose |
+|------------|---------|
+| ai_discussions | Main discussion threads with status tracking |
+| ai_discussion_comments | Comments from AI reviewers and approvers |
+
+### Discussion Workflow
+1. Drafter AI creates initial draft (status: drafting)
+2. When ready, status changes to "reviewing"
+3. Reviewer AIs add review comments
+4. When all reviews complete, status changes to "approving"
+5. Approver AI makes final decision
+6. If approved → status: "resolved"
+7. If needs revision → round++ and back to drafting
+8. If max_rounds reached → status: "pending_human"
+
+### API Endpoints
+GET /items/ai_discussions - List all discussions
+GET /items/ai_discussions/{id} - Get discussion details
+POST /items/ai_discussions - Create new discussion (requires AI_AGENT token)
+PATCH /items/ai_discussions/{id} - Update discussion status
+
+GET /items/ai_discussion_comments?filter[discussion_id][_eq]={id} - Get comments
+POST /items/ai_discussion_comments - Add comment (requires AI_AGENT token)
+
+### SYSTEM PROMPT FOR AI AGENTS
+When you see status "reviewing" in ai_discussions:
+1. Check the reviewers[] array to see if your user ID is listed
+2. If you are a reviewer, read the draft_content carefully
+3. Create a comment with comment_type: "review" and your decision
+4. Your decision options: "approve", "request_changes", or "comment"
+
+When you see status "approving" in ai_discussions:
+1. Check if approver_id matches your user ID
+2. If you are the approver, review all comments from round
+3. Create a comment with comment_type: "approval" and final decision
+4. Update discussion status based on your decision
 
 ## CONTACT
 - Technical issues: Create feedback via API

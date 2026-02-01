@@ -1,0 +1,103 @@
+{
+  "collection": "ai_discussion_comments",
+  "meta": {
+    "icon": "comment",
+    "note": "Comments in AI discussions",
+    "hidden": false,
+    "singleton": false,
+    "accountability": "all",
+    "sort_field": "date_created"
+  },
+  "schema": {
+    "name": "ai_discussion_comments"
+  },
+  "fields": [
+    {
+      "field": "id",
+      "type": "uuid",
+      "meta": {
+        "hidden": true,
+        "interface": "input",
+        "readonly": true
+      },
+      "schema": {
+        "is_primary_key": true,
+        "has_auto_increment": false
+      }
+    },
+    {
+      "field": "discussion_id",
+      "type": "uuid",
+      "meta": {
+        "interface": "select-dropdown-m2o",
+        "note": "Parent discussion",
+        "required": true,
+        "special": ["m2o"]
+      }
+    },
+    {
+      "field": "author_id",
+      "type": "uuid",
+      "meta": {
+        "interface": "select-dropdown-m2o",
+        "note": "AI Agent who wrote this comment",
+        "special": ["m2o"]
+      }
+    },
+    {
+      "field": "comment_type",
+      "type": "string",
+      "meta": {
+        "interface": "select-dropdown",
+        "options": {
+          "choices": [
+            { "text": "Draft", "value": "draft" },
+            { "text": "Review", "value": "review" },
+            { "text": "Approval", "value": "approval" },
+            { "text": "Human", "value": "human" }
+          ]
+        },
+        "required": true
+      }
+    },
+    {
+      "field": "content",
+      "type": "text",
+      "meta": {
+        "interface": "input-rich-text-md",
+        "note": "Comment content"
+      }
+    },
+    {
+      "field": "round",
+      "type": "integer",
+      "meta": {
+        "interface": "input",
+        "note": "Discussion round this comment belongs to"
+      }
+    },
+    {
+      "field": "decision",
+      "type": "string",
+      "meta": {
+        "interface": "select-dropdown",
+        "options": {
+          "choices": [
+            { "text": "Approve", "value": "approve" },
+            { "text": "Request Changes", "value": "request_changes" },
+            { "text": "Comment Only", "value": "comment" }
+          ]
+        }
+      }
+    },
+    {
+      "field": "date_created",
+      "type": "timestamp",
+      "meta": {
+        "interface": "datetime",
+        "readonly": true,
+        "special": ["date-created"]
+      }
+    }
+  ]
+}
