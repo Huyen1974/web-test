@@ -15,9 +15,25 @@ LOCAL_URL="${LOCAL_DIRECTUS_URL:-http://localhost:8055}"
 CLOUD_URL="${CLOUD_DIRECTUS_URL:-https://directus-test-pfne2mqwja-as.a.run.app}"
 WEBSITE_URL="${WEBSITE_URL:-https://ai.incomexsaigoncorp.vn}"
 
-# Auth credentials (from env or defaults)
-ADMIN_EMAIL="${DIRECTUS_ADMIN_EMAIL:-admin@example.com}"
-ADMIN_PASSWORD="${DIRECTUS_ADMIN_PASSWORD:-Directus@2025!}"
+# Auth credentials (from env - NO DEFAULTS for security)
+# Priority: DIRECTUS_STATIC_TOKEN > email/password login
+STATIC_TOKEN="${DIRECTUS_STATIC_TOKEN:-}"
+ADMIN_EMAIL="${DIRECTUS_ADMIN_EMAIL:-}"
+ADMIN_PASSWORD="${DIRECTUS_ADMIN_PASSWORD:-}"
+
+# SECURITY: Require static token in CI (no fallback to login)
+if [ -z "$STATIC_TOKEN" ]; then
+  if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
+    echo -e "${RED}❌ SECURITY ERROR: DIRECTUS_STATIC_TOKEN is required in CI${NC}"
+    echo "   Token must be retrieved from Google Secret Manager"
+    echo "   Check WIF authentication and GSM permissions"
+    exit 1
+  fi
+  # Only allow email/password login for LOCAL development
+  if [ -n "$ADMIN_EMAIL" ] && [ -n "$ADMIN_PASSWORD" ]; then
+    echo -e "${YELLOW}⚠️  WARNING: Using login credentials (local dev only)${NC}"
+  fi
+fi
 
 # Verbose mode
 VERBOSE=false
@@ -49,10 +65,17 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
     echo "  -v, --verbose  Show detailed field comparison on drift"
     echo "  -h, --help     Show this help"
     echo ""
+    echo "Environment:"
+    echo "  DIRECTUS_STATIC_TOKEN  Use static token (priority over login)"
+    echo "  DIRECTUS_ADMIN_EMAIL   Admin email for login"
+    echo "  DIRECTUS_ADMIN_PASSWORD Admin password for login"
+    echo "  LOCAL_DIRECTUS_URL     Local Directus URL"
+    echo "  CLOUD_DIRECTUS_URL     Cloud Directus URL"
+    echo ""
     echo "Checks:"
     echo "  1. Local Directus health"
     echo "  2. Cloud Directus health"
-    echo "  3. Schema sync (MD5 hash comparison)"
+    echo "  3. Schema sync (hash comparison)"
     echo "  4. Anonymous read (Local)"
     echo "  5. Anonymous read (Cloud)"
     echo "  6. Website production"
@@ -66,6 +89,11 @@ echo ""
 echo "Local:   $LOCAL_URL"
 echo "Cloud:   $CLOUD_URL"
 echo "Website: $WEBSITE_URL"
+if [ -n "$STATIC_TOKEN" ]; then
+    echo "Auth:    Static Token (from env)"
+else
+    echo "Auth:    Login ($ADMIN_EMAIL)"
+fi
 echo ""
 
 ERRORS=0
@@ -133,9 +161,14 @@ fi
 # --- Check 3: Schema Sync (hash comparison) ---
 echo -n "3. Schema sync (knowledge_documents)... "
 if [ "$LOCAL_HEALTH" == "200" ] && [ "$CLOUD_HEALTH" == "200" ]; then
-    # Get auth tokens
-    LOCAL_TOKEN=$(get_token "$LOCAL_URL")
-    CLOUD_TOKEN=$(get_token "$CLOUD_URL")
+    # Get auth tokens - use static token if available, otherwise login
+    if [ -n "$STATIC_TOKEN" ]; then
+        LOCAL_TOKEN="$STATIC_TOKEN"
+        CLOUD_TOKEN="$STATIC_TOKEN"
+    else
+        LOCAL_TOKEN=$(get_token "$LOCAL_URL")
+        CLOUD_TOKEN=$(get_token "$CLOUD_URL")
+    fi
 
     if [ -z "$LOCAL_TOKEN" ] || [ -z "$CLOUD_TOKEN" ]; then
         echo -e "${YELLOW}⚠️  AUTH FAILED (check credentials)${NC}"
