@@ -1,699 +1,367 @@
 <script setup lang="ts">
 /**
- * Super Session - AI Discussion Monitoring Dashboard
- * WEB-39: 3-tier interface for human oversight of AI discussions
+ * Super Session - AI Discussion Center
+ * WEB-42: Complete 3-column Outlook-style layout
  *
- * Tier 1: Cases List (all discussions)
- * Tier 2: Rounds (conversation rounds within a discussion)
- * Tier 3: Details (individual comments and human input)
+ * Layout:
+ * - Left (20%): Discussion list with categories
+ * - Middle (25%): Thread/comments list
+ * - Right (55%): Detail panel with Supreme Authority input
  */
 
 definePageMeta({
-  layout: 'default',
-  middleware: ['auth']
-});
+  layout: 'default'
+})
 
-const {
-  discussions,
-  currentDiscussion,
-  comments,
-  loading,
-  error,
-  commentsByRound,
-  fetchDiscussions,
-  fetchDiscussion,
-  fetchComments,
-  submitHumanComment,
-  submitHumanDecision,
-  updateStatus,
-  getDeadline,
-  startPolling,
-  stopPolling
-} = useAIDiscussions();
+const config = useRuntimeConfig()
+const directusUrl = config.public.directusUrl || 'https://directus-test-pfne2mqwja-as.a.run.app'
 
 // State
-const selectedDiscussionId = ref<string | null>(null);
-const selectedRound = ref<number | null>(null);
-const humanInput = ref('');
-const submitting = ref(false);
+const discussions = ref<any[]>([])
+const agents = ref<any[]>([])
+const selectedDiscussionId = ref<number | null>(null)
+const selectedCommentId = ref<number | null>(null)
+const discussionComments = ref<any[]>([])
+const isLoading = ref(false)
+const showCreateModal = ref(false)
 
-// Auth token (from user session or env)
-const token = ref('');
+// Computed
+const selectedDiscussion = computed(() =>
+  discussions.value.find(d => d.id === selectedDiscussionId.value)
+)
+
+const selectedComment = computed(() =>
+  discussionComments.value.find(c => c.id === selectedCommentId.value)
+)
+
+// API Functions
+const fetchDiscussions = async () => {
+  isLoading.value = true
+  try {
+    const response = await $fetch(`${directusUrl}/items/ai_discussions`, {
+      params: {
+        sort: '-date_updated',
+        fields: '*,drafter_id.first_name,drafter_id.last_name,drafter_id.email',
+        limit: 50
+      }
+    })
+    discussions.value = (response as any).data || []
+  } catch (e) {
+    console.error('Failed to fetch discussions:', e)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const fetchComments = async (discussionId: number) => {
+  try {
+    const response = await $fetch(`${directusUrl}/items/ai_discussion_comments`, {
+      params: {
+        'filter[discussion_id][_eq]': discussionId,
+        sort: 'round,date_created',
+        fields: '*,author_id.first_name,author_id.last_name,author_id.email'
+      }
+    })
+    discussionComments.value = (response as any).data || []
+  } catch (e) {
+    console.error('Failed to fetch comments:', e)
+    discussionComments.value = []
+  }
+}
+
+const fetchAgents = async () => {
+  try {
+    const response = await $fetch(`${directusUrl}/users`, {
+      params: {
+        'filter[email][_contains]': 'agent.',
+        fields: 'id,first_name,last_name,email'
+      }
+    })
+    agents.value = ((response as any).data || []).map((u: any) => ({
+      id: u.id,
+      name: u.first_name || u.email?.split('@')[0] || 'Agent',
+      email: u.email,
+      role: getAgentRole(u.email)
+    }))
+  } catch (e) {
+    console.error('Failed to fetch agents:', e)
+  }
+}
+
+const getAgentRole = (email: string): string => {
+  if (!email) return 'Agent'
+  if (email.includes('gemini')) return 'Supervisor'
+  if (email.includes('chatgpt')) return 'Assistant'
+  if (email.includes('claude')) return 'Developer'
+  if (email.includes('codex')) return 'Executor'
+  if (email.includes('antigravity')) return 'Knowledge'
+  return 'Agent'
+}
+
+// Event Handlers
+const selectDiscussion = async (id: number) => {
+  selectedDiscussionId.value = id
+  selectedCommentId.value = null
+  await fetchComments(id)
+}
+
+const selectComment = (id: number) => {
+  selectedCommentId.value = id
+}
+
+const handleDecision = async (decision: string, content: string) => {
+  if (!selectedDiscussionId.value) return
+
+  try {
+    const currentRound = selectedDiscussion.value?.round || 1
+
+    // 1. Create human_supreme comment
+    await $fetch(`${directusUrl}/items/ai_discussion_comments`, {
+      method: 'POST',
+      body: {
+        discussion_id: selectedDiscussionId.value,
+        comment_type: 'human_supreme',
+        content: `👑 **QUYET DINH CUA USER:**\n\n${content || 'No comment'}`,
+        round: currentRound,
+        decision: decision
+      }
+    })
+
+    // 2. Update discussion status
+    const updateData: any = { human_comment: content }
+
+    switch (decision) {
+      case 'approve':
+        updateData.status = 'resolved'
+        updateData.locked_by_user = true
+        break
+      case 'reject':
+        updateData.status = 'rejected'
+        updateData.locked_by_user = true
+        break
+      case 'redirect':
+        updateData.status = 'drafting'
+        updateData.round = currentRound + 1
+        break
+    }
+
+    await $fetch(`${directusUrl}/items/ai_discussions/${selectedDiscussionId.value}`, {
+      method: 'PATCH',
+      body: updateData
+    })
+
+    // Refresh data
+    await fetchDiscussions()
+    await fetchComments(selectedDiscussionId.value)
+
+  } catch (e) {
+    console.error('Failed to submit decision:', e)
+  }
+}
+
+const onDiscussionCreated = async (newDiscussion: any) => {
+  await fetchDiscussions()
+  if (newDiscussion?.id) {
+    selectDiscussion(newDiscussion.id)
+  }
+  showCreateModal.value = false
+}
+
+// Polling for real-time updates
+let pollInterval: ReturnType<typeof setInterval> | null = null
+
+const startPolling = () => {
+  pollInterval = setInterval(async () => {
+    await fetchDiscussions()
+    if (selectedDiscussionId.value) {
+      await fetchComments(selectedDiscussionId.value)
+    }
+  }, 15000) // 15 seconds
+}
 
 // Initialize
 onMounted(async () => {
-  await fetchDiscussions();
-  startPolling(15000); // Refresh every 15 seconds
-});
+  await Promise.all([
+    fetchDiscussions(),
+    fetchAgents()
+  ])
+
+  // Auto-select first discussion
+  if (discussions.value.length > 0) {
+    selectDiscussion(discussions.value[0].id)
+  }
+
+  startPolling()
+})
 
 onUnmounted(() => {
-  stopPolling();
-});
-
-// Select discussion (Tier 1 → Tier 2)
-const selectDiscussion = async (id: string) => {
-  selectedDiscussionId.value = id;
-  selectedRound.value = null;
-
-  await fetchDiscussion(id);
-  await fetchComments(id);
-
-  // Auto-select latest round
-  const rounds = Object.keys(commentsByRound.value).map(Number);
-  if (rounds.length > 0) {
-    selectedRound.value = Math.max(...rounds);
-  } else {
-    selectedRound.value = currentDiscussion.value?.round || 1;
+  if (pollInterval) {
+    clearInterval(pollInterval)
   }
-};
-
-// Get comments for selected round (Tier 3)
-const currentRoundComments = computed(() => {
-  if (!selectedRound.value) return [];
-  return commentsByRound.value[selectedRound.value] || [];
-});
-
-// Submit human response (simple comment)
-const handleSubmitComment = async () => {
-  if (!humanInput.value.trim() || !selectedDiscussionId.value) return;
-
-  submitting.value = true;
-
-  const success = await submitHumanComment(
-    selectedDiscussionId.value,
-    humanInput.value.trim(),
-    token.value
-  );
-
-  if (success) {
-    humanInput.value = '';
-  }
-
-  submitting.value = false;
-};
-
-// Submit Supreme Authority decision
-const handleSupremeDecision = async (decision: 'approve' | 'reject' | 'redirect' | 'comment') => {
-  if (!selectedDiscussionId.value) return;
-
-  submitting.value = true;
-
-  const content = humanInput.value.trim() || getDefaultMessage(decision);
-
-  const success = await submitHumanDecision(
-    selectedDiscussionId.value,
-    content,
-    decision
-  );
-
-  if (success) {
-    humanInput.value = '';
-    await refresh();
-  }
-
-  submitting.value = false;
-};
-
-// Get default message for decision type
-const getDefaultMessage = (decision: string): string => {
-  switch (decision) {
-    case 'approve': return 'Phê duyệt bởi User (Supreme Authority)';
-    case 'reject': return 'Từ chối bởi User (Supreme Authority)';
-    case 'redirect': return 'Yêu cầu sửa đổi bởi User (Supreme Authority)';
-    default: return 'Bình luận từ User';
-  }
-};
-
-// Get available rounds
-const availableRounds = computed(() => {
-  if (!currentDiscussion.value) return [];
-
-  const maxRound = currentDiscussion.value.round;
-  const rounds = [];
-
-  for (let i = 1; i <= maxRound; i++) {
-    const roundComments = commentsByRound.value[i] || [];
-    rounds.push({
-      number: i,
-      commentCount: roundComments.length,
-      status: i < maxRound ? 'completed' : 'current'
-    });
-  }
-
-  return rounds;
-});
-
-// Refresh data manually
-const refresh = async () => {
-  await fetchDiscussions();
-  if (selectedDiscussionId.value) {
-    await fetchDiscussion(selectedDiscussionId.value);
-    await fetchComments(selectedDiscussionId.value);
-  }
-};
+})
 </script>
 
 <template>
-  <div class="super-session">
-    <header class="page-header">
-      <h1>🎯 Super Session</h1>
-      <p>Giám sát thảo luận AI - Hybrid Human-AI Decision System</p>
-      <button class="refresh-btn" @click="refresh" :disabled="loading">
-        🔄 Làm mới
-      </button>
+  <div class="super-session-container">
+    <!-- Top Bar -->
+    <header class="top-bar">
+      <div class="top-bar-left">
+        <h1 class="app-title">🎯 Super Session</h1>
+        <span class="app-subtitle">AI Discussion Center</span>
+      </div>
+      <div class="top-bar-right">
+        <span v-if="isLoading" class="loading-indicator">⟳ Loading...</span>
+        <button @click="showCreateModal = true" class="create-btn">
+          ➕ Tao vu viec moi
+        </button>
+      </div>
     </header>
 
-    <div class="session-layout">
-      <!-- TIER 1: Cases List -->
-      <section class="tier tier-1">
-        <h2>📁 Danh sách vụ việc</h2>
-        <div v-if="loading && discussions.length === 0" class="loading">
-          Đang tải...
-        </div>
-        <div v-else-if="discussions.length === 0" class="empty">
-          Chưa có cuộc thảo luận nào
-        </div>
-        <div v-else class="discussion-list">
-          <AiDiscussionCard
-            v-for="discussion in discussions"
-            :key="discussion.id"
-            :discussion="discussion"
-            :selected="discussion.id === selectedDiscussionId"
-            @select="selectDiscussion"
-          />
-        </div>
-      </section>
-
-      <!-- TIER 2: Rounds -->
-      <section class="tier tier-2" v-if="currentDiscussion">
-        <h2>🔄 Vòng thảo luận</h2>
-        <div class="discussion-info">
-          <h3>{{ currentDiscussion.topic }}</h3>
-          <div class="info-row">
-            <span class="status" :class="currentDiscussion.status">
-              {{ currentDiscussion.status }}
-            </span>
-            <AiCountdownTimer
-              v-if="currentDiscussion.status === 'pending_human'"
-              :deadline="getDeadline(currentDiscussion)"
-              @expired="refresh"
-            />
-          </div>
-        </div>
-
-        <div class="rounds-list">
-          <div
-            v-for="round in availableRounds"
-            :key="round.number"
-            class="round-item"
-            :class="{ selected: round.number === selectedRound, current: round.status === 'current' }"
-            @click="selectedRound = round.number"
-          >
-            <span class="round-number">Vòng {{ round.number }}</span>
-            <span class="comment-count">{{ round.commentCount }} comments</span>
-            <span v-if="round.status === 'current'" class="current-badge">Hiện tại</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- TIER 3: Details -->
-      <section class="tier tier-3" v-if="selectedRound">
-        <h2>💬 Chi tiết hội thoại</h2>
-
-        <AiDiscussionThread
-          :comments="currentRoundComments"
-          :current-round="selectedRound"
+    <!-- Main 3-Column Layout -->
+    <div class="main-layout">
+      <!-- Left Column: Discussion List (20%) -->
+      <div class="column-left">
+        <AiDiscussionSidebar
+          :discussions="discussions"
+          :selected-id="selectedDiscussionId"
+          @select="selectDiscussion"
         />
+      </div>
 
-        <!-- Supreme Authority User Input -->
-        <div v-if="currentDiscussion && !currentDiscussion.locked_by_user" class="supreme-authority-section">
-          <div class="authority-header">
-            <span class="authority-badge">SUPREME AUTHORITY</span>
-            <span class="authority-hint">Y kien cua ban se override moi quyet dinh AI</span>
-          </div>
+      <!-- Middle Column: Thread List (25%) -->
+      <div class="column-middle">
+        <AiThreadList
+          :discussion="selectedDiscussion"
+          :comments="discussionComments"
+          :selected-comment-id="selectedCommentId"
+          @select-comment="selectComment"
+        />
+      </div>
 
-          <textarea
-            v-model="humanInput"
-            class="authority-input"
-            rows="4"
-            placeholder="Nhap y kien cua ban... (Quyen cao nhat - AI se tuan theo)"
-          ></textarea>
-
-          <div class="decision-buttons">
-            <button
-              @click="handleSupremeDecision('approve')"
-              :disabled="submitting"
-              class="btn-approve"
-            >
-              Phe duyet & Dong
-            </button>
-            <button
-              @click="handleSupremeDecision('reject')"
-              :disabled="submitting"
-              class="btn-reject"
-            >
-              Tu choi
-            </button>
-            <button
-              @click="handleSupremeDecision('redirect')"
-              :disabled="submitting"
-              class="btn-redirect"
-            >
-              Yeu cau sua doi
-            </button>
-            <button
-              @click="handleSupremeDecision('comment')"
-              :disabled="submitting"
-              class="btn-comment"
-            >
-              Binh luan (AI tiep tuc)
-            </button>
-          </div>
-
-          <p class="authority-note">
-            Luu y: Phe duyet/Tu choi se KHOA discussion - AI khong the thay doi sau do.
-          </p>
-        </div>
-
-        <!-- Locked indicator -->
-        <div v-if="currentDiscussion?.locked_by_user" class="locked-notice">
-          <span class="lock-icon">🔒</span>
-          <span>Discussion da bi khoa boi User - Khong the thay doi</span>
-        </div>
-
-        <!-- Link for AI agents -->
-        <div class="ai-link-info">
-          <p>
-            🔗 Link giám sát: <code>https://ai.incomexsaigoncorp.vn/admin/super-session</code>
-          </p>
-        </div>
-      </section>
+      <!-- Right Column: Detail Panel (55%) -->
+      <div class="column-right">
+        <AiDetailPanel
+          :discussion="selectedDiscussion"
+          :selected-comment="selectedComment"
+          @submit-decision="handleDecision"
+        />
+      </div>
     </div>
 
-    <!-- Error display -->
-    <div v-if="error" class="error-banner">
-      ⚠️ {{ error }}
-    </div>
+    <!-- Create Discussion Modal -->
+    <AiCreateDiscussionModal
+      v-if="showCreateModal"
+      :agents="agents"
+      @close="showCreateModal = false"
+      @created="onDiscussionCreated"
+    />
   </div>
 </template>
 
 <style scoped>
-.super-session {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 24px;
+.super-session-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f1f5f9;
 }
 
-.page-header {
+.top-bar {
+  height: 56px;
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 24px;
-  padding-bottom: 16px;
+  justify-content: space-between;
+  padding: 0 20px;
+  background: white;
   border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
 }
 
-.page-header h1 {
-  margin: 0;
-  font-size: 24px;
+.top-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-.page-header p {
+.app-title {
+  font-size: 20px;
+  font-weight: 700;
   margin: 0;
+  color: #1e293b;
+}
+
+.app-subtitle {
+  font-size: 14px;
   color: #64748b;
+}
+
+.top-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.loading-indicator {
+  font-size: 14px;
+  color: #64748b;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.create-btn {
+  padding: 8px 16px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.create-btn:hover {
+  background: #2563eb;
+}
+
+.main-layout {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.column-left {
+  width: 20%;
+  min-width: 200px;
+  max-width: 300px;
+}
+
+.column-middle {
+  width: 25%;
+  min-width: 250px;
+  max-width: 350px;
+}
+
+.column-right {
   flex: 1;
 }
 
-.refresh-btn {
-  padding: 8px 16px;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.refresh-btn:hover:not(:disabled) {
-  background: #e2e8f0;
-}
-
-.refresh-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.session-layout {
-  display: grid;
-  grid-template-columns: 350px 300px 1fr;
-  gap: 24px;
-  min-height: 600px;
-}
-
-.tier {
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 16px;
-  overflow: auto;
-}
-
-.tier h2 {
-  margin: 0 0 16px;
-  font-size: 16px;
-  color: #374151;
-}
-
-.discussion-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.loading, .empty {
-  text-align: center;
-  color: #94a3b8;
-  padding: 24px;
-}
-
-/* Tier 2 - Rounds */
-.discussion-info {
-  padding: 12px;
-  background: #f8fafc;
-  border-radius: 8px;
-  margin-bottom: 16px;
-}
-
-.discussion-info h3 {
-  margin: 0 0 8px;
-  font-size: 14px;
-}
-
-.info-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.status {
-  padding: 4px 12px;
-  border-radius: 16px;
-  font-size: 12px;
-  font-weight: 500;
-  background: #e2e8f0;
-  color: #475569;
-}
-
-.status.pending_human {
-  background: #fef3c7;
-  color: #d97706;
-}
-
-.status.reviewing {
-  background: #ede9fe;
-  color: #7c3aed;
-}
-
-.status.resolved {
-  background: #dcfce7;
-  color: #16a34a;
-}
-
-.rounds-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.round-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.round-item:hover {
-  background: #f1f5f9;
-}
-
-.round-item.selected {
-  background: #eff6ff;
-  border-color: #3b82f6;
-}
-
-.round-item.current {
-  border-left: 3px solid #3b82f6;
-}
-
-.round-number {
-  font-weight: 600;
-}
-
-.comment-count {
-  font-size: 12px;
-  color: #64748b;
-}
-
-.current-badge {
-  margin-left: auto;
-  font-size: 10px;
-  padding: 2px 6px;
-  background: #3b82f6;
-  color: white;
-  border-radius: 4px;
-}
-
-/* Tier 3 - Details */
-.human-input-section {
-  margin-top: 24px;
-  padding: 16px;
-  background: #fffbeb;
-  border: 1px solid #fcd34d;
-  border-radius: 8px;
-}
-
-.human-input-section h4 {
-  margin: 0 0 12px;
-  font-size: 14px;
-}
-
-.human-input-section textarea {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 14px;
-  resize: vertical;
-}
-
-.input-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 12px;
-}
-
-.submit-btn {
-  padding: 10px 20px;
-  background: #f59e0b;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.submit-btn:hover:not(:disabled) {
-  background: #d97706;
-}
-
-.submit-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.hint {
-  font-size: 12px;
-  color: #92400e;
-}
-
-/* Supreme Authority Section */
-.supreme-authority-section {
-  margin-top: 24px;
-  padding: 20px;
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  border: 2px solid #f59e0b;
-  border-radius: 12px;
-}
-
-.authority-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.authority-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  color: white;
-  font-weight: 700;
-  font-size: 12px;
-  border-radius: 20px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
-}
-
-.authority-hint {
-  font-size: 13px;
-  color: #92400e;
-}
-
-.authority-input {
-  width: 100%;
-  padding: 14px;
-  border: 2px solid #fbbf24;
-  border-radius: 8px;
-  font-size: 14px;
-  resize: vertical;
-  background: white;
-}
-
-.authority-input:focus {
-  outline: none;
-  border-color: #f59e0b;
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
-}
-
-.decision-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 16px;
-}
-
-.decision-buttons button {
-  padding: 10px 18px;
-  border: none;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.decision-buttons button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-approve {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
-}
-
-.btn-approve:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
-}
-
-.btn-reject {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  color: white;
-}
-
-.btn-reject:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
-}
-
-.btn-redirect {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  color: white;
-}
-
-.btn-redirect:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
-}
-
-.btn-comment {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: white;
-}
-
-.btn-comment:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-}
-
-.authority-note {
-  margin-top: 12px;
-  font-size: 12px;
-  color: #92400e;
-  font-style: italic;
-}
-
-.locked-notice {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 24px;
-  padding: 16px;
-  background: #fee2e2;
-  border: 1px solid #fecaca;
-  border-radius: 8px;
-  color: #dc2626;
-  font-weight: 500;
-}
-
-.lock-icon {
-  font-size: 20px;
-}
-
-.ai-link-info {
-  margin-top: 24px;
-  padding: 12px;
-  background: #f0f9ff;
-  border-radius: 6px;
-  font-size: 13px;
-}
-
-.ai-link-info code {
-  background: #e0f2fe;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.error-banner {
-  position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 12px 24px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 8px;
-  color: #dc2626;
-}
-
 /* Responsive */
-@media (max-width: 1200px) {
-  .session-layout {
-    grid-template-columns: 1fr;
+@media (max-width: 1024px) {
+  .main-layout {
+    flex-direction: column;
   }
 
-  .tier {
-    max-height: 400px;
+  .column-left,
+  .column-middle,
+  .column-right {
+    width: 100%;
+    max-width: none;
+    height: 33vh;
   }
 }
 </style>
