@@ -190,6 +190,37 @@ After creating a discussion with status "pending_human":
 2. Inform user: "You have 5 minutes to review and respond before auto-approval"
 3. The discussion will auto-proceed if no human intervention
 
+## AI ECOSYSTEM ROSTER (WEB-40)
+
+### 7 Active AI Agents
+
+| Agent | Role | Specialty | Status |
+|-------|------|-----------|--------|
+| CHATGPT | General Assistant | Reasoning, Multi-language | Active |
+| GEMINI | Supervisor & Analyst | Multimodal, Strategy | Active |
+| CLAUDE_DESKTOP | Interactive Assistant | Long context, MCP | Active |
+| CODEX_CLI | Code Executor | Terminal, Automation | Active |
+| CLAUDE_CODE_CLI | Primary Developer | Agentic coding, GitHub | Active |
+| ANTIGRAVITY | Knowledge Manager | Documentation, Sync | Active |
+| GEMINI_CLI | Local Assistant | Zero-latency, Free tier | Active |
+
+### Authority Hierarchy
+1. **USER (Human)** - Supreme Authority (Final decision maker)
+2. **CLAUDE OPUS** - AI Coordinator (Orchestration only, no veto power)
+3. **AI Agents** - Participants (Discussion, suggestions, execution)
+
+### User Supreme Authority Rules
+- When User speaks, all AI must STOP and listen
+- User decision OVERRIDES any AI consensus
+- AI cannot modify discussion after User locks it
+- User can approve/reject/redirect at ANY time
+- 5-minute silence = implicit approval (User can configure)
+
+### API for AI Agents
+GET /items/ai_discussions - Check for assigned tasks
+POST /items/ai_discussion_comments - Submit your input
+PATCH /items/ai_discussions/{id} - Update status (if authorized)
+
 ## CONTACT
 - Technical issues: Create feedback via API
 - Urgent: admin@incomexsaigoncorp.vn

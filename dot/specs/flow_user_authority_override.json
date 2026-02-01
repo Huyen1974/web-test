@@ -1,0 +1,54 @@
+{
+  "name": "User Supreme Authority Override",
+  "icon": "verified_user",
+  "description": "When User submits human_supreme comment, lock discussion and notify AI agents",
+  "status": "active",
+  "trigger": "event",
+  "accountability": "all",
+  "options": {
+    "type": "action",
+    "scope": ["items.create"],
+    "collections": ["ai_discussion_comments"]
+  },
+  "operations": [
+    {
+      "name": "Check Human Supreme",
+      "key": "check_human",
+      "type": "condition",
+      "options": {
+        "filter": {
+          "$trigger": {
+            "payload": {
+              "comment_type": {
+                "_eq": "human_supreme"
+              }
+            }
+          }
+        }
+      },
+      "resolve": "log_authority"
+    },
+    {
+      "name": "Log User Authority",
+      "key": "log_authority",
+      "type": "log",
+      "options": {
+        "message": "USER SUPREME AUTHORITY: User has overridden AI discussion {{$trigger.payload.discussion_id}}"
+      },
+      "resolve": "lock_discussion"
+    },
+    {
+      "name": "Lock Discussion",
+      "key": "lock_discussion",
+      "type": "item-update",
+      "options": {
+        "collection": "ai_discussions",
+        "key": "{{$trigger.payload.discussion_id}}",
+        "payload": {
+          "locked_by_user": true
+        }
+      }
+    }
+  ],
+  "notes": "This flow ensures that when a User makes a Supreme Authority decision, the discussion is locked and all AI agents are notified to stop further modifications."
+}

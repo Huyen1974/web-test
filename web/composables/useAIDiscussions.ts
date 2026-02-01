@@ -17,6 +17,7 @@ interface AIDiscussion {
   final_content?: string;
   human_comment?: string;
   linked_feedback_id?: string;
+  locked_by_user?: boolean;
   date_created: string;
   date_updated: string;
 }
@@ -25,10 +26,10 @@ interface AIDiscussionComment {
   id: string;
   discussion_id: string;
   author_id: any;
-  comment_type: 'draft' | 'review' | 'approval' | 'human';
+  comment_type: 'draft' | 'review' | 'approval' | 'human' | 'human_supreme';
   content: string;
   round: number;
-  decision?: 'approve' | 'request_changes' | 'comment';
+  decision?: 'approve' | 'request_changes' | 'comment' | 'reject' | 'redirect';
   date_created: string;
 }
 
@@ -176,6 +177,107 @@ export const useAIDiscussions = () => {
   };
 
   /**
+   * Submit Supreme Authority decision (WEB-40)
+   * User decision overrides all AI consensus
+   */
+  const submitHumanDecision = async (
+    discussionId: string,
+    content: string,
+    decision: 'approve' | 'reject' | 'redirect' | 'comment'
+  ) => {
+    loading.value = true;
+    error.value = null;
+
+    try {
+      // Determine new status based on decision
+      let newStatus: AIDiscussion['status'] | null = null;
+      let shouldLock = false;
+
+      switch (decision) {
+        case 'approve':
+          newStatus = 'resolved';
+          shouldLock = true;
+          break;
+        case 'reject':
+          newStatus = 'rejected';
+          shouldLock = true;
+          break;
+        case 'redirect':
+          newStatus = 'drafting';
+          shouldLock = false;
+          break;
+        case 'comment':
+          newStatus = null;
+          shouldLock = false;
+          break;
+      }
+
+      // Create human_supreme comment
+      const commentResponse = await fetch(
+        `${directusUrl}/items/ai_discussion_comments`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            discussion_id: discussionId,
+            comment_type: 'human_supreme',
+            content: `**QUYET DINH CUA USER (SUPREME AUTHORITY)**\n\n${content}`,
+            round: currentDiscussion.value?.round || 1,
+            decision: decision
+          })
+        }
+      );
+
+      if (!commentResponse.ok) throw new Error(`Comment failed: HTTP ${commentResponse.status}`);
+
+      // Update discussion status and lock if needed
+      const updatePayload: Record<string, any> = {
+        human_comment: content
+      };
+
+      if (newStatus) {
+        updatePayload.status = newStatus;
+      }
+
+      if (shouldLock) {
+        updatePayload.locked_by_user = true;
+      }
+
+      // Increment round for redirect
+      if (decision === 'redirect' && currentDiscussion.value) {
+        updatePayload.round = currentDiscussion.value.round + 1;
+      }
+
+      const updateResponse = await fetch(
+        `${directusUrl}/items/ai_discussions/${discussionId}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(updatePayload)
+        }
+      );
+
+      if (!updateResponse.ok) throw new Error(`Update failed: HTTP ${updateResponse.status}`);
+
+      // Refresh data
+      await fetchDiscussion(discussionId);
+      await fetchComments(discussionId);
+
+      console.log(`[SUPREME AUTHORITY] User decision: ${decision} on discussion ${discussionId}`);
+      return true;
+    } catch (e) {
+      error.value = (e as Error).message;
+      return false;
+    } finally {
+      loading.value = false;
+    }
+  };
+
+  /**
    * Update discussion status
    */
   const updateStatus = async (discussionId: string, status: AIDiscussion['status'], token: string) => {
@@ -271,6 +373,7 @@ export const useAIDiscussions = () => {
     fetchDiscussion,
     fetchComments,
     submitHumanComment,
+    submitHumanDecision,
     updateStatus,
     getDeadline,
     startPolling,
