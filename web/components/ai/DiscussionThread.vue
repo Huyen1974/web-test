@@ -11,10 +11,10 @@ interface Comment {
     last_name: string;
     email: string;
   } | null;
-  comment_type: 'draft' | 'review' | 'approval' | 'human';
+  comment_type: 'draft' | 'review' | 'approval' | 'human' | 'human_supreme';
   content: string;
   round: number;
-  decision?: 'approve' | 'request_changes' | 'comment';
+  decision?: 'approve' | 'request_changes' | 'comment' | 'reject' | 'redirect';
   date_created: string;
 }
 
@@ -29,6 +29,7 @@ const getAuthorName = (author: Comment['author_id']) => {
 };
 
 const getAuthorAvatar = (comment: Comment) => {
+  if (comment.comment_type === 'human_supreme') return '👑';
   if (comment.comment_type === 'human') return '👤';
 
   const email = comment.author_id?.email || '';
@@ -42,19 +43,22 @@ const getAuthorAvatar = (comment: Comment) => {
 
 const getDecisionBadge = (decision?: string) => {
   switch (decision) {
-    case 'approve': return { text: 'Đồng ý', class: 'approve' };
-    case 'request_changes': return { text: 'Cần sửa', class: 'changes' };
-    case 'comment': return { text: 'Góp ý', class: 'comment' };
+    case 'approve': return { text: 'Dong y', class: 'approve' };
+    case 'request_changes': return { text: 'Can sua', class: 'changes' };
+    case 'comment': return { text: 'Gop y', class: 'comment' };
+    case 'reject': return { text: 'Tu choi', class: 'reject' };
+    case 'redirect': return { text: 'Yeu cau sua', class: 'redirect' };
     default: return null;
   }
 };
 
 const getTypeLabel = (type: Comment['comment_type']) => {
   switch (type) {
-    case 'draft': return 'Bản thảo';
-    case 'review': return 'Phản biện';
-    case 'approval': return 'Phê duyệt';
-    case 'human': return 'Con người';
+    case 'draft': return 'Ban thao';
+    case 'review': return 'Phan bien';
+    case 'approval': return 'Phe duyet';
+    case 'human': return 'Con nguoi';
+    case 'human_supreme': return 'SUPREME AUTHORITY';
     default: return type;
   }
 };
@@ -129,6 +133,13 @@ const formatTime = (dateStr: string) => {
   background: #fffbeb;
 }
 
+.comment-item.human_supreme {
+  border-left-color: #d97706;
+  border-left-width: 4px;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.2);
+}
+
 .comment-avatar {
   flex-shrink: 0;
   width: 40px;
@@ -197,6 +208,16 @@ const formatTime = (dateStr: string) => {
 .decision-badge.comment {
   background: #e0e7ff;
   color: #4f46e5;
+}
+
+.decision-badge.reject {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.decision-badge.redirect {
+  background: #fef3c7;
+  color: #d97706;
 }
 
 .timestamp {

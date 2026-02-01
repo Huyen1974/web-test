@@ -24,6 +24,7 @@ const {
   fetchDiscussion,
   fetchComments,
   submitHumanComment,
+  submitHumanDecision,
   updateStatus,
   getDeadline,
   startPolling,
@@ -72,7 +73,7 @@ const currentRoundComments = computed(() => {
   return commentsByRound.value[selectedRound.value] || [];
 });
 
-// Submit human response
+// Submit human response (simple comment)
 const handleSubmitComment = async () => {
   if (!humanInput.value.trim() || !selectedDiscussionId.value) return;
 
@@ -89,6 +90,38 @@ const handleSubmitComment = async () => {
   }
 
   submitting.value = false;
+};
+
+// Submit Supreme Authority decision
+const handleSupremeDecision = async (decision: 'approve' | 'reject' | 'redirect' | 'comment') => {
+  if (!selectedDiscussionId.value) return;
+
+  submitting.value = true;
+
+  const content = humanInput.value.trim() || getDefaultMessage(decision);
+
+  const success = await submitHumanDecision(
+    selectedDiscussionId.value,
+    content,
+    decision
+  );
+
+  if (success) {
+    humanInput.value = '';
+    await refresh();
+  }
+
+  submitting.value = false;
+};
+
+// Get default message for decision type
+const getDefaultMessage = (decision: string): string => {
+  switch (decision) {
+    case 'approve': return 'Phê duyệt bởi User (Supreme Authority)';
+    case 'reject': return 'Từ chối bởi User (Supreme Authority)';
+    case 'redirect': return 'Yêu cầu sửa đổi bởi User (Supreme Authority)';
+    default: return 'Bình luận từ User';
+  }
 };
 
 // Get available rounds
@@ -192,26 +225,60 @@ const refresh = async () => {
           :current-round="selectedRound"
         />
 
-        <!-- Human Input -->
-        <div v-if="currentDiscussion?.status === 'pending_human'" class="human-input-section">
-          <h4>👤 Phản hồi của bạn</h4>
+        <!-- Supreme Authority User Input -->
+        <div v-if="currentDiscussion && !currentDiscussion.locked_by_user" class="supreme-authority-section">
+          <div class="authority-header">
+            <span class="authority-badge">SUPREME AUTHORITY</span>
+            <span class="authority-hint">Y kien cua ban se override moi quyet dinh AI</span>
+          </div>
+
           <textarea
             v-model="humanInput"
-            placeholder="Nhập phản hồi để dừng auto-approval..."
-            rows="3"
+            class="authority-input"
+            rows="4"
+            placeholder="Nhap y kien cua ban... (Quyen cao nhat - AI se tuan theo)"
           ></textarea>
-          <div class="input-actions">
+
+          <div class="decision-buttons">
             <button
-              @click="handleSubmitComment"
-              :disabled="!humanInput.trim() || submitting"
-              class="submit-btn"
+              @click="handleSupremeDecision('approve')"
+              :disabled="submitting"
+              class="btn-approve"
             >
-              {{ submitting ? 'Đang gửi...' : '📤 Gửi phản hồi' }}
+              Phe duyet & Dong
             </button>
-            <span class="hint">
-              Gửi phản hồi sẽ dừng đồng hồ auto-approval
-            </span>
+            <button
+              @click="handleSupremeDecision('reject')"
+              :disabled="submitting"
+              class="btn-reject"
+            >
+              Tu choi
+            </button>
+            <button
+              @click="handleSupremeDecision('redirect')"
+              :disabled="submitting"
+              class="btn-redirect"
+            >
+              Yeu cau sua doi
+            </button>
+            <button
+              @click="handleSupremeDecision('comment')"
+              :disabled="submitting"
+              class="btn-comment"
+            >
+              Binh luan (AI tiep tuc)
+            </button>
           </div>
+
+          <p class="authority-note">
+            Luu y: Phe duyet/Tu choi se KHOA discussion - AI khong the thay doi sau do.
+          </p>
+        </div>
+
+        <!-- Locked indicator -->
+        <div v-if="currentDiscussion?.locked_by_user" class="locked-notice">
+          <span class="lock-icon">🔒</span>
+          <span>Discussion da bi khoa boi User - Khong the thay doi</span>
         </div>
 
         <!-- Link for AI agents -->
@@ -453,6 +520,144 @@ const refresh = async () => {
 .hint {
   font-size: 12px;
   color: #92400e;
+}
+
+/* Supreme Authority Section */
+.supreme-authority-section {
+  margin-top: 24px;
+  padding: 20px;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 2px solid #f59e0b;
+  border-radius: 12px;
+}
+
+.authority-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.authority-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  font-weight: 700;
+  font-size: 12px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
+}
+
+.authority-hint {
+  font-size: 13px;
+  color: #92400e;
+}
+
+.authority-input {
+  width: 100%;
+  padding: 14px;
+  border: 2px solid #fbbf24;
+  border-radius: 8px;
+  font-size: 14px;
+  resize: vertical;
+  background: white;
+}
+
+.authority-input:focus {
+  outline: none;
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+}
+
+.decision-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.decision-buttons button {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.decision-buttons button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-approve {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.btn-approve:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
+.btn-reject {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+}
+
+.btn-reject:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+.btn-redirect {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+}
+
+.btn-redirect:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+}
+
+.btn-comment {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+}
+
+.btn-comment:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.authority-note {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #92400e;
+  font-style: italic;
+}
+
+.locked-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 24px;
+  padding: 16px;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #dc2626;
+  font-weight: 500;
+}
+
+.lock-icon {
+  font-size: 20px;
 }
 
 .ai-link-info {
