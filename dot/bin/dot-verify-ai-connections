@@ -1,0 +1,64 @@
+#!/bin/bash
+# dot-verify-ai-connections: Verify all 7 AI Agents can connect to Directus
+# Usage: ./dot/bin/dot-verify-ai-connections
+set -euo pipefail
+
+DIRECTUS_URL="https://directus-test-pfne2mqwja-as.a.run.app"
+GCP_PROJECT="github-chatgpt-ggcloud"
+
+AGENTS=(
+  "CHATGPT"
+  "GEMINI"
+  "CLAUDE_DESKTOP"
+  "CODEX_CLI"
+  "CLAUDE_CODE_CLI"
+  "ANTIGRAVITY"
+  "GEMINI_CLI"
+)
+
+echo "═══════════════════════════════════════════════════════════"
+echo "  AI AGENT CONNECTION VERIFICATION"
+echo "═══════════════════════════════════════════════════════════"
+echo ""
+
+PASS_COUNT=0
+FAIL_COUNT=0
+
+for AGENT in "${AGENTS[@]}"; do
+  SECRET_NAME="DIRECTUS_AGENT_${AGENT}_TOKEN"
+
+  # Get token from GSM
+  TOKEN=$(gcloud secrets versions access latest --secret="$SECRET_NAME" --project="$GCP_PROJECT" 2>/dev/null || echo "")
+
+  if [ -z "$TOKEN" ]; then
+    echo "❌ $AGENT: Token not found in GSM"
+    ((FAIL_COUNT++))
+    continue
+  fi
+
+  # Test connection with token
+  BODY=$(curl -s -H "Authorization: Bearer $TOKEN" "$DIRECTUS_URL/users/me" 2>/dev/null || echo "{}")
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "$DIRECTUS_URL/users/me" 2>/dev/null || echo "000")
+
+  if [ "$HTTP_CODE" = "200" ]; then
+    USER_EMAIL=$(echo "$BODY" | jq -r '.data.email' 2>/dev/null || echo "unknown")
+    echo "✅ $AGENT: Connected as $USER_EMAIL"
+    ((PASS_COUNT++))
+  else
+    echo "❌ $AGENT: Connection failed (HTTP $HTTP_CODE)"
+    ((FAIL_COUNT++))
+  fi
+done
+
+echo ""
+echo "───────────────────────────────────────────────────────────"
+echo "  SUMMARY: $PASS_COUNT PASS / $FAIL_COUNT FAIL"
+echo "═══════════════════════════════════════════════════════════"
+
+if [ $FAIL_COUNT -eq 0 ]; then
+  echo "✅ ALL 7 AI AGENTS CONNECTED SUCCESSFULLY"
+  exit 0
+else
+  echo "⚠️ SOME AGENTS FAILED TO CONNECT"
+  exit 1
+fi

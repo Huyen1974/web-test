@@ -1,0 +1,171 @@
+{
+  "collection": "ai_discussions",
+  "meta": {
+    "icon": "forum",
+    "note": "AI-to-AI Discussion Threads",
+    "hidden": false,
+    "singleton": false,
+    "accountability": "all",
+    "sort_field": "date_created"
+  },
+  "schema": {
+    "name": "ai_discussions"
+  },
+  "fields": [
+    {
+      "field": "id",
+      "type": "uuid",
+      "meta": {
+        "hidden": true,
+        "interface": "input",
+        "readonly": true
+      },
+      "schema": {
+        "is_primary_key": true,
+        "has_auto_increment": false
+      }
+    },
+    {
+      "field": "topic",
+      "type": "string",
+      "meta": {
+        "interface": "input",
+        "required": true,
+        "note": "Discussion topic/subject"
+      }
+    },
+    {
+      "field": "description",
+      "type": "text",
+      "meta": {
+        "interface": "input-multiline",
+        "note": "Detailed description of the discussion"
+      }
+    },
+    {
+      "field": "drafter_id",
+      "type": "uuid",
+      "meta": {
+        "interface": "select-dropdown-m2o",
+        "note": "AI Agent responsible for drafting",
+        "special": ["m2o"],
+        "options": {
+          "template": "{{first_name}} {{last_name}}"
+        }
+      }
+    },
+    {
+      "field": "reviewers",
+      "type": "json",
+      "meta": {
+        "interface": "input-code",
+        "note": "Array of reviewer user IDs",
+        "options": {
+          "language": "json"
+        }
+      }
+    },
+    {
+      "field": "approver_id",
+      "type": "uuid",
+      "meta": {
+        "interface": "select-dropdown-m2o",
+        "note": "AI Agent responsible for final approval",
+        "special": ["m2o"]
+      }
+    },
+    {
+      "field": "status",
+      "type": "string",
+      "meta": {
+        "interface": "select-dropdown",
+        "options": {
+          "choices": [
+            { "text": "Drafting", "value": "drafting" },
+            { "text": "Reviewing", "value": "reviewing" },
+            { "text": "Approving", "value": "approving" },
+            { "text": "Resolved", "value": "resolved" },
+            { "text": "Pending Human", "value": "pending_human" }
+          ]
+        },
+        "required": true
+      },
+      "schema": {
+        "default_value": "drafting"
+      }
+    },
+    {
+      "field": "round",
+      "type": "integer",
+      "meta": {
+        "interface": "input",
+        "note": "Current revision round"
+      },
+      "schema": {
+        "default_value": 1
+      }
+    },
+    {
+      "field": "max_rounds",
+      "type": "integer",
+      "meta": {
+        "interface": "input",
+        "note": "Maximum allowed revision rounds"
+      },
+      "schema": {
+        "default_value": 3
+      }
+    },
+    {
+      "field": "draft_content",
+      "type": "text",
+      "meta": {
+        "interface": "input-rich-text-md",
+        "note": "Current draft content"
+      }
+    },
+    {
+      "field": "final_content",
+      "type": "text",
+      "meta": {
+        "interface": "input-rich-text-md",
+        "note": "Final approved content"
+      }
+    },
+    {
+      "field": "human_comment",
+      "type": "text",
+      "meta": {
+        "interface": "input-multiline",
+        "note": "Human override/final decision"
+      }
+    },
+    {
+      "field": "linked_feedback_id",
+      "type": "uuid",
+      "meta": {
+        "interface": "select-dropdown-m2o",
+        "note": "Link to original feedback request",
+        "special": ["m2o"]
+      }
+    },
+    {
+      "field": "date_created",
+      "type": "timestamp",
+      "meta": {
+        "interface": "datetime",
+        "readonly": true,
+        "special": ["date-created"]
+      }
+    },
+    {
+      "field": "date_updated",
+      "type": "timestamp",
+      "meta": {
+        "interface": "datetime",
+        "readonly": true,
+        "special": ["date-updated"]
+      }
+    }
+  ]
+}
