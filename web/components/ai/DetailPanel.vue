@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
  * DetailPanel Component
- * Right column - Full content view + Supreme Authority input
+ * Right column - Full content view + Supreme Authority input + DOT Console (WEB-45C)
  */
+import { useDOTConsole, type DOTContext } from '~/composables/useDOTConsole'
 
 interface Comment {
   id: number
@@ -41,10 +42,16 @@ const emit = defineEmits<{
   submitDecision: [decision: string, content: string]
   activateNow: []
   archive: [reason?: string]
+  refreshData: []
 }>()
 
 const userInput = ref('')
 const isSubmitting = ref(false)
+
+// DOT Console Integration (WEB-45C Part D)
+const { isDOTCommand, executeCommand, toasts, removeToast, showToast } = useDOTConsole()
+const dotOutputMessage = ref<string | null>(null)
+const showDotOutput = ref(false)
 
 const getAgentName = (author: any): string => {
   if (!author) return 'Unknown'
@@ -60,16 +67,82 @@ const formatContent = (content: string): string => {
     .replace(/\n/g, '<br>')
 }
 
-const submitDecision = async (decision: string) => {
+// DOT Console Context - provides methods for command execution
+const createDOTContext = (): DOTContext => ({
+  discussionId: props.discussion?.id?.toString() || null,
+  currentRound: props.discussion?.round || 1,
+  status: props.discussion?.status || '',
+  archiveDiscussion: async (id: string, reason?: string) => {
+    emit('archive', reason)
+    return true
+  },
+  activateNow: async (_id: string) => {
+    emit('activateNow')
+    return true
+  },
+  fetchDiscussions: async () => {
+    emit('refreshData')
+    return []
+  },
+  fetchDiscussion: async (_id: string) => {
+    return props.discussion
+  }
+})
+
+// Handle input submission with DOT command detection (S11: Silent Execution)
+const handleInputSubmit = async (decision?: string) => {
   if (isSubmitting.value) return
+  const input = userInput.value.trim()
+  if (!input && !decision) return
+
   isSubmitting.value = true
 
   try {
-    emit('submitDecision', decision, userInput.value)
-    userInput.value = ''
+    // Check if input is a DOT command
+    if (isDOTCommand(input)) {
+      // S11: Execute command silently (no chat bubble)
+      const context = createDOTContext()
+      const result = await executeCommand(input, context)
+
+      // Show output in DOT panel if not silent (e.g., /dot-help)
+      if (!result.silent && result.message) {
+        dotOutputMessage.value = result.message
+        showDotOutput.value = true
+      }
+
+      userInput.value = ''
+      return
+    }
+
+    // Regular decision submission
+    if (decision) {
+      emit('submitDecision', decision, input)
+      userInput.value = ''
+    }
   } finally {
     isSubmitting.value = false
   }
+}
+
+const submitDecision = async (decision: string) => {
+  await handleInputSubmit(decision)
+}
+
+// Handle Enter key for DOT commands
+const handleKeyDown = (event: KeyboardEvent) => {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    const input = userInput.value.trim()
+    if (isDOTCommand(input)) {
+      event.preventDefault()
+      handleInputSubmit()
+    }
+  }
+}
+
+// Close DOT output panel
+const closeDotOutput = () => {
+  showDotOutput.value = false
+  dotOutputMessage.value = null
 }
 
 // S4: Activate Now handler
@@ -124,6 +197,36 @@ onUnmounted(() => {
 
 <template>
   <div class="detail-panel">
+    <!-- S12: Toast Notifications -->
+    <Teleport to="body">
+      <div class="toast-container">
+        <TransitionGroup name="toast">
+          <div
+            v-for="toast in toasts"
+            :key="toast.id"
+            :class="['toast', `toast-${toast.type}`]"
+            @click="removeToast(toast.id)"
+          >
+            <span class="toast-icon">
+              {{ toast.type === 'success' ? '✅' : toast.type === 'error' ? '❌' : toast.type === 'warning' ? '⚠️' : 'ℹ️' }}
+            </span>
+            <span class="toast-message">{{ toast.message }}</span>
+          </div>
+        </TransitionGroup>
+      </div>
+    </Teleport>
+
+    <!-- DOT Output Panel (for /dot-help display) -->
+    <Transition name="slide-up">
+      <div v-if="showDotOutput && dotOutputMessage" class="dot-output-panel">
+        <div class="dot-output-header">
+          <span class="dot-output-title">DOT Console Output</span>
+          <button @click="closeDotOutput" class="dot-output-close">&times;</button>
+        </div>
+        <pre class="dot-output-content">{{ dotOutputMessage }}</pre>
+      </div>
+    </Transition>
+
     <!-- Header -->
     <div v-if="discussion" class="panel-header">
       <div class="header-content">
@@ -222,8 +325,17 @@ onUnmounted(() => {
         v-model="userInput"
         rows="3"
         class="authority-input"
-        placeholder="Nhap y kien cua ban..."
+        placeholder="Nhap y kien cua ban hoac go /dot-help de xem lenh..."
+        @keydown="handleKeyDown"
       ></textarea>
+      <div class="input-hint">
+        <span v-if="isDOTCommand(userInput)" class="hint-command">
+          Press Enter de thuc thi lenh DOT
+        </span>
+        <span v-else class="hint-normal">
+          Go <code>/dot-help</code> de xem danh sach lenh
+        </span>
+      </div>
 
       <div class="decision-buttons">
         <button
@@ -660,5 +772,170 @@ onUnmounted(() => {
   .decision-buttons {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+/* S12: Toast Notifications */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 400px;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 14px;
+}
+
+.toast:hover {
+  transform: translateX(-4px);
+}
+
+.toast-success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.toast-error {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+}
+
+.toast-warning {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+}
+
+.toast-info {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+}
+
+.toast-icon {
+  font-size: 18px;
+}
+
+.toast-message {
+  flex: 1;
+  font-weight: 500;
+}
+
+/* Toast Animations */
+.toast-enter-active,
+.toast-leave-active {
+  transition: all 0.3s ease;
+}
+
+.toast-enter-from {
+  opacity: 0;
+  transform: translateX(100%);
+}
+
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(100%);
+}
+
+/* DOT Output Panel */
+.dot-output-panel {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  background: #1e293b;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
+  max-height: 300px;
+  overflow: hidden;
+  z-index: 100;
+}
+
+.dot-output-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #334155;
+  border-bottom: 1px solid #475569;
+}
+
+.dot-output-title {
+  font-weight: 600;
+  color: #10b981;
+  font-family: monospace;
+}
+
+.dot-output-close {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: #475569;
+  color: #94a3b8;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.dot-output-close:hover {
+  background: #64748b;
+  color: white;
+}
+
+.dot-output-content {
+  padding: 16px;
+  margin: 0;
+  color: #e2e8f0;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-y: auto;
+  max-height: 240px;
+}
+
+/* Slide Up Animation */
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-up-enter-from,
+.slide-up-leave-to {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+/* Input Hints */
+.input-hint {
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+.hint-command {
+  color: #10b981;
+  font-weight: 500;
+}
+
+.hint-normal {
+  color: #92400e;
+}
+
+.input-hint code {
+  background: rgba(0, 0, 0, 0.1);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: monospace;
 }
 </style>

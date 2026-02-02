@@ -1,7 +1,7 @@
 # Business OS Knowledge Base
 # AI-readable index for GPT Actions, Gemini Extensions, and LLM integrations
-# Version: 2.3.0
-# Last Updated: 2026-02-01
+# Version: 2.4.0
+# Last Updated: 2026-02-02
 # Maintainer: Agency OS Team
 
 ## OVERVIEW
@@ -220,6 +220,48 @@ After creating a discussion with status "pending_human":
 GET /items/ai_discussions - Check for assigned tasks
 POST /items/ai_discussion_comments - Submit your input
 PATCH /items/ai_discussions/{id} - Update status (if authorized)
+
+## DOT CONSOLE - COMMAND INTERPRETER (WEB-45C)
+
+### Overview
+The Super Session dashboard includes a DOT (Direct Operation Terminal) Console.
+This allows power users to execute commands directly from the Supreme Authority input.
+
+### Available Commands
+
+| Command | Description | Usage |
+|---------|-------------|-------|
+| /dot-help | Show all available commands | `/dot-help` |
+| /dot-status | View current discussion status | `/dot-status` |
+| /dot-archive | Archive discussion (soft delete) | `/dot-archive [reason]` |
+| /dot-activate | Skip 5-min timer, activate now | `/dot-activate` |
+| /dot-list | List all discussions | `/dot-list` |
+| /dot-refresh | Refresh data | `/dot-refresh` |
+
+### Command Behavior
+- Commands starting with `/` or `dot-` are interpreted as DOT commands
+- S10: `/dot-help` shows complete command reference in-panel
+- S11: Commands execute silently (no chat bubbles in discussion thread)
+- S12: Instant toast notifications for command feedback
+
+### New API Endpoints (WEB-45C)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| /api/agent-data/discussion | POST | Create new AI discussion |
+| /api/agent-data/comment | POST | Add comment to discussion |
+| /api/agent-data/status | PATCH | Update discussion status |
+| /api/agent-data/activate-now | POST | Skip timer, activate immediately |
+
+### Directus Flow Configuration
+The system includes automated flows configured via API (not UI):
+- **E1: Auto-Activate Drafter** - Triggers AI drafter when discussion created with status "drafting"
+
+### Schema Extensions (S6 - Prompt Versioning)
+The `ai_discussion_comments` collection includes:
+- `prompt_version` (integer) - Version number (1, 2, 3...)
+- `prompt_content` (text) - Full prompt at this version
+- `changes_summary` (text) - AI description of changes from previous version
 
 ## CONTACT
 - Technical issues: Create feedback via API
