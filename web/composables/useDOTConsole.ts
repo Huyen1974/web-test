@@ -1,5 +1,5 @@
 /**
- * DOT Console Composable (WEB-45C Part D, WEB-46 S18)
+ * DOT Console Composable (WEB-45C Part D, WEB-46 S18, S22, S23)
  * Turns Supreme Authority input into a Command Interpreter
  *
  * Features:
@@ -7,6 +7,8 @@
  * - S11: Silent execution - commands don't create chat bubbles
  * - S12: Toast notifications for command feedback
  * - S18: /dot-create command for quick discussion creation
+ * - S22: Parameterized commands (--coordinator, --reviewers, --executors)
+ * - S23: /dot-diag self-diagnostics command
  */
 
 export interface DOTCommand {
@@ -24,12 +26,28 @@ export interface DOTContext {
   activateNow: (id: string) => Promise<boolean>
   fetchDiscussions: () => Promise<any[]>
   fetchDiscussion: (id: string) => Promise<any>
-  // S18: Create discussion from command
+  // S18/S22: Create discussion from command with full params
   createDiscussion?: (topic: string, options?: {
     drafter?: string
+    coordinator?: string
     reviewers?: string[]
+    executors?: string[]
     description?: string
   }) => Promise<any>
+  // S23: Activity log callback for showing DOT results
+  addActivityLogEntry?: (entry: ActivityLogEntry) => void
+}
+
+// S23: Activity log entry for DOT command results
+export interface ActivityLogEntry {
+  id: string
+  timestamp: string
+  type: 'dot_command' | 'status_change' | 'ai_response' | 'human_action' | 'timer_event' | 'error' | 'system'
+  message: string
+  command?: string
+  success?: boolean
+  actor?: string
+  metadata?: Record<string, any>
 }
 
 export interface DOTResult {
@@ -87,9 +105,12 @@ QUAN LY DISCUSSION:
 /dot-list          - Xem danh sach tat ca discussions
 /dot-refresh       - Lam moi du lieu
 
-TAO MOI (S18):
-/dot-create "Tieu de" --drafter:claude --reviewers:gemini,chatgpt
-  Tao discussion moi sieu toc tu command line
+CHAN DOAN (S23):
+/dot-diag          - Tu chan doan ket noi (Browser->Proxy->Directus->Agent Data)
+
+TAO MOI (S18/S22):
+/dot-create --topic:"Tieu de" --coordinator:claude --reviewers:gemini,chatgpt --executors:claude-code
+  Tao discussion moi sieu toc voi day du tham so
 
 HANH DONG:
 /dot-archive [ly do] - Luu tru discussion (soft delete)
@@ -99,7 +120,7 @@ HANH DONG:
 
 Ghi chu:
 - Lenh DOT thuc thi ngam (silent), khong tao bong bong chat
-- Ket qua lenh hien thi qua toast notification
+- Ket qua lenh hien thi qua toast notification va Activity Log
 - Go /help hoac /dot-help de xem lai danh sach nay
 `.trim()
 
@@ -107,6 +128,103 @@ Ghi chu:
       success: true,
       message: helpText,
       silent: false // Help should display in panel
+    }
+  }
+
+  /**
+   * S23: Diagnostics command - Check system connectivity
+   * Browser -> Nuxt Proxy -> Directus -> Agent Data
+   */
+  const diagHandler = async (_args: string[], context: DOTContext): Promise<DOTResult> => {
+    const results: { name: string; status: 'ok' | 'error'; detail?: string }[] = []
+
+    // Step 1: Browser -> Nuxt (always OK if we're running)
+    results.push({ name: 'Browser -> Nuxt', status: 'ok' })
+
+    // Step 2: Nuxt -> Directus via proxy
+    try {
+      const directusResponse = await fetch('/api/directus/server/health')
+      if (directusResponse.ok) {
+        results.push({ name: 'Nuxt -> Directus', status: 'ok', detail: 'ping /server/health' })
+      } else {
+        results.push({
+          name: 'Nuxt -> Directus',
+          status: 'error',
+          detail: `HTTP ${directusResponse.status}`
+        })
+      }
+    } catch (e) {
+      results.push({
+        name: 'Nuxt -> Directus',
+        status: 'error',
+        detail: (e as Error).message
+      })
+    }
+
+    // Step 3: Nuxt -> Agent Data (if configured)
+    const config = useRuntimeConfig()
+    if (config.public?.agentData?.enabled && config.public?.agentData?.baseUrl) {
+      try {
+        // Try the info endpoint on agent-data
+        const agentDataResponse = await fetch('/api/agent-data/info')
+        if (agentDataResponse.ok) {
+          results.push({ name: 'Nuxt -> Agent Data', status: 'ok', detail: 'ping /info' })
+        } else {
+          results.push({
+            name: 'Nuxt -> Agent Data',
+            status: 'error',
+            detail: `HTTP ${agentDataResponse.status}`
+          })
+        }
+      } catch (e) {
+        results.push({
+          name: 'Nuxt -> Agent Data',
+          status: 'error',
+          detail: (e as Error).message
+        })
+      }
+    } else {
+      results.push({
+        name: 'Nuxt -> Agent Data',
+        status: 'ok',
+        detail: 'Disabled (not configured)'
+      })
+    }
+
+    // Build diagnostic output
+    const allOk = results.every(r => r.status === 'ok')
+    const diagLines = results.map((r, i) => {
+      const prefix = i === results.length - 1 ? '└──' : '├──'
+      const icon = r.status === 'ok' ? '✅' : '❌'
+      const detail = r.detail ? ` (${r.detail})` : ''
+      return `${prefix} ${r.name}: ${icon} ${r.status.toUpperCase()}${detail}`
+    })
+
+    const output = `
+🔍 DOT System Diagnostics
+${diagLines.join('\n')}
+└── Overall: ${allOk ? '🟢 HEALTHY' : '🔴 ISSUES DETECTED'}
+`.trim()
+
+    // Add to activity log if callback provided
+    if (context.addActivityLogEntry) {
+      context.addActivityLogEntry({
+        id: `diag-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        type: 'dot_command',
+        command: '/dot-diag',
+        message: allOk ? 'System healthy' : 'System issues detected',
+        success: allOk,
+        actor: 'DOT Console',
+        metadata: { results }
+      })
+    }
+
+    return {
+      success: allOk,
+      message: output,
+      data: { results },
+      silent: false // Show in DOT output panel
     }
   }
 
@@ -239,8 +357,9 @@ Updated: ${discussion.date_updated}`,
   }
 
   /**
-   * S18: Create command - Quick create discussion from DOT console
-   * Usage: /dot-create "Tieu de" --drafter:claude --reviewers:gemini,chatgpt
+   * S18/S22: Create command - Quick create discussion from DOT console
+   * Enhanced with full parameterized syntax (S22)
+   * Usage: /dot-create --topic:"Tieu de" --coordinator:claude --reviewers:gemini,chatgpt --executors:claude-code
    */
   const createHandler = async (args: string[], context: DOTContext): Promise<DOTResult> => {
     if (!context.createDiscussion) {
@@ -251,64 +370,122 @@ Updated: ${discussion.date_updated}`,
       }
     }
 
-    // Parse arguments: first quoted string is topic, rest are options
+    // Parse arguments with enhanced syntax (S22)
     let topic = ''
-    let drafter = 'claude'
-    let reviewers: string[] = []
     let description = ''
+    let coordinator = 'claude' // Default coordinator (drafter)
+    let reviewers: string[] = []
+    let executors: string[] = []
 
     // Join args and parse
     const fullArgs = args.join(' ')
 
-    // Extract quoted topic
-    const topicMatch = fullArgs.match(/"([^"]+)"/)
-    if (topicMatch) {
-      topic = topicMatch[1]
-    } else if (args.length > 0 && !args[0].startsWith('--')) {
-      // If no quotes, take first arg as topic
-      topic = args[0]
+    // S22: Parse --param:"value" or --param:value syntax
+    // Support both --topic:"Tieu de" and "Tieu de" (legacy)
+    const topicParamMatch = fullArgs.match(/--topic:"([^"]+)"/)
+    if (topicParamMatch) {
+      topic = topicParamMatch[1]
+    } else {
+      // Legacy: Extract quoted topic without --topic prefix
+      const legacyTopicMatch = fullArgs.match(/"([^"]+)"/)
+      if (legacyTopicMatch) {
+        topic = legacyTopicMatch[1]
+      } else if (args.length > 0 && !args[0].startsWith('--')) {
+        // If no quotes, take first arg as topic
+        topic = args[0]
+      }
+    }
+
+    // Parse description
+    const descMatch = fullArgs.match(/--description:"([^"]+)"/)
+    if (descMatch) {
+      description = descMatch[1]
+    } else {
+      const descShortMatch = fullArgs.match(/--desc:"([^"]+)"/)
+      if (descShortMatch) {
+        description = descShortMatch[1]
+      }
     }
 
     if (!topic) {
       return {
         success: false,
-        message: 'Thieu tieu de. Cu phap: /dot-create "Tieu de" --drafter:claude --reviewers:gemini,chatgpt',
-        silent: true
+        message: `Thieu tieu de. Cu phap:
+/dot-create --topic:"Tieu de" --coordinator:claude --reviewers:gemini,chatgpt --executors:claude-code`,
+        silent: false
       }
     }
 
-    // Parse options
+    // S22: Parse all options from args
     for (const arg of args) {
-      if (arg.startsWith('--drafter:')) {
-        drafter = arg.replace('--drafter:', '')
-      } else if (arg.startsWith('--reviewers:')) {
-        reviewers = arg.replace('--reviewers:', '').split(',')
-      } else if (arg.startsWith('--desc:')) {
+      // Coordinator (alias for drafter in team terminology)
+      if (arg.startsWith('--coordinator:')) {
+        coordinator = arg.replace('--coordinator:', '')
+      }
+      // Legacy drafter support
+      else if (arg.startsWith('--drafter:')) {
+        coordinator = arg.replace('--drafter:', '')
+      }
+      // Reviewers (comma-separated)
+      else if (arg.startsWith('--reviewers:')) {
+        reviewers = arg.replace('--reviewers:', '').split(',').map(r => r.trim()).filter(Boolean)
+      }
+      // Executors (comma-separated) - AI agents who execute tasks
+      else if (arg.startsWith('--executors:')) {
+        executors = arg.replace('--executors:', '').split(',').map(e => e.trim()).filter(Boolean)
+      }
+      // Short description without quotes
+      else if (arg.startsWith('--desc:') && !description) {
         description = arg.replace('--desc:', '')
       }
     }
 
     try {
       const result = await context.createDiscussion(topic, {
-        drafter,
+        coordinator,
+        drafter: coordinator, // Keep backward compatibility
         reviewers,
+        executors,
         description
       })
 
       // Refresh list after creation
       await context.fetchDiscussions()
 
+      // Build success message with team composition
+      const teamParts = [`Coordinator: ${coordinator}`]
+      if (reviewers.length > 0) teamParts.push(`Reviewers: ${reviewers.join(', ')}`)
+      if (executors.length > 0) teamParts.push(`Executors: ${executors.join(', ')}`)
+
+      const successMessage = `✅ Da tao discussion: "${topic}"
+📋 ${teamParts.join(' | ')}
+🆔 ID: ${result?.id || 'N/A'}`
+
+      // Add to activity log if callback provided
+      if (context.addActivityLogEntry) {
+        context.addActivityLogEntry({
+          id: `create-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          type: 'dot_command',
+          command: '/dot-create',
+          message: `Created: ${topic}`,
+          success: true,
+          actor: 'DOT Console',
+          metadata: { topic, coordinator, reviewers, executors, discussionId: result?.id }
+        })
+      }
+
       return {
         success: true,
-        message: `Da tao discussion: "${topic}" (Drafter: ${drafter})`,
+        message: successMessage,
         data: result,
-        silent: true
+        silent: false // Show success in output panel
       }
     } catch (e) {
       return {
         success: false,
-        message: `Loi khi tao discussion: ${(e as Error).message}`,
-        silent: true
+        message: `❌ Loi khi tao discussion: ${(e as Error).message}`,
+        silent: false
       }
     }
   }
@@ -326,6 +503,19 @@ Updated: ${discussion.date_updated}`,
       description: 'Hien thi danh sach lenh DOT',
       usage: '/dot-help',
       handler: helpHandler
+    },
+    // S23: Diagnostics command
+    diag: {
+      name: 'diag',
+      description: 'Tu chan doan ket noi he thong',
+      usage: '/dot-diag',
+      handler: diagHandler
+    },
+    'dot-diag': {
+      name: 'dot-diag',
+      description: 'Tu chan doan ket noi he thong',
+      usage: '/dot-diag',
+      handler: diagHandler
     },
     status: {
       name: 'status',
@@ -473,6 +663,7 @@ Updated: ${discussion.date_updated}`,
   const getAvailableCommands = (): string[] => {
     return [
       '/dot-help',
+      '/dot-diag',
       '/dot-status',
       '/dot-create',
       '/dot-archive',

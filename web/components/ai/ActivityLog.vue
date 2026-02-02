@@ -1,14 +1,17 @@
 <script setup lang="ts">
 /**
- * ActivityLog Component (S7)
+ * ActivityLog Component (S7, WEB-46)
  * Collapsible panel showing system activity log for a discussion
+ * Enhanced to support DOT command results (S23)
  */
 
 interface ActivityLogEntry {
   id: string
   timestamp: string
-  type: 'status_change' | 'ai_response' | 'human_action' | 'timer_event' | 'error' | 'system'
+  type: 'dot_command' | 'status_change' | 'ai_response' | 'human_action' | 'timer_event' | 'error' | 'system'
   message: string
+  command?: string
+  success?: boolean
   actor?: string
   metadata?: Record<string, any>
 }
@@ -16,21 +19,37 @@ interface ActivityLogEntry {
 interface Props {
   discussionId: string
   limit?: number
+  // S23: Injected entries from DOT commands
+  injectedEntries?: ActivityLogEntry[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  limit: 20
+  limit: 20,
+  injectedEntries: () => []
 })
+
+// Emit to allow parent to manage injected entries
+const emit = defineEmits<{
+  clearInjected: []
+}>()
 
 // Use Nuxt proxy to avoid CORS (WEB-46)
 const proxyUrl = '/api/directus'
 
 const isExpanded = ref(false)
-const activities = ref<ActivityLogEntry[]>([])
+const fetchedActivities = ref<ActivityLogEntry[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 
+// Combine fetched activities with injected DOT command entries
+const activities = computed(() => {
+  const all = [...(props.injectedEntries || []), ...fetchedActivities.value]
+  // Sort by timestamp descending (newest first)
+  return all.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+})
+
 const typeConfig: Record<string, { icon: string; color: string }> = {
+  dot_command: { icon: '🔧', color: 'text-emerald-600' },
   status_change: { icon: '🔄', color: 'text-blue-600' },
   ai_response: { icon: '🤖', color: 'text-purple-600' },
   human_action: { icon: '👤', color: 'text-green-600' },
@@ -57,7 +76,7 @@ const fetchActivities = async () => {
     const rawActivities = data.data || []
 
     // Transform Directus activities to our format
-    activities.value = rawActivities.map((activity: any) => ({
+    fetchedActivities.value = rawActivities.map((activity: any) => ({
       id: activity.id,
       timestamp: activity.timestamp,
       type: mapActivityType(activity.action),
@@ -68,7 +87,7 @@ const fetchActivities = async () => {
   } catch (e) {
     error.value = (e as Error).message
     // Fallback to empty array with placeholder
-    activities.value = []
+    fetchedActivities.value = []
   } finally {
     loading.value = false
   }
@@ -112,7 +131,7 @@ const formatTimestamp = (timestamp: string): string => {
 
 const toggleExpanded = () => {
   isExpanded.value = !isExpanded.value
-  if (isExpanded.value && activities.value.length === 0) {
+  if (isExpanded.value && fetchedActivities.value.length === 0) {
     fetchActivities()
   }
 }
@@ -152,12 +171,21 @@ watch(() => props.discussionId, () => {
         <div
           v-for="activity in activities"
           :key="activity.id"
-          class="activity-item"
+          :class="['activity-item', { 'dot-command-entry': activity.type === 'dot_command' }]"
         >
           <span :class="['activity-icon', typeConfig[activity.type]?.color]">
             {{ typeConfig[activity.type]?.icon || '📝' }}
           </span>
           <div class="activity-details">
+            <!-- DOT Command specific display -->
+            <template v-if="activity.type === 'dot_command'">
+              <span class="activity-command">
+                <code>{{ activity.command }}</code>
+                <span :class="['command-status', activity.success ? 'success' : 'error']">
+                  {{ activity.success ? '✓' : '✗' }}
+                </span>
+              </span>
+            </template>
             <span class="activity-message">{{ activity.message }}</span>
             <span class="activity-meta">
               {{ activity.actor }} - {{ formatTimestamp(activity.timestamp) }}
@@ -260,5 +288,40 @@ watch(() => props.discussionId, () => {
   font-size: 11px;
   color: #94a3b8;
   margin-top: 2px;
+}
+
+/* DOT Command Entry Styles (S23) */
+.dot-command-entry {
+  background: #ecfdf5;
+  border-left: 3px solid #10b981;
+}
+
+.activity-command {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.activity-command code {
+  background: #d1fae5;
+  color: #065f46;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 12px;
+}
+
+.command-status {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.command-status.success {
+  color: #10b981;
+}
+
+.command-status.error {
+  color: #ef4444;
 }
 </style>

@@ -2,8 +2,9 @@
 /**
  * DetailPanel Component
  * Right column - Full content view + Supreme Authority input + DOT Console (WEB-45C)
+ * Enhanced with Activity Log integration (WEB-46 S7, S23)
  */
-import { useDOTConsole, type DOTContext } from '~/composables/useDOTConsole'
+import { useDOTConsole, type DOTContext, type ActivityLogEntry } from '~/composables/useDOTConsole'
 
 interface Comment {
   id: number
@@ -43,15 +44,22 @@ const emit = defineEmits<{
   activateNow: []
   archive: [reason?: string]
   refreshData: []
+  createDiscussion: [topic: string, options: any]
 }>()
 
 const userInput = ref('')
 const isSubmitting = ref(false)
 
+// S7/S23: Activity Log entries from DOT commands
+const dotActivityEntries = ref<ActivityLogEntry[]>([])
+
 // DOT Console Integration (WEB-45C Part D)
 const { isDOTCommand, executeCommand, toasts, removeToast, showToast } = useDOTConsole()
 const dotOutputMessage = ref<string | null>(null)
 const showDotOutput = ref(false)
+
+// Nuxt proxy URL for API calls
+const proxyUrl = '/api/directus'
 
 const getAgentName = (author: any): string => {
   if (!author) return 'Unknown'
@@ -65,6 +73,41 @@ const formatContent = (content: string): string => {
   return content
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\n/g, '<br>')
+}
+
+// S23: Add entry to activity log
+const addActivityLogEntry = (entry: ActivityLogEntry) => {
+  dotActivityEntries.value.unshift(entry)
+  // Keep only last 50 entries
+  if (dotActivityEntries.value.length > 50) {
+    dotActivityEntries.value = dotActivityEntries.value.slice(0, 50)
+  }
+}
+
+// S18/S22: Create discussion via API
+const createDiscussionApi = async (topic: string, options: any = {}) => {
+  try {
+    const response = await $fetch(`${proxyUrl}/items/ai_discussions`, {
+      method: 'POST',
+      body: {
+        topic,
+        description: options.description || '',
+        status: 'drafting',
+        round: 1,
+        max_rounds: 3,
+        // Map coordinator to drafter_id if provided
+        ...(options.coordinator && { drafter_id: options.coordinator }),
+        // Store reviewers and executors as JSON arrays in description or metadata
+        ...(options.reviewers?.length && { reviewers: options.reviewers }),
+        ...(options.executors?.length && { executors: options.executors })
+      }
+    })
+    emit('refreshData')
+    return (response as any).data
+  } catch (e) {
+    console.error('Failed to create discussion:', e)
+    throw e
+  }
 }
 
 // DOT Console Context - provides methods for command execution
@@ -86,7 +129,11 @@ const createDOTContext = (): DOTContext => ({
   },
   fetchDiscussion: async (_id: string) => {
     return props.discussion
-  }
+  },
+  // S18/S22: Create discussion from command
+  createDiscussion: createDiscussionApi,
+  // S23: Activity log callback
+  addActivityLogEntry
 })
 
 // Handle input submission with DOT command detection (S11: Silent Execution)
@@ -299,6 +346,13 @@ onUnmounted(() => {
       <div v-else class="empty-detail">
         <p>Chon mot discussion de xem chi tiet</p>
       </div>
+
+      <!-- S7: Activity Log (Tier 3) -->
+      <AiActivityLog
+        v-if="discussion?.id"
+        :discussion-id="discussion.id.toString()"
+        :injected-entries="dotActivityEntries"
+      />
     </div>
 
     <!-- Supreme Authority Input (if not locked) -->
