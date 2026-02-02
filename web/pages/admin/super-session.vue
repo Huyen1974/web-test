@@ -13,8 +13,8 @@ definePageMeta({
   layout: 'default'
 })
 
-const config = useRuntimeConfig()
-const directusUrl = config.public.directusUrl || 'https://directus-test-pfne2mqwja-as.a.run.app'
+// Use Nuxt proxy to avoid CORS issues (WEB-46)
+const proxyUrl = '/api/directus'
 
 // State
 const discussions = ref<any[]>([])
@@ -38,7 +38,7 @@ const selectedComment = computed(() =>
 const fetchDiscussions = async () => {
   isLoading.value = true
   try {
-    const response = await $fetch(`${directusUrl}/items/ai_discussions`, {
+    const response = await $fetch(`${proxyUrl}/items/ai_discussions`, {
       params: {
         sort: '-date_updated',
         fields: '*,drafter_id.first_name,drafter_id.last_name,drafter_id.email',
@@ -55,7 +55,7 @@ const fetchDiscussions = async () => {
 
 const fetchComments = async (discussionId: number) => {
   try {
-    const response = await $fetch(`${directusUrl}/items/ai_discussion_comments`, {
+    const response = await $fetch(`${proxyUrl}/items/ai_discussion_comments`, {
       params: {
         'filter[discussion_id][_eq]': discussionId,
         sort: 'round,date_created',
@@ -71,7 +71,7 @@ const fetchComments = async (discussionId: number) => {
 
 const fetchAgents = async () => {
   try {
-    const response = await $fetch(`${directusUrl}/users`, {
+    const response = await $fetch(`${proxyUrl}/users`, {
       params: {
         'filter[email][_contains]': 'agent.',
         fields: 'id,first_name,last_name,email'
@@ -116,7 +116,7 @@ const handleDecision = async (decision: string, content: string) => {
     const currentRound = selectedDiscussion.value?.round || 1
 
     // 1. Create human_supreme comment
-    await $fetch(`${directusUrl}/items/ai_discussion_comments`, {
+    await $fetch(`${proxyUrl}/items/ai_discussion_comments`, {
       method: 'POST',
       body: {
         discussion_id: selectedDiscussionId.value,
@@ -145,7 +145,7 @@ const handleDecision = async (decision: string, content: string) => {
         break
     }
 
-    await $fetch(`${directusUrl}/items/ai_discussions/${selectedDiscussionId.value}`, {
+    await $fetch(`${proxyUrl}/items/ai_discussions/${selectedDiscussionId.value}`, {
       method: 'PATCH',
       body: updateData
     })

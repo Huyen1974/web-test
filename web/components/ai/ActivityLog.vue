@@ -22,8 +22,8 @@ const props = withDefaults(defineProps<Props>(), {
   limit: 20
 })
 
-const config = useRuntimeConfig()
-const directusUrl = config.public.directusUrl || 'https://directus-test-pfne2mqwja-as.a.run.app'
+// Use Nuxt proxy to avoid CORS (WEB-46)
+const proxyUrl = '/api/directus'
 
 const isExpanded = ref(false)
 const activities = ref<ActivityLogEntry[]>([])
@@ -46,9 +46,9 @@ const fetchActivities = async () => {
   error.value = null
 
   try {
-    // Fetch from Directus activity log
+    // Fetch from Directus activity log via proxy (WEB-46)
     const response = await fetch(
-      `${directusUrl}/activity?filter[collection][_eq]=ai_discussions&filter[item][_eq]=${props.discussionId}&sort=-timestamp&limit=${props.limit}`
+      `${proxyUrl}/activity?filter[collection][_eq]=ai_discussions&filter[item][_eq]=${props.discussionId}&sort=-timestamp&limit=${props.limit}`
     )
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
