@@ -14,7 +14,9 @@ const statusConfig: Record<string, { icon: string; label: string; color: string 
   reviewing: { icon: '🔍', label: 'Dang review', color: 'bg-blue-100 text-blue-700' },
   approving: { icon: '✍️', label: 'Cho phe duyet', color: 'bg-purple-100 text-purple-700' },
   resolved: { icon: '✅', label: 'Hoan thanh', color: 'bg-green-100 text-green-700' },
-  rejected: { icon: '❌', label: 'Tu choi', color: 'bg-red-100 text-red-700' }
+  rejected: { icon: '❌', label: 'Tu choi', color: 'bg-red-100 text-red-700' },
+  archived: { icon: '📦', label: 'Da luu tru', color: 'bg-gray-200 text-gray-500' },
+  stalled_error: { icon: '🚨', label: 'AI that bai', color: 'bg-red-200 text-red-800' }
 }
 
 const config = computed(() => statusConfig[props.status] || statusConfig.drafting)
