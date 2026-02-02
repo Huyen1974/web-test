@@ -53,7 +53,7 @@ async function createFlow(payload: FlowPayload): Promise<string | null> {
       return null;
     }
 
-    const data = await response.json();
+    const data = await response.json() as { data: { id: string } };
     console.log(`[OK] Created flow: ${payload.name} (ID: ${data.data.id})`);
     return data.data.id;
   } catch (e) {
@@ -79,7 +79,7 @@ async function createOperation(payload: OperationPayload): Promise<string | null
       return null;
     }
 
-    const data = await response.json();
+    const data = await response.json() as { data: { id: string } };
     console.log(`[OK] Created operation: ${payload.name} (ID: ${data.data.id})`);
     return data.data.id;
   } catch (e) {
@@ -101,7 +101,7 @@ async function checkExistingFlow(name: string): Promise<string | null> {
 
     if (!response.ok) return null;
 
-    const data = await response.json();
+    const data = await response.json() as { data: Array<{ id: string }> };
     if (data.data && data.data.length > 0) {
       return data.data[0].id;
     }
