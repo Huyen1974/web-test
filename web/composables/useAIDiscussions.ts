@@ -3,6 +3,8 @@
  * WEB-39: Super Session - 3-tier discussion management
  */
 
+type DiscussionStatus = 'drafting' | 'pending_human' | 'reviewing' | 'approving' | 'resolved' | 'rejected' | 'archived' | 'stalled_error';
+
 interface AIDiscussion {
   id: string;
   topic: string;
@@ -10,7 +12,7 @@ interface AIDiscussion {
   drafter_id: any;
   reviewers: string[];
   approver_id: any;
-  status: 'drafting' | 'pending_human' | 'reviewing' | 'approving' | 'resolved' | 'rejected';
+  status: DiscussionStatus;
   round: number;
   max_rounds: number;
   draft_content?: string;
@@ -18,6 +20,8 @@ interface AIDiscussion {
   human_comment?: string;
   linked_feedback_id?: string;
   locked_by_user?: boolean;
+  archived_at?: string;
+  archive_reason?: string;
   date_created: string;
   date_updated: string;
 }
@@ -42,6 +46,10 @@ export const useAIDiscussions = () => {
   const comments = ref<AIDiscussionComment[]>([]);
   const loading = ref(false);
   const error = ref<string | null>(null);
+
+  // S8: AI Working State
+  const isAiWorking = ref(false);
+  const aiWorkingAgent = ref<{ type: string; name: string } | null>(null);
 
   /**
    * Fetch all discussions (Tier 1 - Cases List)
@@ -305,6 +313,73 @@ export const useAIDiscussions = () => {
   };
 
   /**
+   * Archive discussion (S9)
+   * Soft delete - moves to archived state instead of hard delete
+   */
+  const archiveDiscussion = async (discussionId: string, reason?: string) => {
+    loading.value = true;
+    error.value = null;
+
+    try {
+      const response = await $fetch('/api/agent-data/status', {
+        method: 'PATCH',
+        body: {
+          discussion_id: discussionId,
+          status: 'archived',
+          archive_reason: reason || ''
+        }
+      });
+
+      // Refresh discussions list
+      await fetchDiscussions();
+
+      console.log(`[ARCHIVE] Discussion ${discussionId} archived`);
+      return true;
+    } catch (e) {
+      error.value = (e as Error).message;
+      return false;
+    } finally {
+      loading.value = false;
+    }
+  };
+
+  /**
+   * Activate Now (S4)
+   * Skips the 5-minute timer and immediately processes the discussion
+   */
+  const activateNow = async (discussionId: string) => {
+    loading.value = true;
+    error.value = null;
+
+    try {
+      const response = await $fetch('/api/agent-data/activate-now', {
+        method: 'POST',
+        body: { discussion_id: discussionId }
+      });
+
+      // Refresh current discussion
+      await fetchDiscussion(discussionId);
+      await fetchComments(discussionId);
+
+      console.log(`[ACTIVATE NOW] Discussion ${discussionId} activated immediately`);
+      return true;
+    } catch (e) {
+      error.value = (e as Error).message;
+      return false;
+    } finally {
+      loading.value = false;
+    }
+  };
+
+  /**
+   * Set AI working state (S8)
+   */
+  const setAiWorking = (working: boolean, agent?: { type: string; name: string }) => {
+    isAiWorking.value = working;
+    aiWorkingAgent.value = working && agent ? agent : null;
+  };
+
+  /**
    * Group comments by round for Tier 2 display
    */
   const commentsByRound = computed(() => {
@@ -364,6 +439,8 @@ export const useAIDiscussions = () => {
     comments,
     loading,
     error,
+    isAiWorking,
+    aiWorkingAgent,
 
     // Computed
     commentsByRound,
@@ -375,6 +452,9 @@ export const useAIDiscussions = () => {
     submitHumanComment,
     submitHumanDecision,
     updateStatus,
+    archiveDiscussion,
+    activateNow,
+    setAiWorking,
     getDeadline,
     startPolling,
     stopPolling

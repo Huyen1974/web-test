@@ -24,16 +24,23 @@ interface Discussion {
   draft_content?: string
   locked_by_user?: boolean
   date_created?: string
+  date_updated?: string
+  drafter_id?: any
+  approver_id?: any
 }
 
 const props = defineProps<{
   discussion: Discussion | null
   selectedComment: Comment | null
   deadline?: Date | null
+  isAiWorking?: boolean
+  aiWorkingAgent?: { type: string; name: string } | null
 }>()
 
 const emit = defineEmits<{
   submitDecision: [decision: string, content: string]
+  activateNow: []
+  archive: [reason?: string]
 }>()
 
 const userInput = ref('')
@@ -63,6 +70,21 @@ const submitDecision = async (decision: string) => {
   } finally {
     isSubmitting.value = false
   }
+}
+
+// S4: Activate Now handler
+const handleActivateNow = () => {
+  emit('activateNow')
+}
+
+// S9: Archive handler
+const archiveReason = ref('')
+const showArchiveConfirm = ref(false)
+
+const handleArchive = () => {
+  emit('archive', archiveReason.value || undefined)
+  showArchiveConfirm.value = false
+  archiveReason.value = ''
 }
 
 // Countdown timer for pending_human
@@ -116,12 +138,37 @@ onUnmounted(() => {
 
     <!-- Content Area -->
     <div class="panel-content">
-      <!-- Countdown Timer for pending_human -->
+      <!-- S3: Ownership Banner -->
+      <AiOwnershipBanner
+        v-if="discussion"
+        :status="discussion.status"
+        :drafter="discussion.drafter_id"
+        :approver="discussion.approver_id"
+        :date-updated="discussion.date_updated"
+      />
+
+      <!-- S8: AI Typing Indicator -->
+      <AiTypingIndicator
+        v-if="isAiWorking && aiWorkingAgent"
+        :agent="aiWorkingAgent"
+        :is-typing="isAiWorking"
+      />
+
+      <!-- Countdown Timer for pending_human with S4 "Run Now" button -->
       <div v-if="discussion?.status === 'pending_human'" class="countdown-banner">
-        <span class="countdown-label">⏱️ Tu dong approve sau:</span>
-        <span :class="['countdown-time', { warning: remainingSeconds < 60 }]">
-          {{ formatTime(remainingSeconds) }}
-        </span>
+        <div class="countdown-info">
+          <span class="countdown-label">⏱️ Tu dong approve sau:</span>
+          <span :class="['countdown-time', { warning: remainingSeconds < 60 }]">
+            {{ formatTime(remainingSeconds) }}
+          </span>
+        </div>
+        <button
+          @click="handleActivateNow"
+          class="btn-activate-now"
+          title="Bo qua thoi gian cho va approve ngay"
+        >
+          ⚡ Chay ngay
+        </button>
       </div>
 
       <!-- Selected Comment Detail -->
@@ -208,6 +255,33 @@ onUnmounted(() => {
           💬 Binh luan
         </button>
       </div>
+
+      <!-- S9: Archive Button -->
+      <div class="archive-section">
+        <button
+          v-if="!showArchiveConfirm"
+          @click="showArchiveConfirm = true"
+          class="btn-archive"
+        >
+          📦 Luu tru
+        </button>
+        <div v-else class="archive-confirm">
+          <input
+            v-model="archiveReason"
+            type="text"
+            placeholder="Ly do luu tru (tuy chon)"
+            class="archive-reason-input"
+          />
+          <div class="archive-actions">
+            <button @click="handleArchive" class="btn-confirm-archive">
+              Xac nhan
+            </button>
+            <button @click="showArchiveConfirm = false" class="btn-cancel-archive">
+              Huy
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Locked Notice -->
@@ -274,11 +348,18 @@ onUnmounted(() => {
 .countdown-banner {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   padding: 12px;
   background: #fef3c7;
   border-radius: 8px;
   margin-bottom: 16px;
+}
+
+.countdown-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .countdown-label {
@@ -295,6 +376,24 @@ onUnmounted(() => {
 .countdown-time.warning {
   color: #dc2626;
   animation: pulse 1s infinite;
+}
+
+/* S4: Activate Now Button */
+.btn-activate-now {
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-activate-now:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
 }
 
 @keyframes pulse {
@@ -470,6 +569,83 @@ onUnmounted(() => {
 .btn-comment:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+/* S9: Archive Section */
+.archive-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #fbbf24;
+}
+
+.btn-archive {
+  width: 100%;
+  padding: 10px;
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-archive:hover {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.archive-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.archive-reason-input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.archive-reason-input:focus {
+  outline: none;
+  border-color: #94a3b8;
+}
+
+.archive-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-confirm-archive {
+  flex: 1;
+  padding: 8px;
+  background: #64748b;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn-confirm-archive:hover {
+  background: #475569;
+}
+
+.btn-cancel-archive {
+  padding: 8px 12px;
+  background: transparent;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-cancel-archive:hover {
+  background: #f1f5f9;
 }
 
 .locked-notice {
