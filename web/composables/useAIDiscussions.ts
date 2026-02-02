@@ -38,8 +38,9 @@ interface AIDiscussionComment {
 }
 
 export const useAIDiscussions = () => {
-  const config = useRuntimeConfig();
-  const directusUrl = config.public.directusUrl || 'https://directus-test-pfne2mqwja-as.a.run.app';
+  // Use Nuxt proxy to avoid CORS issues (WEB-46)
+  // All browser calls go through /api/directus/* which proxies to Directus
+  const proxyUrl = '/api/directus';
 
   const discussions = ref<AIDiscussion[]>([]);
   const currentDiscussion = ref<AIDiscussion | null>(null);
@@ -60,7 +61,7 @@ export const useAIDiscussions = () => {
 
     try {
       const response = await fetch(
-        `${directusUrl}/items/ai_discussions?sort=-date_updated&fields=*,drafter_id.first_name,drafter_id.last_name,approver_id.first_name,approver_id.last_name`
+        `${proxyUrl}/items/ai_discussions?sort=-date_updated&fields=*,drafter_id.first_name,drafter_id.last_name,approver_id.first_name,approver_id.last_name`
       );
 
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -85,7 +86,7 @@ export const useAIDiscussions = () => {
 
     try {
       const response = await fetch(
-        `${directusUrl}/items/ai_discussions/${id}?fields=*,drafter_id.*,approver_id.*`
+        `${proxyUrl}/items/ai_discussions/${id}?fields=*,drafter_id.*,approver_id.*`
       );
 
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -110,7 +111,7 @@ export const useAIDiscussions = () => {
 
     try {
       const response = await fetch(
-        `${directusUrl}/items/ai_discussion_comments?filter[discussion_id][_eq]=${discussionId}&sort=round,date_created&fields=*,author_id.first_name,author_id.last_name,author_id.email`
+        `${proxyUrl}/items/ai_discussion_comments?filter[discussion_id][_eq]=${discussionId}&sort=round,date_created&fields=*,author_id.first_name,author_id.last_name,author_id.email`
       );
 
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -136,7 +137,7 @@ export const useAIDiscussions = () => {
     try {
       // Update discussion with human_comment
       const updateResponse = await fetch(
-        `${directusUrl}/items/ai_discussions/${discussionId}`,
+        `${proxyUrl}/items/ai_discussions/${discussionId}`,
         {
           method: 'PATCH',
           headers: {
@@ -153,7 +154,7 @@ export const useAIDiscussions = () => {
 
       // Create comment record
       const commentResponse = await fetch(
-        `${directusUrl}/items/ai_discussion_comments`,
+        `${proxyUrl}/items/ai_discussion_comments`,
         {
           method: 'POST',
           headers: {
@@ -222,7 +223,7 @@ export const useAIDiscussions = () => {
 
       // Create human_supreme comment
       const commentResponse = await fetch(
-        `${directusUrl}/items/ai_discussion_comments`,
+        `${proxyUrl}/items/ai_discussion_comments`,
         {
           method: 'POST',
           headers: {
@@ -259,7 +260,7 @@ export const useAIDiscussions = () => {
       }
 
       const updateResponse = await fetch(
-        `${directusUrl}/items/ai_discussions/${discussionId}`,
+        `${proxyUrl}/items/ai_discussions/${discussionId}`,
         {
           method: 'PATCH',
           headers: {
@@ -291,7 +292,7 @@ export const useAIDiscussions = () => {
   const updateStatus = async (discussionId: string, status: AIDiscussion['status'], token: string) => {
     try {
       const response = await fetch(
-        `${directusUrl}/items/ai_discussions/${discussionId}`,
+        `${proxyUrl}/items/ai_discussions/${discussionId}`,
         {
           method: 'PATCH',
           headers: {

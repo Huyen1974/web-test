@@ -1,11 +1,12 @@
 /**
- * DOT Console Composable (WEB-45C Part D)
+ * DOT Console Composable (WEB-45C Part D, WEB-46 S18)
  * Turns Supreme Authority input into a Command Interpreter
  *
  * Features:
  * - S10: /dot-help command shows available commands
  * - S11: Silent execution - commands don't create chat bubbles
  * - S12: Toast notifications for command feedback
+ * - S18: /dot-create command for quick discussion creation
  */
 
 export interface DOTCommand {
@@ -23,6 +24,12 @@ export interface DOTContext {
   activateNow: (id: string) => Promise<boolean>
   fetchDiscussions: () => Promise<any[]>
   fetchDiscussion: (id: string) => Promise<any>
+  // S18: Create discussion from command
+  createDiscussion?: (topic: string, options?: {
+    drafter?: string
+    reviewers?: string[]
+    description?: string
+  }) => Promise<any>
 }
 
 export interface DOTResult {
@@ -74,14 +81,21 @@ export function useDOTConsole() {
     const helpText = `
 DOT Console - Danh sach lenh kha dung:
 
+QUAN LY DISCUSSION:
 /dot-help          - Hien thi danh sach lenh nay
 /dot-status        - Xem trang thai discussion hien tai
+/dot-list          - Xem danh sach tat ca discussions
+/dot-refresh       - Lam moi du lieu
+
+TAO MOI (S18):
+/dot-create "Tieu de" --drafter:claude --reviewers:gemini,chatgpt
+  Tao discussion moi sieu toc tu command line
+
+HANH DONG:
 /dot-archive [ly do] - Luu tru discussion (soft delete)
 /dot-activate      - Chay ngay (bo qua timer 5 phut)
 /dot-approve       - Phe duyet va dong discussion
 /dot-reject        - Tu choi discussion
-/dot-list          - Xem danh sach tat ca discussions
-/dot-refresh       - Lam moi du lieu
 
 Ghi chu:
 - Lenh DOT thuc thi ngam (silent), khong tao bong bong chat
@@ -224,6 +238,81 @@ Updated: ${discussion.date_updated}`,
     }
   }
 
+  /**
+   * S18: Create command - Quick create discussion from DOT console
+   * Usage: /dot-create "Tieu de" --drafter:claude --reviewers:gemini,chatgpt
+   */
+  const createHandler = async (args: string[], context: DOTContext): Promise<DOTResult> => {
+    if (!context.createDiscussion) {
+      return {
+        success: false,
+        message: 'Chuc nang tao discussion chua duoc cau hinh.',
+        silent: true
+      }
+    }
+
+    // Parse arguments: first quoted string is topic, rest are options
+    let topic = ''
+    let drafter = 'claude'
+    let reviewers: string[] = []
+    let description = ''
+
+    // Join args and parse
+    const fullArgs = args.join(' ')
+
+    // Extract quoted topic
+    const topicMatch = fullArgs.match(/"([^"]+)"/)
+    if (topicMatch) {
+      topic = topicMatch[1]
+    } else if (args.length > 0 && !args[0].startsWith('--')) {
+      // If no quotes, take first arg as topic
+      topic = args[0]
+    }
+
+    if (!topic) {
+      return {
+        success: false,
+        message: 'Thieu tieu de. Cu phap: /dot-create "Tieu de" --drafter:claude --reviewers:gemini,chatgpt',
+        silent: true
+      }
+    }
+
+    // Parse options
+    for (const arg of args) {
+      if (arg.startsWith('--drafter:')) {
+        drafter = arg.replace('--drafter:', '')
+      } else if (arg.startsWith('--reviewers:')) {
+        reviewers = arg.replace('--reviewers:', '').split(',')
+      } else if (arg.startsWith('--desc:')) {
+        description = arg.replace('--desc:', '')
+      }
+    }
+
+    try {
+      const result = await context.createDiscussion(topic, {
+        drafter,
+        reviewers,
+        description
+      })
+
+      // Refresh list after creation
+      await context.fetchDiscussions()
+
+      return {
+        success: true,
+        message: `Da tao discussion: "${topic}" (Drafter: ${drafter})`,
+        data: result,
+        silent: true
+      }
+    } catch (e) {
+      return {
+        success: false,
+        message: `Loi khi tao discussion: ${(e as Error).message}`,
+        silent: true
+      }
+    }
+  }
+
   // Command registry
   const commands: Record<string, DOTCommand> = {
     help: {
@@ -297,6 +386,19 @@ Updated: ${discussion.date_updated}`,
       description: 'Lam moi du lieu',
       usage: '/dot-refresh',
       handler: refreshHandler
+    },
+    // S18: Create command
+    create: {
+      name: 'create',
+      description: 'Tao discussion moi sieu toc',
+      usage: '/dot-create "Tieu de" --drafter:claude --reviewers:gemini,chatgpt',
+      handler: createHandler
+    },
+    'dot-create': {
+      name: 'dot-create',
+      description: 'Tao discussion moi sieu toc',
+      usage: '/dot-create "Tieu de" --drafter:claude --reviewers:gemini,chatgpt',
+      handler: createHandler
     }
   }
 
@@ -372,6 +474,7 @@ Updated: ${discussion.date_updated}`,
     return [
       '/dot-help',
       '/dot-status',
+      '/dot-create',
       '/dot-archive',
       '/dot-activate',
       '/dot-approve',
