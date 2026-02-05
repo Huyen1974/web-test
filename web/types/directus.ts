@@ -62,13 +62,49 @@ export interface DirectusKnowledgeDocument extends DirectusItem {
 	/** Document summary (translatable) */
 	summary?: string;
 	/** Document language */
-	language?: 'vi' | 'en' | 'ja';
-	/** Public visibility flag */
-	visibility?: 'public' | 'private';
+	language?: 'vi' | 'en' | 'ja' | 'vn';
+	/** Visibility level (WEB-49 access control) */
+	visibility?: 'public' | 'internal' | 'restricted';
+	/** Allowed roles for restricted visibility (WEB-49) */
+	allowed_roles?: string[];
 	/** Current version flag */
 	is_current_version?: boolean;
 	/** Version number */
 	version?: number;
+	/** Version number (alternate field name) */
+	version_number?: number;
+	/** Workflow status */
+	workflow_status?: string;
+	/** Version group ID for tracking versions */
+	version_group_id?: string;
+	/** Previous version ID */
+	previous_version_id?: string;
+	/** Reviewed by user ID */
+	reviewed_by?: string;
+	/** Reviewed at timestamp */
+	reviewed_at?: string;
+	/** Approved by user ID */
+	approved_by?: string;
+	/** Approved at timestamp */
+	approved_at?: string;
+	/** Publisher user ID */
+	publisher_id?: string;
+	/** Rejection reason */
+	rejection_reason?: string;
+	/** Purge after date */
+	purge_after?: string;
+	/** Parent document ID for hierarchy */
+	parent_document_id?: string;
+	/** Child order for sorting */
+	child_order?: number;
+	/** Published at timestamp */
+	published_at?: string;
+	/** Source ID from Agent Data */
+	source_id?: string;
+	/** File path */
+	path?: string;
+	/** Git SHA */
+	sha?: string;
 	/** Translations array (E1 Plan F.3 compliant) */
 	translations?: DirectusTranslation[];
 }

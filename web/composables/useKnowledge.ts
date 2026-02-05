@@ -26,6 +26,9 @@ function mapToListEntry(doc: DirectusKnowledgeDocument): KnowledgeListEntry {
 		// Approval metadata (Task 0035)
 		status: doc.status || 'draft',
 		updatedAt: doc.date_updated || null,
+		// Access Control (WEB-49)
+		visibility: doc.visibility || 'public',
+		allowedRoles: doc.allowed_roles || [],
 		// Workflow & Versioning fields (Task 0047C)
 		workflowStatus: doc.workflow_status,
 		versionNumber: doc.version_number,
@@ -60,6 +63,9 @@ export function mapToCard(doc: DirectusKnowledgeDocument): KnowledgeCard {
 		status: doc.status || 'draft',
 		updatedBy: doc.user_updated || null,
 		updatedAt: doc.date_updated || null,
+		// Access Control (WEB-49)
+		visibility: doc.visibility || 'public',
+		allowedRoles: doc.allowed_roles || [],
 		// Workflow & Versioning fields (Task 0047C)
 		workflowStatus: doc.workflow_status,
 		versionGroupId: doc.version_group_id,
@@ -131,6 +137,9 @@ export async function useKnowledgeList(options: KnowledgeListOptions = {}): Prom
 					'language',
 					'status',
 					'date_updated',
+					// WEB-49: Access Control fields
+					'visibility',
+					'allowed_roles',
 					// Task 0047C: Workflow & Versioning fields
 					'workflow_status',
 					'version_number',

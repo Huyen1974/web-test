@@ -1,0 +1,35 @@
+name: Critical File Guard
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  check-critical-files:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for required files
+        run: |
+          REQUIRED_FILES=(
+            "docs/dev/blueprints/BUSINESS_OS_BLUEPRINT.md"
+            "docs/ssot/constitution.md"
+          )
+          
+          MISSING_FILES=0
+          
+          for FILE in "${REQUIRED_FILES[@]}"; do
+            if [ ! -f "$FILE" ]; then
+              echo "::error::Critical file missing: $FILE"
+              MISSING_FILES=1
+            else
+              echo "✅ Found: $FILE"
+            fi
+          done
+          
+          if [ "$MISSING_FILES" -eq 1 ]; then
+            echo "::error::One or more critical files are missing. This PR cannot be merged."
+            exit 1
+          fi
