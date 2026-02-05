@@ -28,6 +28,9 @@ export interface KnowledgeCard {
 	status: ContentStatus;
 	updatedBy?: string | null;
 	updatedAt?: string | null;
+	// Access Control (WEB-49)
+	visibility?: Visibility;
+	allowedRoles?: string[];
 	// Workflow & Versioning fields (Task 0047C)
 	workflowStatus?: string;
 	versionGroupId?: string;
@@ -59,6 +62,9 @@ export interface KnowledgeListEntry {
 	// Approval metadata (Task 0035)
 	status: ContentStatus;
 	updatedAt?: string | null;
+	// Access Control (WEB-49)
+	visibility?: Visibility;
+	allowedRoles?: string[];
 	// Workflow & Versioning fields (Task 0047C)
 	workflowStatus?: string;
 	versionNumber?: number;
