@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { KnowledgeList } from '~/types/view-model-0032';
+import { buildKnowledgeTree, useKnowledgeDocumentsForTree } from '~/composables/useKnowledge';
 
 const route = useRoute();
 const router = useRouter();
@@ -12,18 +13,26 @@ const agentDataEnabled = computed(() => !!config.public.agentData?.enabled && !!
 const searchQuery = ref((route.query.q as string) || '');
 const isSearching = ref(false);
 
-// Fetch taxonomy tree (Task 0037)
-const { data: taxonomyTree } = await useAsyncData('taxonomy-tree', () => useTaxonomyTree(), {
+// Mobile sidebar state (WEB-49C)
+const sidebarOpen = ref(false);
+
+// Fetch documents for tree view (WEB-49C)
+const { data: treeDocuments } = await useAsyncData('knowledge-tree-docs', () => useKnowledgeDocumentsForTree(), {
 	// Cache for 5 minutes
 	getCachedData: (key) => {
 		const cached = useNuxtApp().payload.data[key] || useNuxtApp().static.data[key];
 		if (!cached) return;
 		const expiresAt = cached._expires;
-
 		if (expiresAt && Date.now() < expiresAt) {
 			return cached;
 		}
 	},
+});
+
+// Build tree from documents (WEB-49C)
+const knowledgeTree = computed(() => {
+	if (!treeDocuments.value) return [];
+	return buildKnowledgeTree(treeDocuments.value);
 });
 
 // Fetch knowledge documents
@@ -177,17 +186,40 @@ useServerSeoMeta({
 				</div>
 			</header>
 
-			<!-- Two-column layout: Taxonomy Menu + Content -->
+			<!-- Mobile sidebar toggle (WEB-49C) -->
+			<div class="lg:hidden mt-6">
+				<button
+					class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+					@click="sidebarOpen = !sidebarOpen"
+				>
+					<Icon :name="sidebarOpen ? 'heroicons:x-mark' : 'heroicons:bars-3'" class="w-5 h-5" />
+					{{ sidebarOpen ? 'Close' : 'Browse Contents' }}
+				</button>
+			</div>
+
+			<!-- Two-column layout: Tree View + Content (WEB-49C) -->
 			<div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mt-8">
-				<!-- Left sidebar: Taxonomy Menu (Task 0037) -->
-				<aside class="lg:col-span-1">
-					<div class="sticky top-4">
-						<KnowledgeTaxonomyMenu
-							v-if="taxonomyTree"
-							:tree="taxonomyTree"
-							:current-zone="(route.query.zone as string) || undefined"
-							:current-topic="(route.query.topic as string) || undefined"
+				<!-- Left sidebar: Folder Tree View (WEB-49C) -->
+				<aside
+					class="lg:col-span-1"
+					:class="{ 'hidden lg:block': !sidebarOpen }"
+				>
+					<div class="sticky top-4 max-h-[calc(100vh-8rem)] overflow-auto bg-white dark:bg-gray-900 lg:bg-transparent rounded-lg p-4 lg:p-0 border border-gray-200 dark:border-gray-700 lg:border-0">
+						<h2 class="text-sm font-semibold text-gray-900 dark:text-white mb-4 uppercase tracking-wider">
+							Contents
+						</h2>
+
+						<!-- Tree View -->
+						<KnowledgeTreeView
+							v-if="knowledgeTree.length > 0"
+							:nodes="knowledgeTree"
 						/>
+
+						<!-- Empty State -->
+						<div v-else class="text-center py-4 text-gray-500">
+							<Icon name="heroicons:folder" class="w-8 h-8 mx-auto mb-2 text-gray-300" />
+							<p class="text-sm">No documents found</p>
+						</div>
 					</div>
 				</aside>
 
