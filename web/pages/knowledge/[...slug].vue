@@ -26,9 +26,8 @@ const {
 	pending,
 	error,
 } = await useAsyncData(`knowledge-${fullSlug.value}`, async () => {
-	// Try to find document by full slug path or last segment
-	const lastSegment = slugParts.value[slugParts.value.length - 1];
-	return await useKnowledgeDetail(lastSegment || fullSlug.value);
+	// Query by full slug path (e.g., "ssot/constitution", "dev/blueprints/agency-os")
+	return await useKnowledgeDetail(fullSlug.value);
 });
 
 // Fetch history when document is available

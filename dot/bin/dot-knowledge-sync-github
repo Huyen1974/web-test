@@ -1,0 +1,203 @@
+#!/bin/bash
+# dot-knowledge-sync-github - Sync documents directly from GitHub docs/ to knowledge_documents
+# This syncs the ACTUAL current folder structure, not from agent_views
+#
+# Usage: dot-knowledge-sync-github [--dry-run]
+
+set -e
+
+DIRECTUS_URL="https://directus-test-pfne2mqwja-as.a.run.app"
+DRY_RUN=""
+JQ="/usr/bin/jq"
+DOCS_DIR="$(cd "$(dirname "$0")/../.." && pwd)/docs"
+
+# Parse arguments
+for arg in "$@"; do
+    case $arg in
+        --dry-run)
+            DRY_RUN="yes"
+            ;;
+    esac
+done
+
+echo "═══════════════════════════════════════════════════════════════"
+echo "KNOWLEDGE SYNC: GitHub docs/ → knowledge_documents"
+echo "═══════════════════════════════════════════════════════════════"
+echo "Source: $DOCS_DIR"
+echo "Target: $DIRECTUS_URL/items/knowledge_documents"
+[ -n "$DRY_RUN" ] && echo "Mode: DRY RUN (no changes)"
+echo ""
+
+# Get admin token from GSM
+echo "📥 Getting admin token..."
+TOKEN=$(gcloud secrets versions access latest --secret="DIRECTUS_ADMIN_TOKEN_test" 2>/dev/null)
+if [ -z "$TOKEN" ]; then
+    echo "❌ Cannot get admin token from GSM"
+    exit 1
+fi
+echo "✅ Token obtained"
+echo ""
+
+# Create temp file
+EXISTING_FILE=$(mktemp)
+trap "rm -f $EXISTING_FILE" EXIT
+
+# Get existing documents in knowledge_documents
+echo "📥 Checking existing knowledge_documents..."
+curl -s "$DIRECTUS_URL/items/knowledge_documents?fields=id,slug,file_path,source_id&limit=500" \
+    -H "Authorization: Bearer $TOKEN" > "$EXISTING_FILE"
+EXISTING_COUNT=$($JQ '.data | length' "$EXISTING_FILE")
+echo "Found $EXISTING_COUNT documents in knowledge_documents"
+echo ""
+
+# Find all markdown files in docs/
+echo "📥 Scanning $DOCS_DIR for markdown files..."
+FILE_COUNT=$(find "$DOCS_DIR" -name "*.md" -type f | grep -v "archive/" | wc -l | tr -d ' ')
+echo "Found $FILE_COUNT markdown files"
+echo ""
+
+echo "═══════════════════════════════════════════════════════════════"
+echo "Processing documents..."
+echo "═══════════════════════════════════════════════════════════════"
+
+CREATED=0
+UPDATED=0
+ERRORS=0
+
+while IFS= read -r MD_FILE; do
+    # Get relative path from docs/
+    REL_PATH="${MD_FILE#$DOCS_DIR/}"
+
+    # Generate file_path (full path from docs/)
+    FILE_PATH="docs/$REL_PATH"
+
+    # Generate slug from path (remove docs/ prefix and .md extension, lowercase, replace special chars)
+    SLUG=$(echo "$REL_PATH" | sed 's/.md$//' | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr '_' '-')
+
+    # Extract title from first # heading or filename
+    TITLE=$(grep -m1 "^#" "$MD_FILE" 2>/dev/null | sed 's/^#\s*//' | head -1)
+    if [ -z "$TITLE" ]; then
+        TITLE=$(basename "$MD_FILE" .md | tr '_' ' ' | tr '-' ' ')
+    fi
+
+    # Extract summary from first paragraph (skip title)
+    SUMMARY=$(sed -n '/^[^#]/p' "$MD_FILE" | head -5 | tr '\n' ' ' | cut -c1-200)
+
+    # Read content
+    CONTENT=$(cat "$MD_FILE")
+
+    # Generate source_id from file path
+    SOURCE_ID="github:$REL_PATH"
+
+    # Get the last part of the slug (filename without path) for fuzzy matching
+    SLUG_FILENAME=$(basename "$SLUG")
+
+    # Check if exists by:
+    # 1. Exact slug match
+    # 2. Exact file_path match
+    # 3. Old-style flat slug match (just the filename portion)
+    EXISTING_ID=$($JQ -r ".data[] | select(.slug == \"$SLUG\" or .file_path == \"$FILE_PATH\" or .slug == \"$SLUG_FILENAME\") | .id" "$EXISTING_FILE" 2>/dev/null | head -1)
+
+    if [ -n "$EXISTING_ID" ] && [ "$EXISTING_ID" != "null" ]; then
+        echo "  🔄 UPDATE: $TITLE"
+        echo "      slug: $SLUG"
+        echo "      file_path: $FILE_PATH"
+
+        if [ -z "$DRY_RUN" ]; then
+            PAYLOAD=$($JQ -n \
+                --arg title "$TITLE" \
+                --arg slug "$SLUG" \
+                --arg content "$CONTENT" \
+                --arg summary "$SUMMARY" \
+                --arg source_id "$SOURCE_ID" \
+                --arg file_path "$FILE_PATH" \
+                '{
+                    title: $title,
+                    slug: $slug,
+                    content: $content,
+                    summary: $summary,
+                    status: "published",
+                    visibility: "public",
+                    language: "vn",
+                    source_id: $source_id,
+                    file_path: $file_path,
+                    is_current_version: true,
+                    version_number: 1,
+                    workflow_status: "published"
+                }')
+
+            RESULT=$(curl -s -X PATCH "$DIRECTUS_URL/items/knowledge_documents/$EXISTING_ID" \
+                -H "Authorization: Bearer $TOKEN" \
+                -H "Content-Type: application/json" \
+                -d "$PAYLOAD")
+
+            if echo "$RESULT" | $JQ -e '.data' > /dev/null 2>&1; then
+                UPDATED=$((UPDATED + 1))
+            else
+                echo "    ❌ Error: $(echo "$RESULT" | $JQ -r '.errors[0].message // "Unknown error"')"
+                ERRORS=$((ERRORS + 1))
+            fi
+        fi
+    else
+        echo "  ✅ CREATE: $TITLE"
+        echo "      slug: $SLUG"
+        echo "      file_path: $FILE_PATH"
+
+        if [ -z "$DRY_RUN" ]; then
+            VERSION_GROUP_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+
+            PAYLOAD=$($JQ -n \
+                --arg title "$TITLE" \
+                --arg slug "$SLUG" \
+                --arg content "$CONTENT" \
+                --arg summary "$SUMMARY" \
+                --arg source_id "$SOURCE_ID" \
+                --arg file_path "$FILE_PATH" \
+                --arg version_group_id "$VERSION_GROUP_ID" \
+                '{
+                    title: $title,
+                    slug: $slug,
+                    content: $content,
+                    summary: $summary,
+                    status: "published",
+                    visibility: "public",
+                    language: "vn",
+                    source_id: $source_id,
+                    file_path: $file_path,
+                    is_current_version: true,
+                    version_number: 1,
+                    workflow_status: "published",
+                    version_group_id: $version_group_id
+                }')
+
+            RESULT=$(curl -s -X POST "$DIRECTUS_URL/items/knowledge_documents" \
+                -H "Authorization: Bearer $TOKEN" \
+                -H "Content-Type: application/json" \
+                -d "$PAYLOAD")
+
+            if echo "$RESULT" | $JQ -e '.data' > /dev/null 2>&1; then
+                CREATED=$((CREATED + 1))
+            else
+                echo "    ❌ Error: $(echo "$RESULT" | $JQ -r '.errors[0].message // "Unknown error"')"
+                ERRORS=$((ERRORS + 1))
+            fi
+        fi
+    fi
+done < <(find "$DOCS_DIR" -name "*.md" -type f | grep -v "archive/" | sort)
+
+echo ""
+echo "═══════════════════════════════════════════════════════════════"
+echo "SYNC COMPLETE"
+echo "═══════════════════════════════════════════════════════════════"
+echo "Created: $CREATED"
+echo "Updated: $UPDATED"
+echo "Errors: $ERRORS"
+echo ""
+
+# Final count
+FINAL_COUNT=$(curl -s "$DIRECTUS_URL/items/knowledge_documents" \
+    -H "Authorization: Bearer $TOKEN" | $JQ '.data | length')
+
+echo "knowledge_documents now has: $FINAL_COUNT documents"
+[ -n "$DRY_RUN" ] && echo "(DRY RUN - no actual changes made)"
+echo ""

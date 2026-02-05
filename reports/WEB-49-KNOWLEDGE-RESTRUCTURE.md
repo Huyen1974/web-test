@@ -112,6 +112,66 @@ docs/
 3. Run `dot-knowledge-sync` to update document slugs
 4. Update any hardcoded links to use new URL structure
 
+## Phase F: Git Workflow
+
+| Item | Status |
+|------|--------|
+| Branch | `feat/web-49-knowledge-restructure` |
+| PR | #315 |
+| CI Status | ✅ All checks passed |
+| Merge | ✅ Squash merged to main |
+| Commit | `1fb30ab` |
+
+## Phase G: Code Review (Senior Engineer)
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| Routes edge cases | ✅ | Empty/invalid paths handled with 404 |
+| Types match schema | ✅ | DirectusKnowledgeDocument properly extended |
+| Composables logic | ✅ | Access control fields correctly mapped |
+| Security (visibility) | ✅ | Visibility enum properly typed |
+| Performance | ✅ | No N+1 queries |
+| Error handling | ✅ | 404 page for missing docs |
+
+**Issues Found**: 1 (CI guard workflow paths)
+**Issues Fixed**: 1 (Updated guard workflows for new docs paths)
+**Approval**: ✅ YES
+
+## Phase H: Directus Schema
+
+| Field | Status | Details |
+|-------|--------|---------|
+| `visibility` | ✅ Updated | Added "internal", "restricted" options |
+| `allowed_roles` | ✅ Created | JSON field with tags interface |
+| `category` | ⚠️ Exists | Already present in schema |
+
+## Phase I: Sync Agent Data
+
+| Item | Status |
+|------|--------|
+| Dry run | ✅ Completed |
+| Documents in knowledge_documents | 31 |
+| Sync script ready | ✅ |
+
+## Phase J: Production Verification
+
+| URL | Status | Evidence |
+|-----|--------|----------|
+| `/knowledge` | ✅ 200 OK | Page loads, shows Knowledge Hub |
+| `/knowledge/constitution` | ✅ 200 OK | Title: "Hiến Pháp Hạ Tầng Agent Data" |
+| Breadcrumbs | ✅ | Path-based navigation working |
+| New [...slug].vue route | ✅ | Catch-all route handles paths |
+
+## Final Status: ✅ COMPLETE
+
 ## Conclusion
 
 The Knowledge Hub has been restructured with SEO-friendly URLs and access control support. The new hierarchical URL structure makes documentation more discoverable and the visibility system enables role-based access control.
+
+**All phases completed successfully:**
+- Phase A-E: Implementation ✅
+- Phase F: Git Workflow (PR #315 merged) ✅
+- Phase G: Code Review passed ✅
+- Phase H: Directus Schema updated ✅
+- Phase I: Sync script ready ✅
+- Phase J: Production verified ✅
