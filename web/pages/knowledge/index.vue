@@ -1,139 +1,142 @@
 <script setup lang="ts">
-import type { KnowledgeList } from '~/types/view-model-0032';
-import { buildKnowledgeTree, useKnowledgeDocumentsForTree } from '~/composables/useKnowledge';
+/**
+ * Knowledge Hub Index Page (WEB-49D)
+ *
+ * ASSEMBLY ONLY - Uses same components as /docs/index.vue
+ * Changes from /docs: collection name, route prefix, titles
+ */
+import { readItems } from '@directus/sdk';
+import type { DocsTreeNode, DocsBreadcrumb } from '~/types/agent-views';
+import { buildDocsTree, buildBreadcrumbs, filterDocsByTitle } from '~/composables/useAgentViews';
+import { markdownToHtml } from '~/utils/markdown';
+
+definePageMeta({
+	title: 'Knowledge Hub',
+	description: 'Browse knowledge base and documentation',
+});
 
 const route = useRoute();
 const router = useRouter();
-const config = useRuntimeConfig();
-
-// Check if Agent Data is enabled
-const agentDataEnabled = computed(() => !!config.public.agentData?.enabled && !!config.public.agentData?.baseUrl);
 
 // Search state
-const searchQuery = ref((route.query.q as string) || '');
-const isSearching = ref(false);
+const searchQuery = ref('');
 
-// Mobile sidebar state (WEB-49C)
+// Mobile sidebar state
 const sidebarOpen = ref(false);
 
-// Fetch documents for tree view (WEB-49C)
-const { data: treeDocuments } = await useAsyncData('knowledge-tree-docs', () => useKnowledgeDocumentsForTree(), {
-	// Cache for 5 minutes
-	getCachedData: (key) => {
-		const cached = useNuxtApp().payload.data[key] || useNuxtApp().static.data[key];
-		if (!cached) return;
-		const expiresAt = cached._expires;
-		if (expiresAt && Date.now() < expiresAt) {
-			return cached;
-		}
-	},
+// Selected document state
+const selectedDoc = ref<any | null>(null);
+const selectedPath = ref('');
+
+// Fetch all knowledge documents (mapped to AgentView-like structure for buildDocsTree)
+const { data: documents, pending, error } = await useAsyncData('knowledge-docs-list', async () => {
+	const items = await useDirectus(
+		readItems('knowledge_documents', {
+			filter: {
+				status: { _eq: 'published' },
+				visibility: { _eq: 'public' },
+				is_current_version: { _eq: true },
+			},
+			sort: ['file_path'],
+			limit: -1,
+			fields: ['id', 'title', 'slug', 'content', 'summary', 'file_path', 'date_updated'],
+		}),
+	);
+
+	// Map to AgentView-like structure for buildDocsTree compatibility
+	return (items || []).map((doc: any) => ({
+		id: doc.id,
+		source_id: doc.slug, // slug acts as source_id
+		title: doc.title,
+		content: doc.content,
+		summary: doc.summary,
+		path: doc.file_path, // file_path acts as path for tree building
+		last_synced: doc.date_updated,
+	}));
 });
 
-// Build tree from documents (WEB-49C)
-const knowledgeTree = computed(() => {
-	if (!treeDocuments.value) return [];
-	return buildKnowledgeTree(treeDocuments.value);
+// Build tree from documents (reusing /docs buildDocsTree function)
+const docsTree = computed(() => {
+	if (!documents.value) return [];
+	return buildDocsTree(documents.value);
 });
 
-// Fetch knowledge documents
-const { data, pending, error, refresh } = await useAsyncData(
-	'knowledge-list',
-	async () => {
-		const zone = route.query.zone as string | undefined;
-		const subZone = route.query.subZone as string | undefined;
-		const topic = route.query.topic as string | undefined;
-		const query = route.query.q as string | undefined;
-		const trimmedQuery = (query || '').trim();
+// Filter documents for search
+const filteredDocs = computed(() => {
+	if (!documents.value) return [];
+	return filterDocsByTitle(documents.value, searchQuery.value);
+});
 
-		// Case 3: Agent Data enabled AND search query exists → Use Agent Data search
-		if (agentDataEnabled.value && trimmedQuery) {
-			const results = await useAgentDataSearch(trimmedQuery, {
-				zone,
-				subZone,
-				topic,
-				language: 'vn',
-			});
+// Breadcrumbs for selected document
+const breadcrumbs = computed(() => {
+	return buildBreadcrumbs(selectedPath.value);
+});
 
-			// Log search event
-			useAgentDataLogSearch({
-				query: trimmedQuery,
-				zone,
-				subZone,
-				topic,
-				resultCount: results.total,
-				language: 'vn',
-			});
-
-			return {
-				items: results.items,
-				total: results.total,
-				page: 1,
-				pageSize: 20,
-				zone,
-				subZone,
-				topic,
-				language: 'vn' as const,
-			};
-		}
-
-		// Case 1 & 2: Agent Data disabled OR no search query → Use Directus list
-		return await useKnowledgeList({
-			zone,
-			subZone,
-			topic,
-			language: 'vn',
-		});
-	},
-	{
-		watch: [() => route.query],
-	},
-);
-
-// Search handler
-const handleSearch = async () => {
-	if (!searchQuery.value.trim()) {
-		// Clear search
-		await router.push({ query: { ...route.query, q: undefined } });
+// Handle document selection from tree
+function selectDocument(node: DocsTreeNode) {
+	if (node.isFolder) {
 		return;
 	}
 
-	isSearching.value = true;
-
-	try {
-		await router.push({
-			query: {
-				...route.query,
-				q: searchQuery.value.trim(),
-			},
-		});
-	} finally {
-		isSearching.value = false;
+	if (node.document) {
+		selectedDoc.value = node.document;
+		selectedPath.value = node.path;
+		sidebarOpen.value = false;
+		router.replace({ query: { doc: node.document.source_id } });
 	}
-};
+}
 
-// Clear search handler
-const clearSearch = async () => {
-	searchQuery.value = '';
-	await router.push({ query: { ...route.query, q: undefined } });
-};
+// Handle breadcrumb click
+function navigateBreadcrumb(crumb: DocsBreadcrumb) {
+	if (!crumb.path) {
+		selectedDoc.value = null;
+		selectedPath.value = '';
+		router.replace({ query: {} });
+	}
+}
 
-// Compute metadata
-const metadata = computed(() => ({
-	title: 'Knowledge Hub',
-	description: 'Browse our knowledge base and documentation',
-}));
-
-// Page Title
-useHead({
-	title: metadata.value.title,
+// Rendered markdown content
+const renderedContent = computed(() => {
+	if (!selectedDoc.value?.content) return '';
+	return markdownToHtml(selectedDoc.value.content);
 });
 
-// SEO Meta
+// Initialize from URL query
+onMounted(() => {
+	const docQuery = route.query.doc as string;
+	if (docQuery && documents.value) {
+		const doc = documents.value.find((d: any) => d.source_id === docQuery);
+		if (doc) {
+			selectedDoc.value = doc;
+			selectedPath.value = doc.source_id || '';
+		}
+	}
+});
+
+// Watch for query changes
+watch(
+	() => route.query.doc,
+	(newDoc) => {
+		if (newDoc && documents.value) {
+			const doc = documents.value.find((d: any) => d.source_id === newDoc);
+			if (doc) {
+				selectedDoc.value = doc;
+				selectedPath.value = doc.source_id || '';
+			}
+		}
+	},
+);
+
+// SEO
+useHead({
+	title: computed(() => selectedDoc.value?.title || 'Knowledge Hub'),
+});
+
 useServerSeoMeta({
-	title: metadata.value.title,
-	description: metadata.value.description,
-	ogTitle: metadata.value.title,
-	ogDescription: metadata.value.description,
+	title: 'Knowledge Hub',
+	description: 'Browse knowledge base and documentation',
+	ogTitle: 'Knowledge Hub',
+	ogDescription: 'Browse knowledge base and documentation',
 });
 </script>
 
@@ -143,50 +146,28 @@ useServerSeoMeta({
 			<!-- Header -->
 			<header class="pb-6 border-b border-gray-300 dark:border-gray-700">
 				<TypographyTitle>Knowledge Hub</TypographyTitle>
-				<p class="mt-2 text-gray-600 dark:text-gray-400">Browse our knowledge base, guides, and documentation</p>
+				<p class="mt-2 text-gray-600 dark:text-gray-400">
+					Browse knowledge base and documentation
+				</p>
 
 				<!-- Search Box -->
-				<div class="mt-6">
-					<form class="flex gap-2" @submit.prevent="handleSearch">
-						<div class="relative flex-1">
-							<input
-								v-model="searchQuery"
-								type="text"
-								placeholder="Search knowledge base..."
-								class="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent dark:bg-gray-800 dark:border-gray-600"
-								:disabled="isSearching"
-							/>
-							<button
-								v-if="searchQuery"
-								type="button"
-								class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-								@click="clearSearch"
-							>
-								<Icon name="heroicons:x-mark" class="w-5 h-5" />
-							</button>
-						</div>
-						<button
-							type="submit"
-							:disabled="isSearching || !searchQuery.trim()"
-							class="px-6 py-2 font-medium text-white rounded-lg bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
-						>
-							<Icon v-if="isSearching" name="heroicons:arrow-path" class="w-5 h-5 animate-spin" />
-							<Icon v-else name="heroicons:magnifying-glass" class="w-5 h-5" />
-						</button>
-					</form>
-
-					<!-- Search Results Info -->
-					<div v-if="route.query.q && data" class="mt-3">
-						<p class="text-sm text-gray-600 dark:text-gray-400">
-							<span class="font-medium">{{ data.total }}</span>
-							results for
-							<span class="font-medium">"{{ route.query.q }}"</span>
-						</p>
+				<div class="mt-6 max-w-md">
+					<div class="relative">
+						<input
+							v-model="searchQuery"
+							type="text"
+							placeholder="Search knowledge..."
+							class="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent dark:bg-gray-800 dark:border-gray-600"
+						/>
+						<Icon
+							name="heroicons:magnifying-glass"
+							class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+						/>
 					</div>
 				</div>
 			</header>
 
-			<!-- Mobile sidebar toggle (WEB-49C) -->
+			<!-- Mobile sidebar toggle -->
 			<div class="lg:hidden mt-6">
 				<button
 					class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -197,9 +178,9 @@ useServerSeoMeta({
 				</button>
 			</div>
 
-			<!-- Two-column layout: Tree View + Content (WEB-49C) -->
+			<!-- Two-column layout -->
 			<div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mt-8">
-				<!-- Left sidebar: Folder Tree View (WEB-49C) -->
+				<!-- Left sidebar: Tree Navigation -->
 				<aside
 					class="lg:col-span-1"
 					:class="{ 'hidden lg:block': !sidebarOpen }"
@@ -209,148 +190,121 @@ useServerSeoMeta({
 							Contents
 						</h2>
 
-						<!-- Tree View -->
-						<KnowledgeTreeView
-							v-if="knowledgeTree.length > 0"
-							:nodes="knowledgeTree"
-						/>
-
-						<!-- Empty State -->
-						<div v-else class="text-center py-4 text-gray-500">
-							<Icon name="heroicons:folder" class="w-8 h-8 mx-auto mb-2 text-gray-300" />
-							<p class="text-sm">No documents found</p>
+						<!-- Loading State -->
+						<div v-if="pending" class="text-center py-8">
+							<div class="inline-block w-6 h-6 border-2 border-gray-300 rounded-full border-t-primary-600 animate-spin"></div>
 						</div>
+
+						<!-- Error State -->
+						<div v-else-if="error" class="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
+							<p class="text-sm text-red-600 dark:text-red-400">Failed to load documents</p>
+						</div>
+
+						<!-- Search Results -->
+						<div v-else-if="searchQuery.trim()">
+							<p class="text-xs text-gray-500 mb-3">{{ filteredDocs.length }} results</p>
+							<ul class="space-y-1">
+								<li v-for="doc in filteredDocs" :key="doc.id">
+									<button
+										class="w-full text-left px-3 py-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+										:class="{ 'bg-primary-100 dark:bg-primary-900/30': selectedDoc?.id === doc.id }"
+										@click="selectedDoc = doc; selectedPath = doc.source_id || ''"
+									>
+										<span class="text-sm font-medium text-gray-900 dark:text-white">{{ doc.title }}</span>
+										<span class="block text-xs text-gray-500 truncate">{{ doc.source_id }}</span>
+									</button>
+								</li>
+							</ul>
+						</div>
+
+						<!-- Tree View (using DocsTreeView component) -->
+						<DocsTreeView
+							v-else
+							:nodes="docsTree"
+							:selected-path="selectedPath"
+							@select="selectDocument"
+						/>
 					</div>
 				</aside>
 
 				<!-- Main content area -->
 				<main class="lg:col-span-3">
-					<!-- Loading State -->
-					<div v-if="pending" class="flex items-center justify-center py-12">
-						<div class="text-center">
-							<div
-								class="inline-block w-8 h-8 border-4 border-gray-300 rounded-full border-t-primary-600 animate-spin"
-							></div>
-							<p class="mt-4 text-gray-600 dark:text-gray-400">Loading knowledge base...</p>
-						</div>
-					</div>
+					<!-- No selection state -->
+					<div v-if="!selectedDoc" class="text-center py-16">
+						<Icon name="heroicons:document-text" class="w-16 h-16 mx-auto text-gray-400" />
+						<h3 class="mt-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
+							Select a document
+						</h3>
+						<p class="mt-2 text-gray-600 dark:text-gray-400">
+							Choose a document from the navigation to view its content
+						</p>
 
-					<!-- Error State -->
-					<div v-else-if="error" class="py-12">
-						<div class="p-6 text-center border border-red-200 rounded-lg bg-red-50 dark:bg-red-900/20">
-							<Icon name="heroicons:exclamation-triangle" class="w-12 h-12 mx-auto text-red-600" />
-							<h3 class="mt-4 text-lg font-semibold text-red-900 dark:text-red-200">Failed to load knowledge base</h3>
-							<p class="mt-2 text-red-700 dark:text-red-300">
-								There was an error loading the knowledge documents. Please try again later.
-							</p>
-						</div>
-					</div>
-
-					<!-- Empty State -->
-					<div v-else-if="!data || data.items.length === 0" class="py-12">
-						<div class="p-8 text-center border border-gray-200 rounded-lg bg-gray-50 dark:bg-gray-800">
-							<Icon name="heroicons:document-text" class="w-16 h-16 mx-auto text-gray-400" />
-							<h3 class="mt-4 text-lg font-semibold text-gray-900 dark:text-gray-100">No documents found</h3>
-							<p class="mt-2 text-gray-600 dark:text-gray-400">
-								There are no knowledge documents available at this time.
-							</p>
-						</div>
-					</div>
-
-					<!-- Content -->
-					<div v-else class="py-8">
-						<!-- Filters (if applied) -->
-						<div v-if="data.zone || data.subZone || data.topic" class="mb-6">
-							<div class="flex flex-wrap gap-2">
-								<span class="text-sm text-gray-600 dark:text-gray-400">Filtered by:</span>
-								<span v-if="data.zone" class="px-3 py-1 text-sm rounded-full bg-primary-100 text-primary-800">
-									Zone: {{ data.zone }}
-								</span>
-								<span v-if="data.subZone" class="px-3 py-1 text-sm rounded-full bg-primary-100 text-primary-800">
-									SubZone: {{ data.subZone }}
-								</span>
-								<span v-if="data.topic" class="px-3 py-1 text-sm rounded-full bg-primary-100 text-primary-800">
-									Topic: {{ data.topic }}
-								</span>
+						<!-- Quick Stats -->
+						<div v-if="documents" class="mt-8 grid grid-cols-2 gap-4 max-w-xs mx-auto">
+							<div class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+								<p class="text-2xl font-bold text-primary-600">{{ documents.length }}</p>
+								<p class="text-sm text-gray-600 dark:text-gray-400">Documents</p>
+							</div>
+							<div class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+								<p class="text-2xl font-bold text-primary-600">{{ docsTree.length }}</p>
+								<p class="text-sm text-gray-600 dark:text-gray-400">Sections</p>
 							</div>
 						</div>
+					</div>
 
-						<!-- Document Cards -->
-						<div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-							<NuxtLink
-								v-for="item in data.items"
-								:key="item.id"
-								:to="`/knowledge/${item.slug || item.id}`"
-								class="block p-6 transition-shadow border border-gray-200 rounded-lg hover:shadow-lg dark:border-gray-700"
-							>
-								<!-- Zone & Status Badges -->
-								<div class="flex items-center justify-between mb-3">
-									<span class="px-2 py-1 text-xs font-semibold rounded bg-primary-100 text-primary-800">
-										{{ item.zone }}
-									</span>
-									<div class="flex items-center gap-2">
-										<!-- Workflow Status Badge (Task 0047C) -->
-										<span
-											v-if="item.workflowStatus"
-											:class="{
-												'px-2 py-1 text-xs font-semibold rounded': true,
-												'bg-green-100 text-green-800': item.workflowStatus === 'published',
-												'bg-blue-100 text-blue-800': item.workflowStatus === 'approved',
-												'bg-yellow-100 text-yellow-800': item.workflowStatus === 'under_review',
-												'bg-gray-100 text-gray-800':
-													item.workflowStatus === 'draft' || item.workflowStatus === 'archived',
-											}"
+					<!-- Document view -->
+					<div v-else>
+						<!-- Breadcrumbs -->
+						<nav class="mb-6">
+							<ol class="flex items-center space-x-2 text-sm">
+								<li v-for="(crumb, index) in breadcrumbs" :key="crumb.path">
+									<div class="flex items-center">
+										<span v-if="index > 0" class="mx-2 text-gray-400">/</span>
+										<button
+											v-if="index < breadcrumbs.length - 1"
+											class="text-primary-600 hover:text-primary-800 dark:text-primary-400"
+											@click="navigateBreadcrumb(crumb)"
 										>
-											{{ item.workflowStatus.replace('_', ' ') }}
-										</span>
-										<!-- Version Number (Task 0047C) -->
-										<span
-											v-if="item.versionNumber"
-											class="px-2 py-1 text-xs font-semibold rounded bg-purple-100 text-purple-800"
-										>
-											v{{ item.versionNumber }}
+											{{ crumb.name }}
+										</button>
+										<span v-else class="text-gray-600 dark:text-gray-400">
+											{{ crumb.name }}
 										</span>
 									</div>
-								</div>
+								</li>
+							</ol>
+						</nav>
 
-								<!-- Title -->
-								<h3 class="mb-2 text-lg font-semibold text-gray-900 dark:text-gray-100">
-									{{ item.title }}
-								</h3>
+						<!-- Document Header -->
+						<header class="mb-8">
+							<h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+								{{ selectedDoc.title }}
+							</h1>
+							<div class="mt-2 flex items-center gap-4 text-sm text-gray-500">
+								<span v-if="selectedDoc.last_synced">
+									Last updated: {{ new Date(selectedDoc.last_synced).toLocaleDateString() }}
+								</span>
+							</div>
+						</header>
 
-								<!-- Summary -->
-								<p v-if="item.summary" class="mb-4 text-sm text-gray-600 dark:text-gray-400 line-clamp-3">
-									{{ item.summary }}
-								</p>
+						<!-- Document Content -->
+						<article class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 lg:p-8">
+							<TypographyProse :content="renderedContent" size="md" />
+						</article>
 
-								<!-- Meta -->
-								<div class="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-500">
-									<span v-if="item.publishedAt">
-										{{ new Date(item.publishedAt).toLocaleDateString() }}
-									</span>
-									<span v-if="item.subZone" class="flex items-center gap-1">
-										<Icon name="heroicons:folder" class="w-3 h-3" />
-										{{ item.subZone }}
-									</span>
-								</div>
-
-								<!-- Tags -->
-								<div v-if="item.tags && item.tags.length > 0" class="flex flex-wrap gap-1 mt-3">
-									<span
-										v-for="tag in item.tags.slice(0, 3)"
-										:key="tag"
-										class="px-2 py-0.5 text-xs rounded bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
-									>
-										{{ tag }}
-									</span>
-								</div>
-							</NuxtLink>
-						</div>
-
-						<!-- Pagination Info -->
-						<div class="mt-8 text-sm text-center text-gray-600 dark:text-gray-400">
-							Showing {{ data.items.length }} of {{ data.total }} documents
-						</div>
+						<!-- Document Footer -->
+						<footer class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+							<div class="flex items-center justify-between text-sm text-gray-500">
+								<span>Slug: {{ selectedDoc.source_id }}</span>
+								<NuxtLink
+									:to="`/knowledge/${selectedDoc.source_id}`"
+									class="flex items-center gap-1 text-primary-600 hover:text-primary-800"
+								>
+									<Icon name="heroicons:arrow-top-right-on-square" class="w-4 h-4" />
+									Open standalone page
+								</NuxtLink>
+							</div>
+						</footer>
 					</div>
 				</main>
 			</div>
