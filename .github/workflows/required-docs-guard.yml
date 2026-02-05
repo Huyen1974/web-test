@@ -9,5 +9,5 @@ jobs:
       - uses: actions/checkout@v4
       - name: Ensure required docs exist
         run: |
-          test -f docs/BUSINESS_OS_BLUEPRINT.md
-          test -f docs/BUSINESS_OS_BLUEPRINT_Ver.OPUS.md
+          test -f docs/dev/blueprints/BUSINESS_OS_BLUEPRINT.md
+          test -f docs/dev/blueprints/BUSINESS_OS_BLUEPRINT_Ver.OPUS.md
