@@ -1,13 +1,13 @@
 {
   "mcpServers": {
     "agent-data": {
-      "command": "__VENV_PYTHON__",
+      "command": "__AGENT_DATA_DIR__/venv/bin/python",
       "args": ["__AGENT_DATA_DIR__/mcp_server/stdio_server.py"],
       "env": {
         "AGENT_DATA_URL": "http://localhost:8000",
         "AGENT_DATA_URL_CLOUD": "https://agent-data-test-pfne2mqwja-as.a.run.app",
-        "AGENT_DATA_API_KEY_LOCAL": "__AGENT_DATA_API_KEY_LOCAL__",
-        "AGENT_DATA_API_KEY_CLOUD": "__AGENT_DATA_API_KEY_CLOUD__",
+        "AGENT_DATA_API_KEY_LOCAL": "__AGENT_DATA_API_KEY__",
+        "AGENT_DATA_API_KEY_CLOUD": "__AGENT_DATA_API_KEY__",
         "AGENT_DATA_PREFER": "local"
       }
     }
