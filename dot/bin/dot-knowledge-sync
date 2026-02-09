@@ -7,18 +7,30 @@
 
 set -e
 
-DIRECTUS_URL="https://directus-test-pfne2mqwja-as.a.run.app"
+# Determine script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+
+# Source central environment config
+source "$SCRIPT_DIR/../config/environment.sh"
+
 DRY_RUN=""
 JQ="/usr/bin/jq"
+LOCAL_FLAG=""
+CLOUD_FLAG=""
 
 # Parse arguments
 for arg in "$@"; do
     case $arg in
-        --dry-run)
-            DRY_RUN="yes"
-            ;;
+        --dry-run)  DRY_RUN="yes" ;;
+        --local)    LOCAL_FLAG="--local" ;;
+        --cloud)    CLOUD_FLAG="--cloud" ;;
     esac
 done
+
+# Initialize environment (sets DIRECTUS_URL, DIRECTUS_TOKEN, etc.)
+ENV_FLAG="${LOCAL_FLAG:-${CLOUD_FLAG:-}}"
+init_environment "$ENV_FLAG"
+print_environment_banner "$ENV_FLAG"
 
 echo "═══════════════════════════════════════════════════════════════"
 echo "KNOWLEDGE SYNC: agent_views → knowledge_documents"
@@ -28,11 +40,10 @@ echo "Target: $DIRECTUS_URL/items/knowledge_documents"
 [ -n "$DRY_RUN" ] && echo "Mode: DRY RUN (no changes)"
 echo ""
 
-# Get admin token from GSM
-echo "📥 Getting admin token..."
-TOKEN=$(gcloud secrets versions access latest --secret="DIRECTUS_ADMIN_TOKEN_test" 2>/dev/null)
+# Get token (from environment.sh init)
+TOKEN="${DIRECTUS_TOKEN:-}"
 if [ -z "$TOKEN" ]; then
-    echo "❌ Cannot get admin token from GSM"
+    echo "❌ Cannot get admin token"
     exit 1
 fi
 echo "✅ Token obtained"
@@ -54,7 +65,7 @@ echo ""
 
 # Get existing documents in knowledge_documents
 echo "📥 Checking existing knowledge_documents..."
-curl -s "$DIRECTUS_URL/items/knowledge_documents?fields=source_id,id" \
+curl -s "$DIRECTUS_URL/items/knowledge_documents?fields=source_id,id,slug,file_path" \
     -H "Authorization: Bearer $TOKEN" > "$EXISTING_FILE"
 EXISTING_COUNT=$($JQ '.data | length' "$EXISTING_FILE")
 echo "Found $EXISTING_COUNT documents in knowledge_documents"
@@ -94,8 +105,12 @@ for i in $(seq 0 $((DOC_COUNT - 1))); do
     # Generate version_group_id (UUID) for new documents
     VERSION_GROUP_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
 
-    # Check if exists in knowledge_documents by source_id
+    # Check if exists in knowledge_documents by source_id OR slug
     EXISTING_ID=$($JQ -r ".data[] | select(.source_id == \"$SOURCE_ID\") | .id" "$EXISTING_FILE" 2>/dev/null | head -1)
+    # Fallback: match by slug if source_id doesn't match
+    if [ -z "$EXISTING_ID" ] || [ "$EXISTING_ID" = "null" ]; then
+        EXISTING_ID=$($JQ -r ".data[] | select(.slug == \"$SLUG\") | .id" "$EXISTING_FILE" 2>/dev/null | head -1)
+    fi
 
     if [ -n "$EXISTING_ID" ] && [ "$EXISTING_ID" != "null" ]; then
         echo "  🔄 UPDATE: $TITLE (id: $EXISTING_ID)"
@@ -107,7 +122,8 @@ for i in $(seq 0 $((DOC_COUNT - 1))); do
                 --arg content "$CONTENT" \
                 --arg summary "$SUMMARY" \
                 --arg status "$STATUS" \
-                --arg path "$PATH_VAL" \
+                --arg source_id "$SOURCE_ID" \
+                --arg file_path "$PATH_VAL" \
                 --arg sha "$SHA" \
                 --arg published_at "$LAST_SYNCED" \
                 --argjson tags "$TAGS" \
@@ -119,7 +135,8 @@ for i in $(seq 0 $((DOC_COUNT - 1))); do
                     status: $status,
                     visibility: "public",
                     language: "vn",
-                    path: $path,
+                    source_id: $source_id,
+                    file_path: $file_path,
                     sha: $sha,
                     published_at: $published_at,
                     tags: $tags,
@@ -151,7 +168,7 @@ for i in $(seq 0 $((DOC_COUNT - 1))); do
                 --arg summary "$SUMMARY" \
                 --arg status "$STATUS" \
                 --arg source_id "$SOURCE_ID" \
-                --arg path "$PATH_VAL" \
+                --arg file_path "$PATH_VAL" \
                 --arg sha "$SHA" \
                 --arg published_at "$LAST_SYNCED" \
                 --arg version_group_id "$VERSION_GROUP_ID" \
@@ -165,7 +182,7 @@ for i in $(seq 0 $((DOC_COUNT - 1))); do
                     visibility: "public",
                     language: "vn",
                     source_id: $source_id,
-                    path: $path,
+                    file_path: $file_path,
                     sha: $sha,
                     published_at: $published_at,
                     tags: $tags,

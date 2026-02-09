@@ -12,10 +12,14 @@
 
 set -euo pipefail
 
+# Determine script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+
+# Source central environment config
+source "$SCRIPT_DIR/../config/environment.sh"
+
 VERSION="1.0.0"
 GCP_PROJECT="${GCP_PROJECT:-github-chatgpt-ggcloud}"
-DIRECTUS_URL="https://directus-test-pfne2mqwja-as.a.run.app"
-NUXT_URL="https://ai.incomexsaigoncorp.vn"
 
 # Counters
 PASS_COUNT=0
@@ -113,6 +117,8 @@ test_http() {
 main() {
   local skip_write=false
   local verbose=false
+  local local_flag=""
+  local cloud_flag=""
 
   # Parse arguments
   for arg in "$@"; do
@@ -127,10 +133,21 @@ main() {
       --verbose)
         verbose=true
         ;;
+      --local)
+        local_flag="--local"
+        ;;
+      --cloud)
+        cloud_flag="--cloud"
+        ;;
     esac
   done
 
   require_cmds
+
+  # Initialize environment (sets DIRECTUS_URL, NUXT_URL, etc.)
+  local env_flag="${local_flag:-${cloud_flag:-}}"
+  init_environment "$env_flag"
+  print_environment_banner "$env_flag"
 
   cat << 'HEADER'
 ═══════════════════════════════════════════════════════════════

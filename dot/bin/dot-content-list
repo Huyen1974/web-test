@@ -74,49 +74,20 @@ done
 STATUS="${POSITIONAL_ARGS[0]:-all}"
 COLLECTION="${POSITIONAL_ARGS[1]:-knowledge_documents}"
 
-# Environment detection
-detect_env() {
-  if [[ -n "$LOCAL_FLAG" ]]; then echo "local"; return; fi
-  if [[ -n "$CLOUD_FLAG" ]]; then echo "cloud"; return; fi
-  if [[ "${DOT_ENV:-}" == "local" ]]; then echo "local"; return; fi
-  if [[ "${DOT_ENV:-}" == "cloud" ]]; then echo "cloud"; return; fi
+# Source central environment config
+source "$SCRIPT_DIR/../config/environment.sh"
 
-  # Auto-detect
-  if curl -sf --max-time 2 "http://localhost:8055/server/health" >/dev/null 2>&1; then
-    echo "local"
-  else
-    echo "cloud"
-  fi
-}
-
-ENV=$(detect_env)
-
-# Set URLs based on environment
-if [[ "$ENV" == "local" ]]; then
-  DIRECTUS_URL="http://localhost:8055"
-  echo -e "\n\033[32m\033[1m  DOT CONTENT LIST - LOCAL MODE\033[0m"
-else
-  DIRECTUS_URL="https://directus-test-pfne2mqwja-as.a.run.app"
-  echo -e "\n\033[33m\033[1m  DOT CONTENT LIST - CLOUD MODE\033[0m"
-fi
+# Initialize environment (sets DIRECTUS_URL, DIRECTUS_TOKEN, etc.)
+ENV_FLAG="${LOCAL_FLAG:-${CLOUD_FLAG:-}}"
+init_environment "$ENV_FLAG"
+print_environment_banner "$ENV_FLAG"
 
 echo "Collection: $COLLECTION"
 echo "Status Filter: $STATUS"
 echo "------------------------------------------------------------"
 
-# Get token using dot-token (shell-agnostic)
-ENV_FLAG="--cloud"
-[[ "$ENV" == "local" ]] && ENV_FLAG="--local"
-
-# Capture token (stdout only, stderr goes to terminal for retry messages)
-TOKEN=$("$SCRIPT_DIR/dot-token" "$ENV_FLAG")
-TOKEN_EXIT=$?
-
-if [[ $TOKEN_EXIT -ne 0 ]] || [[ -z "$TOKEN" ]]; then
-  echo -e "\033[31m[ERROR]\033[0m Failed to authenticate"
-  exit 1
-fi
-
+# Get token (from environment.sh init)
+TOKEN="${DIRECTUS_TOKEN:-}"
 if [[ -z "$TOKEN" ]]; then
   echo -e "\033[31m[ERROR]\033[0m Failed to authenticate"
   exit 1
