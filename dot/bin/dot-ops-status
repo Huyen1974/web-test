@@ -123,9 +123,9 @@ if [[ "$MODE" == "local" || "$MODE" == "all" ]]; then
   local_ad_response=$(curl -sf --max-time 5 "http://localhost:8000/health" 2>/dev/null || echo "")
   if [[ -n "$local_ad_response" ]]; then
     local_ad_status=$(echo "$local_ad_response" | jq -r '.status // empty' 2>/dev/null)
-    local_ad_qdrant=$(echo "$local_ad_response" | jq -r '.services.qdrant // empty' 2>/dev/null)
-    local_ad_firestore=$(echo "$local_ad_response" | jq -r '.services.firestore // empty' 2>/dev/null)
-    local_ad_openai=$(echo "$local_ad_response" | jq -r '.services.openai // empty' 2>/dev/null)
+    local_ad_qdrant=$(echo "$local_ad_response" | jq -r '.services.qdrant.status // .services.qdrant // empty' 2>/dev/null)
+    local_ad_firestore=$(echo "$local_ad_response" | jq -r '.services.firestore.status // .services.firestore // empty' 2>/dev/null)
+    local_ad_openai=$(echo "$local_ad_response" | jq -r '.services.openai.status // .services.openai // empty' 2>/dev/null)
     if [[ "$local_ad_status" == "healthy" ]]; then
       check_ok "Agent Data Local → healthy (qdrant:$local_ad_qdrant firestore:$local_ad_firestore openai:$local_ad_openai)"
     else
@@ -153,8 +153,14 @@ if [[ "$MODE" == "cloud" || "$MODE" == "all" ]]; then
   # Directus Cloud
   check_url "Directus Cloud" "$CLOUD_DIRECTUS_URL/server/health" 10
 
-  # Agent Data Cloud
-  cloud_ad_response=$(curl -sf --max-time 10 "https://agent-data-test-pfne2mqwja-as.a.run.app/health" 2>/dev/null || echo "")
+  # Agent Data Cloud (IAM-protected — needs identity token)
+  cloud_ad_token=$(gcloud auth print-identity-token 2>/dev/null || echo "")
+  if [[ -n "$cloud_ad_token" ]]; then
+    cloud_ad_response=$(curl -sf --max-time 30 "https://agent-data-test-pfne2mqwja-as.a.run.app/health" \
+      -H "Authorization: Bearer $cloud_ad_token" 2>/dev/null || echo "")
+  else
+    cloud_ad_response=""
+  fi
   if [[ -n "$cloud_ad_response" ]]; then
     cloud_ad_status=$(echo "$cloud_ad_response" | jq -r '.status // empty' 2>/dev/null)
     if [[ "$cloud_ad_status" == "healthy" ]]; then
@@ -163,7 +169,11 @@ if [[ "$MODE" == "cloud" || "$MODE" == "all" ]]; then
       check_warn "Agent Data Cloud → $cloud_ad_status"
     fi
   else
-    check_fail "Agent Data Cloud (https://agent-data-test-pfne2mqwja-as.a.run.app) → unreachable"
+    if [[ -z "$cloud_ad_token" ]]; then
+      check_warn "Agent Data Cloud → no IAM token (run gcloud auth login)"
+    else
+      check_fail "Agent Data Cloud (https://agent-data-test-pfne2mqwja-as.a.run.app) → unreachable"
+    fi
   fi
 
   # Nuxt Cloud

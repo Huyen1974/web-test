@@ -82,7 +82,7 @@ if [[ -n "$CLEAN_FLAG" ]]; then
   echo "Cleaning existing [TEST] items..."
 
   # Get all items with [TEST] prefix
-  EXISTING=$(curl -sf --max-time 30 "${DIRECTUS_URL}/items/knowledge_documents?filter[title][_starts_with]=[TEST]" \
+  EXISTING=$(curl -sfg --max-time 30 "${DIRECTUS_URL}/items/knowledge_documents?filter[title][_starts_with]=[TEST]" \
     -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || echo '{"data":[]}')
 
   COUNT=$(echo "$EXISTING" | jq '.data | length')

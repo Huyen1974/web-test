@@ -105,8 +105,8 @@ if type api_with_retry &>/dev/null; then
   RESPONSE=$(api_with_retry "GET" "${DIRECTUS_URL}/items/${COLLECTION}${QUERY}" "$TOKEN")
 else
   # Fallback without retry lib
-  RESPONSE=$(curl -sf --max-time 30 "${DIRECTUS_URL}/items/${COLLECTION}${QUERY}" \
-    -H "Authorization: Bearer ${TOKEN}" 2>/dev/null)
+  RESPONSE=$(curl -sfg --max-time 30 "${DIRECTUS_URL}/items/${COLLECTION}${QUERY}" \
+    -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || echo "")
 fi
 
 if [[ -z "$RESPONSE" ]]; then
