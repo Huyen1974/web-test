@@ -1,137 +1,154 @@
 <script setup lang="ts">
 /**
- * Knowledge Hub Index Page (WEB-49D)
+ * Knowledge Hub Index Page — WEB-56
  *
- * ASSEMBLY ONLY - Uses same components as /docs/index.vue
- * Changes from /docs: collection name, route prefix, titles
+ * ASSEMBLY ONLY - Reuses DocsTreeView, TypographyProse, buildDocsTree
+ * Data source: Agent Data /kb/list via server proxy /api/knowledge/list
  */
-import { readItems } from '@directus/sdk';
-import type { DocsTreeNode, DocsBreadcrumb } from '~/types/agent-views';
-import { buildDocsTree, buildBreadcrumbs, filterDocsByTitle } from '~/composables/useAgentViews';
-import { markdownToHtml } from '~/utils/markdown';
+import type { DocsTreeNode } from '~/types/agent-views';
+import { buildDocsTree, filterDocsByTitle } from '~/composables/useAgentViews';
 
 definePageMeta({
 	title: 'Knowledge Hub',
 	description: 'Browse knowledge base and documentation',
 });
 
-const route = useRoute();
-const router = useRouter();
+// Readable folder labels extracted from README.md titles + fallback map
+const FOLDER_LABELS: Record<string, string> = {
+	foundation: 'Foundation',
+	plans: 'Plans',
+	operations: 'Operations',
+	'context-packs': 'Context Packs',
+	playbooks: 'Playbooks',
+	status: 'Status',
+	templates: 'Templates',
+	discussions: 'Discussions',
+	archive: 'Archive',
+};
 
 // Search state
 const searchQuery = ref('');
-
 // Mobile sidebar state
 const sidebarOpen = ref(false);
 
-// Selected document state
-const selectedDoc = ref<any | null>(null);
-const selectedPath = ref('');
-
-// Fetch all knowledge documents (mapped to AgentView-like structure for buildDocsTree)
-const { data: documents, pending, error } = await useAsyncData('knowledge-docs-list', async () => {
-	const items = await useDirectus(
-		readItems('knowledge_documents', {
-			filter: {
-				status: { _eq: 'published' },
-				visibility: { _eq: 'public' },
-				is_current_version: { _eq: true },
-			},
-			sort: ['file_path'],
-			limit: -1,
-			fields: ['id', 'title', 'slug', 'content', 'summary', 'file_path', 'date_updated'],
-		}),
-	);
-
-	// Map to AgentView-like structure for buildDocsTree compatibility
-	return (items || []).map((doc: any) => ({
-		id: doc.id,
-		source_id: doc.slug, // slug acts as source_id
-		title: doc.title,
-		content: doc.content,
-		summary: doc.summary,
-		path: doc.file_path, // file_path acts as path for tree building
-		last_synced: doc.date_updated,
-	}));
-});
-
-// Build tree from documents (reusing /docs buildDocsTree function)
-const docsTree = computed(() => {
-	if (!documents.value) return [];
-	return buildDocsTree(documents.value);
-});
-
-// Filter documents for search
-const filteredDocs = computed(() => {
-	if (!documents.value) return [];
-	return filterDocsByTitle(documents.value, searchQuery.value);
-});
-
-// Breadcrumbs for selected document
-const breadcrumbs = computed(() => {
-	return buildBreadcrumbs(selectedPath.value);
-});
-
-// Handle document selection from tree
-function selectDocument(node: DocsTreeNode) {
-	if (node.isFolder) {
-		return;
+// Document code generator (deterministic hash from document_id)
+function docCode(docId: string): string {
+	let hash = 0;
+	for (let i = 0; i < docId.length; i++) {
+		hash = ((hash << 5) - hash + docId.charCodeAt(i)) | 0;
 	}
-
-	if (node.document) {
-		selectedDoc.value = node.document;
-		selectedPath.value = node.path;
-		sidebarOpen.value = false;
-		router.replace({ query: { doc: node.document.source_id } });
-	}
+	return 'KB-' + Math.abs(hash).toString(16).slice(0, 4).toUpperCase().padStart(4, '0');
 }
 
-// Handle breadcrumb click
-function navigateBreadcrumb(crumb: DocsBreadcrumb) {
-	if (!crumb.path) {
-		selectedDoc.value = null;
-		selectedPath.value = '';
-		router.replace({ query: {} });
-	}
-}
+// Fetch from Agent Data via server proxy
+const {
+	data: documents,
+	pending,
+	error,
+} = await useAsyncData('knowledge-agent-data', async () => {
+	const response = await $fetch<{ items: any[] }>('/api/knowledge/list');
+	const items = response?.items || [];
 
-// Rendered markdown content
-const renderedContent = computed(() => {
-	if (!selectedDoc.value?.content) return '';
-	return markdownToHtml(selectedDoc.value.content);
-});
-
-// Initialize from URL query
-onMounted(() => {
-	const docQuery = route.query.doc as string;
-	if (docQuery && documents.value) {
-		const doc = documents.value.find((d: any) => d.source_id === docQuery);
-		if (doc) {
-			selectedDoc.value = doc;
-			selectedPath.value = doc.source_id || '';
-		}
-	}
-});
-
-// Watch for query changes
-watch(
-	() => route.query.doc,
-	(newDoc) => {
-		if (newDoc && documents.value) {
-			const doc = documents.value.find((d: any) => d.source_id === newDoc);
-			if (doc) {
-				selectedDoc.value = doc;
-				selectedPath.value = doc.source_id || '';
+	// Extract folder labels from README.md items before filtering
+	const folderLabels: Record<string, string> = { ...FOLDER_LABELS };
+	for (const item of items) {
+		if (item.document_id?.endsWith('/README.md') && item.title && item.title !== 'check') {
+			// Map parent path to title: "docs/foundation/README.md" → foundation: "Foundation"
+			const parentPath = item.document_id.replace(/\/README\.md$/, '');
+			const folderName = parentPath.split('/').pop();
+			if (folderName) {
+				folderLabels[folderName] = item.title;
 			}
 		}
-	},
-);
+	}
 
-// SEO
-useHead({
-	title: computed(() => selectedDoc.value?.title || 'Knowledge Hub'),
+	// Filter to actual documents only
+	const docs = items.filter((item: any) => {
+		if (!item.document_id) return false;
+		if (item.title === 'check') return false;
+		if (item.document_id.endsWith('/README.md')) return false;
+		// Keep files with .md extension and old-format docs with meaningful tags
+		const hasMd = item.document_id.endsWith('.md');
+		const hasTags = item.tags && item.tags.length > 0;
+		return hasMd || hasTags;
+	});
+
+	// Map to AgentView-like structure for buildDocsTree compatibility
+	const mapped = docs.map((item: any) => ({
+		id: item.document_id,
+		source_id: item.document_id,
+		title: item.title || item.document_id.split('/').pop()?.replace(/\.md$/, '') || item.document_id,
+		path: item.document_id,
+		tags: item.tags,
+	}));
+
+	// Store folder labels for tree labeling
+	return { docs: mapped, folderLabels };
 });
 
+// Extract docs and folder labels from the response
+const docsList = computed(() => documents.value?.docs || []);
+const folderLabelsMap = computed(() => documents.value?.folderLabels || FOLDER_LABELS);
+
+// Build tree with readable folder labels
+const docsTree = computed(() => {
+	if (!docsList.value.length) return [];
+	const tree = buildDocsTree(docsList.value);
+	applyFolderLabels(tree, folderLabelsMap.value);
+	return tree;
+});
+
+function applyFolderLabels(nodes: DocsTreeNode[], labels: Record<string, string>) {
+	for (const node of nodes) {
+		if (node.isFolder) {
+			const folderName = node.name.toLowerCase();
+			if (labels[folderName]) {
+				node.name = labels[folderName];
+			} else if (labels[node.name]) {
+				node.name = labels[node.name];
+			} else {
+				// Capitalize: "my-folder" → "My Folder"
+				node.name = node.name
+					.split('-')
+					.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+					.join(' ');
+			}
+			applyFolderLabels(node.children, labels);
+		}
+	}
+}
+
+// Count total documents (leaf nodes only)
+const totalDocs = computed(() => docsList.value.length);
+
+// Search filtering
+const filteredDocs = computed(() => {
+	if (!docsList.value.length) return [];
+	return filterDocsByTitle(docsList.value, searchQuery.value);
+});
+
+// Navigate to document detail page (clean SEO URL)
+function selectDocument(node: DocsTreeNode) {
+	if (node.isFolder) return;
+	const docId = node.document?.source_id || node.path;
+	navigateTo(`/knowledge/${cleanUrl(docId)}`);
+}
+
+// Navigate from search result
+function selectSearchResult(doc: any) {
+	navigateTo(`/knowledge/${cleanUrl(doc.source_id || '')}`);
+}
+
+// Clean URL: strip "docs/" prefix and ".md" suffix
+function cleanUrl(docId: string): string {
+	let clean = docId;
+	if (clean.startsWith('docs/')) clean = clean.slice(5);
+	clean = clean.replace(/\.md$/, '');
+	return clean;
+}
+
+// SEO
+useHead({ title: 'Knowledge Hub' });
 useServerSeoMeta({
 	title: 'Knowledge Hub',
 	description: 'Browse knowledge base and documentation',
@@ -181,18 +198,21 @@ useServerSeoMeta({
 			<!-- Two-column layout -->
 			<div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mt-8">
 				<!-- Left sidebar: Tree Navigation -->
-				<aside
-					class="lg:col-span-1"
-					:class="{ 'hidden lg:block': !sidebarOpen }"
-				>
-					<div class="sticky top-4 max-h-[calc(100vh-8rem)] overflow-auto bg-white dark:bg-gray-900 lg:bg-transparent rounded-lg p-4 lg:p-0 border border-gray-200 dark:border-gray-700 lg:border-0">
-						<h2 class="text-sm font-semibold text-gray-900 dark:text-white mb-4 uppercase tracking-wider">
+				<aside class="lg:col-span-1" :class="{ 'hidden lg:block': !sidebarOpen }">
+					<div
+						class="sticky top-4 max-h-[calc(100vh-8rem)] overflow-auto bg-white dark:bg-gray-900 lg:bg-transparent rounded-lg p-4 lg:p-0 border border-gray-200 dark:border-gray-700 lg:border-0"
+					>
+						<h2
+							class="text-sm font-semibold text-gray-900 dark:text-white mb-4 uppercase tracking-wider"
+						>
 							Contents
 						</h2>
 
 						<!-- Loading State -->
 						<div v-if="pending" class="text-center py-8">
-							<div class="inline-block w-6 h-6 border-2 border-gray-300 rounded-full border-t-primary-600 animate-spin"></div>
+							<div
+								class="inline-block w-6 h-6 border-2 border-gray-300 rounded-full border-t-primary-600 animate-spin"
+							></div>
 						</div>
 
 						<!-- Error State -->
@@ -207,42 +227,40 @@ useServerSeoMeta({
 								<li v-for="doc in filteredDocs" :key="doc.id">
 									<button
 										class="w-full text-left px-3 py-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-										:class="{ 'bg-primary-100 dark:bg-primary-900/30': selectedDoc?.id === doc.id }"
-										@click="selectedDoc = doc; selectedPath = doc.source_id || ''"
+										@click="selectSearchResult(doc)"
 									>
-										<span class="text-sm font-medium text-gray-900 dark:text-white">{{ doc.title }}</span>
-										<span class="block text-xs text-gray-500 truncate">{{ doc.source_id }}</span>
+										<span class="text-sm font-medium text-gray-900 dark:text-white">{{
+											doc.title
+										}}</span>
+										<span class="block text-xs text-gray-500 truncate">{{
+											docCode(doc.source_id)
+										}}</span>
 									</button>
 								</li>
 							</ul>
 						</div>
 
-						<!-- Tree View (using DocsTreeView component) -->
-						<DocsTreeView
-							v-else
-							:nodes="docsTree"
-							:selected-path="selectedPath"
-							@select="selectDocument"
-						/>
+						<!-- Tree View (reusing DocsTreeView component) -->
+						<DocsTreeView v-else :nodes="docsTree" @select="selectDocument" />
 					</div>
 				</aside>
 
 				<!-- Main content area -->
 				<main class="lg:col-span-3">
-					<!-- No selection state -->
-					<div v-if="!selectedDoc" class="text-center py-16">
-						<Icon name="heroicons:document-text" class="w-16 h-16 mx-auto text-gray-400" />
+					<!-- Welcome state (no document selected - index page) -->
+					<div class="text-center py-16">
+						<Icon name="heroicons:book-open" class="w-16 h-16 mx-auto text-gray-400" />
 						<h3 class="mt-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
-							Select a document
+							Knowledge Hub
 						</h3>
 						<p class="mt-2 text-gray-600 dark:text-gray-400">
-							Choose a document from the navigation to view its content
+							Select a document from the navigation to view its content
 						</p>
 
 						<!-- Quick Stats -->
-						<div v-if="documents" class="mt-8 grid grid-cols-2 gap-4 max-w-xs mx-auto">
+						<div v-if="docsList.length" class="mt-8 grid grid-cols-2 gap-4 max-w-xs mx-auto">
 							<div class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-								<p class="text-2xl font-bold text-primary-600">{{ documents.length }}</p>
+								<p class="text-2xl font-bold text-primary-600">{{ totalDocs }}</p>
 								<p class="text-sm text-gray-600 dark:text-gray-400">Documents</p>
 							</div>
 							<div class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
@@ -250,61 +268,6 @@ useServerSeoMeta({
 								<p class="text-sm text-gray-600 dark:text-gray-400">Sections</p>
 							</div>
 						</div>
-					</div>
-
-					<!-- Document view -->
-					<div v-else>
-						<!-- Breadcrumbs -->
-						<nav class="mb-6">
-							<ol class="flex items-center space-x-2 text-sm">
-								<li v-for="(crumb, index) in breadcrumbs" :key="crumb.path">
-									<div class="flex items-center">
-										<span v-if="index > 0" class="mx-2 text-gray-400">/</span>
-										<button
-											v-if="index < breadcrumbs.length - 1"
-											class="text-primary-600 hover:text-primary-800 dark:text-primary-400"
-											@click="navigateBreadcrumb(crumb)"
-										>
-											{{ crumb.name }}
-										</button>
-										<span v-else class="text-gray-600 dark:text-gray-400">
-											{{ crumb.name }}
-										</span>
-									</div>
-								</li>
-							</ol>
-						</nav>
-
-						<!-- Document Header -->
-						<header class="mb-8">
-							<h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-								{{ selectedDoc.title }}
-							</h1>
-							<div class="mt-2 flex items-center gap-4 text-sm text-gray-500">
-								<span v-if="selectedDoc.last_synced">
-									Last updated: {{ new Date(selectedDoc.last_synced).toLocaleDateString() }}
-								</span>
-							</div>
-						</header>
-
-						<!-- Document Content -->
-						<article class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 lg:p-8">
-							<TypographyProse :content="renderedContent" size="md" />
-						</article>
-
-						<!-- Document Footer -->
-						<footer class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-							<div class="flex items-center justify-between text-sm text-gray-500">
-								<span>Slug: {{ selectedDoc.source_id }}</span>
-								<NuxtLink
-									:to="`/knowledge/${selectedDoc.source_id}`"
-									class="flex items-center gap-1 text-primary-600 hover:text-primary-800"
-								>
-									<Icon name="heroicons:arrow-top-right-on-square" class="w-4 h-4" />
-									Open standalone page
-								</NuxtLink>
-							</div>
-						</footer>
 					</div>
 				</main>
 			</div>
