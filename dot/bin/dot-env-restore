@@ -47,7 +47,30 @@ echo "=== dot-env-restore ==="
 echo ""
 echo "Collecting secrets..."
 
-declare -A SECRETS
+# Use temp file instead of declare -A (bash 3.2 compat)
+SECRETS_FILE=$(mktemp)
+trap "rm -f $SECRETS_FILE" EXIT
+
+# Helper: set a secret (only if not already set)
+set_secret() {
+  local k="$1" v="$2"
+  if ! grep -q "^${k}=" "$SECRETS_FILE" 2>/dev/null; then
+    echo "${k}=${v}" >> "$SECRETS_FILE"
+  fi
+}
+
+# Helper: get a secret value
+get_secret() {
+  local k="$1"
+  grep "^${k}=" "$SECRETS_FILE" 2>/dev/null | head -1 | sed "s/^${k}=//"
+}
+
+# Helper: check if secret exists and is non-empty
+has_secret() {
+  local v
+  v=$(get_secret "$1")
+  [ -n "$v" ]
+}
 
 # Read secrets from web-test/.env.local
 if [ -f "$WEB_TEST_DIR/.env.local" ]; then
@@ -56,7 +79,7 @@ if [ -f "$WEB_TEST_DIR/.env.local" ]; then
     [[ -z "$key" ]] && continue
     key=$(echo "$key" | xargs)
     value=$(echo "$value" | xargs)
-    SECRETS["$key"]="$value"
+    echo "${key}=${value}" >> "$SECRETS_FILE"
   done < "$WEB_TEST_DIR/.env.local"
   ok "Read secrets from web-test/.env.local"
 else
@@ -71,9 +94,7 @@ if [ -f "$AGENT_DATA_DIR/.env.local" ]; then
     key=$(echo "$key" | xargs)
     value=$(echo "$value" | xargs)
     # Only set if not already set from web-test
-    if [ -z "${SECRETS[$key]+x}" ]; then
-      SECRETS["$key"]="$value"
-    fi
+    set_secret "$key" "$value"
   done < "$AGENT_DATA_DIR/.env.local"
   ok "Read secrets from agent-data-test/.env.local"
 else
@@ -88,21 +109,21 @@ fetch_secret() {
 }
 
 # Fill missing secrets from Secret Manager
-if [ -z "${SECRETS[AGENT_DATA_API_KEY]+x}" ] || [ -z "${SECRETS[AGENT_DATA_API_KEY]}" ]; then
+if ! has_secret "AGENT_DATA_API_KEY"; then
   echo "Fetching AGENT_DATA_API_KEY from Secret Manager..."
-  SECRETS[AGENT_DATA_API_KEY]=$(fetch_secret "agent-data-api-key")
+  set_secret "AGENT_DATA_API_KEY" "$(fetch_secret "agent-data-api-key")"
 fi
-if [ -z "${SECRETS[OPENAI_API_KEY]+x}" ] || [ -z "${SECRETS[OPENAI_API_KEY]}" ]; then
+if ! has_secret "OPENAI_API_KEY"; then
   echo "Fetching OPENAI_API_KEY from Secret Manager..."
-  SECRETS[OPENAI_API_KEY]=$(fetch_secret "OPENAI_API_KEY")
+  set_secret "OPENAI_API_KEY" "$(fetch_secret "OPENAI_API_KEY")"
 fi
-if [ -z "${SECRETS[QDRANT_API_KEY]+x}" ] || [ -z "${SECRETS[QDRANT_API_KEY]}" ]; then
+if ! has_secret "QDRANT_API_KEY"; then
   echo "Fetching QDRANT_API_KEY from Secret Manager..."
-  SECRETS[QDRANT_API_KEY]=$(fetch_secret "Qdrant_agent_data_N1D8R2vC0_5")
+  set_secret "QDRANT_API_KEY" "$(fetch_secret "Qdrant_agent_data_N1D8R2vC0_5")"
 fi
-if [ -z "${SECRETS[QDRANT_URL]+x}" ] || [ -z "${SECRETS[QDRANT_URL]}" ]; then
+if ! has_secret "QDRANT_URL"; then
   echo "Fetching QDRANT_URL from Secret Manager..."
-  SECRETS[QDRANT_URL]=$(fetch_secret "QDRANT_URL")
+  set_secret "QDRANT_URL" "$(fetch_secret "QDRANT_URL")"
 fi
 
 # ----------------------------------------------------------------
@@ -124,16 +145,16 @@ apply_template() {
 
   content="${content//__VENV_PYTHON__/$VENV_PYTHON}"
   content="${content//__AGENT_DATA_DIR__/$AGENT_DATA_DIR}"
-  content="${content//__AGENT_DATA_API_KEY_LOCAL__/${SECRETS[AGENT_DATA_API_KEY]:-}}"
-  content="${content//__AGENT_DATA_API_KEY_CLOUD__/${SECRETS[AGENT_DATA_API_KEY]:-}}"
-  content="${content//__AGENT_DATA_API_KEY__/${SECRETS[AGENT_DATA_API_KEY]:-}}"
-  content="${content//__QDRANT_URL__/${SECRETS[QDRANT_URL]:-}}"
-  content="${content//__QDRANT_API_KEY__/${SECRETS[QDRANT_API_KEY]:-}}"
-  content="${content//__OPENAI_API_KEY__/${SECRETS[OPENAI_API_KEY]:-}}"
-  content="${content//__DB_PASSWORD__/${SECRETS[DB_PASSWORD]:-}}"
-  content="${content//__DIRECTUS_KEY__/${SECRETS[KEY]:-}}"
-  content="${content//__DIRECTUS_SECRET__/${SECRETS[SECRET]:-}}"
-  content="${content//__ADMIN_PASSWORD__/${SECRETS[DIRECTUS_ADMIN_PASSWORD]:-}}"
+  content="${content//__AGENT_DATA_API_KEY_LOCAL__/$(get_secret AGENT_DATA_API_KEY)}"
+  content="${content//__AGENT_DATA_API_KEY_CLOUD__/$(get_secret AGENT_DATA_API_KEY)}"
+  content="${content//__AGENT_DATA_API_KEY__/$(get_secret AGENT_DATA_API_KEY)}"
+  content="${content//__QDRANT_URL__/$(get_secret QDRANT_URL)}"
+  content="${content//__QDRANT_API_KEY__/$(get_secret QDRANT_API_KEY)}"
+  content="${content//__OPENAI_API_KEY__/$(get_secret OPENAI_API_KEY)}"
+  content="${content//__DB_PASSWORD__/$(get_secret DB_PASSWORD)}"
+  content="${content//__DIRECTUS_KEY__/$(get_secret KEY)}"
+  content="${content//__DIRECTUS_SECRET__/$(get_secret SECRET)}"
+  content="${content//__ADMIN_PASSWORD__/$(get_secret DIRECTUS_ADMIN_PASSWORD)}"
 
   echo "$content"
 }

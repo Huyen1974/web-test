@@ -2,12 +2,15 @@
 /**
  * Knowledge Document Detail Page — WEB-56 + WEB-56B + WEB-62
  *
- * ASSEMBLY ONLY - Reuses TypographyProse, BlockContainer, TypographyTitle
+ * ASSEMBLY ONLY - Reuses TypographyProse, BlockContainer, TypographyTitle,
+ * DocsTreeView, buildDocsTree (sidebar same as index.vue)
  * Data source: Directus knowledge_documents collection (via SDK)
  * Standard features: Share, Print, TOC, Embed (all inline, no new components)
  */
 import { readItems } from '@directus/sdk';
 import type { BreadcrumbItem } from '~/types/view-model-0032';
+import type { DocsTreeNode } from '~/types/agent-views';
+import { buildDocsTree, filterDocsByTitle } from '~/composables/useAgentViews';
 import { markdownToHtml } from '~/utils/markdown';
 
 const route = useRoute();
@@ -25,6 +28,120 @@ const FOLDER_LABELS: Record<string, string> = {
 	discussions: 'Discussions',
 	archive: 'Archive',
 };
+
+// Mobile sidebar state
+const sidebarOpen = ref(false);
+
+// Search state
+const searchQuery = ref('');
+
+// Fetch doc list for sidebar tree (same query as index.vue)
+const { data: sidebarData } = await useAsyncData('knowledge-directus', async () => {
+	const items = await useDirectus(
+		readItems('knowledge_documents', {
+			filter: {
+				status: { _eq: 'published' },
+				is_current_version: { _eq: true },
+			},
+			fields: ['id', 'title', 'slug', 'file_path', 'source_id', 'tags', 'category', 'is_folder'],
+			sort: ['title'],
+			limit: -1,
+		}),
+	);
+
+	const allItems = items || [];
+
+	// Extract folder labels from README items
+	const folderLabels: Record<string, string> = { ...FOLDER_LABELS };
+	for (const item of allItems) {
+		if (item.file_path?.endsWith('/README.md') && item.title && item.title !== 'check') {
+			const parentPath = item.file_path.replace(/\/README\.md$/, '');
+			const folderName = parentPath.split('/').pop();
+			if (folderName) {
+				folderLabels[folderName] = item.title;
+			}
+		}
+	}
+
+	// Filter to actual documents only
+	const docs = allItems.filter((item: any) => {
+		if (!item.file_path) return false;
+		if (item.title === 'check') return false;
+		if (item.file_path.endsWith('/README.md')) return false;
+		if (item.is_folder) return false;
+		const hasMd = item.file_path.endsWith('.md');
+		const hasTags = item.tags && item.tags.length > 0;
+		return hasMd || hasTags;
+	});
+
+	const mapped = docs.map((item: any) => ({
+		id: item.file_path || item.slug,
+		source_id: item.file_path || item.slug,
+		title: item.title || item.file_path?.split('/').pop()?.replace(/\.md$/, '') || item.slug,
+		path: item.file_path || item.slug,
+		tags: item.tags,
+	}));
+
+	return { docs: mapped, folderLabels };
+});
+
+const sidebarDocs = computed(() => sidebarData.value?.docs || []);
+const folderLabelsMap = computed(() => sidebarData.value?.folderLabels || FOLDER_LABELS);
+
+// Build tree with readable folder labels
+const docsTree = computed(() => {
+	if (!sidebarDocs.value.length) return [];
+	const tree = buildDocsTree(sidebarDocs.value);
+	applyFolderLabels(tree, folderLabelsMap.value);
+	return tree;
+});
+
+function applyFolderLabels(nodes: DocsTreeNode[], labels: Record<string, string>) {
+	for (const node of nodes) {
+		if (node.isFolder) {
+			const folderName = node.name.toLowerCase();
+			if (labels[folderName]) {
+				node.name = labels[folderName];
+			} else if (labels[node.name]) {
+				node.name = labels[node.name];
+			} else {
+				node.name = node.name
+					.split('-')
+					.map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+					.join(' ');
+			}
+			applyFolderLabels(node.children, labels);
+		}
+	}
+}
+
+// Search filtering
+const filteredDocs = computed(() => {
+	if (!sidebarDocs.value.length) return [];
+	return filterDocsByTitle(sidebarDocs.value, searchQuery.value);
+});
+
+// Clean URL helper
+function cleanUrl(docId: string): string {
+	let clean = docId;
+	if (clean.startsWith('docs/')) clean = clean.slice(5);
+	clean = clean.replace(/\.md$/, '');
+	return clean;
+}
+
+// Navigate to another document from sidebar
+function selectSidebarDoc(node: DocsTreeNode) {
+	if (node.isFolder) return;
+	const docId = node.document?.source_id || node.path;
+	sidebarOpen.value = false;
+	navigateTo(`/knowledge/${cleanUrl(docId)}`);
+}
+
+// Navigate from search result
+function selectSearchResult(doc: any) {
+	sidebarOpen.value = false;
+	navigateTo(`/knowledge/${cleanUrl(doc.source_id || '')}`);
+}
 
 // Parse slug path
 const slugParts = computed(() => {
@@ -266,6 +383,73 @@ useServerSeoMeta({
 <template>
 	<BlockContainer>
 		<div class="py-8">
+			<!-- Mobile sidebar toggle -->
+			<div class="lg:hidden mb-6">
+				<button
+					class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+					@click="sidebarOpen = !sidebarOpen"
+				>
+					<Icon :name="sidebarOpen ? 'heroicons:x-mark' : 'heroicons:bars-3'" class="w-5 h-5" />
+					{{ sidebarOpen ? 'Close' : 'Browse Contents' }}
+				</button>
+			</div>
+
+			<!-- Two-column layout (same grid as index.vue) -->
+			<div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+				<!-- Left sidebar: Tree Navigation -->
+				<aside class="lg:col-span-1" :class="{ 'hidden lg:block': !sidebarOpen }">
+					<div
+						class="sticky top-4 max-h-[calc(100vh-8rem)] overflow-auto bg-white dark:bg-gray-900 lg:bg-transparent rounded-lg p-4 lg:p-0 border border-gray-200 dark:border-gray-700 lg:border-0"
+					>
+						<h2
+							class="text-sm font-semibold text-gray-900 dark:text-white mb-4 uppercase tracking-wider"
+						>
+							Contents
+						</h2>
+
+						<!-- Search Box -->
+						<div class="mb-4">
+							<div class="relative">
+								<input
+									v-model="searchQuery"
+									type="text"
+									placeholder="Search..."
+									class="w-full px-3 py-1.5 pr-8 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent dark:bg-gray-800 dark:border-gray-600"
+								/>
+								<Icon
+									name="heroicons:magnifying-glass"
+									class="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+								/>
+							</div>
+						</div>
+
+						<!-- Search Results -->
+						<div v-if="searchQuery.trim()">
+							<p class="text-xs text-gray-500 mb-3">{{ filteredDocs.length }} results</p>
+							<ul class="space-y-1">
+								<li v-for="doc in filteredDocs" :key="doc.id">
+									<button
+										class="w-full text-left px-3 py-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+										@click="selectSearchResult(doc)"
+									>
+										<span class="text-sm font-medium text-gray-900 dark:text-white">{{
+											doc.title
+										}}</span>
+										<span class="block text-xs text-gray-500 truncate">{{
+											docCode(doc.source_id)
+										}}</span>
+									</button>
+								</li>
+							</ul>
+						</div>
+
+						<!-- Tree View -->
+						<DocsTreeView v-else :nodes="docsTree" @select="selectSidebarDoc" />
+					</div>
+				</aside>
+
+				<!-- Main content area -->
+				<main class="lg:col-span-3">
 			<!-- Loading State -->
 			<div v-if="pending" class="flex items-center justify-center py-12">
 				<div class="text-center">
@@ -294,7 +478,7 @@ useServerSeoMeta({
 			</div>
 
 			<!-- Document View -->
-			<article v-else class="max-w-4xl mx-auto">
+			<article v-else>
 				<!-- Breadcrumb -->
 				<nav class="mb-6" aria-label="Breadcrumb">
 					<ol class="flex flex-wrap items-center gap-2 text-sm">
@@ -465,6 +649,8 @@ useServerSeoMeta({
 					</div>
 				</footer>
 			</article>
+				</main>
+			</div>
 		</div>
 	</BlockContainer>
 </template>
