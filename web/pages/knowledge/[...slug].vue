@@ -1,14 +1,16 @@
 <script setup lang="ts">
 /**
- * Knowledge Document Detail Page — WEB-56
+ * Knowledge Document Detail Page — WEB-56 + WEB-56B
  *
  * ASSEMBLY ONLY - Reuses TypographyProse, BlockContainer, TypographyTitle
  * Data source: Agent Data /kb/get via server proxy /api/knowledge/{slug}
+ * Standard features: Share, Print, TOC, Embed (all inline, no new components)
  */
 import type { BreadcrumbItem } from '~/types/view-model-0032';
 import { markdownToHtml } from '~/utils/markdown';
 
 const route = useRoute();
+const toast = useToast();
 
 // Readable folder labels
 const FOLDER_LABELS: Record<string, string> = {
@@ -69,11 +71,103 @@ const {
 	}
 });
 
-// Rendered markdown content
+// Rendered markdown content with heading IDs for TOC anchoring
 const renderedContent = computed(() => {
 	if (!document.value?.content) return '';
-	return markdownToHtml(document.value.content);
+	let html = markdownToHtml(document.value.content);
+	// Add id attributes to headings for TOC anchor links
+	html = html.replace(/<(h[1-4])>(.*?)<\/h[1-4]>/g, (_match, tag, text) => {
+		const id = text.replace(/<[^>]*>/g, '').trim().toLowerCase()
+			.replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-');
+		return `<${tag} id="${id}">${text}</${tag}>`;
+	});
+	return html;
 });
+
+// Table of Contents — extract headings from raw markdown
+const tableOfContents = computed(() => {
+	if (!document.value?.content) return [];
+	const headingRegex = /^(#{1,4})\s+(.+)$/gm;
+	const headings: { level: number; text: string; id: string }[] = [];
+	let match;
+	while ((match = headingRegex.exec(document.value.content)) !== null) {
+		const text = match[2].replace(/[*_`\[\]]/g, '').trim();
+		const id = text.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-');
+		headings.push({ level: match[1].length, text, id });
+	}
+	return headings;
+});
+
+// TOC visibility toggle
+const showToc = ref(false);
+
+// Share — Web Share API with clipboard fallback
+async function shareDocument() {
+	const url = window.location.href;
+	const title = document.value?.title || 'Knowledge Document';
+
+	if (navigator.share) {
+		try {
+			await navigator.share({ title, url });
+			return;
+		} catch {
+			// User cancelled or API failed — fall through to clipboard
+		}
+	}
+
+	// Fallback: copy URL to clipboard
+	try {
+		await navigator.clipboard.writeText(url);
+		toast.add({
+			title: 'Link Copied',
+			description: 'Document URL has been copied to your clipboard.',
+			icon: 'material-symbols:content-copy-outline',
+			color: 'green',
+			timeout: 3000,
+		});
+	} catch {
+		toast.add({
+			title: 'Copy Failed',
+			description: 'Could not copy the link. Please copy it from the address bar.',
+			icon: 'heroicons:exclamation-triangle',
+			color: 'red',
+			timeout: 3000,
+		});
+	}
+}
+
+// Print — native browser print
+function printDocument() {
+	window.print();
+}
+
+// Embed — generate iframe code and copy
+const showEmbed = ref(false);
+const embedCode = computed(() => {
+	if (!import.meta.client) return '';
+	return `<iframe src="${window.location.href}" width="100%" height="600" frameborder="0" title="${document.value?.title || 'Knowledge Document'}"></iframe>`;
+});
+
+async function copyEmbedCode() {
+	try {
+		await navigator.clipboard.writeText(embedCode.value);
+		toast.add({
+			title: 'Embed Code Copied',
+			description: 'The embed code has been copied to your clipboard.',
+			icon: 'material-symbols:content-copy-outline',
+			color: 'green',
+			timeout: 3000,
+		});
+	} catch {
+		toast.add({
+			title: 'Copy Failed',
+			description: 'Could not copy the embed code.',
+			icon: 'heroicons:exclamation-triangle',
+			color: 'red',
+			timeout: 3000,
+		});
+	}
+}
 
 // Build SEO-friendly breadcrumb from slug path
 const breadcrumb = computed<BreadcrumbItem[]>(() => {
@@ -217,7 +311,91 @@ useServerSeoMeta({
 							{{ tag }}
 						</span>
 					</div>
+
+					<!-- Toolbar: Share, Print, TOC, Embed -->
+					<div class="flex flex-wrap items-center gap-2 mt-4 print:hidden">
+						<button
+							class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg text-gray-600 bg-gray-100 hover:bg-gray-200 dark:text-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 transition-colors"
+							@click="shareDocument"
+						>
+							<Icon name="heroicons:share" class="w-4 h-4" />
+							Share
+						</button>
+						<button
+							class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg text-gray-600 bg-gray-100 hover:bg-gray-200 dark:text-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 transition-colors"
+							@click="printDocument"
+						>
+							<Icon name="heroicons:printer" class="w-4 h-4" />
+							Print
+						</button>
+						<button
+							v-if="tableOfContents.length > 0"
+							class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors"
+							:class="showToc
+								? 'text-primary-700 bg-primary-100 dark:text-primary-300 dark:bg-primary-900/30'
+								: 'text-gray-600 bg-gray-100 hover:bg-gray-200 dark:text-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600'"
+							@click="showToc = !showToc"
+						>
+							<Icon name="heroicons:list-bullet" class="w-4 h-4" />
+							Contents
+						</button>
+						<button
+							class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors"
+							:class="showEmbed
+								? 'text-primary-700 bg-primary-100 dark:text-primary-300 dark:bg-primary-900/30'
+								: 'text-gray-600 bg-gray-100 hover:bg-gray-200 dark:text-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600'"
+							@click="showEmbed = !showEmbed"
+						>
+							<Icon name="heroicons:code-bracket" class="w-4 h-4" />
+							Embed
+						</button>
+					</div>
+
+					<!-- Embed Code Panel -->
+					<div
+						v-if="showEmbed"
+						class="mt-3 p-3 rounded-lg bg-gray-50 border border-gray-200 dark:bg-gray-800 dark:border-gray-700 print:hidden"
+					>
+						<div class="flex items-center justify-between mb-2">
+							<span class="text-xs font-medium text-gray-500 dark:text-gray-400">Embed Code</span>
+							<button
+								class="text-xs text-primary-600 hover:text-primary-700 font-medium"
+								@click="copyEmbedCode"
+							>
+								Copy
+							</button>
+						</div>
+						<textarea
+							readonly
+							:value="embedCode"
+							class="w-full h-16 p-2 text-xs font-mono bg-white border border-gray-300 rounded dark:bg-gray-900 dark:border-gray-600 dark:text-gray-300 resize-none"
+							@focus="($event.target as HTMLTextAreaElement).select()"
+						/>
+					</div>
 				</header>
+
+				<!-- Table of Contents -->
+				<nav
+					v-if="showToc && tableOfContents.length > 0"
+					class="mb-6 p-4 rounded-lg bg-gray-50 border border-gray-200 dark:bg-gray-800 dark:border-gray-700 print:hidden"
+					aria-label="Table of Contents"
+				>
+					<h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Table of Contents</h3>
+					<ul class="space-y-1.5">
+						<li
+							v-for="heading in tableOfContents"
+							:key="heading.id"
+							:style="{ paddingLeft: `${(heading.level - 1) * 16}px` }"
+						>
+							<a
+								:href="`#${heading.id}`"
+								class="text-sm text-gray-600 hover:text-primary-600 dark:text-gray-400 dark:hover:text-primary-400 transition-colors"
+							>
+								{{ heading.text }}
+							</a>
+						</li>
+					</ul>
+				</nav>
 
 				<!-- Document Content -->
 				<div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 lg:p-10">
@@ -243,3 +421,13 @@ useServerSeoMeta({
 		</div>
 	</BlockContainer>
 </template>
+
+<style scoped>
+@media print {
+	:deep(header nav),
+	:deep(footer),
+	:deep(.print\\:hidden) {
+		display: none !important;
+	}
+}
+</style>
