@@ -1,0 +1,288 @@
+#!/usr/bin/env bash
+# dot-env-restore — Restore all config files from templates
+# Usage: dot-env-restore [--force] [--dry-run]
+#
+# Reads templates from dot/configs/, resolves secrets from:
+#   1. Existing .env.local files (if present)
+#   2. Google Secret Manager (fallback)
+# Generates actual config files at correct locations.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+WEB_TEST_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+AGENT_DATA_DIR="/Users/nmhuyen/Documents/Manual Deploy/agent-data-test"
+CONFIGS_DIR="$WEB_TEST_DIR/dot/configs"
+
+FORCE=false
+DRY_RUN=false
+
+for arg in "$@"; do
+  case "$arg" in
+    --force) FORCE=true ;;
+    --dry-run) DRY_RUN=true ;;
+    -h|--help)
+      echo "Usage: dot-env-restore [--force] [--dry-run]"
+      echo "  --force    Overwrite existing config files"
+      echo "  --dry-run  Show what would be done without making changes"
+      exit 0
+      ;;
+  esac
+done
+
+# --- Colors ---
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+ok()   { echo -e "${GREEN}OK${NC} $1"; }
+warn() { echo -e "${YELLOW}WARN${NC} $1"; }
+fail() { echo -e "${RED}FAIL${NC} $1"; }
+
+# ----------------------------------------------------------------
+# 1. Collect secrets from existing .env.local files
+# ----------------------------------------------------------------
+echo "=== dot-env-restore ==="
+echo ""
+echo "Collecting secrets..."
+
+declare -A SECRETS
+
+# Read secrets from web-test/.env.local
+if [ -f "$WEB_TEST_DIR/.env.local" ]; then
+  while IFS='=' read -r key value; do
+    [[ "$key" =~ ^#.*$ ]] && continue
+    [[ -z "$key" ]] && continue
+    key=$(echo "$key" | xargs)
+    value=$(echo "$value" | xargs)
+    SECRETS["$key"]="$value"
+  done < "$WEB_TEST_DIR/.env.local"
+  ok "Read secrets from web-test/.env.local"
+else
+  warn "web-test/.env.local not found"
+fi
+
+# Read secrets from agent-data-test/.env.local
+if [ -f "$AGENT_DATA_DIR/.env.local" ]; then
+  while IFS='=' read -r key value; do
+    [[ "$key" =~ ^#.*$ ]] && continue
+    [[ -z "$key" ]] && continue
+    key=$(echo "$key" | xargs)
+    value=$(echo "$value" | xargs)
+    # Only set if not already set from web-test
+    if [ -z "${SECRETS[$key]+x}" ]; then
+      SECRETS["$key"]="$value"
+    fi
+  done < "$AGENT_DATA_DIR/.env.local"
+  ok "Read secrets from agent-data-test/.env.local"
+else
+  warn "agent-data-test/.env.local not found"
+fi
+
+# Fallback: Google Secret Manager
+fetch_secret() {
+  local secret_name="$1"
+  local project="github-chatgpt-ggcloud"
+  gcloud secrets versions access latest --secret="$secret_name" --project="$project" 2>/dev/null || echo ""
+}
+
+# Fill missing secrets from Secret Manager
+if [ -z "${SECRETS[AGENT_DATA_API_KEY]+x}" ] || [ -z "${SECRETS[AGENT_DATA_API_KEY]}" ]; then
+  echo "Fetching AGENT_DATA_API_KEY from Secret Manager..."
+  SECRETS[AGENT_DATA_API_KEY]=$(fetch_secret "agent-data-api-key")
+fi
+if [ -z "${SECRETS[OPENAI_API_KEY]+x}" ] || [ -z "${SECRETS[OPENAI_API_KEY]}" ]; then
+  echo "Fetching OPENAI_API_KEY from Secret Manager..."
+  SECRETS[OPENAI_API_KEY]=$(fetch_secret "OPENAI_API_KEY")
+fi
+if [ -z "${SECRETS[QDRANT_API_KEY]+x}" ] || [ -z "${SECRETS[QDRANT_API_KEY]}" ]; then
+  echo "Fetching QDRANT_API_KEY from Secret Manager..."
+  SECRETS[QDRANT_API_KEY]=$(fetch_secret "Qdrant_agent_data_N1D8R2vC0_5")
+fi
+if [ -z "${SECRETS[QDRANT_URL]+x}" ] || [ -z "${SECRETS[QDRANT_URL]}" ]; then
+  echo "Fetching QDRANT_URL from Secret Manager..."
+  SECRETS[QDRANT_URL]=$(fetch_secret "QDRANT_URL")
+fi
+
+# ----------------------------------------------------------------
+# 2. Resolve paths
+# ----------------------------------------------------------------
+VENV_PYTHON="$AGENT_DATA_DIR/venv/bin/python"
+if [ ! -f "$VENV_PYTHON" ]; then
+  VENV_PYTHON=$(which python3 2>/dev/null || echo "/usr/local/bin/python3")
+  warn "venv python not found, using system: $VENV_PYTHON"
+fi
+
+# ----------------------------------------------------------------
+# 3. Helper: substitute placeholders in template
+# ----------------------------------------------------------------
+apply_template() {
+  local template="$1"
+  local content
+  content=$(cat "$template")
+
+  content="${content//__VENV_PYTHON__/$VENV_PYTHON}"
+  content="${content//__AGENT_DATA_DIR__/$AGENT_DATA_DIR}"
+  content="${content//__AGENT_DATA_API_KEY_LOCAL__/${SECRETS[AGENT_DATA_API_KEY]:-}}"
+  content="${content//__AGENT_DATA_API_KEY_CLOUD__/${SECRETS[AGENT_DATA_API_KEY]:-}}"
+  content="${content//__AGENT_DATA_API_KEY__/${SECRETS[AGENT_DATA_API_KEY]:-}}"
+  content="${content//__QDRANT_URL__/${SECRETS[QDRANT_URL]:-}}"
+  content="${content//__QDRANT_API_KEY__/${SECRETS[QDRANT_API_KEY]:-}}"
+  content="${content//__OPENAI_API_KEY__/${SECRETS[OPENAI_API_KEY]:-}}"
+  content="${content//__DB_PASSWORD__/${SECRETS[DB_PASSWORD]:-}}"
+  content="${content//__DIRECTUS_KEY__/${SECRETS[KEY]:-}}"
+  content="${content//__DIRECTUS_SECRET__/${SECRETS[SECRET]:-}}"
+  content="${content//__ADMIN_PASSWORD__/${SECRETS[DIRECTUS_ADMIN_PASSWORD]:-}}"
+
+  echo "$content"
+}
+
+# ----------------------------------------------------------------
+# 4. Write config files
+# ----------------------------------------------------------------
+write_config() {
+  local template="$1"
+  local target="$2"
+  local label="$3"
+
+  if [ ! -f "$template" ]; then
+    fail "Template missing: $template"
+    return 1
+  fi
+
+  if [ -f "$target" ] && [ "$FORCE" = false ]; then
+    # Check if target already has meaningful content
+    if [ -s "$target" ]; then
+      warn "$label: already exists (use --force to overwrite)"
+      return 0
+    fi
+  fi
+
+  local content
+  content=$(apply_template "$template")
+
+  if [ "$DRY_RUN" = true ]; then
+    echo "[DRY-RUN] Would write: $target"
+    return 0
+  fi
+
+  mkdir -p "$(dirname "$target")"
+  echo "$content" > "$target"
+  ok "$label: written to $target"
+}
+
+# ----------------------------------------------------------------
+# 4a. Special: Claude Desktop config (merge with existing preferences)
+# ----------------------------------------------------------------
+restore_claude_desktop() {
+  local template="$CONFIGS_DIR/claude-desktop-mcp.json.template"
+  local target="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+  local label="Claude Desktop MCP"
+
+  if [ ! -f "$template" ]; then
+    fail "Template missing: $template"
+    return 1
+  fi
+
+  local mcp_config
+  mcp_config=$(apply_template "$template")
+
+  if [ "$DRY_RUN" = true ]; then
+    echo "[DRY-RUN] Would merge MCP config into: $target"
+    return 0
+  fi
+
+  # If target exists, merge mcpServers into existing config
+  if [ -f "$target" ]; then
+    local existing
+    existing=$(cat "$target")
+
+    # Use python to merge JSON (jq may not be available)
+    local merged
+    merged=$(python3 -c "
+import json, sys
+existing = json.loads('''$existing''')
+mcp = json.loads('''$mcp_config''')
+existing['mcpServers'] = mcp.get('mcpServers', {})
+print(json.dumps(existing, indent=2))
+" 2>/dev/null)
+
+    if [ -n "$merged" ]; then
+      # Backup first
+      cp "$target" "${target}.bak"
+      echo "$merged" > "$target"
+      ok "$label: merged into existing config (backup at .bak)"
+    else
+      fail "$label: JSON merge failed"
+      return 1
+    fi
+  else
+    mkdir -p "$(dirname "$target")"
+    echo "$mcp_config" > "$target"
+    ok "$label: created new config"
+  fi
+}
+
+echo ""
+echo "Restoring configs..."
+echo ""
+
+# Claude Desktop MCP
+restore_claude_desktop
+
+# Claude Code MCP (~/.claude/mcp.json)
+write_config \
+  "$CONFIGS_DIR/claude-code-mcp.json.template" \
+  "$HOME/.claude/mcp.json" \
+  "Claude Code MCP"
+
+# Agent Data .env.local
+write_config \
+  "$CONFIGS_DIR/agent-data.env.template" \
+  "$AGENT_DATA_DIR/.env.local" \
+  "Agent Data .env.local"
+
+# Directus .env.local (web-test)
+write_config \
+  "$CONFIGS_DIR/directus.env.template" \
+  "$WEB_TEST_DIR/.env.local" \
+  "Directus .env.local"
+
+# ----------------------------------------------------------------
+# 5. Verify
+# ----------------------------------------------------------------
+echo ""
+echo "=== Verification ==="
+
+PASS=0
+FAIL_COUNT=0
+
+check() {
+  local file="$1"
+  local label="$2"
+  if [ -f "$file" ] && [ -s "$file" ]; then
+    ok "$label"
+    PASS=$((PASS + 1))
+  else
+    fail "$label"
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+  fi
+}
+
+check "$HOME/Library/Application Support/Claude/claude_desktop_config.json" "Claude Desktop config"
+check "$HOME/.claude/mcp.json" "Claude Code MCP config"
+check "$AGENT_DATA_DIR/.env.local" "Agent Data .env.local"
+check "$WEB_TEST_DIR/.env.local" "Directus .env.local"
+
+echo ""
+echo "Result: $PASS passed, $FAIL_COUNT failed"
+
+if [ $FAIL_COUNT -gt 0 ]; then
+  echo ""
+  warn "Some configs could not be restored. Check errors above."
+  exit 1
+fi
+
+echo ""
+echo "Restart Claude Desktop to apply MCP config changes."
