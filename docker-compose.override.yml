@@ -1,0 +1,7 @@
+# Local dev override — skip cold start fix_permissions.py
+# This file is auto-loaded by docker compose alongside docker-compose.local.yml
+services:
+  directus:
+    environment:
+      DIRECTUS_ADMIN_EMAIL: ""
+      DIRECTUS_ADMIN_PASSWORD: ""

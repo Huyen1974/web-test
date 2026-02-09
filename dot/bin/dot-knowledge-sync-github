@@ -6,19 +6,31 @@
 
 set -e
 
-DIRECTUS_URL="https://directus-test-pfne2mqwja-as.a.run.app"
+# Determine script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+
+# Source central environment config
+source "$SCRIPT_DIR/../config/environment.sh"
+
 DRY_RUN=""
 JQ="/usr/bin/jq"
-DOCS_DIR="$(cd "$(dirname "$0")/../.." && pwd)/docs"
+DOCS_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)/docs"
+LOCAL_FLAG=""
+CLOUD_FLAG=""
 
 # Parse arguments
 for arg in "$@"; do
     case $arg in
-        --dry-run)
-            DRY_RUN="yes"
-            ;;
+        --dry-run)  DRY_RUN="yes" ;;
+        --local)    LOCAL_FLAG="--local" ;;
+        --cloud)    CLOUD_FLAG="--cloud" ;;
     esac
 done
+
+# Initialize environment (sets DIRECTUS_URL, DIRECTUS_TOKEN, etc.)
+ENV_FLAG="${LOCAL_FLAG:-${CLOUD_FLAG:-}}"
+init_environment "$ENV_FLAG"
+print_environment_banner "$ENV_FLAG"
 
 echo "═══════════════════════════════════════════════════════════════"
 echo "KNOWLEDGE SYNC: GitHub docs/ → knowledge_documents"
@@ -28,11 +40,10 @@ echo "Target: $DIRECTUS_URL/items/knowledge_documents"
 [ -n "$DRY_RUN" ] && echo "Mode: DRY RUN (no changes)"
 echo ""
 
-# Get admin token from GSM
-echo "📥 Getting admin token..."
-TOKEN=$(gcloud secrets versions access latest --secret="DIRECTUS_ADMIN_TOKEN_test" 2>/dev/null)
+# Get token (from environment.sh init)
+TOKEN="${DIRECTUS_TOKEN:-}"
 if [ -z "$TOKEN" ]; then
-    echo "❌ Cannot get admin token from GSM"
+    echo "❌ Cannot get admin token"
     exit 1
 fi
 echo "✅ Token obtained"

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 /**
- * Knowledge Document Detail Page — WEB-56 + WEB-56B
+ * Knowledge Document Detail Page — WEB-56 + WEB-56B + WEB-62
  *
  * ASSEMBLY ONLY - Reuses TypographyProse, BlockContainer, TypographyTitle
- * Data source: Agent Data /kb/get via server proxy /api/knowledge/{slug}
+ * Data source: Directus knowledge_documents collection (via SDK)
  * Standard features: Share, Print, TOC, Embed (all inline, no new components)
  */
+import { readItems } from '@directus/sdk';
 import type { BreadcrumbItem } from '~/types/view-model-0032';
 import { markdownToHtml } from '~/utils/markdown';
 
@@ -44,28 +45,74 @@ function docCode(docId: string): string {
 	return 'KB-' + Math.abs(hash).toString(16).slice(0, 4).toUpperCase().padStart(4, '0');
 }
 
-// Fetch document from Agent Data via server proxy
+// Fetch document from Directus knowledge_documents
 const {
 	data: document,
 	pending,
 	error,
 } = await useAsyncData(`knowledge-${fullSlug.value}`, async () => {
 	try {
-		const data = await $fetch<{
-			document_id: string;
-			content: string;
-			metadata: { title?: string; tags?: string[] };
-			revision: number;
-		}>(`/api/knowledge/${fullSlug.value}`);
+		// Try multiple file_path variants (same logic as the old server proxy)
+		const variants = [
+			`docs/${fullSlug.value}.md`,
+			`docs/${fullSlug.value}`,
+			`${fullSlug.value}.md`,
+			fullSlug.value,
+		];
 
-		return {
-			id: data.document_id,
-			title: data.metadata?.title || data.document_id.split('/').pop()?.replace(/\.md$/, '') || fullSlug.value,
-			content: data.content,
-			tags: data.metadata?.tags || [],
-			revision: data.revision,
-			readTime: Math.ceil((data.content?.length || 0) / 1000),
-		};
+		for (const fp of variants) {
+			const items = await useDirectus(
+				readItems('knowledge_documents', {
+					filter: {
+						file_path: { _eq: fp },
+						status: { _eq: 'published' },
+						is_current_version: { _eq: true },
+					},
+					limit: 1,
+					fields: ['*'],
+				}),
+			);
+
+			if (items?.length) {
+				const doc = items[0] as any;
+				return {
+					id: doc.file_path || doc.slug,
+					title: doc.title || doc.file_path?.split('/').pop()?.replace(/\.md$/, '') || fullSlug.value,
+					content: doc.content,
+					tags: doc.tags || [],
+					revision: doc.version_number || 1,
+					readTime: Math.ceil((doc.content?.length || 0) / 1000),
+				};
+			}
+		}
+
+		// Fallback: try matching by slug
+		const slugVariant = fullSlug.value.replace(/\//g, '-');
+		const bySlug = await useDirectus(
+			readItems('knowledge_documents', {
+				filter: {
+					slug: { _eq: slugVariant },
+					status: { _eq: 'published' },
+					is_current_version: { _eq: true },
+				},
+				limit: 1,
+				fields: ['*'],
+			}),
+		);
+
+		if (bySlug?.length) {
+			const doc = bySlug[0] as any;
+			return {
+				id: doc.file_path || doc.slug,
+				title: doc.title || fullSlug.value,
+				content: doc.content,
+				tags: doc.tags || [],
+				revision: doc.version_number || 1,
+				readTime: Math.ceil((doc.content?.length || 0) / 1000),
+			};
+		}
+
+		return null;
 	} catch {
 		return null;
 	}

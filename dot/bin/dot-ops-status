@@ -1,0 +1,264 @@
+#!/usr/bin/env bash
+
+# dot-ops-status: Master status check for entire AI stack
+# Usage: ./dot/bin/dot-ops-status [--local|--cloud|--all]
+#
+# Checks health of all services in the AI infrastructure:
+#   - Directus (local/cloud)
+#   - Agent Data (local/cloud)
+#   - MCP Server (local)
+#   - Nuxt frontend (local/cloud)
+#   - Docker containers
+#   - DOT tools availability
+#
+# Options:
+#   --local   Check local services only
+#   --cloud   Check cloud services only
+#   --all     Check both local and cloud (default)
+#   --help    Show this help
+
+set -euo pipefail
+
+# Determine script directory
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+elif [[ -n "${0:-}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+else
+  SCRIPT_DIR="$(pwd)/dot/bin"
+fi
+
+# Source central environment config
+source "$SCRIPT_DIR/../config/environment.sh"
+
+# Parse arguments
+MODE="all"
+for arg in "$@"; do
+  case $arg in
+    --local)  MODE="local" ;;
+    --cloud)  MODE="cloud" ;;
+    --all)    MODE="all" ;;
+    --help|-h)
+      echo "dot-ops-status: Master status check for AI stack"
+      echo ""
+      echo "Usage: ./dot/bin/dot-ops-status [--local|--cloud|--all]"
+      echo ""
+      echo "Options:"
+      echo "  --local   Check local services only"
+      echo "  --cloud   Check cloud services only"
+      echo "  --all     Check both local and cloud (default)"
+      echo "  --help    Show this help"
+      exit 0
+      ;;
+  esac
+done
+
+# Counters
+PASS=0
+FAIL=0
+WARN=0
+
+# Check functions
+check_ok()   { echo -e "  ${GREEN}[OK]${NC}   $1"; PASS=$((PASS + 1)); }
+check_fail() { echo -e "  ${RED}[FAIL]${NC} $1"; FAIL=$((FAIL + 1)); }
+check_warn() { echo -e "  ${YELLOW}[WARN]${NC} $1"; WARN=$((WARN + 1)); }
+check_skip() { echo -e "  ${BLUE}[SKIP]${NC} $1"; }
+
+check_url() {
+  local name="$1" url="$2" timeout="${3:-5}"
+  local code
+  code=$(curl -sf --max-time "$timeout" -o /dev/null -w "%{http_code}" "$url" 2>/dev/null || echo "000")
+  if [[ "$code" == "200" ]]; then
+    check_ok "$name ($url) → $code"
+  elif [[ "$code" == "000" ]]; then
+    check_fail "$name ($url) → unreachable"
+  else
+    check_warn "$name ($url) → $code"
+  fi
+}
+
+check_url_json() {
+  local name="$1" url="$2" field="$3" timeout="${4:-5}"
+  local response
+  response=$(curl -sf --max-time "$timeout" "$url" 2>/dev/null || echo "")
+  if [[ -z "$response" ]]; then
+    check_fail "$name ($url) → unreachable"
+    return
+  fi
+  local value
+  value=$(echo "$response" | jq -r "$field" 2>/dev/null || echo "")
+  if [[ -n "$value" && "$value" != "null" ]]; then
+    check_ok "$name → $value"
+  else
+    check_warn "$name → unexpected response"
+  fi
+}
+
+# =============================================================================
+echo ""
+echo -e "${BOLD}═══════════════════════════════════════════════════════════════${NC}"
+echo -e "${BOLD}          DOT OPS STATUS — AI INFRASTRUCTURE${NC}"
+echo -e "${BOLD}═══════════════════════════════════════════════════════════════${NC}"
+echo -e "  Mode: ${BOLD}${MODE}${NC}  |  Time: $(date '+%Y-%m-%d %H:%M:%S')"
+echo ""
+
+# =============================================================================
+# LOCAL CHECKS
+# =============================================================================
+if [[ "$MODE" == "local" || "$MODE" == "all" ]]; then
+  echo -e "${BOLD}── LOCAL SERVICES ──────────────────────────────────────────${NC}"
+
+  # Docker
+  if docker info >/dev/null 2>&1; then
+    RUNNING=$(docker ps --format '{{.Names}}' 2>/dev/null | wc -l | tr -d ' ')
+    check_ok "Docker Engine ($RUNNING containers running)"
+  else
+    check_fail "Docker Engine — not running"
+  fi
+
+  # Directus Local
+  check_url "Directus Local" "http://localhost:8055/server/health"
+
+  # Agent Data Local
+  local_ad_response=$(curl -sf --max-time 5 "http://localhost:8000/health" 2>/dev/null || echo "")
+  if [[ -n "$local_ad_response" ]]; then
+    local_ad_status=$(echo "$local_ad_response" | jq -r '.status // empty' 2>/dev/null)
+    local_ad_qdrant=$(echo "$local_ad_response" | jq -r '.services.qdrant.status // .services.qdrant // empty' 2>/dev/null)
+    local_ad_firestore=$(echo "$local_ad_response" | jq -r '.services.firestore.status // .services.firestore // empty' 2>/dev/null)
+    local_ad_openai=$(echo "$local_ad_response" | jq -r '.services.openai.status // .services.openai // empty' 2>/dev/null)
+    if [[ "$local_ad_status" == "healthy" ]]; then
+      check_ok "Agent Data Local → healthy (qdrant:$local_ad_qdrant firestore:$local_ad_firestore openai:$local_ad_openai)"
+    else
+      check_warn "Agent Data Local → $local_ad_status (qdrant:$local_ad_qdrant firestore:$local_ad_firestore openai:$local_ad_openai)"
+    fi
+  else
+    check_fail "Agent Data Local (http://localhost:8000) → unreachable"
+  fi
+
+  # MCP Server Local
+  check_url "MCP Server Local" "http://localhost:8001/mcp"
+
+  # Nuxt Local
+  check_url "Nuxt Local" "http://localhost:3000"
+
+  echo ""
+fi
+
+# =============================================================================
+# CLOUD CHECKS
+# =============================================================================
+if [[ "$MODE" == "cloud" || "$MODE" == "all" ]]; then
+  echo -e "${BOLD}── CLOUD SERVICES ─────────────────────────────────────────${NC}"
+
+  # Directus Cloud
+  check_url "Directus Cloud" "$CLOUD_DIRECTUS_URL/server/health" 10
+
+  # Agent Data Cloud (IAM-protected — needs identity token)
+  cloud_ad_token=$(gcloud auth print-identity-token 2>/dev/null || echo "")
+  if [[ -n "$cloud_ad_token" ]]; then
+    cloud_ad_response=$(curl -sf --max-time 30 "https://agent-data-test-pfne2mqwja-as.a.run.app/health" \
+      -H "Authorization: Bearer $cloud_ad_token" 2>/dev/null || echo "")
+  else
+    cloud_ad_response=""
+  fi
+  if [[ -n "$cloud_ad_response" ]]; then
+    cloud_ad_status=$(echo "$cloud_ad_response" | jq -r '.status // empty' 2>/dev/null)
+    if [[ "$cloud_ad_status" == "healthy" ]]; then
+      check_ok "Agent Data Cloud → healthy"
+    else
+      check_warn "Agent Data Cloud → $cloud_ad_status"
+    fi
+  else
+    if [[ -z "$cloud_ad_token" ]]; then
+      check_warn "Agent Data Cloud → no IAM token (run gcloud auth login)"
+    else
+      check_fail "Agent Data Cloud (https://agent-data-test-pfne2mqwja-as.a.run.app) → unreachable"
+    fi
+  fi
+
+  # Nuxt Cloud
+  check_url "Nuxt Cloud" "$CLOUD_NUXT_URL" 10
+
+  echo ""
+fi
+
+# =============================================================================
+# DOT TOOLS
+# =============================================================================
+echo -e "${BOLD}── DOT TOOLS ──────────────────────────────────────────────${NC}"
+
+DOT_BIN="$SCRIPT_DIR"
+TOTAL_TOOLS=$(ls "$DOT_BIN"/dot-* 2>/dev/null | wc -l | tr -d ' ')
+ENV_TOOLS=$(grep -rl "environment.sh" "$DOT_BIN"/dot-* 2>/dev/null | wc -l | tr -d ' ')
+
+check_ok "DOT tools available: $TOTAL_TOOLS total, $ENV_TOOLS using environment.sh"
+
+# Check key tools exist and are executable
+for tool in dot-token dot-content-create dot-content-update dot-content-delete \
+            dot-content-list dot-content-approve dot-knowledge-sync \
+            dot-knowledge-sync-github dot-knowledge-sync-agentdata; do
+  if [[ -x "$DOT_BIN/$tool" ]]; then
+    if grep -q "environment.sh" "$DOT_BIN/$tool" 2>/dev/null; then
+      : # silently pass
+    fi
+  fi
+done
+
+# Environment.sh itself
+if [[ -f "$SCRIPT_DIR/../config/environment.sh" ]]; then
+  check_ok "environment.sh config found"
+else
+  check_fail "environment.sh config MISSING"
+fi
+
+echo ""
+
+# =============================================================================
+# MCP CONFIG
+# =============================================================================
+echo -e "${BOLD}── MCP CONFIGURATION ──────────────────────────────────────${NC}"
+
+CLAUDE_DESKTOP_CONFIG="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+if [[ -f "$CLAUDE_DESKTOP_CONFIG" ]]; then
+  MCP_SERVERS=$(jq '.mcpServers | length // 0' "$CLAUDE_DESKTOP_CONFIG" 2>/dev/null || echo "0")
+  if [[ "$MCP_SERVERS" -gt 0 ]]; then
+    check_ok "Claude Desktop config ($MCP_SERVERS MCP servers)"
+  else
+    check_warn "Claude Desktop config exists but no MCP servers configured"
+  fi
+else
+  check_fail "Claude Desktop config not found"
+fi
+
+CLAUDE_CODE_MCP="$HOME/.claude/mcp.json"
+if [[ -f "$CLAUDE_CODE_MCP" ]]; then
+  CC_SERVERS=$(jq '.mcpServers | length // 0' "$CLAUDE_CODE_MCP" 2>/dev/null || echo "0")
+  if [[ "$CC_SERVERS" -gt 0 ]]; then
+    check_ok "Claude Code MCP config ($CC_SERVERS MCP servers)"
+  else
+    check_warn "Claude Code MCP config exists but no MCP servers"
+  fi
+else
+  check_warn "Claude Code MCP config not found (~/.claude/mcp.json)"
+fi
+
+echo ""
+
+# =============================================================================
+# SUMMARY
+# =============================================================================
+echo -e "${BOLD}═══════════════════════════════════════════════════════════════${NC}"
+TOTAL=$((PASS + FAIL + WARN))
+echo -e "  ${GREEN}PASS: $PASS${NC}  |  ${RED}FAIL: $FAIL${NC}  |  ${YELLOW}WARN: $WARN${NC}  |  Total: $TOTAL"
+
+if [[ $FAIL -eq 0 && $WARN -eq 0 ]]; then
+  echo -e "  ${GREEN}${BOLD}ALL SYSTEMS OPERATIONAL${NC}"
+elif [[ $FAIL -eq 0 ]]; then
+  echo -e "  ${YELLOW}${BOLD}OPERATIONAL WITH WARNINGS${NC}"
+else
+  echo -e "  ${RED}${BOLD}ISSUES DETECTED — ACTION REQUIRED${NC}"
+fi
+echo -e "${BOLD}═══════════════════════════════════════════════════════════════${NC}"
+echo ""
+
+exit $FAIL

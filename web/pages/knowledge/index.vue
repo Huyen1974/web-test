@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
- * Knowledge Hub Index Page — WEB-56
+ * Knowledge Hub Index Page — WEB-56 + WEB-62
  *
  * ASSEMBLY ONLY - Reuses DocsTreeView, TypographyProse, buildDocsTree
- * Data source: Agent Data /kb/list via server proxy /api/knowledge/list
+ * Data source: Directus knowledge_documents collection (via SDK)
  */
+import { readItems } from '@directus/sdk';
 import type { DocsTreeNode } from '~/types/agent-views';
 import { buildDocsTree, filterDocsByTitle } from '~/composables/useAgentViews';
 
@@ -40,21 +41,31 @@ function docCode(docId: string): string {
 	return 'KB-' + Math.abs(hash).toString(16).slice(0, 4).toUpperCase().padStart(4, '0');
 }
 
-// Fetch from Agent Data via server proxy
+// Fetch from Directus knowledge_documents collection
 const {
 	data: documents,
 	pending,
 	error,
-} = await useAsyncData('knowledge-agent-data', async () => {
-	const response = await $fetch<{ items: any[] }>('/api/knowledge/list');
-	const items = response?.items || [];
+} = await useAsyncData('knowledge-directus', async () => {
+	const items = await useDirectus(
+		readItems('knowledge_documents', {
+			filter: {
+				status: { _eq: 'published' },
+				is_current_version: { _eq: true },
+			},
+			fields: ['id', 'title', 'slug', 'file_path', 'source_id', 'tags', 'category', 'is_folder'],
+			sort: ['title'],
+			limit: -1,
+		}),
+	);
 
-	// Extract folder labels from README.md items before filtering
+	const allItems = items || [];
+
+	// Extract folder labels from README items before filtering
 	const folderLabels: Record<string, string> = { ...FOLDER_LABELS };
-	for (const item of items) {
-		if (item.document_id?.endsWith('/README.md') && item.title && item.title !== 'check') {
-			// Map parent path to title: "docs/foundation/README.md" → foundation: "Foundation"
-			const parentPath = item.document_id.replace(/\/README\.md$/, '');
+	for (const item of allItems) {
+		if (item.file_path?.endsWith('/README.md') && item.title && item.title !== 'check') {
+			const parentPath = item.file_path.replace(/\/README\.md$/, '');
 			const folderName = parentPath.split('/').pop();
 			if (folderName) {
 				folderLabels[folderName] = item.title;
@@ -63,26 +74,25 @@ const {
 	}
 
 	// Filter to actual documents only
-	const docs = items.filter((item: any) => {
-		if (!item.document_id) return false;
+	const docs = allItems.filter((item: any) => {
+		if (!item.file_path) return false;
 		if (item.title === 'check') return false;
-		if (item.document_id.endsWith('/README.md')) return false;
-		// Keep files with .md extension and old-format docs with meaningful tags
-		const hasMd = item.document_id.endsWith('.md');
+		if (item.file_path.endsWith('/README.md')) return false;
+		if (item.is_folder) return false;
+		const hasMd = item.file_path.endsWith('.md');
 		const hasTags = item.tags && item.tags.length > 0;
 		return hasMd || hasTags;
 	});
 
 	// Map to AgentView-like structure for buildDocsTree compatibility
 	const mapped = docs.map((item: any) => ({
-		id: item.document_id,
-		source_id: item.document_id,
-		title: item.title || item.document_id.split('/').pop()?.replace(/\.md$/, '') || item.document_id,
-		path: item.document_id,
+		id: item.file_path || item.slug,
+		source_id: item.file_path || item.slug,
+		title: item.title || item.file_path?.split('/').pop()?.replace(/\.md$/, '') || item.slug,
+		path: item.file_path || item.slug,
 		tags: item.tags,
 	}));
 
-	// Store folder labels for tree labeling
 	return { docs: mapped, folderLabels };
 });
 

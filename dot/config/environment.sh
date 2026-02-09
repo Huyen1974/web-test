@@ -125,7 +125,7 @@ get_admin_credentials() {
         local password="${DIRECTUS_ADMIN_PASSWORD:-}"
 
         # Try credentials.local.json if env vars not set
-        if [[ -z "$password" && -f "$DOT_CONFIG_DIR/credentials.local.json" ]]; then
+        if [[ (-z "$password" || -z "$email") && -f "$DOT_CONFIG_DIR/credentials.local.json" ]]; then
             email=$(jq -r '.profiles[0].username // empty' "$DOT_CONFIG_DIR/credentials.local.json" 2>/dev/null)
             password=$(jq -r '.profiles[0].password // empty' "$DOT_CONFIG_DIR/credentials.local.json" 2>/dev/null)
         fi
@@ -148,6 +148,16 @@ get_directus_token() {
     if [[ -n "${DIRECTUS_ADMIN_TOKEN:-}" ]]; then
         echo "$DIRECTUS_ADMIN_TOKEN"
         return 0
+    fi
+
+    # Check credentials.local.json for staticToken
+    if [[ -f "$DOT_CONFIG_DIR/credentials.local.json" ]]; then
+        local static_token
+        static_token=$(jq -r '.staticToken // empty' "$DOT_CONFIG_DIR/credentials.local.json" 2>/dev/null)
+        if [[ -n "$static_token" ]]; then
+            echo "$static_token"
+            return 0
+        fi
     fi
 
     # Get credentials

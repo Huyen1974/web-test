@@ -1,0 +1,292 @@
+#!/bin/bash
+# dot-knowledge-sync-agentdata — Sync Agent Data KB → Directus knowledge_documents
+#
+# Usage:
+#   dot-knowledge-sync-agentdata [--dry-run] [--local] [--cloud]
+#
+# Sources documents from Agent Data /kb/list + /kb/get, upserts into Directus.
+# Records with source_id prefix "github:" are NEVER touched.
+# Records with source_id prefix "agentdata:" are created or updated.
+
+set -e
+
+# --- Configuration ---
+AGENT_DATA_LOCAL="http://localhost:8000"
+AGENT_DATA_CLOUD="https://agent-data-test-pfne2mqwja-as.a.run.app"
+DIRECTUS_LOCAL="http://localhost:8055"
+DIRECTUS_CLOUD="https://directus-test-pfne2mqwja-as.a.run.app"
+JQ="/usr/bin/jq"
+
+DRY_RUN=""
+TARGET=""
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+for arg in "$@"; do
+  case $arg in
+    --dry-run) DRY_RUN="yes" ;;
+    --local)   TARGET="local" ;;
+    --cloud)   TARGET="cloud" ;;
+  esac
+done
+
+# --- Auto-detect target ---
+if [ -z "$TARGET" ]; then
+  if curl -s --max-time 2 http://localhost:8000/health > /dev/null 2>&1; then
+    TARGET="local"
+  else
+    TARGET="cloud"
+  fi
+fi
+
+if [ "$TARGET" = "local" ]; then
+  AGENT_DATA_URL="$AGENT_DATA_LOCAL"
+  DIRECTUS_URL="$DIRECTUS_LOCAL"
+else
+  AGENT_DATA_URL="$AGENT_DATA_CLOUD"
+  DIRECTUS_URL="$DIRECTUS_CLOUD"
+fi
+
+echo "================================================================"
+echo "KNOWLEDGE SYNC: Agent Data → Directus knowledge_documents"
+echo "================================================================"
+echo "Agent Data: $AGENT_DATA_URL"
+echo "Directus:   $DIRECTUS_URL"
+[ -n "$DRY_RUN" ] && echo "Mode:       DRY RUN (no changes)"
+echo ""
+
+# --- Auth ---
+# Directus: use static token from GSM
+echo "Getting Directus token..."
+TOKEN=$(gcloud secrets versions access latest --secret="DIRECTUS_ADMIN_TOKEN_test" --project="github-chatgpt-ggcloud" 2>/dev/null)
+if [ -z "$TOKEN" ]; then
+  echo "FATAL: Cannot get Directus token from Secret Manager"
+  exit 1
+fi
+echo "OK: Directus token obtained"
+
+# Agent Data: use API key for local, IAM for cloud
+AD_HEADERS=""
+if [ "$TARGET" = "local" ]; then
+  AD_API_KEY="${API_KEY:-test-key-local}"
+  AD_HEADERS="-H X-API-Key:${AD_API_KEY}"
+fi
+
+# --- Step 1: Fetch Agent Data documents ---
+echo ""
+echo "Step 1: Fetching documents from Agent Data..."
+AD_LIST=$(curl -s $AD_HEADERS "$AGENT_DATA_URL/kb/list")
+TOTAL_AD=$(echo "$AD_LIST" | $JQ '.items | length')
+echo "Agent Data documents: $TOTAL_AD"
+
+# --- Step 2: Fetch existing Directus records ---
+echo ""
+echo "Step 2: Fetching existing Directus records..."
+EXISTING_FILE=$(mktemp)
+trap "rm -f $EXISTING_FILE" EXIT
+
+curl -s "$DIRECTUS_URL/items/knowledge_documents?fields=id,source_id,slug,title,file_path&limit=500" \
+  -H "Authorization: Bearer $TOKEN" > "$EXISTING_FILE"
+
+EXISTING_COUNT=$(cat "$EXISTING_FILE" | $JQ '.data | length')
+GITHUB_COUNT=$(cat "$EXISTING_FILE" | $JQ '[.data[] | select(.source_id | startswith("github:"))] | length')
+AD_EXISTING=$(cat "$EXISTING_FILE" | $JQ '[.data[] | select(.source_id | startswith("agentdata:"))] | length')
+
+echo "Directus total: $EXISTING_COUNT (github: $GITHUB_COUNT, agentdata: $AD_EXISTING)"
+
+# --- Step 3: Filter syncable documents ---
+echo ""
+echo "Step 3: Filtering syncable documents..."
+
+# Get syncable docs: exclude READMEs and root-level folders (no .md extension, no /)
+SYNCABLE=$(echo "$AD_LIST" | $JQ '[
+  .items[] |
+  select(
+    (.document_id | endswith("README.md") | not) and
+    ((.document_id | contains("/")) or (.document_id | endswith(".md")))
+  )
+]')
+SYNC_COUNT=$(echo "$SYNCABLE" | $JQ 'length')
+echo "Syncable documents: $SYNC_COUNT (excluded READMEs and root folders)"
+
+# --- Step 4: Process documents ---
+echo ""
+echo "================================================================"
+echo "Step 4: Processing $SYNC_COUNT documents..."
+echo "================================================================"
+
+CREATED=0
+UPDATED=0
+SKIPPED=0
+ERRORS=0
+
+for i in $(seq 0 $((SYNC_COUNT - 1))); do
+  DOC_ID=$(echo "$SYNCABLE" | $JQ -r ".[$i].document_id")
+  TITLE=$(echo "$SYNCABLE" | $JQ -r ".[$i].title // empty")
+  PARENT_ID=$(echo "$SYNCABLE" | $JQ -r ".[$i].parent_id // empty")
+  TAGS=$(echo "$SYNCABLE" | $JQ -c ".[$i].tags // []")
+  REVISION=$(echo "$SYNCABLE" | $JQ -r ".[$i].revision // 1")
+
+  SOURCE_ID="agentdata:${DOC_ID}"
+
+  # Generate slug: strip docs/ prefix and .md suffix, lowercase, replace / with -
+  SLUG=$(echo "$DOC_ID" | sed 's|^docs/||' | sed 's|\.md$||' | tr '[:upper:]' '[:lower:]' | tr '/' '-' | tr ' ' '-' | tr '_' '-')
+
+  # File path
+  FILE_PATH="$DOC_ID"
+
+  # Category from first path segment
+  CATEGORY=$(echo "$DOC_ID" | sed 's|^docs/||' | cut -d/ -f1)
+
+  # Is folder? Check if any item has this as parent_id
+  IS_FOLDER=$(echo "$AD_LIST" | $JQ --arg pid "$DOC_ID" '[.items[] | select(.parent_id == $pid)] | length > 0')
+
+  # Title fallback
+  if [ -z "$TITLE" ] || [ "$TITLE" = "null" ]; then
+    TITLE=$(basename "$DOC_ID" .md | tr '_' ' ' | tr '-' ' ')
+  fi
+
+  # Check if exists in Directus by source_id
+  EXISTING_ID=$(cat "$EXISTING_FILE" | $JQ -r --arg sid "$SOURCE_ID" '.data[] | select(.source_id == $sid) | .id' 2>/dev/null | head -1)
+
+  # Fetch content from Agent Data
+  ENCODED_ID=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$DOC_ID', safe=''))")
+  CONTENT=""
+  if [ -z "$DRY_RUN" ]; then
+    DOC_RESPONSE=$(curl -s $AD_HEADERS "$AGENT_DATA_URL/kb/get/$ENCODED_ID" 2>/dev/null)
+    CONTENT=$(echo "$DOC_RESPONSE" | $JQ -r '.content // empty' 2>/dev/null)
+    if [ -z "$CONTENT" ] || [ "$CONTENT" = "null" ]; then
+      echo "  [SKIP] $TITLE — no content from /kb/get"
+      SKIPPED=$((SKIPPED + 1))
+      continue
+    fi
+  fi
+
+  # Build summary from first paragraph (up to 200 chars)
+  SUMMARY=$(echo "$CONTENT" | sed -n '/^[^#]/p' | head -5 | tr '\n' ' ' | cut -c1-200)
+
+  if [ -n "$EXISTING_ID" ] && [ "$EXISTING_ID" != "null" ]; then
+    # --- UPDATE ---
+    echo "  [UPDATE] $TITLE ($SOURCE_ID)"
+
+    if [ -z "$DRY_RUN" ]; then
+      PAYLOAD=$($JQ -n \
+        --arg title "$TITLE" \
+        --arg slug "$SLUG" \
+        --arg content "$CONTENT" \
+        --arg summary "$SUMMARY" \
+        --arg source_id "$SOURCE_ID" \
+        --arg file_path "$FILE_PATH" \
+        --arg category "$CATEGORY" \
+        --argjson tags "$TAGS" \
+        --argjson revision "$REVISION" \
+        --argjson is_folder "$IS_FOLDER" \
+        '{
+          title: $title,
+          slug: $slug,
+          content: $content,
+          summary: $summary,
+          source_id: $source_id,
+          file_path: $file_path,
+          category: $category,
+          tags: $tags,
+          version_number: $revision,
+          is_folder: $is_folder,
+          status: "published",
+          visibility: "public",
+          language: "vi",
+          is_current_version: true,
+          workflow_status: "published"
+        }')
+
+      RESULT=$(curl -s -X PATCH "$DIRECTUS_URL/items/knowledge_documents/$EXISTING_ID" \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "$PAYLOAD")
+
+      if echo "$RESULT" | $JQ -e '.data' > /dev/null 2>&1; then
+        UPDATED=$((UPDATED + 1))
+      else
+        ERR_MSG=$(echo "$RESULT" | $JQ -r '.errors[0].message // "Unknown"' 2>/dev/null)
+        echo "    [ERROR] $ERR_MSG"
+        ERRORS=$((ERRORS + 1))
+      fi
+    fi
+  else
+    # --- CREATE ---
+    echo "  [CREATE] $TITLE ($SOURCE_ID)"
+
+    if [ -z "$DRY_RUN" ]; then
+      VERSION_GROUP_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+
+      PAYLOAD=$($JQ -n \
+        --arg title "$TITLE" \
+        --arg slug "$SLUG" \
+        --arg content "$CONTENT" \
+        --arg summary "$SUMMARY" \
+        --arg source_id "$SOURCE_ID" \
+        --arg file_path "$FILE_PATH" \
+        --arg category "$CATEGORY" \
+        --argjson tags "$TAGS" \
+        --argjson revision "$REVISION" \
+        --argjson is_folder "$IS_FOLDER" \
+        --arg version_group_id "$VERSION_GROUP_ID" \
+        '{
+          title: $title,
+          slug: $slug,
+          content: $content,
+          summary: $summary,
+          source_id: $source_id,
+          file_path: $file_path,
+          category: $category,
+          tags: $tags,
+          version_number: $revision,
+          is_folder: $is_folder,
+          status: "published",
+          visibility: "public",
+          language: "vi",
+          is_current_version: true,
+          workflow_status: "published",
+          version_group_id: $version_group_id
+        }')
+
+      RESULT=$(curl -s -X POST "$DIRECTUS_URL/items/knowledge_documents" \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "$PAYLOAD")
+
+      if echo "$RESULT" | $JQ -e '.data' > /dev/null 2>&1; then
+        CREATED=$((CREATED + 1))
+      else
+        ERR_MSG=$(echo "$RESULT" | $JQ -r '.errors[0].message // "Unknown"' 2>/dev/null)
+        echo "    [ERROR] $ERR_MSG"
+        ERRORS=$((ERRORS + 1))
+      fi
+    fi
+  fi
+done
+
+# --- Summary ---
+echo ""
+echo "================================================================"
+echo "SYNC COMPLETE"
+echo "================================================================"
+echo "Created: $CREATED"
+echo "Updated: $UPDATED"
+echo "Skipped: $SKIPPED"
+echo "Errors:  $ERRORS"
+echo "Total processed: $SYNC_COUNT"
+[ -n "$DRY_RUN" ] && echo "(DRY RUN — no actual changes made)"
+
+# Final count (use jq to count by source_id prefix since aggregate filters are unreliable)
+if [ -z "$DRY_RUN" ]; then
+  echo ""
+  ALL_RECORDS=$(curl -s "$DIRECTUS_URL/items/knowledge_documents?fields=id,source_id&limit=-1" \
+    -H "Authorization: Bearer $TOKEN")
+  FINAL_TOTAL=$(echo "$ALL_RECORDS" | $JQ '.data | length')
+  FINAL_AD=$(echo "$ALL_RECORDS" | $JQ '[.data[] | select(.source_id // "" | startswith("agentdata:"))] | length')
+  FINAL_GH=$(echo "$ALL_RECORDS" | $JQ '[.data[] | select(.source_id // "" | startswith("github:"))] | length')
+  echo "Directus knowledge_documents:"
+  echo "  Total:      $FINAL_TOTAL"
+  echo "  agentdata:  $FINAL_AD"
+  echo "  github:     $FINAL_GH (preserved)"
+fi
