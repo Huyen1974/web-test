@@ -1,0 +1,127 @@
+{
+  "version": "0.2",
+  "description": "Directus Flows for knowledge_documents ↔ Agent Data sync pipeline (WEB-60)",
+  "directus": {
+    "base_url": "https://directus-test-pfne2mqwja-as.a.run.app",
+    "requirements": {
+      "FLOWS_ENV_ALLOW_LIST": "AGENT_DATA_URL,AGENT_DATA_API_KEY",
+      "AGENT_DATA_URL": "Agent Data service URL (local: http://host.docker.internal:8000, cloud: https://agent-data-test-pfne2mqwja-as.a.run.app)",
+      "AGENT_DATA_API_KEY": "Agent Data API key for authentication"
+    },
+    "notes": [
+      "Directus 11.x event flows MUST start with an exec operation — item-read as first op silently fails",
+      "FLOWS_ENV_ALLOW_LIST must include all env vars referenced by {{$env.VAR}} in flow templates",
+      "Docker networking: Directus container reaches local Agent Data via host.docker.internal:8000"
+    ]
+  },
+  "flows": [
+    {
+      "name": "[DOT] Knowledge Sync to Agent Data",
+      "icon": "sync",
+      "color": "#10B981",
+      "status": "active",
+      "trigger": "event",
+      "options": {
+        "type": "action",
+        "scope": ["items.create", "items.update"],
+        "collections": ["knowledge_documents"]
+      },
+      "operations": [
+        {
+          "name": "Flow Start",
+          "key": "flow_start",
+          "type": "exec",
+          "position_x": 10,
+          "position_y": 1,
+          "options": {
+            "code": "module.exports = async function(data) { return data.$trigger; }"
+          },
+          "resolve": "read_item",
+          "_note": "Directus 11.x requires exec as first operation for event flows"
+        },
+        {
+          "name": "Read Full Item",
+          "key": "read_item",
+          "type": "item-read",
+          "position_x": 25,
+          "position_y": 1,
+          "options": {
+            "collection": "knowledge_documents",
+            "key": "{{$trigger.keys[0]}}"
+          },
+          "resolve": "send_to_ad"
+        },
+        {
+          "name": "Send to Agent Data",
+          "key": "send_to_ad",
+          "type": "request",
+          "position_x": 40,
+          "position_y": 1,
+          "options": {
+            "method": "POST",
+            "url": "{{$env.AGENT_DATA_URL}}/documents?upsert=true",
+            "headers": [
+              { "header": "Content-Type", "value": "application/json" },
+              { "header": "X-API-Key", "value": "{{$env.AGENT_DATA_API_KEY}}" }
+            ],
+            "body": {
+              "document_id": "directus-{{read_item.id}}",
+              "parent_id": "root",
+              "content": {
+                "mime_type": "text/markdown",
+                "body": "{{read_item.content}}"
+              },
+              "metadata": {
+                "title": "{{read_item.title}}",
+                "status": "{{read_item.workflow_status}}",
+                "source": "directus",
+                "collection": "knowledge_documents"
+              },
+              "is_human_readable": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "[DOT] Knowledge Delete from Agent Data",
+      "icon": "delete",
+      "color": "#EF4444",
+      "status": "active",
+      "trigger": "event",
+      "options": {
+        "type": "action",
+        "scope": ["items.delete"],
+        "collections": ["knowledge_documents"]
+      },
+      "operations": [
+        {
+          "name": "Flow Start",
+          "key": "flow_start",
+          "type": "exec",
+          "position_x": 10,
+          "position_y": 1,
+          "options": {
+            "code": "module.exports = async function(data) { return data.$trigger; }"
+          },
+          "resolve": "delete_from_ad",
+          "_note": "Directus 11.x requires exec as first operation for event flows"
+        },
+        {
+          "name": "Delete from Agent Data",
+          "key": "delete_from_ad",
+          "type": "request",
+          "position_x": 25,
+          "position_y": 1,
+          "options": {
+            "method": "DELETE",
+            "url": "{{$env.AGENT_DATA_URL}}/documents/directus-{{$trigger.keys[0]}}",
+            "headers": [
+              { "header": "X-API-Key", "value": "{{$env.AGENT_DATA_API_KEY}}" }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
