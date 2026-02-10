@@ -1,0 +1,391 @@
+#!/usr/bin/env bash
+
+# dot-flow-setup-sync: Configure Directus Flows for knowledge_documents → Agent Data sync
+# Usage: ./dot/bin/dot-flow-setup-sync [--local|--cloud]
+#
+# Creates two Directus Flows via API (idempotent — safe to run multiple times):
+#   1. Knowledge Sync to Agent Data  (items.create + items.update → POST /documents?upsert=true)
+#   2. Knowledge Delete from Agent Data (items.delete → DELETE /documents/directus-{id})
+#
+# Prerequisites:
+#   Directus environment variables must be set:
+#     AGENT_DATA_URL    - Agent Data service URL (e.g., http://host.docker.internal:8000)
+#     AGENT_DATA_API_KEY - Agent Data API key
+#
+# Options:
+#   --local     Use local development environment
+#   --cloud     Use cloud/production environment
+#   --dry-run   Show what would be created without making changes
+#   --help, -h  Show this help
+
+set -euo pipefail
+
+# Determine script directory
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+elif [[ -n "${0:-}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+else
+  SCRIPT_DIR="$(pwd)/dot/bin"
+fi
+
+# Source central environment config
+source "$SCRIPT_DIR/../config/environment.sh"
+
+# Parse arguments
+ENV_FLAG=""
+DRY_RUN=""
+
+for arg in "$@"; do
+  case "$arg" in
+    --local)  ENV_FLAG="--local" ;;
+    --cloud)  ENV_FLAG="--cloud" ;;
+    --dry-run) DRY_RUN="yes" ;;
+    --help|-h)
+      head -20 "$0" | tail -18
+      exit 0
+      ;;
+  esac
+done
+
+# Initialize environment
+init_environment "$ENV_FLAG"
+print_environment_banner "$ENV_FLAG"
+
+TOKEN="${DIRECTUS_TOKEN:-}"
+if [[ -z "$TOKEN" ]]; then
+  echo -e "${RED}[ERROR]${NC} Failed to authenticate with Directus" >&2
+  exit 1
+fi
+
+echo "============================================================"
+echo "  Directus Flow Setup: Knowledge → Agent Data Sync"
+echo "============================================================"
+echo ""
+
+# ─────────────────────────────────────────────────────────────────
+# Helper Functions
+# ─────────────────────────────────────────────────────────────────
+
+# Delete ALL flows matching a name (handles duplicates).
+# Uses Python for reliable token handling (curl can mangle JWT tokens in bash).
+cleanup_existing_flows() {
+  local name="$1"
+  python3 -c "
+import urllib.request, json, sys
+url = '${DIRECTUS_URL}'
+token = '${TOKEN}'
+name = '''$name'''
+headers = {'Authorization': f'Bearer {token}'}
+
+# List flows by name
+encoded = urllib.parse.quote(name, safe='')
+req = urllib.request.Request(f'{url}/flows?filter[name][_eq]={encoded}&fields=id', headers=headers)
+try:
+    resp = urllib.request.urlopen(req)
+    flows = json.loads(resp.read())['data']
+except Exception as e:
+    print(f'  Warning: Could not list flows: {e}', file=sys.stderr)
+    sys.exit(0)
+
+for f in flows:
+    fid = f['id']
+    print(f'  Removing existing flow {fid}...')
+    req = urllib.request.Request(f'{url}/flows/{fid}', headers=headers, method='DELETE')
+    try:
+        urllib.request.urlopen(req)
+    except Exception as e:
+        print(f'  Warning: Could not delete flow {fid}: {e}', file=sys.stderr)
+" 2>&1
+}
+
+# Create a flow. Returns flow ID.
+create_flow() {
+  local payload="$1"
+  local response
+  response=$(curl -sf --max-time 15 -X POST \
+    "${DIRECTUS_URL}/flows" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "$payload" 2>/dev/null || echo "")
+
+  if [[ -z "$response" ]]; then
+    echo -e "${RED}[ERROR]${NC} Failed to create flow" >&2
+    return 1
+  fi
+
+  local flow_id
+  flow_id=$(echo "$response" | jq -r '.data.id // empty')
+  if [[ -z "$flow_id" || "$flow_id" == "null" ]]; then
+    echo -e "${RED}[ERROR]${NC} No flow ID returned" >&2
+    echo "$response" | jq . 2>/dev/null >&2 || echo "$response" >&2
+    return 1
+  fi
+
+  echo "$flow_id"
+}
+
+# Create an operation. Returns operation ID.
+create_operation() {
+  local payload="$1"
+  local response
+  response=$(curl -sf --max-time 15 -X POST \
+    "${DIRECTUS_URL}/operations" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "$payload" 2>/dev/null || echo "")
+
+  if [[ -z "$response" ]]; then
+    echo -e "${RED}[ERROR]${NC} Failed to create operation" >&2
+    return 1
+  fi
+
+  local op_id
+  op_id=$(echo "$response" | jq -r '.data.id // empty')
+  if [[ -z "$op_id" || "$op_id" == "null" ]]; then
+    echo -e "${RED}[ERROR]${NC} No operation ID returned" >&2
+    echo "$response" | jq . 2>/dev/null >&2 || echo "$response" >&2
+    return 1
+  fi
+
+  echo "$op_id"
+}
+
+# Update a flow or operation
+patch_resource() {
+  local resource="$1" id="$2" payload="$3"
+  curl -sf --max-time 15 -X PATCH \
+    "${DIRECTUS_URL}/${resource}/${id}" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "$payload" >/dev/null 2>&1
+}
+
+# ─────────────────────────────────────────────────────────────────
+# Flow 1: Knowledge Sync (Create/Update → Agent Data)
+# ─────────────────────────────────────────────────────────────────
+
+setup_sync_flow() {
+  local FLOW_NAME="[DOT] Knowledge Sync to Agent Data"
+  echo -e "${BOLD}Flow 1: ${FLOW_NAME}${NC}"
+
+  # Idempotent: remove ALL existing flows with this name
+  if [[ -z "$DRY_RUN" ]]; then
+    cleanup_existing_flows "$FLOW_NAME"
+  fi
+
+  if [[ -n "$DRY_RUN" ]]; then
+    echo -e "  ${YELLOW}[DRY RUN]${NC} Would create sync flow with 3 operations"
+    return
+  fi
+
+  # Create the flow
+  local flow_id
+  flow_id=$(create_flow "$(jq -n \
+    --arg name "$FLOW_NAME" \
+    '{
+      name: $name,
+      icon: "sync",
+      color: "#10B981",
+      status: "active",
+      trigger: "event",
+      accountability: "all",
+      options: {
+        type: "action",
+        scope: ["items.create", "items.update"],
+        collections: ["knowledge_documents"]
+      }
+    }')")
+
+  echo -e "  Flow created: ${GREEN}${flow_id}${NC}"
+
+  # Op0: Pass-through exec (Directus 11.x requires exec as first operation for event flows)
+  local start_op_id
+  start_op_id=$(create_operation "$(jq -n \
+    --arg flow "$flow_id" \
+    '{
+      flow: $flow,
+      name: "Flow Start",
+      key: "flow_start",
+      type: "exec",
+      position_x: 10,
+      position_y: 1,
+      options: {
+        code: "module.exports = async function(data) { return data.$trigger; }"
+      }
+    }')")
+
+  echo -e "  Op0 (Start): ${GREEN}${start_op_id}${NC}"
+
+  # Op1: Read the full item from Directus
+  local read_op_id
+  read_op_id=$(create_operation "$(jq -n \
+    --arg flow "$flow_id" \
+    '{
+      flow: $flow,
+      name: "Read Full Item",
+      key: "read_item",
+      type: "item-read",
+      position_x: 25,
+      position_y: 1,
+      options: {
+        collection: "knowledge_documents",
+        key: "{{$trigger.keys[0]}}"
+      }
+    }')")
+
+  echo -e "  Op1 (Read Item): ${GREEN}${read_op_id}${NC}"
+
+  # Op2: Send to Agent Data via HTTP POST /documents?upsert=true
+  # The body maps Directus fields → Agent Data DocumentCreate schema
+  local send_op_id
+  send_op_id=$(create_operation "$(jq -n \
+    --arg flow "$flow_id" \
+    '{
+      flow: $flow,
+      name: "Send to Agent Data",
+      key: "send_to_ad",
+      type: "request",
+      position_x: 40,
+      position_y: 1,
+      options: {
+        method: "POST",
+        url: "{{$env.AGENT_DATA_URL}}/documents?upsert=true",
+        headers: [
+          { header: "Content-Type", value: "application/json" },
+          { header: "X-API-Key", value: "{{$env.AGENT_DATA_API_KEY}}" }
+        ],
+        body: {
+          document_id: "directus-{{read_item.id}}",
+          parent_id: "root",
+          content: {
+            mime_type: "text/markdown",
+            body: "{{read_item.content}}"
+          },
+          metadata: {
+            title: "{{read_item.title}}",
+            status: "{{read_item.workflow_status}}",
+            source: "directus",
+            collection: "knowledge_documents"
+          },
+          is_human_readable: true
+        }
+      }
+    }')")
+
+  echo -e "  Op2 (Send to AD): ${GREEN}${send_op_id}${NC}"
+
+  # Chain: flow_start → read_item → send_to_ad
+  patch_resource "operations" "$start_op_id" "$(jq -n --arg r "$read_op_id" '{resolve: $r}')"
+  patch_resource "operations" "$read_op_id" "$(jq -n --arg r "$send_op_id" '{resolve: $r}')"
+  # Set first operation on flow
+  patch_resource "flows" "$flow_id" "$(jq -n --arg op "$start_op_id" '{operation: $op}')"
+  echo -e "  Chain: flow_start → read_item → send_to_ad ${GREEN}OK${NC}"
+}
+
+# ─────────────────────────────────────────────────────────────────
+# Flow 2: Knowledge Delete (Delete → Agent Data)
+# ─────────────────────────────────────────────────────────────────
+
+setup_delete_flow() {
+  local FLOW_NAME="[DOT] Knowledge Delete from Agent Data"
+  echo ""
+  echo -e "${BOLD}Flow 2: ${FLOW_NAME}${NC}"
+
+  # Idempotent: remove ALL existing flows with this name
+  if [[ -z "$DRY_RUN" ]]; then
+    cleanup_existing_flows "$FLOW_NAME"
+  fi
+
+  if [[ -n "$DRY_RUN" ]]; then
+    echo -e "  ${YELLOW}[DRY RUN]${NC} Would create delete flow with 2 operations"
+    return
+  fi
+
+  # Create the flow
+  local flow_id
+  flow_id=$(create_flow "$(jq -n \
+    --arg name "$FLOW_NAME" \
+    '{
+      name: $name,
+      icon: "delete",
+      color: "#EF4444",
+      status: "active",
+      trigger: "event",
+      accountability: "all",
+      options: {
+        type: "action",
+        scope: ["items.delete"],
+        collections: ["knowledge_documents"]
+      }
+    }')")
+
+  echo -e "  Flow created: ${GREEN}${flow_id}${NC}"
+
+  # Op0: Pass-through exec (Directus 11.x requires exec as first operation for event flows)
+  local start_op_id
+  start_op_id=$(create_operation "$(jq -n \
+    --arg flow "$flow_id" \
+    '{
+      flow: $flow,
+      name: "Flow Start",
+      key: "flow_start",
+      type: "exec",
+      position_x: 10,
+      position_y: 1,
+      options: {
+        code: "module.exports = async function(data) { return data.$trigger; }"
+      }
+    }')")
+
+  echo -e "  Op0 (Start): ${GREEN}${start_op_id}${NC}"
+
+  # Op1: Delete from Agent Data
+  local delete_op_id
+  delete_op_id=$(create_operation "$(jq -n \
+    --arg flow "$flow_id" \
+    '{
+      flow: $flow,
+      name: "Delete from Agent Data",
+      key: "delete_from_ad",
+      type: "request",
+      position_x: 25,
+      position_y: 1,
+      options: {
+        method: "DELETE",
+        url: "{{$env.AGENT_DATA_URL}}/documents/directus-{{$trigger.keys[0]}}",
+        headers: [
+          { header: "X-API-Key", value: "{{$env.AGENT_DATA_API_KEY}}" }
+        ]
+      }
+    }')")
+
+  echo -e "  Op1 (Delete from AD): ${GREEN}${delete_op_id}${NC}"
+
+  # Chain: flow_start → delete_from_ad
+  patch_resource "operations" "$start_op_id" "$(jq -n --arg r "$delete_op_id" '{resolve: $r}')"
+  # Set first operation on flow
+  patch_resource "flows" "$flow_id" "$(jq -n --arg op "$start_op_id" '{operation: $op}')"
+  echo -e "  Chain: flow_start → delete_from_ad ${GREEN}OK${NC}"
+}
+
+# ─────────────────────────────────────────────────────────────────
+# Main
+# ─────────────────────────────────────────────────────────────────
+
+setup_sync_flow
+setup_delete_flow
+
+echo ""
+echo "============================================================"
+echo -e "${GREEN}[SUCCESS]${NC} Directus Flows configured"
+echo "============================================================"
+echo ""
+echo "Reminder: Directus needs these environment variables set:"
+echo "  AGENT_DATA_URL      - Agent Data service URL"
+echo "  AGENT_DATA_API_KEY  - Agent Data API key"
+echo ""
+echo "For local Docker Directus:"
+echo "  AGENT_DATA_URL=http://host.docker.internal:8000"
+echo ""
+echo "Verify flows in Directus: ${DIRECTUS_URL}/admin/settings/flows"

@@ -1,0 +1,113 @@
+#!/bin/bash
+# dot-knowledge-search - Search Agent Data knowledge base
+# Usage: dot-knowledge-search "query" [--status=published|draft|all]
+#
+# Options:
+#   --status=published  Only published documents (default)
+#   --status=draft      Only draft documents
+#   --status=all        All documents regardless of status
+#   --collection=NAME   Filter by collection name
+
+set -e
+
+QUERY=""
+STATUS="published"
+COLLECTION=""
+AGENT_URL="${AGENT_DATA_URL:-http://localhost:8000}"
+
+# Parse arguments
+for arg in "$@"; do
+  case "$arg" in
+    --status=*)
+      STATUS="${arg#--status=}"
+      ;;
+    --collection=*)
+      COLLECTION="${arg#--collection=}"
+      ;;
+    --help|-h)
+      echo "Usage: dot-knowledge-search \"query\" [--status=published|draft|all]"
+      echo ""
+      echo "Options:"
+      echo "  --status=published  Only published documents (default)"
+      echo "  --status=draft      Only draft documents"
+      echo "  --status=all        All documents regardless of status"
+      echo "  --collection=NAME   Filter by collection name"
+      echo ""
+      echo "Examples:"
+      echo "  dot-knowledge-search \"What are the system principles?\""
+      echo "  dot-knowledge-search \"draft ideas\" --status=all"
+      echo "  dot-knowledge-search \"discussion\" --status=draft"
+      exit 0
+      ;;
+    -*)
+      echo "Unknown option: $arg" >&2
+      exit 1
+      ;;
+    *)
+      if [ -z "$QUERY" ]; then
+        QUERY="$arg"
+      fi
+      ;;
+  esac
+done
+
+if [ -z "$QUERY" ]; then
+    echo "Usage: dot-knowledge-search \"your query\" [--status=published|draft|all]"
+    echo ""
+    echo "Examples:"
+    echo "  dot-knowledge-search \"What are the system principles?\""
+    echo "  dot-knowledge-search \"Summarize the constitution\""
+    echo "  dot-knowledge-search \"draft proposals\" --status=all"
+    exit 1
+fi
+
+echo "Searching: $QUERY"
+echo "Endpoint: $AGENT_URL/chat"
+echo "Status filter: $STATUS"
+echo ""
+
+# Build request payload with jq for safe JSON construction
+if [ "$STATUS" = "all" ]; then
+  PAYLOAD=$(jq -n --arg q "$QUERY" '{message: $q}')
+else
+  PAYLOAD=$(jq -n --arg q "$QUERY" --arg s "$STATUS" \
+    '{message: $q, filters: {status: $s}}')
+fi
+
+RESPONSE=$(curl -s -X POST "$AGENT_URL/chat" \
+    -H "Content-Type: application/json" \
+    -d "$PAYLOAD" 2>/dev/null)
+
+if [ -z "$RESPONSE" ]; then
+    echo "Error: No response from Agent Data"
+    echo "Make sure Agent Data is running: dot-agent-status"
+    exit 1
+fi
+
+# Extract and display response
+echo "Response:"
+echo "--------"
+echo "$RESPONSE" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    print(data.get('response', data.get('content', 'No response')))
+    print()
+    print('Stats:')
+    usage = data.get('usage', {})
+    print(f\"  Latency: {usage.get('latency_ms', 'N/A')}ms\")
+    print(f\"  Qdrant hits: {usage.get('qdrant_hits', 'N/A')}\")
+
+    context = data.get('context', [])
+    if context:
+        print()
+        print('Sources:')
+        for c in context[:3]:
+            meta = c.get('metadata', {})
+            status = meta.get('status', '')
+            status_tag = f' [{status}]' if status else ''
+            print(f\"  - {c.get('document_id', 'unknown')}{status_tag}\")
+except Exception as e:
+    print(f'Parse error: {e}')
+    print(sys.stdin.read())
+" 2>/dev/null

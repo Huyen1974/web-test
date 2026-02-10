@@ -1,0 +1,21 @@
+#!/bin/bash
+# Pre-commit hook: runs architecture compliance check before each commit
+# Install: git config core.hooksPath .githooks
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+ARCH_CHECK="${REPO_ROOT}/dot/bin/dot-arch-check"
+
+if [ -x "$ARCH_CHECK" ]; then
+  echo "Running architecture compliance check..."
+  "$ARCH_CHECK"
+  EXIT_CODE=$?
+  if [ $EXIT_CODE -ne 0 ]; then
+    echo ""
+    echo "Commit blocked: Architecture violations detected."
+    echo "Fix violations above, then try again."
+    echo "To bypass (EMERGENCY ONLY): git commit --no-verify"
+    exit 1
+  fi
+else
+  echo "Warning: dot-arch-check not found, skipping architecture check"
+fi
