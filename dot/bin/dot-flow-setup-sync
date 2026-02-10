@@ -72,17 +72,23 @@ echo ""
 cleanup_existing_flows() {
   local name="$1"
   python3 -c "
-import urllib.request, json, sys
+import urllib.request, json, sys, ssl
 url = '${DIRECTUS_URL}'
 token = '${TOKEN}'
 name = '''$name'''
 headers = {'Authorization': f'Bearer {token}'}
 
+# SSL context for cloud HTTPS (macOS urllib has cert issues)
+ctx = ssl.create_default_context()
+if url.startswith('https'):
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
 # List flows by name
 encoded = urllib.parse.quote(name, safe='')
 req = urllib.request.Request(f'{url}/flows?filter[name][_eq]={encoded}&fields=id', headers=headers)
 try:
-    resp = urllib.request.urlopen(req)
+    resp = urllib.request.urlopen(req, context=ctx)
     flows = json.loads(resp.read())['data']
 except Exception as e:
     print(f'  Warning: Could not list flows: {e}', file=sys.stderr)
@@ -93,7 +99,7 @@ for f in flows:
     print(f'  Removing existing flow {fid}...')
     req = urllib.request.Request(f'{url}/flows/{fid}', headers=headers, method='DELETE')
     try:
-        urllib.request.urlopen(req)
+        urllib.request.urlopen(req, context=ctx)
     except Exception as e:
         print(f'  Warning: Could not delete flow {fid}: {e}', file=sys.stderr)
 " 2>&1
