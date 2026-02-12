@@ -22,10 +22,14 @@ export default defineNuxtConfig({
 		'/approval-desk/**': { prerender: false },
 		'/knowledge-tree': { prerender: false },
 		'/knowledge-tree/**': { prerender: false },
-		'/knowledge/**': { prerender: false },
 		'/profile': { prerender: false },
 		'/portal': { prerender: false },
 		'/portal/**': { prerender: false },
+		// Cache: permanent until content changes (WEB-70B)
+		'/knowledge': { swr: 31536000, prerender: false },
+		'/knowledge/**': { swr: 31536000, prerender: false },
+		'/api/knowledge/**': { swr: 31536000 },
+		'/_nuxt/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
 	},
 
 	extends: [
