@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+set -euo pipefail
+BASE_DIR="/Users/nmhuyen/Documents/Manual Deploy/web-test"
+AGENT_DATA_DIR="/Users/nmhuyen/Documents/Manual Deploy/agent-data-test"
+LOG_DIR="${BASE_DIR}/logs"
+mkdir -p "${LOG_DIR}"
+GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
+ok()   { echo -e "  ${GREEN}✅ $1${NC}"; }
+fail() { echo -e "  ${RED}❌ $1${NC}"; }
+info() { echo -e "  ${CYAN}ℹ️  $1${NC}"; }
+warn() { echo -e "  ${YELLOW}⚠️  $1${NC}"; }
+wait_for_url() {
+  local url="$1" timeout="${2:-60}" interval="${3:-2}" elapsed=0
+  while [ $elapsed -lt $timeout ]; do
+    curl -sf -o /dev/null --max-time 5 "$url" 2>/dev/null && return 0
+    sleep "$interval"; elapsed=$((elapsed + interval))
+  done
+  return 1
+}
+check_port() { lsof -i ":$1" -sTCP:LISTEN >/dev/null 2>&1; }
+
+echo ""
+echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+echo -e "${CYAN}  🚀 INCOMEX LOCAL SYSTEM — FULL STARTUP${NC}"
+echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+echo ""
+PASS=0
+
+# 1. Docker
+echo -e "${YELLOW}[1/5] Docker Desktop...${NC}"
+if docker info >/dev/null 2>&1; then
+  ok "Docker đang chạy"; PASS=$((PASS+1))
+else
+  info "Mở Docker Desktop..."; open -a "Docker"
+  echo -n "  Chờ Docker: "
+  for i in $(seq 1 60); do
+    docker info >/dev/null 2>&1 && echo "" && ok "Docker sẵn sàng (${i}s)" && PASS=$((PASS+1)) && break
+    echo -n "."; sleep 2
+  done
+  docker info >/dev/null 2>&1 || { fail "Docker không lên — mở thủ công rồi chạy lại"; exit 1; }
+fi
+
+# 2. Directus
+echo -e "${YELLOW}[2/5] Directus + MySQL...${NC}"
+cd "${BASE_DIR}"
+if check_port 8055; then
+  ok "Directus đã chạy"; PASS=$((PASS+1))
+else
+  docker compose -f docker-compose.local.yml up -d 2>&1 | tail -2
+  echo -n "  Chờ Directus: "
+  if wait_for_url "http://localhost:8055/server/health" 90 3; then
+    echo ""; ok "Directus sẵn sàng"; PASS=$((PASS+1))
+  else
+    echo ""; check_port 8055 && { warn "Directus đang load — tiếp tục"; PASS=$((PASS+1)); } || fail "Directus lỗi"
+  fi
+fi
+
+# 3. Agent Data (40s warm-up)
+echo -e "${YELLOW}[3/5] Agent Data (warm-up 40s)...${NC}"
+if check_port 8000; then
+  ok "Agent Data đã chạy"; PASS=$((PASS+1))
+else
+  cd "${AGENT_DATA_DIR}"
+  [ -f .env.local ] || { fail ".env.local không có — xem LOCAL-FIRST_OPERATIONS.md mục 3C"; exit 1; }
+  if [ -x "${BASE_DIR}/dot/bin/dot-agent-up" ]; then
+    "${BASE_DIR}/dot/bin/dot-agent-up" >> "${LOG_DIR}/agent-data.log" 2>&1 &
+  elif [ -x scripts/start-agent-data.sh ]; then
+    scripts/start-agent-data.sh >> "${LOG_DIR}/agent-data.log" 2>&1 &
+  else
+    set -a; source .env.local; set +a
+    python3 -m uvicorn agent_data.server:app --host 0.0.0.0 --port 8000 >> "${LOG_DIR}/agent-data.log" 2>&1 &
+  fi
+  echo -n "  Warm-up: "
+  for i in $(seq 1 40); do echo -n "▓"; sleep 1; done; echo ""
+  wait_for_url "http://localhost:8000/info" 30 2 && { ok "Agent Data sẵn sàng"; PASS=$((PASS+1)); } || { fail "Agent Data lỗi — xem ${LOG_DIR}/agent-data.log"; }
+fi
+
+# 4. Nuxt
+echo -e "${YELLOW}[4/5] Nuxt Frontend...${NC}"
+cd "${BASE_DIR}"
+if check_port 3000; then
+  HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:3000 2>/dev/null || echo "000")
+  if [ "$HTTP_CODE" = "200" ]; then
+    ok "Nuxt OK (HTTP 200)"; PASS=$((PASS+1))
+  else
+    warn "Nuxt lỗi HTTP ${HTTP_CODE} — restart..."
+    kill $(lsof -ti :3000) 2>/dev/null || true; sleep 2
+    cd "${BASE_DIR}/web"; npm run dev >> "${LOG_DIR}/nuxt.log" 2>&1 &
+    wait_for_url "http://localhost:3000" 60 3 && { ok "Nuxt restarted"; PASS=$((PASS+1)); } || warn "Nuxt chưa sẵn sàng — xem ${LOG_DIR}/nuxt.log"
+  fi
+else
+  cd "${BASE_DIR}/web"; npm run dev >> "${LOG_DIR}/nuxt.log" 2>&1 &
+  echo -n "  Chờ Nuxt: "
+  wait_for_url "http://localhost:3000" 60 3 && { echo ""; ok "Nuxt sẵn sàng"; PASS=$((PASS+1)); } || { echo ""; warn "Nuxt đang build — xem ${LOG_DIR}/nuxt.log"; }
+fi
+
+# 5. Health Check
+echo -e "${YELLOW}[5/5] Health Check...${NC}"
+for svc in "Docker:docker info" "Directus:curl -sf -o /dev/null --max-time 5 http://localhost:8055/server/health" "Agent Data:curl -sf -o /dev/null --max-time 5 http://localhost:8000/info" "Nuxt:curl -sf -o /dev/null --max-time 5 http://localhost:3000"; do
+  name="${svc%%:*}"; cmd="${svc#*:}"
+  eval "$cmd" 2>/dev/null && ok "$name" || fail "$name"
+done
+# Agent Data audit
+API_KEY_VAL="${API_KEY:-$(grep -E '^API_KEY=' "${AGENT_DATA_DIR}/.env.local" 2>/dev/null | cut -d= -f2 || echo '')}"
+if [ -n "$API_KEY_VAL" ]; then
+  AD=$(curl -sf --max-time 15 -X POST http://localhost:8000/kb/audit-sync \
+    -H "Content-Type: application/json" -H "X-API-Key: ${API_KEY_VAL}" \
+    -d '{"auto_heal": false}' 2>/dev/null || echo '{}')
+  DOCS=$(echo "$AD" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f\"{d.get('total_documents','-')} docs, {d.get('total_vectors','-')} vecs, {d.get('orphan_count','-')} orphans\")" 2>/dev/null || echo "không đọc được")
+  info "Agent Data: ${DOCS}"
+fi
+check_port 8001 && ok "MCP Server (8001)" || info "MCP Server (8001) — không bắt buộc"
+
+echo ""
+echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+[ $PASS -ge 4 ] && echo -e "${GREEN}  ✅ HỆ THỐNG SẴN SÀNG — ${PASS}/5${NC}" || echo -e "${YELLOW}  ⚠️  CHƯA ĐẦY ĐỦ — ${PASS}/5${NC}"
+echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+echo ""
+echo "  Directus:  http://localhost:8055/admin"
+echo "  Nuxt:      http://localhost:3000"
+echo "  Agent Data: http://localhost:8000/info"
+echo "  Knowledge: http://localhost:3000/knowledge"
+echo "  Logs:      ${LOG_DIR}/"
+echo ""
