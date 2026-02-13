@@ -33,7 +33,7 @@ jobs:
 
       - name: Verify Directus API accessible
         run: |
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://directus-test-pfne2mqwja-as.a.run.app/server/health")
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://directus.incomexsaigoncorp.vn/server/health")
           echo "Directus Health HTTP Code: $HTTP_CODE"
           if [ "$HTTP_CODE" != "200" ]; then
             echo "Error: Directus not healthy"
@@ -42,7 +42,7 @@ jobs:
 
       - name: Verify AI discussions endpoint
         run: |
-          RESPONSE=$(curl -s "https://directus-test-pfne2mqwja-as.a.run.app/items/ai_discussions?limit=1")
+          RESPONSE=$(curl -s "https://directus.incomexsaigoncorp.vn/items/ai_discussions?limit=1")
           echo "AI Discussions Response: $RESPONSE"
           if echo "$RESPONSE" | grep -q "error"; then
             echo "Error accessing ai_discussions"
