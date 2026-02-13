@@ -67,6 +67,7 @@ jobs:
           docker push "${{ env.NUXT_SSR_IMAGE }}"
 
       - name: Deploy Nuxt SSR to Cloud Run
+        continue-on-error: true
         run: |
           gcloud run deploy nuxt-ssr-pfne2mqwja \
             --image="${{ env.NUXT_SSR_IMAGE }}" \
