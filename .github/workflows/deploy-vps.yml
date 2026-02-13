@@ -1,10 +1,12 @@
 name: Deploy to VPS
 
 on:
-  workflow_run:
-    workflows: ["Firebase Deploy"]
-    types: [completed]
+  push:
     branches: [main]
+    paths:
+      - 'web/**'
+      - 'infra/**'
+      - '.github/workflows/deploy-vps.yml'
   workflow_dispatch:
     inputs:
       services:
@@ -30,11 +32,8 @@ jobs:
   deploy:
     name: Deploy to VPS
     runs-on: ubuntu-latest
-    # Only run on successful upstream workflow or manual dispatch
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'main')
+    # Run on push to main or manual dispatch
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout code
@@ -57,7 +56,7 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "targets=${{ github.event.inputs.services }}" >> "$GITHUB_OUTPUT"
           else
-            # Auto-deploy from Firebase Deploy = nuxt only
+            # Auto-deploy on push to main = nuxt only
             echo "targets=nuxt" >> "$GITHUB_OUTPUT"
           fi
 
@@ -69,7 +68,6 @@ jobs:
           username: root
           key: ${{ secrets.VPS_SSH_KEY }}
           envs: NUXT_IMAGE,AGENT_DATA_IMAGE
-          script_stop: true
           script: |
             set -euo pipefail
             cd /opt/incomex/docker
