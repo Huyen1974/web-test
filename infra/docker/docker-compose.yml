@@ -1,0 +1,178 @@
+# =============================================================================
+# INCOMEX VPS DOCKER STACK — Production
+# =============================================================================
+# VPS: Contabo 38.242.240.89
+# Services: MySQL, Qdrant, Directus, Agent Data, Nuxt, Nginx
+#
+# Images: agent-data and nuxt pulled from Artifact Registry (CI/CD pipeline)
+# Registry: asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # MySQL 8.0 — Database for Directus
+  # ---------------------------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    container_name: incomex-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ./mysql/data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - incomex
+
+  # ---------------------------------------------------------------------------
+  # Qdrant — Vector Database
+  # ---------------------------------------------------------------------------
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: incomex-qdrant
+    restart: unless-stopped
+    volumes:
+      - ./qdrant/data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__API_KEY: ${QDRANT_LOCAL_API_KEY}
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 3 bash -c 'echo > /dev/tcp/localhost/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - incomex
+
+  # ---------------------------------------------------------------------------
+  # Directus 11 — Headless CMS
+  # ---------------------------------------------------------------------------
+  directus:
+    image: directus/directus:11.5
+    container_name: incomex-directus
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_CLIENT: mysql
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      KEY: ${DIRECTUS_KEY}
+      SECRET: ${DIRECTUS_SECRET}
+      ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD}
+      PUBLIC_URL: ${DIRECTUS_PUBLIC_URL}
+      WEBSOCKETS_ENABLED: "true"
+      CACHE_ENABLED: "false"
+      RATE_LIMITER_ENABLED: "false"
+      FLOWS_ENV_ALLOW_LIST: "WEB_URL,AGENT_DATA_URL,AGENT_DATA_API_KEY"
+      AGENT_DATA_URL: http://agent-data:8000
+      AGENT_DATA_API_KEY: ${AGENT_DATA_API_KEY}
+      WEB_URL: ${WEB_URL}
+    volumes:
+      - ./directus/uploads:/directus/uploads
+      - ./directus/extensions:/directus/extensions
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8055/server/info || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+    networks:
+      - incomex
+
+  # ---------------------------------------------------------------------------
+  # Agent Data — Knowledge API (FastAPI + Langroid)
+  # ---------------------------------------------------------------------------
+  agent-data:
+    image: ${AGENT_DATA_IMAGE:-asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/agent-data/agent-data-test:latest}
+    container_name: incomex-agent-data
+    restart: unless-stopped
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    environment:
+      PORT: "8000"
+      API_KEY: ${AGENT_DATA_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ${QDRANT_LOCAL_API_KEY}
+      QDRANT_COLLECTION: production_documents
+      APP_ENV: production
+      GOOGLE_APPLICATION_CREDENTIALS: /app/credentials/google-credentials.json
+    volumes:
+      - ./credentials/google-credentials.json:/app/credentials/google-credentials.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/info\")' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 45s
+    networks:
+      - incomex
+
+  # ---------------------------------------------------------------------------
+  # Nuxt SSR — Frontend
+  # ---------------------------------------------------------------------------
+  nuxt:
+    image: ${NUXT_SSR_IMAGE:-asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/web-test/nuxt-ssr:latest}
+    container_name: incomex-nuxt
+    restart: unless-stopped
+    depends_on:
+      directus:
+        condition: service_healthy
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3000"
+      NUXT_DIRECTUS_URL: http://directus:8055
+      NUXT_DIRECTUS_INTERNAL_URL: http://directus:8055
+      NUXT_PUBLIC_DIRECTUS_URL: ${DIRECTUS_PUBLIC_URL}
+      NUXT_PUBLIC_SITE_URL: ${WEB_URL}
+      NUXT_PUBLIC_AGENT_DATA_BASE_URL: http://agent-data:8000
+      NUXT_AGENT_DATA_API_KEY: ${AGENT_DATA_API_KEY}
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 3000 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - incomex
+
+  # ---------------------------------------------------------------------------
+  # Nginx — Reverse Proxy
+  # ---------------------------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: incomex-nginx
+    restart: unless-stopped
+    depends_on:
+      - nuxt
+      - directus
+      - agent-data
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - ./nginx/static:/usr/share/nginx/static:ro
+    networks:
+      - incomex
+
+networks:
+  incomex:
+    driver: bridge

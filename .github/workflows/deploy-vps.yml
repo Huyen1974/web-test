@@ -1,0 +1,150 @@
+name: Deploy to VPS
+
+on:
+  workflow_run:
+    workflows: ["Firebase Deploy"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      services:
+        description: "Services to update (comma-separated: nuxt,agent-data,all)"
+        required: false
+        default: "nuxt"
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  REGION: asia-southeast1
+  PROJECT_ID: github-chatgpt-ggcloud
+  NUXT_IMAGE: asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/web-test/nuxt-ssr:latest
+  AGENT_DATA_IMAGE: asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/agent-data/agent-data-test:latest
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    # Only run on successful upstream workflow or manual dispatch
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # --- GCP Auth: get short-lived access token for Artifact Registry ---
+      - name: Authenticate to Google Cloud
+        id: gcp-auth
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: projects/812872501910/locations/global/workloadIdentityPools/agent-data-pool/providers/github-provider
+          service_account: chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com
+          token_format: access_token
+
+      # --- Determine which services to update ---
+      - name: Determine services
+        id: services
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "targets=${{ github.event.inputs.services }}" >> "$GITHUB_OUTPUT"
+          else
+            # Auto-deploy from Firebase Deploy = nuxt only
+            echo "targets=nuxt" >> "$GITHUB_OUTPUT"
+          fi
+
+      # --- Deploy via SSH ---
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: NUXT_IMAGE,AGENT_DATA_IMAGE
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd /opt/incomex/docker
+
+            # Login to Artifact Registry using short-lived access token
+            echo "${{ steps.gcp-auth.outputs.access_token }}" | \
+              docker login -u oauth2accesstoken --password-stdin ${{ env.REGION }}-docker.pkg.dev
+
+            TARGETS="${{ steps.services.outputs.targets }}"
+            echo "=== Deploying: $TARGETS ==="
+
+            # Pull new images
+            if [[ "$TARGETS" == *"nuxt"* ]] || [[ "$TARGETS" == "all" ]]; then
+              echo "Pulling Nuxt SSR image..."
+              docker pull "$NUXT_IMAGE"
+            fi
+
+            if [[ "$TARGETS" == *"agent-data"* ]] || [[ "$TARGETS" == "all" ]]; then
+              echo "Pulling Agent Data image..."
+              docker pull "$AGENT_DATA_IMAGE"
+            fi
+
+            # Recreate only the updated services (zero-downtime for others)
+            if [[ "$TARGETS" == "all" ]]; then
+              docker compose up -d --no-build nuxt agent-data
+            elif [[ "$TARGETS" == *"nuxt"* ]] && [[ "$TARGETS" == *"agent-data"* ]]; then
+              docker compose up -d --no-build nuxt agent-data
+            elif [[ "$TARGETS" == *"nuxt"* ]]; then
+              docker compose up -d --no-build nuxt
+            elif [[ "$TARGETS" == *"agent-data"* ]]; then
+              docker compose up -d --no-build agent-data
+            fi
+
+            # Wait for services to be healthy
+            echo "Waiting for services to stabilize..."
+            sleep 15
+
+            # Health checks
+            echo "=== Health Checks ==="
+            FAILED=0
+
+            if [[ "$TARGETS" == *"nuxt"* ]] || [[ "$TARGETS" == "all" ]]; then
+              if docker exec incomex-nuxt nc -z 127.0.0.1 3000 2>/dev/null; then
+                echo "Nuxt: HEALTHY"
+              else
+                echo "Nuxt: UNHEALTHY"
+                FAILED=1
+              fi
+            fi
+
+            if [[ "$TARGETS" == *"agent-data"* ]] || [[ "$TARGETS" == "all" ]]; then
+              if docker exec incomex-agent-data python -c 'import urllib.request; urllib.request.urlopen("http://localhost:8000/info")' 2>/dev/null; then
+                echo "Agent Data: HEALTHY"
+              else
+                echo "Agent Data: UNHEALTHY (may need 30-45s warm-up)"
+                FAILED=1
+              fi
+            fi
+
+            # Nginx health (always check)
+            if curl -sf -o /dev/null https://vps.incomexsaigoncorp.vn/ 2>/dev/null; then
+              echo "Nginx+SSL: HEALTHY"
+            else
+              echo "Nginx+SSL: UNHEALTHY"
+              FAILED=1
+            fi
+
+            docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}" | grep incomex
+
+            # Logout from registry
+            docker logout ${{ env.REGION }}-docker.pkg.dev 2>/dev/null || true
+
+            if [[ $FAILED -ne 0 ]]; then
+              echo "WARNING: Some health checks failed. Check container logs."
+              exit 1
+            fi
+
+            echo "=== Deploy complete ==="
