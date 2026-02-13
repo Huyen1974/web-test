@@ -1,0 +1,411 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Agent Data API - Incomex Knowledge Hub",
+    "version": "1.0.0",
+    "description": "Knowledge management API for Incomex Saigon Corp. Provides CRUD operations on documents and semantic search across the knowledge base."
+  },
+  "servers": [
+    {
+      "url": "https://vps.incomexsaigoncorp.vn/api"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "healthCheck",
+        "summary": "System health check",
+        "description": "Returns system health status including service connectivity and data integrity metrics.",
+        "responses": {
+          "200": {
+            "description": "Health status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "version": { "type": "string" },
+                    "langroid_available": { "type": "boolean" },
+                    "service_count": { "type": "integer" },
+                    "data_integrity": {
+                      "type": "object",
+                      "properties": {
+                        "document_count": { "type": "integer" },
+                        "vector_point_count": { "type": "integer" },
+                        "sync_status": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kb/list": {
+      "get": {
+        "operationId": "listDocuments",
+        "summary": "List all documents in knowledge base",
+        "description": "Returns a list of all documents with their IDs, titles, tags, and revision numbers. Optionally filter by path prefix.",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Filter documents by path prefix (e.g. 'knowledge/dev')"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": { "type": "integer" },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "document_id": { "type": "string" },
+                          "parent_id": { "type": "string" },
+                          "title": { "type": "string" },
+                          "tags": { "type": "array", "items": { "type": "string" } },
+                          "revision": { "type": "integer" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kb/get/{doc_id}": {
+      "get": {
+        "operationId": "getDocument",
+        "summary": "Get a document by ID",
+        "description": "Retrieves the full content and metadata of a single document. The doc_id typically starts with 'knowledge/' prefix.",
+        "parameters": [
+          {
+            "name": "doc_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1 },
+            "description": "Document ID (e.g. 'knowledge/dev/ssot/constitution-v1.11e.md')"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "document_id": { "type": "string" },
+                    "content": { "type": "string" },
+                    "metadata": {
+                      "type": "object",
+                      "properties": {
+                        "title": { "type": "string" },
+                        "tags": { "type": "array", "items": { "type": "string" } }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found"
+          }
+        }
+      }
+    },
+    "/documents": {
+      "post": {
+        "operationId": "createDocument",
+        "summary": "Create a new document",
+        "description": "Creates a new document in the knowledge base. Use upsert=true to create or update if the document already exists.",
+        "parameters": [
+          {
+            "name": "upsert",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "boolean", "default": false },
+            "description": "If true, update existing document instead of failing"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["document_id", "parent_id", "content", "metadata"],
+                "properties": {
+                  "document_id": {
+                    "type": "string",
+                    "description": "Unique document path (e.g. 'knowledge/dev/my-doc.md')"
+                  },
+                  "parent_id": {
+                    "type": "string",
+                    "description": "Parent folder ID or 'root'"
+                  },
+                  "content": {
+                    "type": "object",
+                    "required": ["mime_type", "body"],
+                    "properties": {
+                      "mime_type": {
+                        "type": "string",
+                        "enum": ["text/markdown", "text/plain", "application/json"]
+                      },
+                      "body": {
+                        "type": "string",
+                        "description": "Document body content"
+                      }
+                    }
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "required": ["title"],
+                    "properties": {
+                      "title": { "type": "string" },
+                      "tags": {
+                        "type": "array",
+                        "items": { "type": "string" }
+                      },
+                      "source": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Document created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "status": { "type": "string" },
+                    "revision": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{doc_id}": {
+      "put": {
+        "operationId": "updateDocument",
+        "summary": "Update an existing document",
+        "description": "Updates specific fields of an existing document. Specify which fields to update via update_mask.",
+        "parameters": [
+          {
+            "name": "doc_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1 },
+            "description": "Document ID to update"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["document_id", "patch", "update_mask"],
+                "properties": {
+                  "document_id": {
+                    "type": "string",
+                    "description": "Must match the doc_id in the URL path"
+                  },
+                  "patch": {
+                    "type": "object",
+                    "description": "Fields to update",
+                    "properties": {
+                      "content": {
+                        "type": "object",
+                        "properties": {
+                          "mime_type": {
+                            "type": "string",
+                            "enum": ["text/markdown", "text/plain", "application/json"]
+                          },
+                          "body": { "type": "string" }
+                        },
+                        "required": ["mime_type", "body"]
+                      },
+                      "metadata": {
+                        "type": "object",
+                        "properties": {
+                          "title": { "type": "string" },
+                          "tags": { "type": "array", "items": { "type": "string" } },
+                          "source": { "type": "string" }
+                        }
+                      }
+                    }
+                  },
+                  "update_mask": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "List of fields to update (e.g. ['content', 'metadata'])"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Document updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "status": { "type": "string" },
+                    "revision": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteDocument",
+        "summary": "Delete a document",
+        "description": "Soft-deletes a document from the knowledge base. The document can be re-created later.",
+        "parameters": [
+          {
+            "name": "doc_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1 },
+            "description": "Document ID to delete"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "status": { "type": "string" },
+                    "revision": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/chat": {
+      "post": {
+        "operationId": "searchKnowledge",
+        "summary": "Semantic search across knowledge base",
+        "description": "Performs semantic search using RAG (Retrieval-Augmented Generation). Returns relevant document snippets ranked by relevance score. Use 'query' field for the search text.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["query"],
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "Natural language search query"
+                  },
+                  "top_k": {
+                    "type": "integer",
+                    "default": 5,
+                    "minimum": 1,
+                    "maximum": 20,
+                    "description": "Number of results to return"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "response": {
+                      "type": "string",
+                      "description": "Generated response summary"
+                    },
+                    "content": {
+                      "type": "string",
+                      "description": "Same as response (backward compat)"
+                    },
+                    "session_id": { "type": "string" },
+                    "context": {
+                      "type": "array",
+                      "description": "Ranked source documents",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "document_id": { "type": "string" },
+                          "snippet": { "type": "string" },
+                          "score": { "type": "number" },
+                          "metadata": {
+                            "type": "object",
+                            "properties": {
+                              "title": { "type": "string" },
+                              "tags": { "type": "array", "items": { "type": "string" } }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {},
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      }
+    }
+  },
+  "security": [
+    { "ApiKeyAuth": [] }
+  ]
+}
