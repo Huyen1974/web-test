@@ -9,9 +9,9 @@
 
 set -euo pipefail
 
-# --- Defaults (auto-detect: defaults to local) ---
+# --- Defaults (auto-detect: try local, fallback to VPS) ---
 AUTO_HEAL=false
-TARGET="local"
+TARGET=""
 LOCAL_URL="http://localhost:8000"
 CLOUD_URL="https://vps.incomexsaigoncorp.vn/api"
 API_KEY="${AGENT_DATA_API_KEY:-test-key-local}"
@@ -34,24 +34,21 @@ for arg in "$@"; do
     esac
 done
 
+# --- Auto-detect if no flag provided ---
+if [ -z "$TARGET" ]; then
+    if curl -sf --max-time 2 "$LOCAL_URL/health" >/dev/null 2>&1; then
+        TARGET="local"
+    else
+        TARGET="cloud"
+    fi
+fi
+
 # --- Resolve target URL + auth ---
 if [ "$TARGET" = "cloud" ]; then
     BASE_URL="$CLOUD_URL"
-    # Cloud requires IAM token
-    echo "Fetching IAM token..."
-    IAM_TOKEN=$(gcloud auth print-identity-token 2>/dev/null) || {
-        echo "ERROR: gcloud auth failed. Run: gcloud auth login"
-        exit 1
-    }
-    AUTH_HEADER="Authorization: Bearer $IAM_TOKEN"
-    # Cloud API key from Secret Manager or env
-    CLOUD_KEY="${AGENT_DATA_CLOUD_API_KEY:-}"
-    if [ -z "$CLOUD_KEY" ]; then
-        CLOUD_KEY=$(gcloud secrets versions access latest --secret=agent-data-api-key --project=github-chatgpt-ggcloud 2>/dev/null) || {
-            echo "ERROR: Cannot fetch cloud API key from Secret Manager"
-            exit 1
-        }
-    fi
+    AUTH_HEADER=""
+    # VPS uses API key auth (no IAM token needed)
+    CLOUD_KEY="${AGENT_DATA_CLOUD_API_KEY:-${AGENT_DATA_API_KEY:-C38FE9FA-2BC6-4FBB-BA0C-981E8FB89450}}"
     API_KEY="$CLOUD_KEY"
 else
     BASE_URL="$LOCAL_URL"
