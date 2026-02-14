@@ -43,7 +43,7 @@ if [[ -f "${SCRIPT_DIR}/../config/environment.sh" ]]; then
   PASSWORD="${DIRECTUS_ADMIN_PASSWORD:-}"
 else
   # Fallback to old behavior
-  BASE_URL="${DIRECTUS_BASE_URL:-https://directus-test-pfne2mqwja-as.a.run.app}"
+  BASE_URL="${DIRECTUS_BASE_URL:-https://directus.incomexsaigoncorp.vn}"
   EMAIL="${DIRECTUS_ADMIN_EMAIL:-admin@example.com}"
   PASSWORD="${DIRECTUS_ADMIN_PASSWORD:-}"
 fi

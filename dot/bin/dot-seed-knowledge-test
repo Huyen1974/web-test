@@ -276,10 +276,10 @@ if [[ -n "$DOC3_ID" ]]; then
 fi
 echo ""
 echo "Verify at:"
-echo "  List:   ${DIRECTUS_URL/directus-test-pfne2mqwja-as.a.run.app/localhost:3000}/knowledge"
-echo "  Tree:   ${DIRECTUS_URL/directus-test-pfne2mqwja-as.a.run.app/localhost:3000}/knowledge-tree"
+echo "  List:   ${DIRECTUS_URL/directus.incomexsaigoncorp.vn/localhost:3000}/knowledge"
+echo "  Tree:   ${DIRECTUS_URL/directus.incomexsaigoncorp.vn/localhost:3000}/knowledge-tree"
 if [[ -n "$DOC1_ID" ]]; then
-  echo "  Detail: ${DIRECTUS_URL/directus-test-pfne2mqwja-as.a.run.app/localhost:3000}/knowledge/$DOC1_ID"
+  echo "  Detail: ${DIRECTUS_URL/directus.incomexsaigoncorp.vn/localhost:3000}/knowledge/$DOC1_ID"
 fi
 echo ""
 echo "To clean up test data later, run:"

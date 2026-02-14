@@ -94,7 +94,7 @@ ENV=$(detect_env)
 if [[ "$ENV" == "local" ]]; then
   DIRECTUS_URL="http://localhost:8055"
 else
-  DIRECTUS_URL="${DIRECTUS_URL:-https://directus-test-pfne2mqwja-as.a.run.app}"
+  DIRECTUS_URL="${DIRECTUS_URL:-https://directus.incomexsaigoncorp.vn}"
 fi
 
 # Get credentials

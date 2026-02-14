@@ -1,0 +1,161 @@
+#!/bin/bash
+# dot-vector-audit - Audit & auto-heal vector sync (Agent Data ↔ Qdrant)
+# Usage: dot-vector-audit [--heal] [--cloud] [--local]
+#
+# Flags:
+#   --heal   Enable auto-heal (fix orphans + reindex missing)
+#   --cloud  Target cloud Agent Data
+#   --local  Target local Agent Data (default)
+
+set -euo pipefail
+
+# --- Defaults (auto-detect: defaults to local) ---
+AUTO_HEAL=false
+TARGET="local"
+LOCAL_URL="http://localhost:8000"
+CLOUD_URL="https://vps.incomexsaigoncorp.vn/api"
+API_KEY="${AGENT_DATA_API_KEY:-test-key-local}"
+
+# --- Parse args ---
+for arg in "$@"; do
+    case "$arg" in
+        --heal) AUTO_HEAL=true ;;
+        --cloud) TARGET="cloud" ;;
+        --local) TARGET="local" ;;
+        --help|-h)
+            echo "Usage: dot-vector-audit [--heal] [--cloud] [--local]"
+            echo ""
+            echo "  --heal   Auto-fix orphans + reindex missing vectors"
+            echo "  --cloud  Target cloud Agent Data"
+            echo "  --local  Target local Agent Data (default)"
+            exit 0
+            ;;
+        *) echo "Unknown flag: $arg"; exit 1 ;;
+    esac
+done
+
+# --- Resolve target URL + auth ---
+if [ "$TARGET" = "cloud" ]; then
+    BASE_URL="$CLOUD_URL"
+    # Cloud requires IAM token
+    echo "Fetching IAM token..."
+    IAM_TOKEN=$(gcloud auth print-identity-token 2>/dev/null) || {
+        echo "ERROR: gcloud auth failed. Run: gcloud auth login"
+        exit 1
+    }
+    AUTH_HEADER="Authorization: Bearer $IAM_TOKEN"
+    # Cloud API key from Secret Manager or env
+    CLOUD_KEY="${AGENT_DATA_CLOUD_API_KEY:-}"
+    if [ -z "$CLOUD_KEY" ]; then
+        CLOUD_KEY=$(gcloud secrets versions access latest --secret=agent-data-api-key --project=github-chatgpt-ggcloud 2>/dev/null) || {
+            echo "ERROR: Cannot fetch cloud API key from Secret Manager"
+            exit 1
+        }
+    fi
+    API_KEY="$CLOUD_KEY"
+else
+    BASE_URL="$LOCAL_URL"
+    AUTH_HEADER=""
+fi
+
+echo "================================================================="
+echo "  VECTOR AUDIT — $TARGET ($BASE_URL)"
+echo "================================================================="
+
+# --- Pre-flight: check service is up ---
+echo -n "Pre-flight check... "
+HEALTH=$(curl -s -w "\n%{http_code}" \
+    -H "X-API-Key: $API_KEY" \
+    ${AUTH_HEADER:+-H "$AUTH_HEADER"} \
+    "$BASE_URL/health" 2>/dev/null) || {
+    echo "FAIL (connection refused)"
+    exit 1
+}
+HTTP_CODE=$(echo "$HEALTH" | tail -1)
+if [ "$HTTP_CODE" != "200" ]; then
+    echo "FAIL (HTTP $HTTP_CODE)"
+    exit 1
+fi
+echo "OK"
+
+# --- Run audit-sync ---
+MODE="dry-run"
+if [ "$AUTO_HEAL" = "true" ]; then
+    MODE="auto-heal"
+fi
+echo "Running audit-sync ($MODE)..."
+echo ""
+
+RESULT=$(curl -s -X POST \
+    -H "X-API-Key: $API_KEY" \
+    -H "Content-Type: application/json" \
+    ${AUTH_HEADER:+-H "$AUTH_HEADER"} \
+    -d "{\"auto_heal\": $AUTO_HEAL}" \
+    "$BASE_URL/kb/audit-sync" 2>/dev/null)
+
+# --- Parse and display results ---
+python3 -c "
+import json, sys
+try:
+    r = json.loads('''$RESULT''')
+except:
+    print('ERROR: Failed to parse response')
+    sys.exit(1)
+
+docs = r.get('total_documents', '?')
+vecs = r.get('total_vectors', '?')
+orphans = r.get('orphan_count', 0)
+ghosts = r.get('ghost_count', 0)
+status = r.get('status', '?')
+
+print(f'  Documents:  {docs}')
+print(f'  Vectors:    {vecs}')
+print(f'  Orphans:    {orphans}')
+print(f'  Ghosts:     {ghosts}')
+print(f'  Status:     {status}')
+print()
+
+if orphans > 0:
+    orphan_ids = r.get('orphan_vector_document_ids', [])
+    print(f'  Orphan vector doc IDs ({orphans}):')
+    for oid in orphan_ids[:10]:
+        print(f'    - {oid}')
+    if orphans > 10:
+        print(f'    ... and {orphans - 10} more')
+    print()
+
+if ghosts > 0:
+    ghost_ids = r.get('documents_without_vectors', [])
+    print(f'  Ghost documents ({ghosts}):')
+    for gid in ghost_ids[:10]:
+        print(f'    - {gid}')
+    if ghosts > 10:
+        print(f'    ... and {ghosts - 10} more')
+    print()
+
+recs = r.get('recommendations', [])
+if recs:
+    print('  Recommendations:')
+    for rec in recs:
+        print(f'    - {rec}')
+    print()
+
+# Healed results
+healed = r.get('healed', {})
+if healed:
+    print('  Auto-heal results:')
+    print(f'    Reindexed: {healed.get(\"reindexed\", 0)}')
+    print(f'    Cleaned:   {healed.get(\"cleaned\", 0)}')
+    print()
+
+if status == 'clean':
+    print('  RESULT: CLEAN (no issues)')
+elif '$AUTO_HEAL' == 'true':
+    post = r.get('post_heal_audit', {})
+    post_status = post.get('status', '?')
+    print(f'  POST-HEAL: {post_status}')
+else:
+    print('  RESULT: ISSUES FOUND — run with --heal to fix')
+"
+
+echo "================================================================="

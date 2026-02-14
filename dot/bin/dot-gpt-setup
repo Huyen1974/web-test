@@ -1,0 +1,41 @@
+#!/bin/bash
+# dot-gpt-setup - Setup instructions for ChatGPT Custom Actions (Agent First)
+# Usage: dot-gpt-setup
+
+OPENAPI_FILE="/Users/nmhuyen/Documents/Manual Deploy/agent-data-test/docs/api/openapi.yaml"
+
+echo "======================================="
+echo "     CHATGPT ACTIONS SETUP GUIDE       "
+echo "======================================="
+
+if [ -f "$OPENAPI_FILE" ]; then
+    echo "OpenAPI spec found: $OPENAPI_FILE"
+    echo ""
+    echo "STEPS TO SETUP:"
+    echo ""
+    echo "1. Go to: https://chat.openai.com/gpts/editor"
+    echo "2. Create new GPT or edit existing"
+    echo "3. Go to 'Configure' tab -> 'Actions'"
+    echo "4. Click 'Create new action'"
+    echo "5. Paste the OpenAPI spec (use: dot-gpt-copy-spec)"
+    echo ""
+    echo "SERVER URL (for local testing):"
+    echo "  http://localhost:8000"
+    echo ""
+    echo "SERVER URL (for production):"
+    echo "  https://vps.incomexsaigoncorp.vn/api"
+    echo ""
+    echo "QUICK COPY:"
+    echo "  Run: dot-gpt-copy-spec"
+    echo "  Then paste in ChatGPT Actions editor"
+    echo ""
+    echo "TEST PROMPTS:"
+    echo "  - Search for system principles"
+    echo "  - Get system health status"
+else
+    echo "OpenAPI spec not found!"
+    echo "Expected at: $OPENAPI_FILE"
+    echo "Run: dot-knowledge-info to verify setup"
+fi
+
+echo "======================================="

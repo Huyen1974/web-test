@@ -79,9 +79,9 @@ function loadConfig() {
   if (options.local) {
     directusUrl = 'http://localhost:8055';
   } else if (options.cloud) {
-    directusUrl = 'https://directus-test-pfne2mqwja-as.a.run.app';
+    directusUrl = 'https://directus.incomexsaigoncorp.vn';
   } else {
-    directusUrl = process.env.DIRECTUS_URL || 'https://directus-test-pfne2mqwja-as.a.run.app';
+    directusUrl = process.env.DIRECTUS_URL || 'https://directus.incomexsaigoncorp.vn';
   }
 
   let config = {

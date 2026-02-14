@@ -5,7 +5,7 @@
       "args": ["__AGENT_DATA_DIR__/mcp_server/stdio_server.py"],
       "env": {
         "AGENT_DATA_URL": "http://localhost:8000",
-        "AGENT_DATA_URL_CLOUD": "https://agent-data-test-pfne2mqwja-as.a.run.app",
+        "AGENT_DATA_URL_CLOUD": "https://vps.incomexsaigoncorp.vn/api",
         "AGENT_DATA_API_KEY_LOCAL": "__AGENT_DATA_API_KEY__",
         "AGENT_DATA_API_KEY_CLOUD": "__AGENT_DATA_API_KEY__",
         "AGENT_DATA_PREFER": "local"

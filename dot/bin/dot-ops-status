@@ -156,7 +156,7 @@ if [[ "$MODE" == "cloud" || "$MODE" == "all" ]]; then
   # Agent Data Cloud (IAM-protected — needs identity token)
   cloud_ad_token=$(gcloud auth print-identity-token 2>/dev/null || echo "")
   if [[ -n "$cloud_ad_token" ]]; then
-    cloud_ad_response=$(curl -sf --max-time 30 "https://agent-data-test-pfne2mqwja-as.a.run.app/health" \
+    cloud_ad_response=$(curl -sf --max-time 30 "https://vps.incomexsaigoncorp.vn/api/health" \
       -H "Authorization: Bearer $cloud_ad_token" 2>/dev/null || echo "")
   else
     cloud_ad_response=""
@@ -172,7 +172,7 @@ if [[ "$MODE" == "cloud" || "$MODE" == "all" ]]; then
     if [[ -z "$cloud_ad_token" ]]; then
       check_warn "Agent Data Cloud → no IAM token (run gcloud auth login)"
     else
-      check_fail "Agent Data Cloud (https://agent-data-test-pfne2mqwja-as.a.run.app) → unreachable"
+      check_fail "Agent Data Cloud (https://vps.incomexsaigoncorp.vn/api) → unreachable"
     fi
   fi
 

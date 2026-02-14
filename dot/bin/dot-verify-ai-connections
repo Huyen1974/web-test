@@ -3,7 +3,7 @@
 # Usage: ./dot/bin/dot-verify-ai-connections
 set -euo pipefail
 
-DIRECTUS_URL="https://directus-test-pfne2mqwja-as.a.run.app"
+DIRECTUS_URL="https://directus.incomexsaigoncorp.vn"
 GCP_PROJECT="github-chatgpt-ggcloud"
 
 AGENTS=(

@@ -116,7 +116,7 @@ fi
 
 # Set Directus URL based on environment
 if [[ "$USE_CLOUD" == "true" ]]; then
-    DIRECTUS_URL="${DIRECTUS_URL:-https://directus-test-pfne2mqwja-as.a.run.app}"
+    DIRECTUS_URL="${DIRECTUS_URL:-https://directus.incomexsaigoncorp.vn}"
 else
     DIRECTUS_URL="${DIRECTUS_URL:-http://localhost:8055}"
 fi

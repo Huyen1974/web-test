@@ -175,7 +175,7 @@ main() {
     init_environment "$@"
     BASE_URL="$DIRECTUS_URL"
   else
-    BASE_URL="${DIRECTUS_BASE_URL:-https://directus-test-pfne2mqwja-as.a.run.app}"
+    BASE_URL="${DIRECTUS_BASE_URL:-https://directus.incomexsaigoncorp.vn}"
   fi
 
   echo "========================================="
