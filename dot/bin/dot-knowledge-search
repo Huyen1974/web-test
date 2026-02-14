@@ -13,7 +13,16 @@ set -e
 QUERY=""
 STATUS="published"
 COLLECTION=""
-AGENT_URL="${AGENT_DATA_URL:-http://localhost:8000}"
+# Auto-detect: try local, fallback to VPS
+if [ -z "${AGENT_DATA_URL:-}" ]; then
+    if curl -sf --max-time 2 "http://localhost:8000/health" >/dev/null 2>&1; then
+        AGENT_URL="http://localhost:8000"
+    else
+        AGENT_URL="https://vps.incomexsaigoncorp.vn/api"
+    fi
+else
+    AGENT_URL="$AGENT_DATA_URL"
+fi
 
 # Parse arguments
 for arg in "$@"; do
