@@ -25,6 +25,9 @@ export default defineNuxtConfig({
 		'/profile': { prerender: false },
 		'/portal': { prerender: false },
 		'/portal/**': { prerender: false },
+		// Redirect legacy /docs routes to /knowledge (P16)
+		'/docs': { redirect: { to: '/knowledge', statusCode: 301 } },
+		'/docs/**': { redirect: { to: '/knowledge', statusCode: 301 } },
 		// Cache: permanent until content changes (WEB-70B)
 		'/knowledge': { swr: 31536000, prerender: false },
 		'/knowledge/**': { swr: 31536000, prerender: false },

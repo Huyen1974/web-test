@@ -1,12 +1,11 @@
 name: Deploy to VPS
 
 on:
-  push:
+  # Run AFTER Firebase Deploy completes (which builds the Nuxt SSR image)
+  workflow_run:
+    workflows: ["Firebase Deploy"]
+    types: [completed]
     branches: [main]
-    paths:
-      - 'web/**'
-      - 'infra/**'
-      - '.github/workflows/deploy-vps.yml'
   workflow_dispatch:
     inputs:
       services:
@@ -32,8 +31,10 @@ jobs:
   deploy:
     name: Deploy to VPS
     runs-on: ubuntu-latest
-    # Run on push to main or manual dispatch
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    # Skip if the triggering workflow failed (workflow_run only)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
 
     steps:
       - name: Checkout code
@@ -60,8 +61,28 @@ jobs:
             echo "targets=nuxt" >> "$GITHUB_OUTPUT"
           fi
 
-      # --- Deploy via SSH ---
-      - name: Deploy to VPS
+      # --- Sync config files to VPS ---
+      - name: Sync infra config to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            # Create temp dir for receiving files
+            mkdir -p /tmp/infra-sync
+
+      - name: Copy compose file to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "infra/docker/docker-compose.yml,infra/nginx/conf.d/default.conf"
+          target: "/tmp/infra-sync"
+          strip_components: 0
+
+      - name: Apply config and deploy
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -72,7 +93,19 @@ jobs:
             set -euo pipefail
             cd /opt/incomex/docker
 
-            # Login to Artifact Registry using short-lived access token
+            # --- Sync config files from repo ---
+            if [ -f /tmp/infra-sync/infra/docker/docker-compose.yml ]; then
+              cp /tmp/infra-sync/infra/docker/docker-compose.yml ./docker-compose.yml
+              echo "Synced docker-compose.yml"
+            fi
+            if [ -f /tmp/infra-sync/infra/nginx/conf.d/default.conf ]; then
+              cp /tmp/infra-sync/infra/nginx/conf.d/default.conf ./nginx/conf.d/default.conf
+              docker exec incomex-nginx nginx -s reload 2>/dev/null || true
+              echo "Synced and reloaded nginx config"
+            fi
+            rm -rf /tmp/infra-sync
+
+            # --- Login to Artifact Registry ---
             echo "${{ steps.gcp-auth.outputs.access_token }}" | \
               docker login -u oauth2accesstoken --password-stdin ${{ env.REGION }}-docker.pkg.dev
 
@@ -92,13 +125,13 @@ jobs:
 
             # Recreate only the updated services (zero-downtime for others)
             if [[ "$TARGETS" == "all" ]]; then
-              docker compose up -d --no-build nuxt agent-data
+              docker compose up -d --force-recreate --no-build nuxt agent-data
             elif [[ "$TARGETS" == *"nuxt"* ]] && [[ "$TARGETS" == *"agent-data"* ]]; then
-              docker compose up -d --no-build nuxt agent-data
+              docker compose up -d --force-recreate --no-build nuxt agent-data
             elif [[ "$TARGETS" == *"nuxt"* ]]; then
-              docker compose up -d --no-build nuxt
+              docker compose up -d --force-recreate --no-build nuxt
             elif [[ "$TARGETS" == *"agent-data"* ]]; then
-              docker compose up -d --no-build agent-data
+              docker compose up -d --force-recreate --no-build agent-data
             fi
 
             # Wait for services to be healthy
