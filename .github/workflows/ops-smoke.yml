@@ -7,9 +7,8 @@ on:
 
 env:
   DIRECTUS_BASE_URL: ${{ vars.DIRECTUS_BASE_URL || vars.NUXT_PUBLIC_DIRECTUS_URL || secrets.DIRECTUS_BASE_URL || secrets.NUXT_PUBLIC_DIRECTUS_URL }}
-  # GCS switch 2025-12-23 – persistent public assets
-  # Updated 2026-01-06 after schema migration
-  SMOKE_ASSET_ID: "b18f3792-bd31-43e5-8a7d-b25d76f41dd9"
+  # VPS Directus asset (uploaded 2026-02-14, public access verified)
+  SMOKE_ASSET_ID: "eb037157-91f7-462a-97fe-e17642b6d960"
 
 jobs:
   smoke-test:
