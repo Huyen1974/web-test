@@ -74,7 +74,7 @@ export default defineEventHandler(async (event) => {
   const directusUrl =
     config.directusInternalUrl ||
     process.env.DIRECTUS_INTERNAL_URL ||
-    'https://directus-test-pfne2mqwja-as.a.run.app'
+    'https://directus.incomexsaigoncorp.vn'
 
   // Build target URL with query parameters
   const query = getQuery(event)

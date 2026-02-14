@@ -46,7 +46,7 @@ export default defineEventHandler(async (event): Promise<HealthResponse> => {
   const directusUrl =
     config.directusInternalUrl ||
     process.env.DIRECTUS_INTERNAL_URL ||
-    'https://directus-test-pfne2mqwja-as.a.run.app';
+    'https://directus.incomexsaigoncorp.vn';
 
   try {
     const directusStart = Date.now();

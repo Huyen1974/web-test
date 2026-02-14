@@ -30,7 +30,7 @@ ENV NODE_ENV=production
 
 # Build-time env vars (will be overridden at runtime)
 ARG NUXT_PUBLIC_SITE_URL=https://ai.incomexsaigoncorp.vn
-ARG NUXT_PUBLIC_DIRECTUS_URL=https://directus-test-pfne2mqwja-as.a.run.app
+ARG NUXT_PUBLIC_DIRECTUS_URL=https://directus.incomexsaigoncorp.vn
 
 RUN pnpm run build
 

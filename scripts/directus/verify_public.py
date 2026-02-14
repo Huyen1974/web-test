@@ -6,7 +6,7 @@ import subprocess
 import ssl
 import sys
 
-API_URL = "https://directus-test-812872501910.asia-southeast1.run.app"
+API_URL = "https://directus.incomexsaigoncorp.vn"
 REQUIRED_PUBLIC_COLLECTIONS = [
     "pages", "navigation", "navigation_items", "globals", "forms", "seo",
     "pages_blocks", "block_hero", "block_faqs", "block_richtext", "block_testimonials", 
