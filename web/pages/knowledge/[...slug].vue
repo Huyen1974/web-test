@@ -121,10 +121,11 @@ const filteredDocs = computed(() => {
 	return filterDocsByTitle(sidebarDocs.value, searchQuery.value);
 });
 
-// Clean URL helper
+// Clean URL helper: strip "docs/" or "knowledge/" prefix and ".md" suffix
 function cleanUrl(docId: string): string {
 	let clean = docId;
 	if (clean.startsWith('docs/')) clean = clean.slice(5);
+	if (clean.startsWith('knowledge/')) clean = clean.slice(10);
 	clean = clean.replace(/\.md$/, '');
 	return clean;
 }
@@ -169,10 +170,13 @@ const {
 	error,
 } = await useAsyncData(`knowledge-${fullSlug.value}`, async () => {
 	try {
-		// Try multiple file_path variants (same logic as the old server proxy)
+		// Try multiple file_path variants to match Directus records
+		// Records may use docs/ prefix (old), knowledge/ prefix (new), or bare path
 		const variants = [
 			`docs/${fullSlug.value}.md`,
 			`docs/${fullSlug.value}`,
+			`knowledge/${fullSlug.value}.md`,
+			`knowledge/${fullSlug.value}`,
 			`${fullSlug.value}.md`,
 			fullSlug.value,
 		];
