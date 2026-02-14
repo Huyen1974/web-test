@@ -45,9 +45,9 @@ jobs:
           chmod +x ./dot/bin/dot-sync-check
           ./dot/bin/dot-sync-check
         env:
-          # In CI, both point to Cloud (no local instance)
-          LOCAL_DIRECTUS_URL: "https://directus-test-pfne2mqwja-as.a.run.app"
-          CLOUD_DIRECTUS_URL: "https://directus-test-pfne2mqwja-as.a.run.app"
+          # Both point to VPS Directus (single source of truth since 2026-02-13)
+          LOCAL_DIRECTUS_URL: "https://directus.incomexsaigoncorp.vn"
+          CLOUD_DIRECTUS_URL: "https://directus.incomexsaigoncorp.vn"
           # Use static token from Secret Manager ONLY (no fallback)
           DIRECTUS_STATIC_TOKEN: ${{ steps.token.outputs.admin_token }}
           # CI mode flag for fail-fast behavior
