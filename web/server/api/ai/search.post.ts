@@ -7,9 +7,9 @@
  * - Rate limiting: 100 requests per minute per token
  * - All requests logged for audit trail
  *
- * CLOUD RUN AUTHENTICATION:
- * - Uses Google Identity Token for service-to-service auth
- * - Includes retry with exponential backoff for Cold Start handling
+ * VPS DEPLOYMENT:
+ * - Uses API key for Agent Data auth (VPS since 2026-02-13)
+ * - Includes retry with exponential backoff
  *
  * @endpoint POST /api/ai/search
  * @auth Bearer token required
@@ -19,11 +19,6 @@
 
 import { joinURL } from 'ufo';
 import { H3Event } from 'h3';
-import {
-	getIdentityToken,
-	isRunningOnGoogleCloud,
-	getCloudRunServiceUrl,
-} from '~/server/utils/googleAuth';
 import { retryWithBackoff, warmUp } from '~/server/utils/retryWithBackoff';
 
 // Simple in-memory rate limiter (per-token)
@@ -246,34 +241,14 @@ export default defineEventHandler(async (event) => {
 		const baseUrl = agentDataBaseUrl;
 		const apiKey = config.agentData?.apiKey;
 
-		// Get the Cloud Run service URL for Identity Token audience
-		// IMPORTANT: Identity Token audience MUST be the Cloud Run URL, not custom domain
-		const cloudRunUrl = getCloudRunServiceUrl(baseUrl);
 		const chatUrl = joinURL(baseUrl, '/chat');
 		const healthUrl = joinURL(baseUrl, '/health');
 
-		// Prepare headers for the request
+		// Auth headers (API key for VPS)
 		const requestHeaders: Record<string, string> = {
 			'Content-Type': 'application/json',
 		};
-
-		// Add Google Identity Token if running on Cloud Run
-		// This is required for service-to-service authentication
-		if (isRunningOnGoogleCloud()) {
-			try {
-				const idToken = await getIdentityToken(cloudRunUrl);
-				requestHeaders['Authorization'] = `Bearer ${idToken}`;
-				console.log('[AI-Gateway] Using Google Identity Token for authentication');
-			} catch (authError) {
-				console.error('[AI-Gateway] Failed to get identity token:', authError);
-				// Fall back to API key if available
-				if (apiKey) {
-					requestHeaders['Authorization'] = `Bearer ${apiKey}`;
-					console.log('[AI-Gateway] Falling back to API key authentication');
-				}
-			}
-		} else if (apiKey) {
-			// Local development: use API key if available
+		if (apiKey) {
 			requestHeaders['Authorization'] = `Bearer ${apiKey}`;
 		}
 

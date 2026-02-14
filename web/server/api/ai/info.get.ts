@@ -7,9 +7,8 @@
  * - Rate limiting: 200 requests per minute (higher limit for status checks)
  * - Cached for 30 seconds to reduce backend load
  *
- * CLOUD RUN AUTHENTICATION:
- * - Uses Google Identity Token for service-to-service auth
- * - Includes retry for Cold Start handling
+ * VPS DEPLOYMENT:
+ * - Uses API key for Agent Data auth (VPS since 2026-02-13)
  *
  * @endpoint GET /api/ai/info
  * @auth None required (public)
@@ -18,11 +17,6 @@
 
 import { joinURL } from 'ufo';
 import { H3Event } from 'h3';
-import {
-	getIdentityToken,
-	isRunningOnGoogleCloud,
-	getCloudRunServiceUrl,
-} from '~/server/utils/googleAuth';
 import { retryWithBackoff } from '~/server/utils/retryWithBackoff';
 
 // Simple cache for info endpoint
@@ -102,27 +96,13 @@ export default defineEventHandler(async (event) => {
 		const baseUrl = agentDataBaseUrl;
 		const apiKey = config.agentData?.apiKey;
 
-		// Get the Cloud Run service URL for Identity Token audience
-		const cloudRunUrl = getCloudRunServiceUrl(baseUrl);
 		const infoUrl = joinURL(baseUrl, '/info');
 
-		// Prepare headers
+		// Auth headers (API key for VPS)
 		const requestHeaders: Record<string, string> = {
 			'Content-Type': 'application/json',
 		};
-
-		// Add Google Identity Token if running on Cloud Run
-		if (isRunningOnGoogleCloud()) {
-			try {
-				const idToken = await getIdentityToken(cloudRunUrl);
-				requestHeaders['Authorization'] = `Bearer ${idToken}`;
-			} catch (authError) {
-				console.error('[AI-Gateway] Info: Failed to get identity token:', authError);
-				if (apiKey) {
-					requestHeaders['Authorization'] = `Bearer ${apiKey}`;
-				}
-			}
-		} else if (apiKey) {
+		if (apiKey) {
 			requestHeaders['Authorization'] = `Bearer ${apiKey}`;
 		}
 
