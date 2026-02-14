@@ -1,10 +1,10 @@
 # =============================================================================
-# Nuxt 3 SSR Server for Cloud Run
+# Nuxt 3 SSR Server — VPS + Cloud Run
 # =============================================================================
-# Architecture: Builds a production SSR server that can be deployed to Cloud Run
-# and proxied via Firebase Hosting for a true SSR experience.
+# Builds a production SSR server for VPS Docker stack.
+# Also pushed to Artifact Registry as backup for Cloud Run.
 #
-# Preset: node-server (standalone Node.js server, perfect for Cloud Run)
+# Preset: node-server (standalone Node.js server)
 # =============================================================================
 
 FROM node:20-alpine AS builder
