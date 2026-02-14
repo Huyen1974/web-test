@@ -93,7 +93,7 @@ function detectEnvironment() {
 
 const ENV = detectEnvironment();
 const LOCAL_DIRECTUS_URL = 'http://localhost:8055';
-const CLOUD_DIRECTUS_URL = 'https://directus-test-pfne2mqwja-as.a.run.app';
+const CLOUD_DIRECTUS_URL = 'https://directus.incomexsaigoncorp.vn';
 
 // Print environment banner
 function printEnvironmentBanner(directusUrl) {

@@ -70,7 +70,7 @@ services:
       # === MODE B: Hybrid Lean (Local Directus) ===
       NUXT_DIRECTUS_URL: http://directus:8055           # SSR calls (Docker network)
       NUXT_PUBLIC_DIRECTUS_URL: http://localhost:8055   # Browser calls (Host machine)
-      # To switch to Cloud Run, change both to: https://directus-test-pfne2mqwja-as.a.run.app
+      # To switch to VPS, change both to: https://directus.incomexsaigoncorp.vn
       NUXT_PUBLIC_SITE_URL: http://localhost:3000
       HOST: 0.0.0.0
       PORT: 3000

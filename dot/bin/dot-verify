@@ -68,7 +68,7 @@ AUTO-TRIGGER FAILED (Expected in v0.1 - Permission Issue)
 
 MANUAL VERIFICATION REQUIRED:
 1. Login to Directus Admin:
-   https://directus-test-pfne2mqwja-as.a.run.app/admin
+   https://directus.incomexsaigoncorp.vn/admin
 
 2. Go to: Settings -> Flows
 

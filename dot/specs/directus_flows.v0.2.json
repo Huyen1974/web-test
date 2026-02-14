@@ -2,10 +2,10 @@
   "version": "0.2",
   "description": "Directus Flows for knowledge_documents ↔ Agent Data sync pipeline (WEB-60)",
   "directus": {
-    "base_url": "https://directus-test-pfne2mqwja-as.a.run.app",
+    "base_url": "https://directus.incomexsaigoncorp.vn",
     "requirements": {
       "FLOWS_ENV_ALLOW_LIST": "AGENT_DATA_URL,AGENT_DATA_API_KEY",
-      "AGENT_DATA_URL": "Agent Data service URL (local: http://host.docker.internal:8000, cloud: https://agent-data-test-pfne2mqwja-as.a.run.app)",
+      "AGENT_DATA_URL": "Agent Data service URL (local: http://host.docker.internal:8000, cloud: https://vps.incomexsaigoncorp.vn/api)",
       "AGENT_DATA_API_KEY": "Agent Data API key for authentication"
     },
     "notes": [

@@ -24,7 +24,7 @@ VERSION="1.0.0"
 
 # URLs
 NUXT_URL="${NUXT_URL:-https://ai.incomexsaigoncorp.vn}"
-DIRECTUS_URL="${DIRECTUS_URL:-https://directus-test-pfne2mqwja-as.a.run.app}"
+DIRECTUS_URL="${DIRECTUS_URL:-https://directus.incomexsaigoncorp.vn}"
 
 # Counters
 PASS_COUNT=0
@@ -171,7 +171,7 @@ main() {
         ;;
       --cloud)
         NUXT_URL="https://ai.incomexsaigoncorp.vn"
-        DIRECTUS_URL="https://directus-test-pfne2mqwja-as.a.run.app"
+        DIRECTUS_URL="https://directus.incomexsaigoncorp.vn"
         ;;
     esac
   done

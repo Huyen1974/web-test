@@ -97,7 +97,7 @@ main() {
       "token": "${ai_gateway_token}"
     },
     "directus": {
-      "base_url": "https://directus-test-pfne2mqwja-as.a.run.app",
+      "base_url": "https://directus.incomexsaigoncorp.vn",
       "feedbacks": "/items/feedbacks",
       "agent_views": "/items/agent_views",
       "auth_type": "Bearer",
@@ -138,7 +138,7 @@ HEADER
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1. Base URL:
-   https://directus-test-pfne2mqwja-as.a.run.app
+   https://directus.incomexsaigoncorp.vn
 
 2. Directus AI Agent Token (for /items/* endpoints):
    ${directus_ai_token}
@@ -178,13 +178,13 @@ curl -X POST https://ai.incomexsaigoncorp.vn/api/ai/search \\
   -d '{"query": "Hien phap he thong la gi?", "top_k": 3}'
 
 # Test Create Feedback (via Directus)
-curl -X POST https://directus-test-pfne2mqwja-as.a.run.app/items/feedbacks \\
+curl -X POST https://directus.incomexsaigoncorp.vn/items/feedbacks \\
   -H "Authorization: Bearer ${directus_ai_token}" \\
   -H "Content-Type: application/json" \\
   -d '{"linked_entity_ref": "test:001", "feedback_type": "suggestion", "content": "Test from CLI", "source_model": "manual-test", "status": "pending"}'
 
 # Test Read Agent Views
-curl https://directus-test-pfne2mqwja-as.a.run.app/items/agent_views \\
+curl https://directus.incomexsaigoncorp.vn/items/agent_views \\
   -H "Authorization: Bearer ${directus_ai_token}"
 
 EOF

@@ -12,9 +12,9 @@ set -e
 
 # --- Configuration ---
 AGENT_DATA_LOCAL="http://localhost:8000"
-AGENT_DATA_CLOUD="https://agent-data-test-pfne2mqwja-as.a.run.app"
+AGENT_DATA_CLOUD="https://vps.incomexsaigoncorp.vn/api"
 DIRECTUS_LOCAL="http://localhost:8055"
-DIRECTUS_CLOUD="https://directus-test-pfne2mqwja-as.a.run.app"
+DIRECTUS_CLOUD="https://directus.incomexsaigoncorp.vn"
 JQ="/usr/bin/jq"
 
 DRY_RUN=""

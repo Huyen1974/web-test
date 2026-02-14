@@ -12,7 +12,7 @@ NC='\033[0m'
 
 # URLs
 LOCAL_URL="${LOCAL_DIRECTUS_URL:-http://localhost:8055}"
-CLOUD_URL="${CLOUD_DIRECTUS_URL:-https://directus-test-pfne2mqwja-as.a.run.app}"
+CLOUD_URL="${CLOUD_DIRECTUS_URL:-https://directus.incomexsaigoncorp.vn}"
 WEBSITE_URL="${WEBSITE_URL:-https://ai.incomexsaigoncorp.vn}"
 
 # Auth credentials (from env - NO DEFAULTS for security)

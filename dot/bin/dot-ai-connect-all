@@ -1,0 +1,54 @@
+#!/bin/bash
+# dot-ai-connect-all - Verify all AI/Agent connections
+# Usage: dot-ai-connect-all
+
+echo "AI/Agent Connection Status"
+echo "=========================="
+echo ""
+
+# 1. Agent Data (backend)
+echo "1. Agent Data (localhost:8000):"
+if curl -s http://localhost:8000/info 2>/dev/null | grep -q "langroid"; then
+    VERSION=$(curl -s http://localhost:8000/info | python3 -c "import sys,json; print(json.load(sys.stdin).get('version', 'unknown'))" 2>/dev/null)
+    echo "   CONNECTED (v$VERSION)"
+else
+    echo "   NOT CONNECTED"
+fi
+
+# 2. MCP Server
+echo ""
+echo "2. MCP Server (localhost:8001):"
+if curl -s http://localhost:8001/health 2>/dev/null | grep -q "ok"; then
+    TOOLS=$(curl -s http://localhost:8001/mcp 2>/dev/null | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('tools', [])))" 2>/dev/null)
+    echo "   CONNECTED ($TOOLS tools available)"
+else
+    echo "   NOT CONNECTED"
+fi
+
+# 3. Claude Desktop Config
+echo ""
+echo "3. Claude Desktop Config:"
+CONFIG_FILE="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+if [ -f "$CONFIG_FILE" ] && grep -q "agent-data" "$CONFIG_FILE" 2>/dev/null; then
+    echo "   CONFIGURED"
+else
+    echo "   NOT CONFIGURED"
+    echo "   Run: Add mcpServers to $CONFIG_FILE"
+fi
+
+# 4. Cloud Run (backup)
+echo ""
+echo "4. Cloud Run (backup endpoint):"
+CLOUD_URL="https://vps.incomexsaigoncorp.vn/api"
+if curl -s "$CLOUD_URL/info" --max-time 5 2>/dev/null | grep -q "langroid"; then
+    echo "   AVAILABLE"
+else
+    echo "   NOT AVAILABLE (local-only mode)"
+fi
+
+echo ""
+echo "================================"
+echo "Quick Commands:"
+echo "  Search: dot-knowledge-search \"query\""
+echo "  Info:   dot-knowledge-info"
+echo "  MCP:    dot-mcp-verify"

@@ -177,7 +177,7 @@ function printEnvironmentBanner() {
   const directusUrl =
     ENV === 'local'
       ? 'http://localhost:8055'
-      : 'https://directus-test-pfne2mqwja-as.a.run.app'
+      : 'https://directus.incomexsaigoncorp.vn'
 
   console.log('')
   if (ENV === 'local') {
