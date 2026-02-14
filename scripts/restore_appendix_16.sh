@@ -28,7 +28,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Default Directus URL (Live Server)
-DIRECTUS_URL="${DIRECTUS_URL:-https://directus-test-812872501910.asia-southeast1.run.app}"
+DIRECTUS_URL="${DIRECTUS_URL:-https://directus.incomexsaigoncorp.vn}"
 
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

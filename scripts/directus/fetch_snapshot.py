@@ -7,7 +7,7 @@ import ssl
 import sys
 import hashlib
 
-API_URL = "https://directus-test-812872501910.asia-southeast1.run.app"
+API_URL = "https://directus.incomexsaigoncorp.vn"
 OUTPUT_FILE = "directus/snapshot.json"
 
 def get_access_token_via_login():

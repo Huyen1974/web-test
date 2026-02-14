@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
 	const directusUrl =
 		process.env.NUXT_PUBLIC_DIRECTUS_URL ||
 		config.public.directusUrl ||
-		'https://directus-test-pfne2mqwja-as.a.run.app';
+		'https://directus.incomexsaigoncorp.vn';
 
 	try {
 		// agent_views is publicly readable - no auth needed

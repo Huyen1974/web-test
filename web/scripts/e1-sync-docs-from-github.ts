@@ -18,8 +18,8 @@
 import { createDirectus, rest, authentication, readItems, createItem, updateItem } from '@directus/sdk';
 
 // Configuration
-const DIRECTUS_URL = process.env.NUXT_PUBLIC_DIRECTUS_URL || 'https://directus-test-pfne2mqwja-as.a.run.app';
-const AGENT_DATA_URL = process.env.AGENT_DATA_URL || 'https://agent-data-test-pfne2mqwja-as.a.run.app';
+const DIRECTUS_URL = process.env.NUXT_PUBLIC_DIRECTUS_URL || 'https://directus.incomexsaigoncorp.vn';
+const AGENT_DATA_URL = process.env.AGENT_DATA_URL || 'https://vps.incomexsaigoncorp.vn/api';
 const DIRECTUS_EMAIL = process.env.DIRECTUS_ADMIN_EMAIL || '';
 const DIRECTUS_PASSWORD = process.env.DIRECTUS_ADMIN_PASSWORD || '';
 

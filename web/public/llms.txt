@@ -36,7 +36,7 @@ Purpose: Understand KB structure before searching - reduces token usage
 GET https://ai.incomexsaigoncorp.vn/api/ai/info
 
 ### Step 2: Read Documents (No Auth)
-GET https://directus-test-pfne2mqwja-as.a.run.app/items/agent_views?limit=100
+GET https://directus.incomexsaigoncorp.vn/items/agent_views?limit=100
 
 ### Step 3: Semantic Search (Requires Token)
 POST https://ai.incomexsaigoncorp.vn/api/ai/search
@@ -45,7 +45,7 @@ Content-Type: application/json
 {"query": "Your question here", "top_k": 5}
 
 ### Step 4: Submit Feedback (Requires Token)
-POST https://directus-test-pfne2mqwja-as.a.run.app/items/feedbacks
+POST https://directus.incomexsaigoncorp.vn/items/feedbacks
 Authorization: Bearer <DIRECTUS_AI_AGENT_TOKEN>
 Content-Type: application/json
 {
@@ -67,7 +67,7 @@ Base: https://ai.incomexsaigoncorp.vn
 | /api/ai/search | POST | Bearer | Semantic search (100 req/min) |
 
 ### Directus CMS
-Base: https://directus-test-pfne2mqwja-as.a.run.app
+Base: https://directus.incomexsaigoncorp.vn
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|

@@ -15,7 +15,7 @@ export default defineNuxtPlugin((nuxtApp) => {
 		config.public.directus?.rest?.baseUrl ||
 		config.public.directus?.url ||
 		config.public.directusUrl ||
-		'https://directus-test-pfne2mqwja-as.a.run.app';
+		'https://directus.incomexsaigoncorp.vn';
 
 	// Client uses absolute proxy URL (SDK needs absolute URL for `new URL()`)
 	// window.location.origin provides the current domain (e.g., https://ai.incomexsaigoncorp.vn)

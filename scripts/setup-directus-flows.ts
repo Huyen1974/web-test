@@ -11,7 +11,7 @@
  *   DIRECTUS_ADMIN_TOKEN - Admin token for Directus
  */
 
-const DIRECTUS_URL = process.env.DIRECTUS_URL || 'https://directus-test-pfne2mqwja-as.a.run.app';
+const DIRECTUS_URL = process.env.DIRECTUS_URL || 'https://directus.incomexsaigoncorp.vn';
 const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN || '';
 
 interface FlowPayload {

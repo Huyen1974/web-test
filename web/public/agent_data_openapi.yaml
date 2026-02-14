@@ -29,9 +29,9 @@ info:
 servers:
   - url: https://ai.incomexsaigoncorp.vn
     description: Production AI Gateway (Recommended)
-  - url: https://directus-test-pfne2mqwja-as.a.run.app
+  - url: https://directus.incomexsaigoncorp.vn
     description: Directus CMS (Public Read)
-  - url: https://agent-data-test-pfne2mqwja-as.a.run.app
+  - url: https://vps.incomexsaigoncorp.vn/api
     description: Agent Data Service (Internal - IAM Protected)
 
 components:
@@ -403,7 +403,7 @@ paths:
 
         Documents are synced from the `docs/` folder in the web-test GitHub repository.
       servers:
-        - url: https://directus-test-pfne2mqwja-as.a.run.app
+        - url: https://directus.incomexsaigoncorp.vn
       security: []
       parameters:
         - name: limit
@@ -482,7 +482,7 @@ paths:
         - Set `author_type: "ai_agent"` and `author_name` to your model name
         - Use `linked_entity_ref` format: `agent_view:{id}` for documents
       servers:
-        - url: https://directus-test-pfne2mqwja-as.a.run.app
+        - url: https://directus.incomexsaigoncorp.vn
       security:
         - DirectusAuth: []
       requestBody:
@@ -540,7 +540,7 @@ paths:
         Returns hierarchical tree of documents from GitHub repository.
         **Internal endpoint** - requires Cloud IAM or use AI Gateway instead.
       servers:
-        - url: https://agent-data-test-pfne2mqwja-as.a.run.app
+        - url: https://vps.incomexsaigoncorp.vn/api
       parameters:
         - name: ref
           in: query
@@ -572,7 +572,7 @@ paths:
         Returns decoded file content from GitHub repository.
         **Internal endpoint** - requires Cloud IAM or use Directus agent_views instead.
       servers:
-        - url: https://agent-data-test-pfne2mqwja-as.a.run.app
+        - url: https://vps.incomexsaigoncorp.vn/api
       parameters:
         - name: path
           in: query

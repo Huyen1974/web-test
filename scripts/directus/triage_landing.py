@@ -7,7 +7,7 @@ import subprocess
 import ssl
 import sys
 
-API_URL = "https://directus-test-812872501910.asia-southeast1.run.app"
+API_URL = "https://directus.incomexsaigoncorp.vn"
 
 def get_access_token_via_login():
     def fetch_secret(name):
