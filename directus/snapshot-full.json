@@ -29579,8 +29579,8 @@
           "is_generated": false,
           "generation_expression": null,
           "has_auto_increment": false,
-          "foreign_key_table": "os_projects",
-          "foreign_key_column": "id"
+          "foreign_key_table": null,
+          "foreign_key_column": null
         }
       },
       {
@@ -45851,17 +45851,8 @@
           "one_collection": "os_projects",
           "one_collection_field": null,
           "one_deselect_action": "nullify",
-          "one_field": null,
+          "one_field": "invoices",
           "sort_field": null
-        },
-        "schema": {
-          "table": "os_invoices",
-          "column": "project",
-          "foreign_key_table": "os_projects",
-          "foreign_key_column": "id",
-          "constraint_name": "os_invoices_project_foreign",
-          "on_update": "NO ACTION",
-          "on_delete": "NO ACTION"
         }
       },
       {
