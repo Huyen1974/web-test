@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# dot-sync-check: Verify sync status between Local and Cloud Directus
+# dot-sync-check: VPS Infrastructure Health Monitor
 # Usage: ./dot/bin/dot-sync-check [--verbose]
+#
+# Checks VPS Directus, Agent Data, anonymous read, and website health.
+# Auth token is OPTIONAL — basic health checks work without it.
 set -euo pipefail
 
 # Colors
@@ -10,243 +13,159 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-# URLs
-LOCAL_URL="${LOCAL_DIRECTUS_URL:-http://localhost:8055}"
-CLOUD_URL="${CLOUD_DIRECTUS_URL:-https://directus.incomexsaigoncorp.vn}"
+# URLs — single VPS endpoints
+VPS_DIRECTUS_URL="${VPS_DIRECTUS_URL:-https://directus.incomexsaigoncorp.vn}"
+VPS_AGENT_DATA_URL="${VPS_AGENT_DATA_URL:-https://vps.incomexsaigoncorp.vn/api}"
 WEBSITE_URL="${WEBSITE_URL:-https://ai.incomexsaigoncorp.vn}"
 
-# Auth credentials (from env - NO DEFAULTS for security)
-# Priority: DIRECTUS_STATIC_TOKEN > email/password login
+# Optional auth token (nice-to-have for field count check)
 STATIC_TOKEN="${DIRECTUS_STATIC_TOKEN:-}"
-ADMIN_EMAIL="${DIRECTUS_ADMIN_EMAIL:-}"
-ADMIN_PASSWORD="${DIRECTUS_ADMIN_PASSWORD:-}"
-
-# SECURITY: Require static token in CI (no fallback to login)
-if [ -z "$STATIC_TOKEN" ]; then
-  if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
-    echo -e "${RED}❌ SECURITY ERROR: DIRECTUS_STATIC_TOKEN is required in CI${NC}"
-    echo "   Token must be retrieved from Google Secret Manager"
-    echo "   Check WIF authentication and GSM permissions"
-    exit 1
-  fi
-  # Only allow email/password login for LOCAL development
-  if [ -n "$ADMIN_EMAIL" ] && [ -n "$ADMIN_PASSWORD" ]; then
-    echo -e "${YELLOW}⚠️  WARNING: Using login credentials (local dev only)${NC}"
-  fi
-fi
 
 # Verbose mode
 VERBOSE=false
 [[ "${1:-}" == "--verbose" || "${1:-}" == "-v" ]] && VERBOSE=true
 
-# Get auth token (use temp file to avoid shell escaping issues)
-get_token() {
-    local url="$1"
-    local tmpfile=$(mktemp)
-    cat > "$tmpfile" << EOFLOGIN
-{"email":"$ADMIN_EMAIL","password":"$ADMIN_PASSWORD"}
-EOFLOGIN
-    local token=$(curl -s --max-time 10 -X POST "$url/auth/login" \
-        -H "Content-Type: application/json" \
-        -d @"$tmpfile" 2>/dev/null \
-        | grep -o '"access_token":"[^"]*"' \
-        | cut -d'"' -f4)
-    rm -f "$tmpfile"
-    echo "$token"
-}
-
 # Show help
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-    echo "DOT-SYNC-CHECK - Verify Local ↔ Cloud Directus sync"
+    echo "DOT-SYNC-CHECK - VPS Infrastructure Health Monitor"
     echo ""
     echo "Usage: dot-sync-check [--verbose]"
     echo ""
     echo "Options:"
-    echo "  -v, --verbose  Show detailed field comparison on drift"
+    echo "  -v, --verbose  Show detailed info on each check"
     echo "  -h, --help     Show this help"
     echo ""
     echo "Environment:"
-    echo "  DIRECTUS_STATIC_TOKEN  Use static token (priority over login)"
-    echo "  DIRECTUS_ADMIN_EMAIL   Admin email for login"
-    echo "  DIRECTUS_ADMIN_PASSWORD Admin password for login"
-    echo "  LOCAL_DIRECTUS_URL     Local Directus URL"
-    echo "  CLOUD_DIRECTUS_URL     Cloud Directus URL"
+    echo "  VPS_DIRECTUS_URL        VPS Directus URL (default: https://directus.incomexsaigoncorp.vn)"
+    echo "  VPS_AGENT_DATA_URL      VPS Agent Data URL (default: https://vps.incomexsaigoncorp.vn/api)"
+    echo "  WEBSITE_URL             Website URL (default: https://ai.incomexsaigoncorp.vn)"
+    echo "  DIRECTUS_STATIC_TOKEN   Optional auth token for schema checks"
     echo ""
     echo "Checks:"
-    echo "  1. Local Directus health"
-    echo "  2. Cloud Directus health"
-    echo "  3. Schema sync (hash comparison)"
-    echo "  4. Anonymous read (Local)"
-    echo "  5. Anonymous read (Cloud)"
-    echo "  6. Website production"
+    echo "  1. VPS Directus health (/server/health)"
+    echo "  2. VPS Agent Data health (/health)"
+    echo "  3. Anonymous read (knowledge_documents)"
+    echo "  4. Website production (/knowledge)"
+    echo "  5. Schema field count (optional, requires auth token)"
     exit 0
 fi
 
 echo "======================================"
-echo "  DOT Sync Check - Local ↔ Cloud"
+echo "  DOT Health Check - VPS Infrastructure"
 echo "======================================"
 echo ""
-echo "Local:   $LOCAL_URL"
-echo "Cloud:   $CLOUD_URL"
-echo "Website: $WEBSITE_URL"
+echo "Directus:   $VPS_DIRECTUS_URL"
+echo "Agent Data: $VPS_AGENT_DATA_URL"
+echo "Website:    $WEBSITE_URL"
 if [ -n "$STATIC_TOKEN" ]; then
-    echo "Auth:    Static Token (from env)"
+    echo "Auth:       Static Token (from env)"
 else
-    echo "Auth:    Login ($ADMIN_EMAIL)"
+    echo "Auth:       None (basic checks only)"
 fi
 echo ""
 
 ERRORS=0
 WARNINGS=0
 
-# Helper: get sorted field list and compute hash (SHA1 via shasum)
-get_fields_hash() {
-    local url="$1"
-    local collection="$2"
-    local token="$3"
-    curl -s --max-time 10 "$url/fields/$collection" \
-        -H "Authorization: Bearer $token" 2>/dev/null \
-        | grep -o '"field":"[^"]*"' \
-        | cut -d'"' -f4 \
-        | sort \
-        | shasum 2>/dev/null | cut -d' ' -f1 || echo "error"
-}
-
-# Helper: get sorted field list as comma-separated
-get_fields_list() {
-    local url="$1"
-    local collection="$2"
-    local token="$3"
-    curl -s --max-time 10 "$url/fields/$collection" \
-        -H "Authorization: Bearer $token" 2>/dev/null \
-        | grep -o '"field":"[^"]*"' \
-        | cut -d'"' -f4 \
-        | sort \
-        | tr '\n' ',' \
-        | sed 's/,$//'
-}
-
-# Helper: count fields
-get_fields_count() {
-    local url="$1"
-    local collection="$2"
-    local token="$3"
-    curl -s --max-time 10 "$url/fields/$collection" \
-        -H "Authorization: Bearer $token" 2>/dev/null \
-        | grep -o '"field":"[^"]*"' \
-        | wc -l \
-        | tr -d ' '
-}
-
-# --- Check 1: Local Directus Health ---
-echo -n "1. Local Directus health.......... "
-LOCAL_HEALTH=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$LOCAL_URL/server/health" 2>/dev/null || echo "000")
-if [ "$LOCAL_HEALTH" == "200" ]; then
-    echo -e "${GREEN}✅ OK${NC}"
+# --- Check 1: VPS Directus Health ---
+echo -n "1. VPS Directus health............ "
+DIRECTUS_HEALTH=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$VPS_DIRECTUS_URL/server/health" 2>/dev/null || echo "000")
+if [ "$DIRECTUS_HEALTH" == "200" ]; then
+    echo -e "${GREEN}OK${NC}"
 else
-    echo -e "${RED}❌ FAIL (HTTP $LOCAL_HEALTH)${NC}"
-    ((ERRORS++))
+    echo -e "${RED}FAIL (HTTP $DIRECTUS_HEALTH)${NC}"
+    ERRORS=$((ERRORS + 1))
 fi
 
-# --- Check 2: Cloud Directus Health ---
-echo -n "2. Cloud Directus health.......... "
-CLOUD_HEALTH=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$CLOUD_URL/server/health" 2>/dev/null || echo "000")
-if [ "$CLOUD_HEALTH" == "200" ]; then
-    echo -e "${GREEN}✅ OK${NC}"
-else
-    echo -e "${RED}❌ FAIL (HTTP $CLOUD_HEALTH)${NC}"
-    ((ERRORS++))
-fi
-
-# --- Check 3: Schema Sync (hash comparison) ---
-echo -n "3. Schema sync (knowledge_documents)... "
-if [ "$LOCAL_HEALTH" == "200" ] && [ "$CLOUD_HEALTH" == "200" ]; then
-    # Get auth tokens - use static token if available, otherwise login
-    if [ -n "$STATIC_TOKEN" ]; then
-        LOCAL_TOKEN="$STATIC_TOKEN"
-        CLOUD_TOKEN="$STATIC_TOKEN"
+# --- Check 2: VPS Agent Data Health ---
+echo -n "2. VPS Agent Data health.......... "
+AD_HEALTH_HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$VPS_AGENT_DATA_URL/health" 2>/dev/null || echo "000")
+if [ "$AD_HEALTH_HTTP" == "200" ]; then
+    # Try to extract status from JSON response
+    AD_BODY=$(curl -s --max-time 15 "$VPS_AGENT_DATA_URL/health" 2>/dev/null || echo "{}")
+    AD_STATUS=$(echo "$AD_BODY" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4 || true)
+    if [ "$AD_STATUS" == "healthy" ]; then
+        echo -e "${GREEN}OK (healthy)${NC}"
+    elif [ -n "$AD_STATUS" ]; then
+        echo -e "${YELLOW}WARN (status: $AD_STATUS)${NC}"
+        WARNINGS=$((WARNINGS + 1))
     else
-        LOCAL_TOKEN=$(get_token "$LOCAL_URL")
-        CLOUD_TOKEN=$(get_token "$CLOUD_URL")
-    fi
-
-    if [ -z "$LOCAL_TOKEN" ] || [ -z "$CLOUD_TOKEN" ]; then
-        echo -e "${YELLOW}⚠️  AUTH FAILED (check credentials)${NC}"
-        ((WARNINGS++))
-    else
-        LOCAL_HASH=$(get_fields_hash "$LOCAL_URL" "knowledge_documents" "$LOCAL_TOKEN")
-        CLOUD_HASH=$(get_fields_hash "$CLOUD_URL" "knowledge_documents" "$CLOUD_TOKEN")
-        LOCAL_COUNT=$(get_fields_count "$LOCAL_URL" "knowledge_documents" "$LOCAL_TOKEN")
-
-        if [ "$LOCAL_HASH" == "$CLOUD_HASH" ]; then
-            echo -e "${GREEN}✅ SYNCED ($LOCAL_COUNT fields, hash match)${NC}"
-        else
-            echo -e "${RED}❌ DRIFT (hash mismatch)${NC}"
-            if $VERBOSE; then
-                echo -e "   ${CYAN}Local fields:${NC}"
-                echo "   $(get_fields_list "$LOCAL_URL" "knowledge_documents" "$LOCAL_TOKEN")"
-                echo -e "   ${CYAN}Cloud fields:${NC}"
-                echo "   $(get_fields_list "$CLOUD_URL" "knowledge_documents" "$CLOUD_TOKEN")"
-            else
-                echo -e "   ${YELLOW}Run with --verbose to see field diff${NC}"
-            fi
-            ((ERRORS++))
-        fi
+        echo -e "${GREEN}OK${NC}"
     fi
 else
-    echo -e "${YELLOW}⏭️  SKIPPED (one or both instances down)${NC}"
-    ((WARNINGS++))
+    echo -e "${RED}FAIL (HTTP $AD_HEALTH_HTTP)${NC}"
+    ERRORS=$((ERRORS + 1))
 fi
 
-# --- Check 4: Anonymous Read (Local) ---
-echo -n "4. Anonymous read (Local)......... "
-if [ "$LOCAL_HEALTH" == "200" ]; then
-    LOCAL_READ=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$LOCAL_URL/items/knowledge_documents?limit=1" 2>/dev/null || echo "000")
-    if [ "$LOCAL_READ" == "200" ]; then
-        echo -e "${GREEN}✅ OK${NC}"
+# --- Check 3: Anonymous Read (knowledge_documents) ---
+echo -n "3. Anonymous read (knowledge)..... "
+if [ "$DIRECTUS_HEALTH" == "200" ]; then
+    ANON_READ=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$VPS_DIRECTUS_URL/items/knowledge_documents?limit=1" 2>/dev/null || echo "000")
+    if [ "$ANON_READ" == "200" ]; then
+        echo -e "${GREEN}OK${NC}"
     else
-        echo -e "${YELLOW}⚠️  BLOCKED (HTTP $LOCAL_READ)${NC}"
-        ((WARNINGS++))
+        echo -e "${YELLOW}BLOCKED (HTTP $ANON_READ)${NC}"
+        WARNINGS=$((WARNINGS + 1))
     fi
 else
-    echo -e "${YELLOW}⏭️  SKIPPED${NC}"
+    echo -e "${YELLOW}SKIPPED (Directus down)${NC}"
+    WARNINGS=$((WARNINGS + 1))
 fi
 
-# --- Check 5: Anonymous Read (Cloud) ---
-echo -n "5. Anonymous read (Cloud)......... "
-if [ "$CLOUD_HEALTH" == "200" ]; then
-    CLOUD_READ=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$CLOUD_URL/items/knowledge_documents?limit=1" 2>/dev/null || echo "000")
-    if [ "$CLOUD_READ" == "200" ]; then
-        echo -e "${GREEN}✅ OK${NC}"
-    else
-        echo -e "${YELLOW}⚠️  BLOCKED (HTTP $CLOUD_READ)${NC}"
-        ((WARNINGS++))
-    fi
-else
-    echo -e "${YELLOW}⏭️  SKIPPED${NC}"
-fi
-
-# --- Check 6: Website (Production) ---
-echo -n "6. Website (/knowledge)........... "
+# --- Check 4: Website (/knowledge) ---
+echo -n "4. Website (/knowledge)........... "
 WEB_CHECK=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$WEBSITE_URL/knowledge" 2>/dev/null || echo "000")
 if [ "$WEB_CHECK" == "200" ]; then
-    echo -e "${GREEN}✅ OK${NC}"
+    echo -e "${GREEN}OK${NC}"
 else
-    echo -e "${RED}❌ FAIL (HTTP $WEB_CHECK)${NC}"
-    ((ERRORS++))
+    echo -e "${RED}FAIL (HTTP $WEB_CHECK)${NC}"
+    ERRORS=$((ERRORS + 1))
+fi
+
+# --- Check 5: Schema Field Count (optional, requires auth) ---
+echo -n "5. Schema field count............. "
+if [ -n "$STATIC_TOKEN" ] && [ "$DIRECTUS_HEALTH" == "200" ]; then
+    FIELDS_BODY=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/fields/knowledge_documents" \
+        -H "Authorization: Bearer $STATIC_TOKEN" 2>/dev/null || echo "")
+    # Count fields safely — grep may return nothing, so use || true
+    FIELD_COUNT=$(echo "$FIELDS_BODY" | grep -o '"field":"[^"]*"' | wc -l | tr -d ' ' || true)
+    FIELD_COUNT="${FIELD_COUNT:-0}"
+    if [ "$FIELD_COUNT" -gt 0 ] 2>/dev/null; then
+        echo -e "${GREEN}OK ($FIELD_COUNT fields)${NC}"
+        if $VERBOSE; then
+            FIELD_LIST=$(echo "$FIELDS_BODY" | grep -o '"field":"[^"]*"' | cut -d'"' -f4 | sort | tr '\n' ',' | sed 's/,$//' || true)
+            echo -e "   ${CYAN}Fields:${NC} $FIELD_LIST"
+        fi
+    else
+        # Check if it is an auth issue (403) or empty response
+        FIELDS_HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$VPS_DIRECTUS_URL/fields/knowledge_documents" \
+            -H "Authorization: Bearer $STATIC_TOKEN" 2>/dev/null || echo "000")
+        if [ "$FIELDS_HTTP" == "401" ] || [ "$FIELDS_HTTP" == "403" ]; then
+            echo -e "${YELLOW}AUTH FAILED (HTTP $FIELDS_HTTP — token may be invalid)${NC}"
+            WARNINGS=$((WARNINGS + 1))
+        else
+            echo -e "${YELLOW}WARN (0 fields returned, HTTP $FIELDS_HTTP)${NC}"
+            WARNINGS=$((WARNINGS + 1))
+        fi
+    fi
+elif [ "$DIRECTUS_HEALTH" != "200" ]; then
+    echo -e "${YELLOW}SKIPPED (Directus down)${NC}"
+    WARNINGS=$((WARNINGS + 1))
+else
+    echo -e "${YELLOW}SKIPPED (no auth token)${NC}"
 fi
 
 # --- Summary ---
 echo ""
 echo "======================================"
 if [ "$ERRORS" -eq 0 ] && [ "$WARNINGS" -eq 0 ]; then
-    echo -e "${GREEN}  ALL CHECKS PASSED ✅${NC}"
+    echo -e "${GREEN}  ALL CHECKS PASSED${NC}"
     exit 0
 elif [ "$ERRORS" -eq 0 ]; then
-    echo -e "${YELLOW}  PASSED WITH $WARNINGS WARNING(S) ⚠️${NC}"
+    echo -e "${YELLOW}  PASSED WITH $WARNINGS WARNING(S)${NC}"
     exit 0
 else
-    echo -e "${RED}  $ERRORS CHECK(S) FAILED ❌${NC}"
-    [ "$WARNINGS" -gt 0 ] && echo -e "${YELLOW}  $WARNINGS WARNING(S) ⚠️${NC}"
+    echo -e "${RED}  $ERRORS CHECK(S) FAILED${NC}"
+    [ "$WARNINGS" -gt 0 ] && echo -e "${YELLOW}  $WARNINGS WARNING(S)${NC}"
     exit 1
 fi
