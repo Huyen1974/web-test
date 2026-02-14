@@ -9,27 +9,214 @@ on:
 permissions:
   contents: read
 
+env:
+  VPS_DIRECTUS_URL: "https://directus.incomexsaigoncorp.vn"
+  VPS_AGENT_DATA_URL: "https://vps.incomexsaigoncorp.vn/api"
+  WEBSITE_URL: "https://ai.incomexsaigoncorp.vn"
+
 jobs:
   health-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Health Check
+      - name: "CHECK 1 — Services Alive"
         run: |
-          chmod +x ./dot/bin/dot-sync-check
-          ./dot/bin/dot-sync-check --verbose
-        env:
-          VPS_DIRECTUS_URL: "https://directus.incomexsaigoncorp.vn"
-          VPS_AGENT_DATA_URL: "https://vps.incomexsaigoncorp.vn/api"
-          WEBSITE_URL: "https://ai.incomexsaigoncorp.vn"
+          echo "=== CHECK 1: Services Alive ==="
+          FAILED=0
+
+          echo -n "Nuxt (website)......... "
+          HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$WEBSITE_URL/" 2>/dev/null || echo "000")
+          if [ "$HTTP" = "200" ]; then echo "OK ($HTTP)"; else echo "FAIL ($HTTP)"; FAILED=1; fi
+
+          echo -n "Directus............... "
+          HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$VPS_DIRECTUS_URL/server/health" 2>/dev/null || echo "000")
+          if [ "$HTTP" = "200" ]; then echo "OK ($HTTP)"; else echo "FAIL ($HTTP)"; FAILED=1; fi
+
+          echo -n "Agent Data............. "
+          HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$VPS_AGENT_DATA_URL/health" 2>/dev/null || echo "000")
+          if [ "$HTTP" = "200" ]; then echo "OK ($HTTP)"; else echo "FAIL ($HTTP)"; FAILED=1; fi
+
+          echo -n "Qdrant (via health).... "
+          QDRANT=$(curl -s --max-time 15 "$VPS_AGENT_DATA_URL/health" 2>/dev/null | jq -r '.services.qdrant.status // "unknown"')
+          if [ "$QDRANT" = "ok" ]; then echo "OK"; else echo "FAIL ($QDRANT)"; FAILED=1; fi
+
+          if [ $FAILED -ne 0 ]; then echo "::error::CHECK 1 FAILED — services down"; exit 1; fi
+          echo "CHECK 1: PASS"
+
+      - name: "CHECK 2 — Data Integrity"
+        run: |
+          echo "=== CHECK 2: Data Integrity ==="
+          FAILED=0
+
+          # Get Agent Data counts
+          AD_BODY=$(curl -s --max-time 15 "$VPS_AGENT_DATA_URL/health" 2>/dev/null)
+          AD_DOCS=$(echo "$AD_BODY" | jq -r '.data_integrity.document_count // 0')
+          AD_VECTORS=$(echo "$AD_BODY" | jq -r '.data_integrity.vector_point_count // 0')
+          AD_RATIO=$(echo "$AD_BODY" | jq -r '.data_integrity.ratio // 0')
+          AD_SYNC=$(echo "$AD_BODY" | jq -r '.data_integrity.sync_status // "unknown"')
+
+          # Get Directus count
+          DIR_BODY=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/items/knowledge_documents?aggregate%5Bcount%5D=id" 2>/dev/null)
+          DIR_COUNT=$(echo "$DIR_BODY" | jq -r '.data[0].count.id // 0')
+
+          echo "Agent Data: $AD_DOCS docs, $AD_VECTORS vectors, ratio $AD_RATIO, sync $AD_SYNC"
+          echo "Directus:   $DIR_COUNT records"
+
+          # Check 1: doc/vector ratio (2.5-4.5 is healthy)
+          echo -n "Vector ratio........... "
+          RATIO_OK=$(echo "$AD_RATIO" | awk '{if ($1 >= 2.5 && $1 <= 4.5) print "yes"; else print "no"}')
+          if [ "$RATIO_OK" = "yes" ]; then echo "OK ($AD_RATIO)"; else echo "WARN ($AD_RATIO — expected 2.5-4.5)"; fi
+
+          # Check 2: sync status
+          echo -n "Sync status............ "
+          if [ "$AD_SYNC" = "ok" ]; then echo "OK"; else echo "FAIL ($AD_SYNC)"; FAILED=1; fi
+
+          # Check 3: counts not zero
+          echo -n "Document count......... "
+          if [ "$AD_DOCS" -gt 50 ] 2>/dev/null; then echo "OK ($AD_DOCS)"; else echo "FAIL ($AD_DOCS — expected >50)"; FAILED=1; fi
+
+          echo -n "Directus count......... "
+          if [ "$DIR_COUNT" -gt 50 ] 2>/dev/null; then echo "OK ($DIR_COUNT)"; else echo "WARN ($DIR_COUNT — expected >50)"; fi
+
+          if [ $FAILED -ne 0 ]; then echo "::error::CHECK 2 FAILED — data integrity issue"; exit 1; fi
+          echo "CHECK 2: PASS"
+
+      - name: "CHECK 3 — Content Verification"
+        run: |
+          echo "=== CHECK 3: Content Verification ==="
+          FAILED=0
+
+          # Get 3 published docs from Directus with file_path
+          DOCS=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/items/knowledge_documents?filter%5Bstatus%5D%5B_eq%5D=published&filter%5Bis_current_version%5D%5B_eq%5D=true&filter%5Bis_folder%5D%5B_eq%5D=false&fields=title,file_path&sort=title&limit=3" 2>/dev/null)
+
+          for i in 0 1 2; do
+            TITLE=$(echo "$DOCS" | jq -r ".data[$i].title // \"\"")
+            FPATH=$(echo "$DOCS" | jq -r ".data[$i].file_path // \"\"")
+            if [ -z "$FPATH" ]; then continue; fi
+
+            # Build clean URL: strip knowledge/ or docs/ prefix and .md suffix
+            CLEAN=$(echo "$FPATH" | sed 's|^knowledge/||;s|^docs/||;s|\.md$||')
+            URL="$WEBSITE_URL/knowledge/$CLEAN"
+
+            echo -n "Page: $TITLE... "
+            HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$URL" 2>/dev/null || echo "000")
+            BODY=$(curl -s --max-time 20 "$URL" 2>/dev/null)
+            NOT_FOUND=$(echo "$BODY" | grep -c "Document not found" || true)
+
+            if [ "$HTTP" = "200" ] && [ "$NOT_FOUND" = "0" ]; then
+              echo "OK ($HTTP)"
+            else
+              echo "FAIL ($HTTP, not_found=$NOT_FOUND)"
+              FAILED=1
+            fi
+          done
+
+          if [ $FAILED -ne 0 ]; then echo "::error::CHECK 3 FAILED — content pages broken"; exit 1; fi
+          echo "CHECK 3: PASS"
+
+      - name: "CHECK 4 — Cache CDN"
+        run: |
+          echo "=== CHECK 4: Cache CDN ==="
+          FAILED=0
+
+          echo -n "Cache headers.......... "
+          HEADERS=$(curl -sI --max-time 15 "$WEBSITE_URL/knowledge/" 2>/dev/null)
+          HAS_CACHE=$(echo "$HEADERS" | grep -ic 'cache-control.*s-maxage' || true)
+          if [ "$HAS_CACHE" -gt 0 ]; then
+            CACHE_VAL=$(echo "$HEADERS" | grep -i 'cache-control' | head -1 | tr -d '\r')
+            echo "OK ($CACHE_VAL)"
+          else
+            echo "WARN (no s-maxage header)"
+          fi
+
+          echo -n "CDN serving............ "
+          X_CACHE=$(echo "$HEADERS" | grep -i 'x-cache' | head -1 | tr -d '\r')
+          if [ -n "$X_CACHE" ]; then
+            echo "OK ($X_CACHE)"
+          else
+            echo "WARN (no x-cache header)"
+          fi
+
+          echo -n "No set-cookie leak..... "
+          SET_COOKIE=$(echo "$HEADERS" | grep -ic 'set-cookie' || true)
+          if [ "$SET_COOKIE" = "0" ]; then echo "OK"; else echo "WARN (set-cookie present)"; fi
+
+          echo "CHECK 4: PASS"
+
+      - name: "CHECK 5 — Vector Search"
+        run: |
+          echo "=== CHECK 5: Vector Search ==="
+          FAILED=0
+
+          echo -n "Search query........... "
+          RESULT=$(curl -s --max-time 30 -X POST "$VPS_AGENT_DATA_URL/chat" \
+            -H 'Content-Type: application/json' \
+            -d '{"message":"kiến trúc hệ thống"}' 2>/dev/null)
+
+          # Strip ANSI codes and parse
+          CLEAN=$(echo "$RESULT" | sed 's/\x1b\[[0-9;]*m//g')
+          CTX_COUNT=$(echo "$CLEAN" | jq -r '.context | length // 0' 2>/dev/null || echo "0")
+
+          if [ "$CTX_COUNT" -gt 0 ] 2>/dev/null; then
+            FIRST=$(echo "$CLEAN" | jq -r '.context[0].document_id // "?"' 2>/dev/null)
+            echo "OK ($CTX_COUNT results, first: $FIRST)"
+          else
+            echo "FAIL (0 results)"
+            FAILED=1
+          fi
+
+          if [ $FAILED -ne 0 ]; then echo "::error::CHECK 5 FAILED — vector search broken"; exit 1; fi
+          echo "CHECK 5: PASS"
+
+      - name: "CHECK 6 — Directus Flows"
+        run: |
+          echo "=== CHECK 6: Directus Flows ==="
+          FAILED=0
+
+          # Count active flows (public access to /flows)
+          FLOWS=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/flows" 2>/dev/null)
+          ACTIVE=$(echo "$FLOWS" | jq '[.data[] | select(.status == "active")] | length' 2>/dev/null || echo "0")
+          TOTAL=$(echo "$FLOWS" | jq '.data | length' 2>/dev/null || echo "0")
+
+          echo -n "Active flows........... "
+          if [ "$ACTIVE" -ge 5 ] 2>/dev/null; then
+            echo "OK ($ACTIVE active / $TOTAL total)"
+          else
+            echo "WARN ($ACTIVE active — expected >=5)"
+          fi
+
+          # Check no Cloud Run URLs in flow operations
+          echo -n "Cloud Run URLs......... "
+          CR_COUNT=$(echo "$FLOWS" | jq '[.data[].operations[]?.options // {} | tostring] | map(select(test("run.app"))) | length' 2>/dev/null || echo "0")
+          if [ "$CR_COUNT" = "0" ]; then
+            echo "CLEAN (0 found)"
+          else
+            echo "FAIL ($CR_COUNT flows still have Cloud Run URLs)"
+            FAILED=1
+          fi
+
+          if [ $FAILED -ne 0 ]; then echo "::error::CHECK 6 FAILED — Directus flow issue"; exit 1; fi
+          echo "CHECK 6: PASS"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo ""
+          echo "========================================"
+          echo "  HEALTH CHECK COMPLETE"
+          echo "========================================"
+          echo "  Checks: Services, Data, Content, Cache, Search, Flows"
+          echo "  VPS: $VPS_AGENT_DATA_URL"
+          echo "  Web: $WEBSITE_URL"
+          echo "========================================"
 
       - name: Notify on Failure
         if: failure()
         run: |
-          echo "::error::Health check failed! VPS infrastructure may be down."
+          echo "::error::Health check failed! VPS infrastructure may have issues."
           echo "Check the logs above for details."
           echo ""
-          echo "VPS Directus: https://directus.incomexsaigoncorp.vn"
-          echo "VPS Agent Data: https://vps.incomexsaigoncorp.vn/api"
-          echo "Website: https://ai.incomexsaigoncorp.vn"
+          echo "Directus: $VPS_DIRECTUS_URL"
+          echo "Agent Data: $VPS_AGENT_DATA_URL"
+          echo "Website: $WEBSITE_URL"
