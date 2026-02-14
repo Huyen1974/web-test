@@ -149,10 +149,11 @@ function selectSearchResult(doc: any) {
 	navigateTo(`/knowledge/${cleanUrl(doc.source_id || '')}`);
 }
 
-// Clean URL: strip "docs/" prefix and ".md" suffix
+// Clean URL: strip "docs/" or "knowledge/" prefix and ".md" suffix
 function cleanUrl(docId: string): string {
 	let clean = docId;
 	if (clean.startsWith('docs/')) clean = clean.slice(5);
+	if (clean.startsWith('knowledge/')) clean = clean.slice(10);
 	clean = clean.replace(/\.md$/, '');
 	return clean;
 }
