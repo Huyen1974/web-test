@@ -1,22 +1,41 @@
 /**
- * Strip session cookie from /knowledge routes — WEB-70F
+ * Strip session cookie from public cacheable routes — WEB-70F + P26
  *
  * Firebase Hosting (Fastly CDN) never caches responses with set-cookie headers.
- * The Directus auth module sets a session cookie on every SSR-rendered page,
- * causing ALL /knowledge HTML requests to be CDN MISS.
+ * The session.global.ts middleware sets a session cookie on every page,
+ * causing ALL public HTML requests to be CDN MISS.
  *
- * This middleware removes set-cookie from /knowledge responses only,
- * allowing Firebase CDN to cache them with s-maxage=31536000 (1 year).
+ * This middleware removes set-cookie from public cacheable responses,
+ * allowing Firebase CDN to cache them with s-maxage (stale-while-revalidate).
  *
- * Other routes (login, admin, portal) keep their cookies untouched.
+ * Auth/private routes (login, admin, portal, profile) keep their cookies.
  *
- * VERIFY: curl -sI localhost:3000/knowledge | grep set-cookie (should be empty)
+ * VERIFY: curl -sI localhost:3000/posts | grep set-cookie (should be empty)
  * REGISTRY: docs/CUSTOM-CODE-REGISTRY.md
  */
+
+/** Public route prefixes where cookies should be stripped for CDN caching */
+const CACHEABLE_PREFIXES = [
+	'/knowledge',
+	'/posts',
+	'/projects',
+	'/blueprints',
+	'/help',
+];
+
+function isCacheablePath(path: string): boolean {
+	// Homepage
+	if (path === '/') return true;
+	// Public route prefixes
+	return CACHEABLE_PREFIXES.some(
+		(prefix) => path === prefix || path.startsWith(prefix + '/'),
+	);
+}
+
 export default defineEventHandler((event) => {
 	const path = getRequestURL(event).pathname;
 
-	if (!path.startsWith('/knowledge')) {
+	if (!isCacheablePath(path)) {
 		return;
 	}
 
