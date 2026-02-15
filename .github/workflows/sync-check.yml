@@ -208,9 +208,9 @@ jobs:
           ALLOWED="current-state current-tasks dev other"
 
           # Get all document IDs and extract top-level folders
-          DOCS=$(curl -s --max-time 15 -H "X-API-Key: ${{ secrets.AGENT_DATA_API_KEY }}" "$VPS_AGENT_DATA_URL/kb/list" 2>/dev/null)
+          DOCS=$(curl -s --max-time 15 "$VPS_AGENT_DATA_URL/kb/list" 2>/dev/null)
           FOLDERS=$(echo "$DOCS" | jq -r '
-            [.[] | .document_id // "" |
+            [.items[] | .document_id // "" |
               select(startswith("knowledge/")) |
               split("/")[1]] |
             unique | .[]' 2>/dev/null)
