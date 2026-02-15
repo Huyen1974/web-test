@@ -33,6 +33,7 @@ export default defineNuxtConfig({
 		'/knowledge/**': { swr: 31536000, prerender: false },
 		'/api/knowledge/**': { swr: 31536000 },
 		// CDN cache for public pages (P26 — strip-cookie middleware removes set-cookie)
+		'/': { swr: 3600 },
 		'/posts': { swr: 3600 },
 		'/posts/**': { swr: 3600 },
 		'/projects': { swr: 3600 },
