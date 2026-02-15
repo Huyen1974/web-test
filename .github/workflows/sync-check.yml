@@ -199,6 +199,43 @@ jobs:
           if [ $FAILED -ne 0 ]; then echo "::error::CHECK 6 FAILED — Directus flow issue"; exit 1; fi
           echo "CHECK 6: PASS"
 
+      - name: "CHECK 7 — Knowledge Structure Validation"
+        run: |
+          echo "=== CHECK 7: Knowledge Structure Validation ==="
+          FAILED=0
+
+          # Allowed top-level folders under knowledge/ (KS-LAW §2)
+          ALLOWED="current-state current-tasks dev other"
+
+          # Get all document IDs and extract top-level folders
+          DOCS=$(curl -s --max-time 15 -H "X-API-Key: ${{ secrets.AGENT_DATA_API_KEY }}" "$VPS_AGENT_DATA_URL/kb/list" 2>/dev/null)
+          FOLDERS=$(echo "$DOCS" | jq -r '
+            [.[] | .document_id // "" |
+              select(startswith("knowledge/")) |
+              split("/")[1]] |
+            unique | .[]' 2>/dev/null)
+
+          echo -n "Top-level folders...... "
+          VIOLATIONS=""
+          for folder in $FOLDERS; do
+            if ! echo "$ALLOWED" | grep -qw "$folder"; then
+              VIOLATIONS="$VIOLATIONS $folder"
+            fi
+          done
+
+          if [ -z "$VIOLATIONS" ]; then
+            echo "OK ($(echo $FOLDERS | wc -w | tr -d ' ') folders, all valid)"
+            echo "  Folders: $FOLDERS"
+          else
+            echo "FAIL — rogue folders found:$VIOLATIONS"
+            echo "  Expected: $ALLOWED"
+            echo "  Found: $FOLDERS"
+            FAILED=1
+          fi
+
+          if [ $FAILED -ne 0 ]; then echo "::error::CHECK 7 FAILED — unauthorized knowledge folders"; exit 1; fi
+          echo "CHECK 7: PASS"
+
       - name: Summary
         if: always()
         run: |
@@ -206,7 +243,7 @@ jobs:
           echo "========================================"
           echo "  HEALTH CHECK COMPLETE"
           echo "========================================"
-          echo "  Checks: Services, Data, Content, Cache, Search, Flows"
+          echo "  Checks: Services, Data, Content, Cache, Search, Flows, Structure"
           echo "  VPS: $VPS_AGENT_DATA_URL"
           echo "  Web: $WEBSITE_URL"
           echo "========================================"
