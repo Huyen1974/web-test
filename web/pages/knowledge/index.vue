@@ -16,18 +16,27 @@ definePageMeta({
 
 // Readable folder labels — frozen 4-folder structure (KS-LAW §2)
 const FOLDER_LABELS: Record<string, string> = {
-	'current-state': 'Current State',
-	'current-tasks': 'Current Tasks',
-	dev: 'Development',
-	other: 'Resources',
+	'current-state': 'Trạng thái hiện tại',
+	'current-tasks': 'Việc đang làm',
+	dev: 'Phát triển',
+	other: 'Tài liệu AI',
 	// Sub-folders
 	blueprints: 'Blueprints',
 	ssot: 'SSOT',
 	operations: 'Operations',
+	'context-packs': 'Context Packs',
+	playbooks: 'Playbooks',
 	sessions: 'Sessions',
 	specs: 'Specs',
 	sprints: 'Sprints',
 	status: 'Status',
+	templates: 'Templates',
+	discussions: 'Discussions',
+	archive: 'Archive',
+	guides: 'Guides',
+	research: 'Research',
+	decisions: 'Decisions',
+	processes: 'Processes',
 };
 
 // Search state

@@ -39,7 +39,7 @@ export default defineEventHandler((event) => {
 		return;
 	}
 
-	// Hook into response to strip set-cookie and vary:cookie after all handlers run
+	// Hook into response to strip set-cookie, vary:cookie, and override s-maxage for CDN
 	const originalWriteHead = event.node.res.writeHead;
 	event.node.res.writeHead = function (
 		statusCode: number,
@@ -47,6 +47,13 @@ export default defineEventHandler((event) => {
 	) {
 		// Remove set-cookie so CDN can cache the response
 		event.node.res.removeHeader('set-cookie');
+
+		// Override cache-control: Nitro ISR uses short swr (60s) for freshness,
+		// but CDN should cache permanently (purged by Directus flow on content change)
+		event.node.res.setHeader(
+			'cache-control',
+			's-maxage=31536000, stale-while-revalidate',
+		);
 
 		// Remove 'cookie' from vary header so CDN serves one cache entry
 		// regardless of what cookies the browser sends (P28)
