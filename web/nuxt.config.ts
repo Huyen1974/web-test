@@ -28,10 +28,18 @@ export default defineNuxtConfig({
 		// Redirect legacy /docs routes to /knowledge (P16)
 		'/docs': { redirect: { to: '/knowledge', statusCode: 301 } },
 		'/docs/**': { redirect: { to: '/knowledge', statusCode: 301 } },
-		// Cache: permanent until content changes (WEB-70B)
+		// Cache: permanent until content changes (WEB-70B + P26)
 		'/knowledge': { swr: 31536000, prerender: false },
 		'/knowledge/**': { swr: 31536000, prerender: false },
 		'/api/knowledge/**': { swr: 31536000 },
+		// CDN cache for public pages (P26 — strip-cookie middleware removes set-cookie)
+		'/posts': { swr: 3600 },
+		'/posts/**': { swr: 3600 },
+		'/projects': { swr: 3600 },
+		'/blueprints': { swr: 3600 },
+		'/blueprints/**': { swr: 3600 },
+		'/help': { swr: 3600 },
+		'/help/**': { swr: 3600 },
 		'/_nuxt/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
 	},
 
