@@ -18,8 +18,8 @@ export function buildDocsTree(documents: AgentView[]): DocsTreeNode[] {
 
 	for (const doc of sortedDocs) {
 		const path = doc.path || doc.source_id || '';
-		// Remove "docs/" prefix if present
-		const relativePath = path.startsWith('docs/') ? path.slice(5) : path;
+		// Remove "docs/" or "knowledge/" prefix if present
+		const relativePath = path.replace(/^(docs|knowledge)\//, '');
 		const parts = relativePath.split('/');
 
 		// Build folder hierarchy
