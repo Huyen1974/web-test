@@ -14,17 +14,20 @@ definePageMeta({
 	description: 'Browse knowledge base and documentation',
 });
 
-// Readable folder labels extracted from README.md titles + fallback map
+// Readable folder labels — frozen 4-folder structure (KS-LAW §2)
 const FOLDER_LABELS: Record<string, string> = {
-	foundation: 'Foundation',
-	plans: 'Plans',
+	'current-state': 'Current State',
+	'current-tasks': 'Current Tasks',
+	dev: 'Development',
+	other: 'Resources',
+	// Sub-folders
+	blueprints: 'Blueprints',
+	ssot: 'SSOT',
 	operations: 'Operations',
-	'context-packs': 'Context Packs',
-	playbooks: 'Playbooks',
+	sessions: 'Sessions',
+	specs: 'Specs',
+	sprints: 'Sprints',
 	status: 'Status',
-	templates: 'Templates',
-	discussions: 'Discussions',
-	archive: 'Archive',
 };
 
 // Search state
@@ -85,13 +88,16 @@ const {
 	});
 
 	// Map to AgentView-like structure for buildDocsTree compatibility
-	const mapped = docs.map((item: any) => ({
-		id: item.file_path || item.slug,
-		source_id: item.file_path || item.slug,
-		title: item.title || item.file_path?.split('/').pop()?.replace(/\.md$/, '') || item.slug,
-		path: item.file_path || item.slug,
-		tags: item.tags,
-	}));
+	const mapped = docs.map((item: any) => {
+		const fp = item.file_path || item.slug || '';
+		return {
+			id: fp,
+			source_id: fp,
+			title: item.title || fp.split('/').pop()?.replace(/\.md$/, '') || item.slug,
+			path: fp,
+			tags: item.tags,
+		};
+	});
 
 	return { docs: mapped, folderLabels };
 });

@@ -39,13 +39,30 @@ export default defineEventHandler((event) => {
 		return;
 	}
 
-	// Hook into response to strip set-cookie after all handlers run
+	// Hook into response to strip set-cookie and vary:cookie after all handlers run
 	const originalWriteHead = event.node.res.writeHead;
 	event.node.res.writeHead = function (
 		statusCode: number,
 		...args: unknown[]
 	) {
+		// Remove set-cookie so CDN can cache the response
 		event.node.res.removeHeader('set-cookie');
+
+		// Remove 'cookie' from vary header so CDN serves one cache entry
+		// regardless of what cookies the browser sends (P28)
+		const vary = event.node.res.getHeader('vary');
+		if (vary) {
+			const parts = (Array.isArray(vary) ? vary.join(', ') : String(vary))
+				.split(',')
+				.map((v) => v.trim())
+				.filter((v) => v.toLowerCase() !== 'cookie');
+			if (parts.length > 0) {
+				event.node.res.setHeader('vary', parts.join(', '));
+			} else {
+				event.node.res.removeHeader('vary');
+			}
+		}
+
 		return originalWriteHead.call(this, statusCode, ...args);
 	};
 });
