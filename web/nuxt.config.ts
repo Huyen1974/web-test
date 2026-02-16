@@ -22,7 +22,7 @@ export default defineNuxtConfig({
 		'/approval-desk/**': { prerender: false },
 		'/knowledge-tree': { prerender: false },
 		'/knowledge-tree/**': { prerender: false },
-		'/profile': { prerender: false },
+		'/profile': { redirect: { to: '/portal/account', statusCode: 302 } },
 		'/portal': { prerender: false },
 		'/portal/**': { prerender: false },
 		// Redirect legacy /docs routes to /knowledge (P16)
