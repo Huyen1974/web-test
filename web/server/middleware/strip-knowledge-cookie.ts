@@ -48,11 +48,12 @@ export default defineEventHandler((event) => {
 		// Remove set-cookie so CDN can cache the response
 		event.node.res.removeHeader('set-cookie');
 
-		// Override cache-control: Nitro ISR uses short swr (60s) for freshness,
-		// but CDN should cache permanently (purged by Directus flow on content change)
+		// Override cache-control: CDN caches for 1 hour, serves stale while revalidating.
+		// Firebase Hosting CDN has no per-URL purge API, so we use short s-maxage
+		// with long stale-while-revalidate for instant responses + hourly freshness.
 		event.node.res.setHeader(
 			'cache-control',
-			's-maxage=31536000, stale-while-revalidate',
+			's-maxage=3600, stale-while-revalidate=31536000',
 		);
 
 		// Remove 'cookie' from vary header so CDN serves one cache entry
