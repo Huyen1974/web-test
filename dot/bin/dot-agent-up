@@ -1,0 +1,58 @@
+#!/bin/bash
+# dot-agent-up - Start Agent Data and MCP Server
+# Part of WEB-52 MCP Server implementation
+set -e
+
+AGENT_DATA_DIR="/Users/nmhuyen/Documents/Manual Deploy/agent-data-test"
+
+echo "Starting Agent Data services..."
+
+# Check if Agent Data already running
+if lsof -i:8000 > /dev/null 2>&1; then
+    echo "  Port 8000 already in use (Agent Data may be running)"
+else
+    echo "  Starting Agent Data on port 8000..."
+    cd "$AGENT_DATA_DIR"
+    source venv/bin/activate
+    export $(cat .env.local | grep -v '^#' | xargs)
+    nohup uvicorn agent_data.server:app --host 0.0.0.0 --port 8000 > /tmp/agent-data.log 2>&1 &
+    sleep 3
+
+    # Verify it started
+    if curl -s http://localhost:8000/info > /dev/null 2>&1; then
+        echo "  Agent Data started successfully"
+    else
+        echo "  Warning: Agent Data may not have started properly"
+        echo "  Check logs: tail -f /tmp/agent-data.log"
+    fi
+fi
+
+# Check if MCP Server already running
+if lsof -i:8001 > /dev/null 2>&1; then
+    echo "  Port 8001 already in use (MCP Server may be running)"
+else
+    echo "  Starting MCP Server on port 8001..."
+    cd "$AGENT_DATA_DIR"
+    source venv/bin/activate
+    export AGENT_DATA_URL=http://localhost:8000
+    nohup uvicorn mcp_server.server:app --host 0.0.0.0 --port 8001 > /tmp/mcp-server.log 2>&1 &
+    sleep 2
+
+    # Verify it started
+    if curl -s http://localhost:8001/health > /dev/null 2>&1; then
+        echo "  MCP Server started successfully"
+    else
+        echo "  Warning: MCP Server may not have started properly"
+        echo "  Check logs: tail -f /tmp/mcp-server.log"
+    fi
+fi
+
+echo ""
+echo "Services:"
+echo "  - Agent Data: http://localhost:8000"
+echo "  - MCP Server: http://localhost:8001"
+echo "  - MCP Info:   http://localhost:8001/mcp"
+echo ""
+echo "Logs:"
+echo "  - Agent Data: tail -f /tmp/agent-data.log"
+echo "  - MCP Server: tail -f /tmp/mcp-server.log"

@@ -1,0 +1,19 @@
+#!/bin/bash
+# dot-agent-down - Stop Agent Data and MCP Server
+# Part of WEB-52 MCP Server implementation
+
+echo "Stopping Agent Data services..."
+
+# Kill processes on ports 8000 and 8001
+for port in 8000 8001; do
+    pid=$(lsof -ti:$port 2>/dev/null)
+    if [ -n "$pid" ]; then
+        kill $pid 2>/dev/null
+        echo "  Stopped process on port $port (PID: $pid)"
+    else
+        echo "  No process on port $port"
+    fi
+done
+
+echo ""
+echo "Services stopped"

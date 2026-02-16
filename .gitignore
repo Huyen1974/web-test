@@ -31,3 +31,7 @@ agent_token_output.txt
 dot/config/credentials.local.json
 dot/config/google-credentials.json
 .env.local
+
+# Local-only files
+dot/backups/
+reports/

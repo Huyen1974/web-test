@@ -1,0 +1,85 @@
+#!/bin/bash
+# dot-mcp-stdio-restart - Restart Claude Desktop to reload MCP stdio server
+# Usage: dot-mcp-stdio-restart [--verify]
+
+VERIFY="${1:-}"
+
+echo "MCP STDIO Server Restart"
+echo "========================"
+
+# Test MCP server first
+AGENT_DATA_DIR="${AGENT_DATA_DIR:-/Users/nmhuyen/Documents/Manual Deploy/agent-data-test}"
+
+echo "Testing MCP stdio server..."
+cd "$AGENT_DATA_DIR"
+TEST_OUTPUT=$(./venv/bin/python mcp_server/stdio_server.py --test 2>&1)
+
+if echo "$TEST_OUTPUT" | grep -q "Test completed successfully"; then
+    echo "  -> MCP server test: PASS"
+else
+    echo "  -> MCP server test: FAIL"
+    echo "$TEST_OUTPUT"
+    exit 1
+fi
+
+# Check Claude Desktop config
+CONFIG_FILE="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+if [ -f "$CONFIG_FILE" ]; then
+    if grep -q "mcp_server.stdio_server" "$CONFIG_FILE"; then
+        echo "  -> Claude config: OK (stdio transport configured)"
+    else
+        echo "  -> Claude config: WARNING (stdio transport not found)"
+        echo "     Run: dot-mcp-config-claude"
+    fi
+else
+    echo "  -> Claude config: MISSING"
+    exit 1
+fi
+
+# Restart Claude Desktop
+echo ""
+echo "Restarting Claude Desktop..."
+pkill -x "Claude" 2>/dev/null || true
+sleep 2
+
+open -na "Claude" --args --disable-gpu
+sleep 3
+
+# Verify it's running
+if pgrep -x "Claude" > /dev/null; then
+    PID=$(pgrep -x "Claude" | head -1)
+    echo "  -> Claude Desktop: RUNNING (PID: $PID)"
+else
+    echo "  -> Claude Desktop: FAILED TO START"
+    exit 1
+fi
+
+# Optional verification
+if [ "$VERIFY" = "--verify" ]; then
+    echo ""
+    echo "Verification Mode"
+    echo "-----------------"
+
+    # Check Agent Data is running
+    if curl -s http://localhost:8000/info | grep -q "agent-data"; then
+        echo "  -> Agent Data (8000): OK"
+    else
+        echo "  -> Agent Data (8000): NOT RUNNING"
+        echo "     Run: dot-agent-up"
+    fi
+
+    # Check MCP HTTP server (optional)
+    if curl -s http://localhost:8001/health 2>/dev/null | grep -q "ok"; then
+        echo "  -> MCP HTTP (8001): OK"
+    else
+        echo "  -> MCP HTTP (8001): Not running (optional)"
+    fi
+
+    echo ""
+    echo "Claude Desktop should now have MCP tools available."
+    echo "Look for the hammer icon in the chat input area."
+fi
+
+echo ""
+echo "========================"
+echo "Restart complete!"

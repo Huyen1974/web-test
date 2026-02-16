@@ -1,0 +1,40 @@
+#!/bin/bash
+# dot-knowledge-info - Get Agent Data system info
+# Usage: dot-knowledge-info
+
+AGENT_URL="${AGENT_DATA_URL:-http://localhost:8000}"
+
+echo "Agent Data System Info"
+echo "======================"
+echo ""
+
+echo "Health Check:"
+HEALTH=$(curl -s "$AGENT_URL/health" 2>/dev/null)
+if [ -n "$HEALTH" ]; then
+    echo "$HEALTH" | python3 -m json.tool 2>/dev/null || echo "  $HEALTH"
+else
+    echo "  Not responding"
+fi
+
+echo ""
+echo "System Info:"
+INFO=$(curl -s "$AGENT_URL/info" 2>/dev/null)
+if [ -n "$INFO" ]; then
+    echo "$INFO" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    print(f\"  Name: {data.get('name', 'N/A')}\")
+    print(f\"  Version: {data.get('version', 'N/A')}\")
+    print(f\"  Langroid: {data.get('langroid_version', 'N/A')}\")
+    deps = data.get('dependencies', {})
+    print(f\"  Dependencies: {', '.join([k for k,v in deps.items() if v])}\")
+except:
+    print('  Could not parse info')
+" 2>/dev/null
+else
+    echo "  Not responding"
+fi
+
+echo ""
+echo "Endpoint: $AGENT_URL"

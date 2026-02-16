@@ -1,0 +1,33 @@
+#!/bin/bash
+# dot-knowledge-ingest - Ingest document into Agent Data
+# Usage: dot-knowledge-ingest <source_path>
+
+set -e
+
+SOURCE="$1"
+AGENT_URL="${AGENT_DATA_URL:-http://localhost:8000}"
+
+if [ -z "$SOURCE" ]; then
+    echo "Usage: dot-knowledge-ingest <source_path>"
+    echo ""
+    echo "Examples:"
+    echo "  dot-knowledge-ingest gs://bucket/docs/file.pdf"
+    echo "  dot-knowledge-ingest https://example.com/document.md"
+    exit 1
+fi
+
+echo "Ingesting: $SOURCE"
+echo "Endpoint: $AGENT_URL/ingest"
+echo ""
+
+RESPONSE=$(curl -s -X POST "$AGENT_URL/ingest" \
+    -H "Content-Type: application/json" \
+    -d "{\"source\": \"$SOURCE\"}" 2>/dev/null)
+
+if [ -z "$RESPONSE" ]; then
+    echo "Error: No response from Agent Data"
+    exit 1
+fi
+
+echo "Response:"
+echo "$RESPONSE" | python3 -m json.tool 2>/dev/null || echo "$RESPONSE"

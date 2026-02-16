@@ -1,0 +1,19 @@
+#!/bin/bash
+# dot-gpt-copy-spec - Copy OpenAPI spec to clipboard for ChatGPT Actions
+# Usage: dot-gpt-copy-spec
+
+OPENAPI_FILE="/Users/nmhuyen/Documents/Manual Deploy/agent-data-test/docs/api/openapi.yaml"
+
+if [ -f "$OPENAPI_FILE" ]; then
+    cat "$OPENAPI_FILE" | pbcopy
+    echo "OpenAPI spec copied to clipboard!"
+    echo ""
+    echo "Now paste it in:"
+    echo "  ChatGPT -> Configure -> Actions -> Create new action"
+    echo ""
+    echo "Spec contains endpoints:"
+    grep "operationId:" "$OPENAPI_FILE" | sed 's/.*operationId: /  - /'
+else
+    echo "OpenAPI spec not found: $OPENAPI_FILE"
+    exit 1
+fi

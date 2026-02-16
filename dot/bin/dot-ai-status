@@ -1,0 +1,105 @@
+#!/bin/bash
+# dot-ai-status - Complete AI Ecosystem Status (Agent First Master Tool)
+# Usage: dot-ai-status
+
+echo "================================================================="
+echo "           AI ECOSYSTEM CONNECTION STATUS                        "
+echo "================================================================="
+
+# Backend Services
+echo " BACKEND SERVICES"
+echo "-----------------------------------------------------------------"
+
+echo -n " Agent Data (localhost:8000)      : "
+if curl -s http://localhost:8000/info 2>/dev/null | grep -q "langroid"; then
+    VERSION=$(curl -s http://localhost:8000/info 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('version','?'))" 2>/dev/null)
+    echo "ONLINE (v$VERSION)"
+else
+    echo "OFFLINE"
+fi
+
+echo -n " MCP Server (localhost:8001)      : "
+if curl -s http://localhost:8001/health 2>/dev/null | grep -q "ok"; then
+    TOOLS=$(curl -s http://localhost:8001/mcp 2>/dev/null | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('tools',[])))" 2>/dev/null)
+    echo "ONLINE ($TOOLS tools)"
+else
+    echo "OFFLINE"
+fi
+
+echo -n " Directus (localhost:8055)        : "
+if curl -s http://localhost:8055/server/health 2>/dev/null | grep -q "ok"; then
+    echo "ONLINE"
+else
+    echo "NOT STARTED"
+fi
+
+# AI Connections
+echo "-----------------------------------------------------------------"
+echo " AI CONNECTIONS"
+echo "-----------------------------------------------------------------"
+
+# Claude Desktop
+echo -n " Claude Desktop (MCP)             : "
+CONFIG_FILE="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+if [ -f "$CONFIG_FILE" ] && grep -q "mcpServers" "$CONFIG_FILE"; then
+    if pgrep -x "Claude" > /dev/null; then
+        echo "CONFIGURED & RUNNING"
+    else
+        echo "CONFIGURED (not running)"
+    fi
+else
+    echo "NOT CONFIGURED"
+fi
+
+# ChatGPT
+echo -n " ChatGPT (Actions/OpenAPI)        : "
+if [ -f "/Users/nmhuyen/Documents/Manual Deploy/agent-data-test/docs/api/openapi.yaml" ]; then
+    echo "SPEC READY"
+else
+    echo "NO SPEC"
+fi
+
+# Gemini
+echo -n " Gemini CLI                       : "
+if command -v gemini &> /dev/null; then
+    echo "AVAILABLE"
+else
+    echo "NOT INSTALLED"
+fi
+
+# Claude Code CLI
+echo -n " Claude Code CLI                  : "
+if command -v claude &> /dev/null; then
+    echo "AVAILABLE"
+else
+    echo "NOT INSTALLED"
+fi
+
+echo "-----------------------------------------------------------------"
+echo " VECTOR SYNC STATUS"
+echo "-----------------------------------------------------------------"
+
+echo -n " Vector audit                    : "
+if curl -s http://localhost:8000/health 2>/dev/null | grep -q "healthy"; then
+    AUDIT=$(curl -s -X POST -H "X-API-Key: ${AGENT_DATA_API_KEY:-test-key-local}" -H "Content-Type: application/json" -d '{"auto_heal": false}' http://localhost:8000/kb/audit-sync 2>/dev/null)
+    DOCS=$(echo "$AUDIT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('total_documents','?'))" 2>/dev/null)
+    VECS=$(echo "$AUDIT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('total_vectors','?'))" 2>/dev/null)
+    STATUS=$(echo "$AUDIT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','?'))" 2>/dev/null)
+    echo "$STATUS ($DOCS docs, $VECS vectors)"
+else
+    echo "SKIP (Agent Data offline)"
+fi
+
+echo "-----------------------------------------------------------------"
+echo " QUICK COMMANDS"
+echo "-----------------------------------------------------------------"
+echo " dot-agent-up         - Start Agent Data + MCP Server"
+echo " dot-claude-restart   - Restart Claude Desktop"
+echo " dot-mcp-status       - Check MCP connection"
+echo " dot-gpt-setup        - ChatGPT Actions guide"
+echo " dot-gpt-copy-spec    - Copy OpenAPI to clipboard"
+echo " dot-gemini-setup     - Gemini setup guide"
+echo " dot-knowledge-search - Search Agent Data"
+echo " dot-vector-audit     - Audit & auto-heal vector sync"
+echo " dot-ai-start         - Start entire ecosystem"
+echo "================================================================="
