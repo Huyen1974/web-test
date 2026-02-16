@@ -1,0 +1,98 @@
+#!/bin/bash
+# dot-vector-audit-schedule - Manage local periodic vector audit
+# Usage: dot-vector-audit-schedule [enable|disable|status]
+#
+# Creates a macOS LaunchAgent that runs dot-vector-audit every 12 hours
+# (matching Cloud Scheduler frequency)
+
+set -euo pipefail
+
+PLIST_NAME="com.dot.vector-audit"
+PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_NAME}.plist"
+DOT_BIN="$(cd "$(dirname "$0")" && pwd)"
+LOG_FILE="/tmp/dot-vector-audit.log"
+
+ACTION="${1:-status}"
+
+case "$ACTION" in
+    enable)
+        echo "Creating LaunchAgent for periodic vector audit..."
+        cat > "$PLIST_PATH" << PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>${PLIST_NAME}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>${DOT_BIN}/dot-vector-audit</string>
+        <string>--heal</string>
+        <string>--local</string>
+    </array>
+    <key>StartInterval</key>
+    <integer>43200</integer>
+    <key>StandardOutPath</key>
+    <string>${LOG_FILE}</string>
+    <key>StandardErrorPath</key>
+    <string>${LOG_FILE}</string>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+    </dict>
+</dict>
+</plist>
+PLIST
+
+        launchctl load "$PLIST_PATH" 2>/dev/null || true
+        echo "Enabled: vector audit runs every 12 hours"
+        echo "Log: $LOG_FILE"
+        echo "Plist: $PLIST_PATH"
+        ;;
+
+    disable)
+        if [ -f "$PLIST_PATH" ]; then
+            launchctl unload "$PLIST_PATH" 2>/dev/null || true
+            rm -f "$PLIST_PATH"
+            echo "Disabled: LaunchAgent removed"
+        else
+            echo "Already disabled (no LaunchAgent found)"
+        fi
+        ;;
+
+    status)
+        echo "Vector Audit Scheduler Status:"
+        if [ -f "$PLIST_PATH" ]; then
+            echo "  LaunchAgent: INSTALLED"
+            echo "  Plist: $PLIST_PATH"
+            LOADED=$(launchctl list 2>/dev/null | grep "$PLIST_NAME" || true)
+            if [ -n "$LOADED" ]; then
+                echo "  Status: LOADED (active)"
+            else
+                echo "  Status: NOT LOADED (inactive)"
+            fi
+        else
+            echo "  LaunchAgent: NOT INSTALLED"
+            echo "  Run: dot-vector-audit-schedule enable"
+        fi
+        if [ -f "$LOG_FILE" ]; then
+            echo "  Last log ($(wc -l < "$LOG_FILE" | tr -d ' ') lines):"
+            tail -3 "$LOG_FILE" | sed 's/^/    /'
+        else
+            echo "  Log: none yet"
+        fi
+        # Cloud scheduler info
+        echo ""
+        echo "Cloud Scheduler:"
+        echo "  Frequency: every 12 hours (Cloud Scheduler)"
+        echo "  Endpoint: POST /kb/audit-sync {auto_heal: true}"
+        ;;
+
+    *)
+        echo "Usage: dot-vector-audit-schedule [enable|disable|status]"
+        exit 1
+        ;;
+esac

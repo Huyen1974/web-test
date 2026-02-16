@@ -1,0 +1,36 @@
+#!/bin/bash
+# dot-mcp-verify - Verify MCP Server connection
+# Usage: dot-mcp-verify
+
+MCP_URL="${MCP_URL:-http://localhost:8001}"
+
+echo "Verifying MCP Server at $MCP_URL..."
+echo ""
+
+# Test health endpoint
+echo "Health Check:"
+HEALTH=$(curl -s "$MCP_URL/health" 2>/dev/null)
+if echo "$HEALTH" | grep -q "ok"; then
+    echo "  Status: OK"
+    echo "  Agent Data: $(echo "$HEALTH" | python3 -c "import sys,json; print(json.load(sys.stdin).get('agent_data_status', 'unknown'))" 2>/dev/null)"
+else
+    echo "  Status: NOT RESPONDING"
+    echo "  Response: $HEALTH"
+    exit 1
+fi
+
+echo ""
+echo "Available Tools:"
+TOOLS=$(curl -s "$MCP_URL/mcp" 2>/dev/null)
+echo "$TOOLS" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    for tool in data.get('tools', []):
+        print(f\"  - {tool['name']}: {tool['description'][:60]}...\")
+except:
+    print('  Could not parse tools')
+" 2>/dev/null
+
+echo ""
+echo "MCP Endpoint: $MCP_URL/mcp"

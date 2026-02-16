@@ -1,0 +1,83 @@
+#!/bin/bash
+# dot-ai-start - Start entire AI ecosystem (Agent First - One Command)
+# Usage: dot-ai-start
+
+echo "Starting AI Ecosystem..."
+echo ""
+
+AGENT_DATA_DIR="/Users/nmhuyen/Documents/Manual Deploy/agent-data-test"
+
+# 1. Start Agent Data if not running
+echo "1. Agent Data..."
+if ! curl -s http://localhost:8000/info 2>/dev/null | grep -q "langroid"; then
+    cd "$AGENT_DATA_DIR"
+    source venv/bin/activate 2>/dev/null
+    export $(cat .env.local 2>/dev/null | grep -v '^#' | xargs)
+    nohup uvicorn agent_data.server:app --host 0.0.0.0 --port 8000 > /tmp/agent-data.log 2>&1 &
+    sleep 3
+
+    if curl -s http://localhost:8000/info 2>/dev/null | grep -q "langroid"; then
+        echo "   Agent Data started"
+    else
+        echo "   Agent Data failed to start (check /tmp/agent-data.log)"
+    fi
+else
+    echo "   Agent Data already running"
+fi
+
+# 1b. Quick vector audit
+echo -n "   Vector sync: "
+AUDIT=$(curl -s -X POST -H "X-API-Key: ${AGENT_DATA_API_KEY:-test-key-local}" -H "Content-Type: application/json" -d '{"auto_heal": false}' http://localhost:8000/kb/audit-sync 2>/dev/null)
+if [ -n "$AUDIT" ]; then
+    STATUS=$(echo "$AUDIT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','?'))" 2>/dev/null)
+    DOCS=$(echo "$AUDIT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('total_documents','?'))" 2>/dev/null)
+    VECS=$(echo "$AUDIT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('total_vectors','?'))" 2>/dev/null)
+    echo "$STATUS ($DOCS docs, $VECS vectors)"
+    if [ "$STATUS" != "clean" ]; then
+        echo "   WARNING: Vector issues detected — run 'dot-vector-audit --heal' to fix"
+    fi
+else
+    echo "skipped (audit endpoint unavailable)"
+fi
+
+# 2. Start MCP Server if not running
+echo "2. MCP Server..."
+if ! curl -s http://localhost:8001/health 2>/dev/null | grep -q "ok"; then
+    cd "$AGENT_DATA_DIR"
+    source venv/bin/activate 2>/dev/null
+    export AGENT_DATA_URL=http://localhost:8000
+    nohup uvicorn mcp_server.server:app --host 0.0.0.0 --port 8001 > /tmp/mcp-server.log 2>&1 &
+    sleep 2
+
+    if curl -s http://localhost:8001/health 2>/dev/null | grep -q "ok"; then
+        echo "   MCP Server started"
+    else
+        echo "   MCP Server failed to start (check /tmp/mcp-server.log)"
+    fi
+else
+    echo "   MCP Server already running"
+fi
+
+# 3. Start Claude Desktop
+echo "3. Claude Desktop..."
+if ! pgrep -x "Claude" > /dev/null; then
+    open -a "Claude" 2>/dev/null
+    sleep 2
+    if pgrep -x "Claude" > /dev/null; then
+        echo "   Claude Desktop started"
+    else
+        echo "   Claude Desktop not available"
+    fi
+else
+    echo "   Claude Desktop already running"
+fi
+
+# 4. Show status
+echo ""
+echo "================================================"
+bash "$(dirname "$0")/dot-ai-status" 2>/dev/null || {
+    echo "Status check:"
+    echo " Agent Data: $(curl -s http://localhost:8000/info 2>/dev/null | grep -q 'langroid' && echo 'ONLINE' || echo 'OFFLINE')"
+    echo " MCP Server: $(curl -s http://localhost:8001/health 2>/dev/null | grep -q 'ok' && echo 'ONLINE' || echo 'OFFLINE')"
+    echo " Claude:     $(pgrep -x Claude >/dev/null && echo 'RUNNING' || echo 'NOT RUNNING')"
+}

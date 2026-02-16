@@ -1,0 +1,22 @@
+#!/bin/bash
+# dot-claude-restart - Restart Claude Desktop app (Agent First)
+# Usage: dot-claude-restart
+
+echo "Restarting Claude Desktop..."
+
+# Kill Claude if running
+pkill -x "Claude" 2>/dev/null
+sleep 2
+
+# Start Claude
+open -a "Claude"
+sleep 3
+
+# Verify
+if pgrep -x "Claude" > /dev/null; then
+    echo "Claude Desktop restarted successfully"
+else
+    echo "Failed to start Claude Desktop"
+    echo "Try manually: open -a Claude"
+    exit 1
+fi

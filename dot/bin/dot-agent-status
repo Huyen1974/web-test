@@ -1,0 +1,35 @@
+#!/bin/bash
+# dot-agent-status - Check status of Agent Data and MCP Server
+# Part of WEB-52 MCP Server implementation
+
+echo "Agent Data Services Status"
+echo "=========================="
+echo ""
+
+# Agent Data (port 8000)
+echo -n "Agent Data (8000): "
+if curl -s http://localhost:8000/info > /dev/null 2>&1; then
+    echo "RUNNING"
+    curl -s http://localhost:8000/info | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'  Version: {d.get(\"version\", \"unknown\")}'); print(f'  Langroid: {d.get(\"langroid_available\", False)}')" 2>/dev/null
+else
+    echo "STOPPED"
+fi
+
+echo ""
+
+# MCP Server (port 8001)
+echo -n "MCP Server (8001): "
+if curl -s http://localhost:8001/health > /dev/null 2>&1; then
+    echo "RUNNING"
+    curl -s http://localhost:8001/mcp | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'  Version: {d.get(\"version\", \"unknown\")}'); print(f'  Tools: {[t[\"name\"] for t in d.get(\"tools\", [])]}')" 2>/dev/null
+    # Check Agent Data connectivity
+    status=$(curl -s http://localhost:8001/health | python3 -c "import sys,json; print(json.load(sys.stdin).get('agent_data_status', 'unknown'))" 2>/dev/null)
+    echo "  Agent Data connection: $status"
+else
+    echo "STOPPED"
+fi
+
+echo ""
+echo "Quick test:"
+echo "  curl http://localhost:8001/mcp"
+echo "  curl -X POST http://localhost:8001/mcp/tools/search_knowledge -H 'Content-Type: application/json' -d '{\"query\":\"test\"}'"

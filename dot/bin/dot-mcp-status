@@ -1,0 +1,44 @@
+#!/bin/bash
+# dot-mcp-status - Full MCP Status Check (Agent First)
+# Usage: dot-mcp-status
+
+echo "======================================="
+echo "       MCP CONNECTION STATUS           "
+echo "======================================="
+
+# Check Agent Data
+echo -n "Agent Data (8000): "
+if curl -s http://localhost:8000/info 2>/dev/null | grep -q "langroid"; then
+    VERSION=$(curl -s http://localhost:8000/info 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('version','?'))" 2>/dev/null)
+    echo "RUNNING (v$VERSION)"
+else
+    echo "NOT RUNNING"
+fi
+
+# Check MCP Server (HTTP)
+echo -n "MCP Server (8001): "
+if curl -s http://localhost:8001/health 2>/dev/null | grep -q "ok"; then
+    TOOLS=$(curl -s http://localhost:8001/mcp 2>/dev/null | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('tools',[])))" 2>/dev/null)
+    echo "RUNNING ($TOOLS tools)"
+else
+    echo "NOT RUNNING"
+fi
+
+# Check Claude Desktop config
+echo -n "Claude Config:     "
+CONFIG_FILE="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+if [ -f "$CONFIG_FILE" ] && grep -q "mcpServers" "$CONFIG_FILE"; then
+    echo "MCP configured"
+else
+    echo "MCP NOT configured"
+fi
+
+# Check Claude Desktop process
+echo -n "Claude Desktop:    "
+if pgrep -x "Claude" > /dev/null; then
+    echo "Running"
+else
+    echo "Not running (start with: dot-claude-restart)"
+fi
+
+echo "======================================="

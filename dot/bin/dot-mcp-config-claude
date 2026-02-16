@@ -1,0 +1,55 @@
+#!/bin/bash
+# dot-mcp-config-claude - Configure Claude Desktop MCP connection
+# Usage: dot-mcp-config-claude
+
+CONFIG_FILE="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+MCP_SERVER_DIR="/Users/nmhuyen/Documents/Manual Deploy/agent-data-test"
+VENV_PYTHON="$MCP_SERVER_DIR/venv/bin/python"
+
+echo "Configuring Claude Desktop MCP..."
+
+# Check if venv exists
+if [ ! -f "$VENV_PYTHON" ]; then
+    echo "Error: Python venv not found at $VENV_PYTHON"
+    echo "Run: cd $MCP_SERVER_DIR && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt"
+    exit 1
+fi
+
+# Backup existing config
+if [ -f "$CONFIG_FILE" ]; then
+    BACKUP="$CONFIG_FILE.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$CONFIG_FILE" "$BACKUP"
+    echo "Backed up to: $BACKUP"
+fi
+
+# Create config directory if needed
+mkdir -p "$(dirname "$CONFIG_FILE")"
+
+# Write new config
+cat > "$CONFIG_FILE" << JSONEOF
+{
+  "mcpServers": {
+    "agent-data": {
+      "command": "$VENV_PYTHON",
+      "args": ["-m", "mcp_server.stdio_server"],
+      "cwd": "$MCP_SERVER_DIR",
+      "env": {
+        "AGENT_DATA_URL": "http://localhost:8000"
+      }
+    }
+  },
+  "preferences": {
+    "quickEntryDictationShortcut": "capslock",
+    "sidebarMode": "chat"
+  }
+}
+JSONEOF
+
+echo ""
+echo "Config updated:"
+cat "$CONFIG_FILE" | python3 -m json.tool
+
+echo ""
+echo "IMPORTANT: Please restart Claude Desktop to apply changes"
+echo ""
+echo "After restart, test with: \"List available MCP tools\""
