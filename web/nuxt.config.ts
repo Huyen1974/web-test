@@ -28,21 +28,22 @@ export default defineNuxtConfig({
 		// Redirect legacy /docs routes to /knowledge (P16)
 		'/docs': { redirect: { to: '/knowledge', statusCode: 301 } },
 		'/docs/**': { redirect: { to: '/knowledge', statusCode: 301 } },
-		// Nitro ISR: 1s (always fresh from Directus)
-		// CDN s-maxage overridden to 1 year in strip-knowledge-cookie middleware
-		// Flow: Directus change → PURGE CDN → warm (hits fresh Nitro) → CDN caches
-		'/knowledge': { swr: 1, prerender: false },
-		'/knowledge/**': { swr: 1, prerender: false },
-		'/api/knowledge/**': { swr: 1 },
-		// Public pages: same strategy
-		'/': { swr: 1 },
-		'/posts': { swr: 1 },
-		'/posts/**': { swr: 1 },
-		'/projects': { swr: 1 },
-		'/blueprints': { swr: 1 },
-		'/blueprints/**': { swr: 1 },
-		'/help': { swr: 1 },
-		'/help/**': { swr: 1 },
+		// Dynamic pages — Nuxt ISR standard
+		// swr: true = Nuxt internal cache + background revalidate
+		// No s-maxage → CDN does not cache → content always fresh
+		'/': { swr: true },
+		'/knowledge': { swr: true, prerender: false },
+		'/knowledge/**': { swr: true, prerender: false },
+		'/api/knowledge/**': { swr: true },
+		'/posts': { swr: true },
+		'/posts/**': { swr: true },
+		'/projects': { swr: true },
+		'/projects/**': { swr: true },
+		'/blueprints': { swr: true },
+		'/blueprints/**': { swr: true },
+		'/help': { swr: true },
+		'/help/**': { swr: true },
+		// Static assets — immutable cache (filename has hash, never changes)
 		'/_nuxt/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
 	},
 
