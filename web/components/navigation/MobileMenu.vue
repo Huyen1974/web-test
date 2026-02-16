@@ -77,14 +77,6 @@ watch(
 			</div>
 			<div class="flex flex-col justify-center h-full px-6 space-y-4">
 				<NavigationMobileMenuItem v-for="item in navigation.items" :key="item.id" :item="item" @close="toggle" />
-				<!-- Knowledge Hub Link (Phase 3) -->
-				<NuxtLink
-					to="/knowledge"
-					class="block py-2 text-lg font-medium text-gray-900 dark:text-white hover:text-primary"
-					@click="toggle"
-				>
-					Knowledge
-				</NuxtLink>
 				<UButton href="/contact-us" variant="solid" size="xl" class="font-display">Let's Talk</UButton>
 			</div>
 		</Motionable>

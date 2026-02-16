@@ -28,21 +28,20 @@ export default defineNuxtConfig({
 		// Redirect legacy /docs routes to /knowledge (P16)
 		'/docs': { redirect: { to: '/knowledge', statusCode: 301 } },
 		'/docs/**': { redirect: { to: '/knowledge', statusCode: 301 } },
-		// Dynamic pages — Nuxt ISR standard
-		// swr: true = Nuxt internal cache + background revalidate
-		// No s-maxage → CDN does not cache → content always fresh
-		'/': { swr: true },
-		'/knowledge': { swr: true, prerender: false },
-		'/knowledge/**': { swr: true, prerender: false },
-		'/api/knowledge/**': { swr: true },
-		'/posts': { swr: true },
-		'/posts/**': { swr: true },
-		'/projects': { swr: true },
-		'/projects/**': { swr: true },
-		'/blueprints': { swr: true },
-		'/blueprints/**': { swr: true },
-		'/help': { swr: true },
-		'/help/**': { swr: true },
+		// Dynamic pages — SSR, no CDN cache (P42)
+		// no-cache tells Firebase CDN (Fastly) to always revalidate with origin
+		'/': { headers: { 'cache-control': 'no-cache' } },
+		'/knowledge': { prerender: false, headers: { 'cache-control': 'no-cache' } },
+		'/knowledge/**': { prerender: false, headers: { 'cache-control': 'no-cache' } },
+		'/api/knowledge/**': { headers: { 'cache-control': 'no-cache' } },
+		'/posts': { headers: { 'cache-control': 'no-cache' } },
+		'/posts/**': { headers: { 'cache-control': 'no-cache' } },
+		'/projects': { headers: { 'cache-control': 'no-cache' } },
+		'/projects/**': { headers: { 'cache-control': 'no-cache' } },
+		'/blueprints': { headers: { 'cache-control': 'no-cache' } },
+		'/blueprints/**': { headers: { 'cache-control': 'no-cache' } },
+		'/help': { headers: { 'cache-control': 'no-cache' } },
+		'/help/**': { headers: { 'cache-control': 'no-cache' } },
 		// Static assets — immutable cache (filename has hash, never changes)
 		'/_nuxt/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
 	},
