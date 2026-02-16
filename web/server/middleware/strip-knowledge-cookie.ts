@@ -1,20 +1,17 @@
 /**
- * Strip session cookie from public cacheable routes — WEB-70F + P26
+ * Strip session cookie from public cacheable routes — WEB-70F + P26 + P37B
  *
- * Firebase Hosting (Fastly CDN) never caches responses with set-cookie headers.
- * The session.global.ts middleware sets a session cookie on every page,
- * causing ALL public HTML requests to be CDN MISS.
- *
- * This middleware removes set-cookie from public cacheable responses,
- * allowing Firebase CDN to cache them with s-maxage (stale-while-revalidate).
+ * The session.global.ts middleware sets a Directus session cookie on every page.
+ * This middleware removes set-cookie and strips 'cookie' from Vary header
+ * on public routes so responses are uniform regardless of browser cookies.
  *
  * Auth/private routes (login, admin, portal, profile) keep their cookies.
  *
- * VERIFY: curl -sI localhost:3000/posts | grep set-cookie (should be empty)
+ * VERIFY: curl -sI localhost:3000/knowledge | grep set-cookie (should be empty)
  * REGISTRY: docs/CUSTOM-CODE-REGISTRY.md
  */
 
-/** Public route prefixes where cookies should be stripped for CDN caching */
+/** Public route prefixes where cookies should be stripped */
 const CACHEABLE_PREFIXES = [
 	'/knowledge',
 	'/posts',
@@ -24,9 +21,7 @@ const CACHEABLE_PREFIXES = [
 ];
 
 function isCacheablePath(path: string): boolean {
-	// Homepage
 	if (path === '/') return true;
-	// Public route prefixes
 	return CACHEABLE_PREFIXES.some(
 		(prefix) => path === prefix || path.startsWith(prefix + '/'),
 	);
@@ -39,25 +34,16 @@ export default defineEventHandler((event) => {
 		return;
 	}
 
-	// Hook into response to strip set-cookie, vary:cookie, and override s-maxage for CDN
+	// Hook into response to strip set-cookie and vary:cookie
 	const originalWriteHead = event.node.res.writeHead;
 	event.node.res.writeHead = function (
 		statusCode: number,
 		...args: unknown[]
 	) {
-		// Remove set-cookie so CDN can cache the response
+		// Remove set-cookie so Directus session cookie is not sent
 		event.node.res.removeHeader('set-cookie');
 
-		// Override cache-control: CDN caches for 1 hour, serves stale while revalidating.
-		// Firebase Hosting CDN has no per-URL purge API, so we use short s-maxage
-		// with long stale-while-revalidate for instant responses + hourly freshness.
-		event.node.res.setHeader(
-			'cache-control',
-			's-maxage=3600, stale-while-revalidate=31536000',
-		);
-
-		// Remove 'cookie' from vary header so CDN serves one cache entry
-		// regardless of what cookies the browser sends (P28)
+		// Remove 'cookie' from vary header so all users get the same response
 		const vary = event.node.res.getHeader('vary');
 		if (vary) {
 			const parts = (Array.isArray(vary) ? vary.join(', ') : String(vary))
