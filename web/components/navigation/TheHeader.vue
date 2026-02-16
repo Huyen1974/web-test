@@ -55,13 +55,6 @@ const {
 			</NuxtLink>
 			<nav class="hidden md:flex md:space-x-4 lg:space-x-6" aria-label="Global">
 				<NavigationMenuItem v-for="item in navigation?.items" :key="item.id" :item="item" />
-				<!-- Knowledge Hub Link (Phase 3) -->
-				<NuxtLink
-					to="/knowledge"
-					class="inline-flex items-center text-sm font-medium text-gray-200 transition hover:text-white"
-				>
-					Knowledge
-				</NuxtLink>
 			</nav>
 			<div class="flex items-center justify-end flex-shrink-0 space-x-2">
 				<DarkModeToggle class="hidden text-gray-200 md:block hover:text-gray-400" bg="dark" />
