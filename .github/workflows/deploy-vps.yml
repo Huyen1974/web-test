@@ -152,7 +152,7 @@ jobs:
             # Nginx+SSL: retry up to 3 times (nginx reload can cause brief gap)
             NGINX_OK=0
             for i in 1 2 3; do
-              if curl -sf --connect-timeout 10 --max-time 20 -o /dev/null https://vps.incomexsaigoncorp.vn/ 2>/dev/null; then
+              if curl -sf --resolve vps.incomexsaigoncorp.vn:443:127.0.0.1 --connect-timeout 10 --max-time 20 -o /dev/null https://vps.incomexsaigoncorp.vn/ 2>/dev/null; then
                 NGINX_OK=1
                 break
               fi
@@ -320,7 +320,7 @@ jobs:
             # Nginx health (always check, retry up to 3 times)
             NGINX_OK=0
             for i in 1 2 3; do
-              if curl -sf --connect-timeout 10 --max-time 20 -o /dev/null https://vps.incomexsaigoncorp.vn/ 2>/dev/null; then
+              if curl -sf --resolve vps.incomexsaigoncorp.vn:443:127.0.0.1 --connect-timeout 10 --max-time 20 -o /dev/null https://vps.incomexsaigoncorp.vn/ 2>/dev/null; then
                 NGINX_OK=1
                 break
               fi
