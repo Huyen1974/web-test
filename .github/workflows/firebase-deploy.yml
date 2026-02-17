@@ -30,7 +30,10 @@ jobs:
     name: Build Nuxt SSR Image
     runs-on: ubuntu-latest
     # Only build Docker image on push to main (not PRs)
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Skip when DEPLOY_MODE=direct (rsync deploys output directly)
+    if: >-
+      vars.DEPLOY_MODE != 'direct' &&
+      github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout code
