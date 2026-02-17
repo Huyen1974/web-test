@@ -170,6 +170,7 @@ services:
       - "443:443"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/secrets:/etc/nginx/secrets:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - ./nginx/static:/usr/share/nginx/static:ro
     networks:
