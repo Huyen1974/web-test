@@ -170,7 +170,7 @@ function formatDate(dateStr?: string): string {
 						v-for="task in filteredTasks"
 						:key="task.id"
 						class="cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-700"
-						@click="navigateTo(`/tasks/${task.id}`)"
+						@click="navigateTo(`/knowledge/current-tasks/${task.id}`)"
 					>
 						<td class="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
 							{{ task.name }}
