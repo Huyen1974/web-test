@@ -1,16 +1,8 @@
+# DISABLED auto-trigger (PA-4a: deploy via rsync, not Artifact Registry)
+# Run manually via GitHub Actions UI if rollback to Artifact needed
 name: Terraform Deploy
 
 on:
-  push:
-    branches:
-      - main
-      - 'feat/**'
-      - 'fix/**'
-  pull_request:
-    branches:
-      - main
-      - 'feat/**'
-      - 'fix/**'
   workflow_dispatch:
 
 # Prevent concurrent Terraform deployments to avoid state conflicts
