@@ -143,6 +143,8 @@ services:
       NUXT_PUBLIC_SITE_URL: ${WEB_URL}
       NUXT_PUBLIC_AGENT_DATA_BASE_URL: http://agent-data:8000
       NUXT_AGENT_DATA_API_KEY: ${AGENT_DATA_API_KEY}
+    volumes:
+      - /opt/incomex/deploys/nuxt-output:/app/.output
     healthcheck:
       test: ["CMD-SHELL", "nc -z 127.0.0.1 3000 || exit 1"]
       interval: 15s

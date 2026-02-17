@@ -1,7 +1,7 @@
 name: Deploy to VPS
 
 on:
-  # Run AFTER Firebase Deploy completes (which builds the Nuxt SSR image)
+  # Run AFTER Firebase Deploy completes
   workflow_run:
     workflows: ["Firebase Deploy"]
     types: [completed]
@@ -28,13 +28,160 @@ env:
   AGENT_DATA_IMAGE: asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/agent-data/agent-data-test:latest
 
 jobs:
-  deploy:
-    name: Deploy to VPS
+  # ===========================================================================
+  # Direct Deploy: Build on GitHub → rsync .output/ → VPS restart
+  # Active when DEPLOY_MODE=direct (skip Artifact Registry)
+  # ===========================================================================
+  deploy-direct:
+    name: Build & Deploy Direct
     runs-on: ubuntu-latest
-    # Skip if the triggering workflow failed (workflow_run only)
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      vars.DEPLOY_MODE == 'direct' && (
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      )
+
+    defaults:
+      run:
+        working-directory: ./web
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # --- Build Nuxt SSR ---
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Nuxt SSR
+        env:
+          NITRO_PRESET: node-server
+          NODE_ENV: production
+          NUXT_PUBLIC_SITE_URL: "https://ai.incomexsaigoncorp.vn"
+          NUXT_PUBLIC_DIRECTUS_URL: "https://directus.incomexsaigoncorp.vn"
+        run: pnpm run build
+
+      # --- Sync config files to VPS ---
+      - name: Copy config to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "infra/docker/docker-compose.yml,infra/nginx/conf.d/default.conf"
+          target: "/tmp/infra-sync"
+          strip_components: 0
+
+      # --- Backup + Rsync output ---
+      - name: Backup previous deploy
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            mkdir -p /opt/incomex/deploys/nuxt-output
+            mkdir -p /opt/incomex/deploys/nuxt-output.prev
+            rm -rf /opt/incomex/deploys/nuxt-output.prev
+            cp -a /opt/incomex/deploys/nuxt-output /opt/incomex/deploys/nuxt-output.prev
+            echo "Backup complete: $(du -sh /opt/incomex/deploys/nuxt-output.prev | cut -f1)"
+
+      - name: Rsync output to VPS
+        uses: burnett01/rsync-deployments@7.0.1
+        with:
+          switches: -avz --delete
+          path: web/.output/
+          remote_path: /opt/incomex/deploys/nuxt-output/
+          remote_host: ${{ secrets.VPS_HOST }}
+          remote_user: root
+          remote_key: ${{ secrets.VPS_SSH_KEY }}
+
+      # --- Apply config + restart ---
+      - name: Apply config and restart Nuxt
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd /opt/incomex/docker
+
+            # Sync config files
+            if [ -f /tmp/infra-sync/infra/docker/docker-compose.yml ]; then
+              cp /tmp/infra-sync/infra/docker/docker-compose.yml ./docker-compose.yml
+              echo "Synced docker-compose.yml"
+            fi
+            if [ -f /tmp/infra-sync/infra/nginx/conf.d/default.conf ]; then
+              cp /tmp/infra-sync/infra/nginx/conf.d/default.conf ./nginx/conf.d/default.conf
+              docker exec incomex-nginx nginx -s reload 2>/dev/null || true
+              echo "Synced and reloaded nginx config"
+            fi
+            rm -rf /tmp/infra-sync
+
+            # Restart Nuxt (reads new .output from volume mount)
+            echo "=== Restarting Nuxt ==="
+            docker compose restart nuxt
+
+            # Wait for startup
+            echo "Waiting for Nuxt to start..."
+            sleep 15
+
+            # Health checks
+            echo "=== Health Checks ==="
+            FAILED=0
+
+            if docker exec incomex-nuxt nc -z 127.0.0.1 3000 2>/dev/null; then
+              echo "Nuxt: HEALTHY"
+            else
+              echo "Nuxt: UNHEALTHY"
+              FAILED=1
+            fi
+
+            if curl -sf -o /dev/null https://vps.incomexsaigoncorp.vn/ 2>/dev/null; then
+              echo "Nginx+SSL: HEALTHY"
+            else
+              echo "Nginx+SSL: UNHEALTHY"
+              FAILED=1
+            fi
+
+            docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}" | grep incomex
+
+            if [[ $FAILED -ne 0 ]]; then
+              echo "WARNING: Health checks failed. Rolling back..."
+              rm -rf /opt/incomex/deploys/nuxt-output
+              cp -a /opt/incomex/deploys/nuxt-output.prev /opt/incomex/deploys/nuxt-output
+              docker compose restart nuxt
+              sleep 15
+              echo "Rollback complete."
+              exit 1
+            fi
+
+            echo "=== Direct deploy complete ==="
+
+  # ===========================================================================
+  # Artifact Deploy: Pull Docker image from Artifact Registry → VPS restart
+  # Active when DEPLOY_MODE != direct (default / artifact)
+  # ===========================================================================
+  deploy-artifact:
+    name: Deploy via Artifact
+    runs-on: ubuntu-latest
+    if: >-
+      vars.DEPLOY_MODE != 'direct' && (
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      )
 
     steps:
       - name: Checkout code
