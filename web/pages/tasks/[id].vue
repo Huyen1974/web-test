@@ -17,7 +17,7 @@ const {
 const tabs = computed(() => {
 	return TAB_CONFIG.map((tab) => ({
 		name: tab.label,
-		href: `/admin/tasks/${taskId}/${tab.key}`,
+		href: `/tasks/${taskId}/${tab.key}`,
 	}));
 });
 
@@ -47,7 +47,7 @@ provide('refreshTask', refresh);
 			<!-- Header -->
 			<div>
 				<NuxtLink
-					to="/admin/tasks"
+					to="/tasks"
 					class="mb-4 inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
 				>
 					&larr; Back to Tasks
