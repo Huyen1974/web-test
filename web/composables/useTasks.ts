@@ -20,14 +20,17 @@ export async function useTasksList(statusFilter?: TaskStatus | TaskStatus[]) {
 		}
 	}
 
-	return await useDirectus<Task[]>(
-		readItems('tasks', {
-			fields: ['*'],
-			filter: Object.keys(filter).length > 0 ? filter : undefined,
-			sort: ['sort', '-date_updated'],
-			limit: 100,
-		}),
-	);
+	const params: Record<string, any> = {
+		fields: ['*'],
+		sort: ['sort', '-date_updated'],
+		limit: 100,
+	};
+
+	if (Object.keys(filter).length > 0) {
+		params.filter = filter;
+	}
+
+	return await useDirectus<Task[]>(readItems('tasks', params));
 }
 
 /**
@@ -36,7 +39,7 @@ export async function useTasksList(statusFilter?: TaskStatus | TaskStatus[]) {
 export async function useTaskDetail(id: number | string) {
 	return await useDirectus<Task>(
 		readItem('tasks', id, {
-			fields: ['*', { comments: ['*'] }],
+			fields: ['*'],
 		}),
 	);
 }
