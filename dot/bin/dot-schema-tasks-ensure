@@ -1,0 +1,583 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-schema-tasks-ensure - Ensure tasks + task_comments collections in Directus
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-02-17): Initial version for P43 Super Session Task Manager
+#     - tasks: 17 fields (name, description, status, priority, 8 content tabs, etc.)
+#     - task_comments: 7 fields with M2O → tasks (CASCADE delete)
+#     - Idempotent: checks existence before create, patches missing fields
+#     - Based on dot-schema-feedback-ensure pattern
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOT_AUTH="${SCRIPT_DIR}/dot-auth"
+
+# Source environment configuration
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+POLICY_ID="abf8a154-5b1c-4a46-ac9c-7300570f4f17"
+
+# Required fields for tasks collection
+# Format: field_name:type:nullable:special
+declare -a TASKS_FIELDS=(
+  "name:string:false:"
+  "description:text:true:"
+  "status:string:false:"
+  "priority:string:true:"
+  "assigned_to:string:true:"
+  "deadline:timestamp:true:"
+  "content_targets:text:true:"
+  "content_rules:text:true:"
+  "content_checklist:text:true:"
+  "content_plan:text:true:"
+  "content_prompt:text:true:"
+  "content_reports:text:true:"
+  "content_verify:text:true:"
+  "content_test:text:true:"
+  "sort:integer:true:"
+  "user_created:uuid:true:user-created"
+  "date_created:timestamp:false:date-created"
+  "date_updated:timestamp:true:date-updated"
+)
+
+# Required fields for task_comments collection
+declare -a COMMENTS_FIELDS=(
+  "task_id:integer:false:m2o"
+  "tab_scope:string:false:"
+  "agent_type:string:false:"
+  "content:text:false:"
+  "action:string:true:"
+  "user_created:uuid:true:user-created"
+  "date_created:timestamp:false:date-created"
+)
+
+# Logging functions
+log_info() { echo "ℹ️  [INFO] $1"; }
+log_ok() { echo "✅ [OK] $1"; }
+log_warn() { echo "⚠️  [WARN] $1"; }
+log_skip() { echo "⏭️  [SKIP] $1"; }
+log_err() { echo "❌ [ERR] $1" >&2; }
+
+require_cmds() {
+  for cmd in curl jq; do
+    command -v "$cmd" >/dev/null 2>&1 || { log_err "Missing required command: $cmd"; exit 1; }
+  done
+}
+
+api_request() {
+  local method="$1"
+  local url="$2"
+  local data="${3-}"
+  local resp
+
+  if [[ -n "${data-}" ]]; then
+    resp=$(curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "$data" \
+      -w "\n%{http_code}")
+  else
+    resp=$(curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -w "\n%{http_code}")
+  fi
+
+  printf '%s' "$resp"
+}
+
+# Generate field payload based on field spec
+field_payload() {
+  local spec="$1"
+  local field_name field_type nullable special
+
+  IFS=':' read -r field_name field_type nullable special <<< "$spec"
+
+  local is_nullable="true"
+  [[ "$nullable" == "false" ]] && is_nullable="false"
+
+  local meta_json='{"required":false}'
+  local schema_json="{\"is_nullable\":$is_nullable}"
+
+  # Handle special field types
+  case "$special" in
+    "m2o")
+      meta_json='{"interface":"select-dropdown-m2o","special":["m2o"]}'
+      ;;
+    "user-created")
+      meta_json='{"interface":"select-dropdown-m2o","special":["user-created"],"readonly":true,"hidden":true}'
+      schema_json='{"foreign_key_table":"directus_users","foreign_key_column":"id"}'
+      ;;
+    "date-created")
+      meta_json='{"interface":"datetime","special":["date-created"],"readonly":true}'
+      ;;
+    "date-updated")
+      meta_json='{"interface":"datetime","special":["date-updated"],"readonly":true}'
+      ;;
+  esac
+
+  # Build final payload
+  jq -nc \
+    --arg field "$field_name" \
+    --arg type "$field_type" \
+    --argjson meta "$meta_json" \
+    --argjson schema "$schema_json" \
+    '{field:$field, type:$type, meta:$meta, schema:$schema}'
+}
+
+collection_exists() {
+  local collection="$1"
+  local resp body code
+  resp=$(api_request GET "${BASE_URL}/collections/${collection}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" == "200" ]]; then
+    return 0
+  elif [[ "$code" == "403" ]]; then
+    return 1
+  fi
+
+  log_err "Failed to check collection ${collection} (HTTP $code)"
+  return 1
+}
+
+field_exists() {
+  local collection="$1"
+  local field_name="$2"
+  local resp body code
+
+  resp=$(api_request GET "${BASE_URL}/fields/${collection}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" == "200" ]]; then
+    if echo "$body" | jq -e --arg field "$field_name" '.data[]? | select(.field == $field)' >/dev/null 2>&1; then
+      return 0
+    fi
+    return 1
+  fi
+
+  log_err "Failed to check field ${collection}.${field_name} (HTTP $code)"
+  return 1
+}
+
+create_collection() {
+  local collection="$1"
+  local icon="$2"
+  local note="$3"
+  local display_template="$4"
+
+  local payload
+  payload=$(jq -nc \
+    --arg collection "$collection" \
+    --arg icon "$icon" \
+    --arg note "$note" \
+    --arg display "$display_template" \
+    '{
+      collection: $collection,
+      schema: {},
+      meta: {
+        collection: $collection,
+        icon: $icon,
+        note: $note,
+        display_template: $display,
+        sort_field: "date_created"
+      }
+    }')
+
+  log_info "Creating collection ${collection}"
+  local resp body code
+  resp=$(api_request POST "${BASE_URL}/collections" "$payload")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to create collection ${collection} (HTTP $code)"
+    echo "$body" | head -c 300 >&2
+    exit 1
+  fi
+
+  log_ok "Collection ${collection} created"
+}
+
+create_field() {
+  local collection="$1"
+  local spec="$2"
+  local field_name
+  field_name=$(echo "$spec" | cut -d':' -f1)
+
+  local payload resp body code
+
+  payload=$(field_payload "$spec")
+  log_info "Creating field ${collection}.${field_name}"
+  resp=$(api_request POST "${BASE_URL}/fields/${collection}" "$payload")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to create field ${collection}.${field_name} (HTTP $code)"
+    echo "$body" | head -c 200 >&2
+    exit 1
+  fi
+
+  log_ok "Field ${collection}.${field_name} created"
+}
+
+setup_relations() {
+  log_info "Setting up relations..."
+
+  # task_comments.task_id -> tasks (CASCADE delete)
+  local task_relation
+  task_relation=$(jq -nc '{
+    collection: "task_comments",
+    field: "task_id",
+    related_collection: "tasks",
+    meta: {
+      one_field: "comments",
+      sort_field: null,
+      one_deselect_action: "nullify"
+    },
+    schema: {
+      on_delete: "CASCADE"
+    }
+  }')
+
+  local resp code
+  resp=$(api_request POST "${BASE_URL}/relations" "$task_relation")
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" == "200" ]]; then
+    log_ok "Relation task_comments.task_id -> tasks created (CASCADE)"
+  elif [[ "$code" == "400" ]]; then
+    log_skip "Relation task_comments.task_id -> tasks already exists"
+  else
+    log_warn "Could not create task_id relation (HTTP $code)"
+  fi
+}
+
+setup_permissions() {
+  log_info "Setting up public permissions..."
+
+  # tasks: public read (all fields)
+  local tasks_read
+  tasks_read=$(jq -nc \
+    --arg policy "$POLICY_ID" \
+    '{
+      policy: $policy,
+      collection: "tasks",
+      action: "read",
+      fields: ["*"],
+      permissions: {},
+      validation: {}
+    }')
+
+  local resp code
+  resp=$(api_request POST "${BASE_URL}/permissions" "$tasks_read")
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" == "200" || "$code" == "204" ]]; then
+    log_ok "Permission: tasks public read"
+  elif [[ "$code" == "400" ]]; then
+    log_skip "Permission: tasks public read already exists"
+  else
+    log_warn "Could not create tasks read permission (HTTP $code)"
+  fi
+
+  # task_comments: public read
+  local comments_read
+  comments_read=$(jq -nc \
+    --arg policy "$POLICY_ID" \
+    '{
+      policy: $policy,
+      collection: "task_comments",
+      action: "read",
+      fields: ["*"],
+      permissions: {},
+      validation: {}
+    }')
+
+  resp=$(api_request POST "${BASE_URL}/permissions" "$comments_read")
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" == "200" || "$code" == "204" ]]; then
+    log_ok "Permission: task_comments public read"
+  elif [[ "$code" == "400" ]]; then
+    log_skip "Permission: task_comments public read already exists"
+  else
+    log_warn "Could not create task_comments read permission (HTTP $code)"
+  fi
+
+  # task_comments: public create
+  local comments_create
+  comments_create=$(jq -nc \
+    --arg policy "$POLICY_ID" \
+    '{
+      policy: $policy,
+      collection: "task_comments",
+      action: "create",
+      fields: ["*"],
+      permissions: {},
+      validation: {}
+    }')
+
+  resp=$(api_request POST "${BASE_URL}/permissions" "$comments_create")
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" == "200" || "$code" == "204" ]]; then
+    log_ok "Permission: task_comments public create"
+  elif [[ "$code" == "400" ]]; then
+    log_skip "Permission: task_comments public create already exists"
+  else
+    log_warn "Could not create task_comments create permission (HTTP $code)"
+  fi
+}
+
+verify_fields() {
+  local collection="$1"
+  shift
+  local fields=("$@")
+  local resp body code missing=()
+
+  resp=$(api_request GET "${BASE_URL}/fields/${collection}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to list fields for ${collection} (HTTP $code)"
+    exit 1
+  fi
+
+  local field_count
+  field_count=$(echo "$body" | jq '.data | length')
+
+  for spec in "${fields[@]}"; do
+    local field_name
+    field_name=$(echo "$spec" | cut -d':' -f1)
+    if ! echo "$body" | jq -e --arg field "$field_name" '.data[]? | select(.field == $field)' >/dev/null 2>&1; then
+      missing+=("$field_name")
+    fi
+  done
+
+  if [[ "${#missing[@]}" -gt 0 ]]; then
+    log_err "Missing required fields in ${collection}: ${missing[*]}"
+    exit 1
+  fi
+
+  log_ok "${collection}: All required fields present (${field_count} total)"
+}
+
+show_help() {
+  cat << EOF
+dot-schema-tasks-ensure v${VERSION} - Ensure tasks + task_comments collections
+
+Usage:
+  dot-schema-tasks-ensure [options]
+
+Options:
+  --local       Use local development environment
+  --cloud       Use cloud/production environment (default)
+  --dry-run     Show what would be done without making changes
+  --help, -h    Show this help message
+
+Collections Created:
+
+  tasks (18 fields):
+    - name                Task name (required)
+    - description         Task description
+    - status              draft|active|in_review|completed|archived
+    - priority            low|medium|high|critical
+    - assigned_to         user|claude|gpt (simple string)
+    - deadline            Target deadline
+    - content_targets     Tab: Targets content (markdown)
+    - content_rules       Tab: Rules content (markdown)
+    - content_checklist   Tab: Checklist content (markdown)
+    - content_plan        Tab: Plan content (markdown)
+    - content_prompt      Tab: Prompt content (markdown)
+    - content_reports     Tab: Reports content (markdown)
+    - content_verify      Tab: Verify content (markdown)
+    - content_test        Tab: Test content (markdown)
+    - sort                Sort order
+    - user_created        Auto: creator user
+    - date_created        Auto: creation timestamp
+    - date_updated        Auto: update timestamp
+
+  task_comments (7 fields):
+    - task_id             M2O → tasks (CASCADE delete)
+    - tab_scope           targets|rules|checklist|plan|prompt|reports|verify|test|general
+    - agent_type          user|claude|gpt|system
+    - content             Comment content (required)
+    - action              approve|reject|request_changes|escalate (nullable)
+    - user_created        Auto: creator user
+    - date_created        Auto: creation timestamp
+
+EOF
+  show_environment_help
+}
+
+ensure_collection_fields() {
+  local collection="$1"
+  shift
+  local fields=("$@")
+
+  log_info "Ensuring required fields for ${collection}..."
+  for spec in "${fields[@]}"; do
+    local field_name
+    field_name=$(echo "$spec" | cut -d':' -f1)
+
+    if field_exists "$collection" "$field_name"; then
+      log_skip "Field ${collection}.${field_name} already exists"
+    else
+      if [[ "$DRY_RUN" == "true" ]]; then
+        log_info "Would create field ${collection}.${field_name}"
+      else
+        create_field "$collection" "$spec"
+      fi
+    fi
+  done
+}
+
+main() {
+  DRY_RUN=false
+
+  # Parse arguments
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h)
+        show_help
+        exit 0
+        ;;
+      --dry-run)
+        DRY_RUN=true
+        ;;
+    esac
+  done
+
+  require_cmds
+
+  # Initialize environment
+  init_environment "$@"
+  BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: Schema Tasks Ensure v${VERSION}"
+  echo "========================================="
+  print_environment_banner "$@"
+  echo "Ensuring tasks + task_comments collections"
+  echo ""
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log_warn "DRY RUN MODE - No changes will be made"
+    echo ""
+  fi
+
+  # Get authentication token
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    if [[ ! -f "$DOT_AUTH" ]]; then
+      log_err "dot-auth not found at ${DOT_AUTH}"
+      exit 1
+    fi
+    log_info "Authenticating with Directus..."
+    # shellcheck source=/dev/null
+    source "$DOT_AUTH" "$@"
+  fi
+
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "DOT_TOKEN is empty after authentication"
+    exit 1
+  fi
+
+  # =========================================
+  # COLLECTION 1: tasks
+  # =========================================
+  echo ""
+  echo "--- Collection: tasks ---"
+
+  if collection_exists "tasks"; then
+    log_skip "Collection 'tasks' already exists"
+  else
+    if [[ "$DRY_RUN" == "true" ]]; then
+      log_info "Would create collection 'tasks'"
+    else
+      create_collection "tasks" "task_alt" \
+        "Super Session Task Manager - Created by DOT v${VERSION}" \
+        "{{name}} ({{status}})"
+    fi
+  fi
+
+  ensure_collection_fields "tasks" "${TASKS_FIELDS[@]}"
+
+  # =========================================
+  # COLLECTION 2: task_comments
+  # =========================================
+  echo ""
+  echo "--- Collection: task_comments ---"
+
+  if collection_exists "task_comments"; then
+    log_skip "Collection 'task_comments' already exists"
+  else
+    if [[ "$DRY_RUN" == "true" ]]; then
+      log_info "Would create collection 'task_comments'"
+    else
+      create_collection "task_comments" "comment" \
+        "Task feedback comments - Created by DOT v${VERSION}" \
+        "{{agent_type}}: {{content}}"
+    fi
+  fi
+
+  ensure_collection_fields "task_comments" "${COMMENTS_FIELDS[@]}"
+
+  # =========================================
+  # RELATIONS
+  # =========================================
+  echo ""
+  if [[ "$DRY_RUN" != "true" ]]; then
+    setup_relations
+  else
+    log_info "Would create relation task_comments.task_id -> tasks"
+  fi
+
+  # =========================================
+  # PERMISSIONS
+  # =========================================
+  echo ""
+  if [[ "$DRY_RUN" != "true" ]]; then
+    setup_permissions
+  else
+    log_info "Would create public read for tasks"
+    log_info "Would create public read + create for task_comments"
+  fi
+
+  # =========================================
+  # VERIFICATION
+  # =========================================
+  echo ""
+  if [[ "$DRY_RUN" != "true" ]]; then
+    log_info "Running final verification..."
+
+    if ! collection_exists "tasks"; then
+      log_err "Collection tasks missing after ensure"
+      exit 1
+    fi
+    verify_fields "tasks" "${TASKS_FIELDS[@]}"
+
+    if ! collection_exists "task_comments"; then
+      log_err "Collection task_comments missing after ensure"
+      exit 1
+    fi
+    verify_fields "task_comments" "${COMMENTS_FIELDS[@]}"
+  fi
+
+  log_ok "Collections tasks + task_comments ready"
+
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Schema Tasks Ensure - COMPLETE"
+  echo "========================================="
+}
+
+main "$@"
