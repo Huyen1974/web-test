@@ -149,7 +149,17 @@ jobs:
               FAILED=1
             fi
 
-            if curl -sf -o /dev/null https://vps.incomexsaigoncorp.vn/ 2>/dev/null; then
+            # Nginx+SSL: retry up to 3 times (nginx reload can cause brief gap)
+            NGINX_OK=0
+            for i in 1 2 3; do
+              if curl -sf --connect-timeout 10 --max-time 20 -o /dev/null https://vps.incomexsaigoncorp.vn/ 2>/dev/null; then
+                NGINX_OK=1
+                break
+              fi
+              echo "Nginx+SSL: attempt $i failed, retrying in 5s..."
+              sleep 5
+            done
+            if [[ $NGINX_OK -eq 1 ]]; then
               echo "Nginx+SSL: HEALTHY"
             else
               echo "Nginx+SSL: UNHEALTHY"
@@ -307,8 +317,17 @@ jobs:
               fi
             fi
 
-            # Nginx health (always check)
-            if curl -sf -o /dev/null https://vps.incomexsaigoncorp.vn/ 2>/dev/null; then
+            # Nginx health (always check, retry up to 3 times)
+            NGINX_OK=0
+            for i in 1 2 3; do
+              if curl -sf --connect-timeout 10 --max-time 20 -o /dev/null https://vps.incomexsaigoncorp.vn/ 2>/dev/null; then
+                NGINX_OK=1
+                break
+              fi
+              echo "Nginx+SSL: attempt $i failed, retrying in 5s..."
+              sleep 5
+            done
+            if [[ $NGINX_OK -eq 1 ]]; then
               echo "Nginx+SSL: HEALTHY"
             else
               echo "Nginx+SSL: UNHEALTHY"
