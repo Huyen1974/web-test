@@ -18,7 +18,7 @@ export default defineNuxtConfig({
 
 	routeRules: {
 		'/admin/**': { prerender: false },
-		'/tasks/**': { prerender: false, headers: { 'cache-control': 'no-cache' } },
+		'/knowledge/current-tasks/**': { prerender: false, headers: { 'cache-control': 'no-cache' } },
 		'/approval-desk': { prerender: false },
 		'/approval-desk/**': { prerender: false },
 		'/knowledge-tree': { prerender: false },
