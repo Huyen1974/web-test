@@ -3,12 +3,12 @@
   "info": {
     "title": "Incomex OPS Proxy — Task Management API",
     "description": "CRUD API for AI agents (GPT, Claude) to manage tasks and task comments via the Directus-backed OPS proxy. Rate-limited, API-key authenticated.",
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "servers": [
     {
-      "url": "https://vps.incomexsaigoncorp.vn/ops",
-      "description": "VPS OPS Proxy"
+      "url": "https://ops.incomexsaigoncorp.vn",
+      "description": "OPS Proxy (dedicated subdomain)"
     }
   ],
   "security": [
