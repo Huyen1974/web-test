@@ -1,0 +1,281 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-permission-ensure - Ensure a Directus permission exists for a policy
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-02-18): Generic permission ensure tool
+#     - Accepts policy, collection, action, fields as CLI args
+#     - Idempotent: checks before create
+#     - Reusable across all collections and roles
+#     - Based on dot-permissions-setup pattern
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source environment configuration
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+
+# Logging
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_skip() { echo "[SKIP] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+require_cmds() {
+  for cmd in curl jq; do
+    command -v "$cmd" >/dev/null 2>&1 || { log_err "Missing: $cmd"; exit 1; }
+  done
+}
+
+api_request() {
+  local method="$1" url="$2" data="${3-}"
+  if [[ -n "${data-}" ]]; then
+    curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "$data" -w "\n%{http_code}"
+  else
+    curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -w "\n%{http_code}"
+  fi
+}
+
+permission_exists() {
+  local collection="$1" action="$2" policy="$3"
+  local resp body code
+
+  resp=$(api_request GET "${BASE_URL}/permissions?filter[policy][_eq]=${policy}&filter[collection][_eq]=${collection}&filter[action][_eq]=${action}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to check permission (HTTP $code)"
+    return 1
+  fi
+
+  local count
+  count=$(echo "$body" | jq '.data | length')
+  [[ "$count" -gt 0 ]]
+}
+
+create_permission() {
+  local policy="$1" collection="$2" action="$3" fields="$4" filter="$5"
+
+  local payload
+  payload=$(jq -nc \
+    --arg policy "$policy" \
+    --arg collection "$collection" \
+    --arg action "$action" \
+    --argjson fields "$fields" \
+    --argjson permissions "$filter" \
+    '{
+      policy: $policy,
+      collection: $collection,
+      action: $action,
+      fields: $fields,
+      permissions: $permissions,
+      validation: {}
+    }')
+
+  log_info "Creating permission: ${collection}.${action} on policy ${policy}"
+
+  local resp body code
+  resp=$(api_request POST "${BASE_URL}/permissions" "$payload")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" == "200" || "$code" == "204" ]]; then
+    local perm_id
+    perm_id=$(echo "$body" | jq -r '.data.id // "?"')
+    log_ok "Permission ${collection}.${action} created (ID: $perm_id)"
+    return 0
+  else
+    local err_msg
+    err_msg=$(echo "$body" | jq -r '.errors[0].message // "Unknown error"')
+    log_err "Failed to create ${collection}.${action}: $err_msg (HTTP $code)"
+    return 1
+  fi
+}
+
+# =============================================================================
+# WELL-KNOWN POLICY ALIASES
+# =============================================================================
+resolve_policy() {
+  local input="$1"
+  case "$input" in
+    ai-agent|ai_agent|AI_Agent|"AI Agent")
+      echo "e81a70bc-21d3-4f30-856e-686608a2023b"
+      ;;
+    public|Public)
+      echo "abf8a154-5b1c-4a46-ac9c-7300570f4f17"
+      ;;
+    agent|Agent)
+      echo "74d6c90f-1481-49f6-8b86-ee7d0f1ed269"
+      ;;
+    administrator|Administrator|admin)
+      echo "8a613123-2538-4943-9d67-b6d261a4789c"
+      ;;
+    *)
+      # Assume it's a raw UUID
+      echo "$input"
+      ;;
+  esac
+}
+
+show_help() {
+  cat << EOF
+dot-permission-ensure v${VERSION} - Ensure a Directus permission exists
+
+Usage:
+  dot-permission-ensure --policy <name|uuid> --collection <name> --action <action> [options]
+
+Required:
+  --policy <name|uuid>     Policy name alias or UUID
+  --collection <name>      Directus collection name
+  --action <action>        Permission action: create|read|update|delete
+
+Options:
+  --fields <json_array>    Fields to allow (default: ["*"])
+  --filter <json>          Permission filter (default: {})
+  --local                  Use local Directus
+  --cloud                  Use cloud/VPS Directus (default)
+  --dry-run                Show what would be done
+  --help, -h               Show this help
+
+Policy Aliases:
+  ai-agent     AI Agent Policy  (e81a70bc-...)
+  public       Public label     (abf8a154-...)
+  agent        Agent Policy     (74d6c90f-...)
+  admin        Administrator    (8a613123-...)
+
+Examples:
+  # Add DELETE permission for AI Agent on task_comments
+  dot-permission-ensure --policy ai-agent --collection task_comments --action delete
+
+  # Add read permission with field restrictions
+  dot-permission-ensure --policy public --collection tasks --action read --fields '["name","status"]'
+
+  # Add create with filter (own records only)
+  dot-permission-ensure --policy ai-agent --collection feedbacks --action create \\
+    --filter '{"user_created":{"_eq":"\$CURRENT_USER"}}'
+
+EOF
+  show_environment_help
+}
+
+main() {
+  local orig_args=("$@")
+  local policy_input="" collection="" action="" fields='["*"]' filter='{}' dry_run=false
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --policy)    policy_input="$2"; shift 2 ;;
+      --collection) collection="$2"; shift 2 ;;
+      --action)    action="$2"; shift 2 ;;
+      --fields)    fields="$2"; shift 2 ;;
+      --filter)    filter="$2"; shift 2 ;;
+      --dry-run)   dry_run=true; shift ;;
+      --help|-h)   show_help; exit 0 ;;
+      --local|--cloud) shift ;;  # handled by init_environment
+      *)           shift ;;
+    esac
+  done
+
+  # Validate required args
+  if [[ -z "$policy_input" || -z "$collection" || -z "$action" ]]; then
+    log_err "Missing required arguments: --policy, --collection, --action"
+    echo ""
+    show_help
+    exit 1
+  fi
+
+  # Validate action
+  case "$action" in
+    create|read|update|delete) ;;
+    *) log_err "Invalid action: $action (must be create|read|update|delete)"; exit 1 ;;
+  esac
+
+  require_cmds
+
+  # Save caller's DOT_TOKEN (init_environment may overwrite with stale credentials)
+  local saved_token="${DOT_TOKEN:-}"
+
+  # Initialize environment (re-parse for --local/--cloud)
+  init_environment "${orig_args[@]}"
+  BASE_URL="$DIRECTUS_URL"
+
+  # Restore caller's token if it was set (takes priority over credentials.local.json)
+  if [[ -n "$saved_token" ]]; then
+    export DOT_TOKEN="$saved_token"
+  fi
+
+  local policy
+  policy=$(resolve_policy "$policy_input")
+
+  echo "========================================="
+  echo "DOT Tool: Permission Ensure v${VERSION}"
+  echo "========================================="
+  print_environment_banner "${orig_args[@]}"
+  echo "Policy:     $policy_input ($policy)"
+  echo "Collection: $collection"
+  echo "Action:     $action"
+  echo "Fields:     $fields"
+  echo ""
+
+  # Get auth token
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    local dot_auth="${SCRIPT_DIR}/dot-auth"
+    if [[ -f "$dot_auth" ]]; then
+      source "$dot_auth" "${orig_args[@]}"
+    else
+      log_err "dot-auth not found and DOT_TOKEN not set"
+      exit 1
+    fi
+  fi
+
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "Authentication failed"
+    exit 1
+  fi
+  log_ok "Authenticated"
+
+  # Check if permission already exists
+  if permission_exists "$collection" "$action" "$policy"; then
+    log_skip "Permission ${collection}.${action} already exists on policy $policy_input"
+    echo ""
+    echo "========================================="
+    echo "DOT Tool: Permission Ensure - COMPLETE"
+    echo "========================================="
+    exit 0
+  fi
+
+  # Create permission
+  if [[ "$dry_run" == "true" ]]; then
+    log_info "DRY RUN: Would create ${collection}.${action} on policy $policy_input"
+  else
+    create_permission "$policy" "$collection" "$action" "$fields" "$filter"
+  fi
+
+  # Verify
+  if [[ "$dry_run" != "true" ]]; then
+    if permission_exists "$collection" "$action" "$policy"; then
+      log_ok "Verified: ${collection}.${action} exists"
+    else
+      log_err "Verification failed: permission not found after create"
+      exit 1
+    fi
+  fi
+
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Permission Ensure - COMPLETE"
+  echo "========================================="
+}
+
+main "$@"
