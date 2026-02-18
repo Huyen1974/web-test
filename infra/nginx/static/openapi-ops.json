@@ -1,0 +1,417 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Incomex OPS Proxy — Task Management API",
+    "description": "CRUD API for AI agents (GPT, Claude) to manage tasks and task comments via the Directus-backed OPS proxy. Rate-limited, API-key authenticated.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://vps.incomexsaigoncorp.vn/ops",
+      "description": "VPS OPS Proxy"
+    }
+  ],
+  "security": [
+    {
+      "ApiKeyAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      }
+    },
+    "schemas": {
+      "Task": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "description": "Primary key" },
+          "name": { "type": "string", "description": "Task name" },
+          "description": { "type": "string", "nullable": true, "description": "Task description" },
+          "status": { "type": "string", "enum": ["draft", "active", "in_review", "completed", "archived"], "description": "Task status" },
+          "priority": { "type": "string", "enum": ["low", "medium", "high", "critical"], "nullable": true, "description": "Task priority" },
+          "assigned_to": { "type": "string", "enum": ["user", "claude", "gpt"], "nullable": true, "description": "Assigned agent" },
+          "deadline": { "type": "string", "format": "date-time", "nullable": true, "description": "Target deadline" },
+          "content_targets": { "type": "string", "nullable": true, "description": "Tab: Targets (markdown)" },
+          "content_rules": { "type": "string", "nullable": true, "description": "Tab: Rules (markdown)" },
+          "content_checklist": { "type": "string", "nullable": true, "description": "Tab: Checklist (markdown)" },
+          "content_plan": { "type": "string", "nullable": true, "description": "Tab: Plan (markdown)" },
+          "content_prompt": { "type": "string", "nullable": true, "description": "Tab: Prompt (markdown)" },
+          "content_reports": { "type": "string", "nullable": true, "description": "Tab: Reports (markdown)" },
+          "content_verify": { "type": "string", "nullable": true, "description": "Tab: Verify (markdown)" },
+          "content_test": { "type": "string", "nullable": true, "description": "Tab: Test (markdown)" },
+          "sort": { "type": "integer", "nullable": true, "description": "Sort order" },
+          "date_created": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+          "date_updated": { "type": "string", "format": "date-time", "nullable": true, "description": "Last update timestamp" },
+          "user_created": { "type": "string", "format": "uuid", "nullable": true, "description": "Creator user ID" }
+        }
+      },
+      "TaskComment": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "description": "Primary key" },
+          "task_id": { "type": "integer", "description": "Foreign key to tasks" },
+          "tab_scope": { "type": "string", "enum": ["targets", "rules", "checklist", "plan", "prompt", "reports", "verify", "test", "general"], "description": "Which tab this comment belongs to" },
+          "agent_type": { "type": "string", "enum": ["user", "claude", "gpt", "system"], "description": "Who created this comment" },
+          "content": { "type": "string", "description": "Comment content (markdown)" },
+          "action": { "type": "string", "enum": ["approve", "reject", "request_changes", "escalate"], "nullable": true, "description": "Action taken" },
+          "date_created": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+          "user_created": { "type": "string", "format": "uuid", "nullable": true, "description": "Creator user ID" }
+        }
+      },
+      "TaskList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Task" }
+          }
+        }
+      },
+      "TaskSingle": {
+        "type": "object",
+        "properties": {
+          "data": { "$ref": "#/components/schemas/Task" }
+        }
+      },
+      "CommentList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/TaskComment" }
+          }
+        }
+      },
+      "CommentSingle": {
+        "type": "object",
+        "properties": {
+          "data": { "$ref": "#/components/schemas/TaskComment" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/items/tasks": {
+      "get": {
+        "operationId": "listTasks",
+        "summary": "List tasks",
+        "description": "Retrieve a list of tasks. Supports Directus query parameters for filtering, sorting, and pagination.",
+        "tags": ["Tasks"],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 100 },
+            "description": "Maximum number of items to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": { "type": "integer" },
+            "description": "Number of items to skip"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Sort field (prefix with - for descending, e.g. -date_created)"
+          },
+          {
+            "name": "filter[status][_eq]",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter by status"
+          },
+          {
+            "name": "filter[assigned_to][_eq]",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter by assigned agent"
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Comma-separated list of fields to return"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of tasks",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TaskList" }
+              }
+            }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      }
+    },
+    "/items/tasks/{task_id}": {
+      "get": {
+        "operationId": "getTask",
+        "summary": "Get a single task",
+        "tags": ["Tasks"],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" },
+            "description": "Task ID"
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Comma-separated list of fields to return"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task details",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TaskSingle" }
+              }
+            }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "patch": {
+        "operationId": "updateTask",
+        "summary": "Update a task",
+        "description": "Update one or more fields on a task. Only include fields you want to change.",
+        "tags": ["Tasks"],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" },
+            "description": "Task ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "description": { "type": "string" },
+                  "status": { "type": "string", "enum": ["draft", "active", "in_review", "completed", "archived"] },
+                  "priority": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+                  "assigned_to": { "type": "string", "enum": ["user", "claude", "gpt"] },
+                  "deadline": { "type": "string", "format": "date-time" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated task",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TaskSingle" }
+              }
+            }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      }
+    },
+    "/items/task_comments": {
+      "get": {
+        "operationId": "listComments",
+        "summary": "List task comments",
+        "description": "Retrieve comments. Filter by task_id to get comments for a specific task.",
+        "tags": ["Comments"],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 100 },
+            "description": "Maximum number of items to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": { "type": "integer" },
+            "description": "Number of items to skip"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Sort field (prefix with - for descending)"
+          },
+          {
+            "name": "filter[task_id][_eq]",
+            "in": "query",
+            "schema": { "type": "integer" },
+            "description": "Filter by task ID"
+          },
+          {
+            "name": "filter[tab_scope][_eq]",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter by tab scope"
+          },
+          {
+            "name": "filter[agent_type][_eq]",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter by agent type"
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Comma-separated list of fields to return"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of comments",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CommentList" }
+              }
+            }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      },
+      "post": {
+        "operationId": "createComment",
+        "summary": "Create a task comment",
+        "description": "Add a new comment to a task. Requires task_id, tab_scope, agent_type, and content.",
+        "tags": ["Comments"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["task_id", "tab_scope", "agent_type", "content"],
+                "properties": {
+                  "task_id": { "type": "integer", "description": "Task to comment on" },
+                  "tab_scope": { "type": "string", "enum": ["targets", "rules", "checklist", "plan", "prompt", "reports", "verify", "test", "general"], "description": "Tab context" },
+                  "agent_type": { "type": "string", "enum": ["user", "claude", "gpt", "system"], "description": "Comment author type" },
+                  "content": { "type": "string", "description": "Comment content (markdown supported)" },
+                  "action": { "type": "string", "enum": ["approve", "reject", "request_changes", "escalate"], "description": "Optional action taken" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created comment",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CommentSingle" }
+              }
+            }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      }
+    },
+    "/items/task_comments/{comment_id}": {
+      "get": {
+        "operationId": "getComment",
+        "summary": "Get a single comment",
+        "tags": ["Comments"],
+        "parameters": [
+          {
+            "name": "comment_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" },
+            "description": "Comment ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Comment details",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CommentSingle" }
+              }
+            }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "patch": {
+        "operationId": "updateComment",
+        "summary": "Update a comment",
+        "description": "Update content or action on an existing comment.",
+        "tags": ["Comments"],
+        "parameters": [
+          {
+            "name": "comment_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" },
+            "description": "Comment ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "content": { "type": "string", "description": "Updated comment content" },
+                  "action": { "type": "string", "enum": ["approve", "reject", "request_changes", "escalate"], "description": "Updated action" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated comment",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CommentSingle" }
+              }
+            }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteComment",
+        "summary": "Delete a comment",
+        "description": "Permanently delete a task comment.",
+        "tags": ["Comments"],
+        "parameters": [
+          {
+            "name": "comment_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" },
+            "description": "Comment ID"
+          }
+        ],
+        "responses": {
+          "204": { "description": "Comment deleted successfully" },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      }
+    }
+  }
+}
