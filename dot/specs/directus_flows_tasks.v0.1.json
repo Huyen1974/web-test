@@ -1,0 +1,181 @@
+{
+  "version": "0.2",
+  "description": "Directus Flows for tasks/task_comments → Agent Data sync pipeline (WEB-77)",
+  "directus": {
+    "version": "11.5.1",
+    "base_url": "https://directus.incomexsaigoncorp.vn",
+    "requirements": {
+      "FLOWS_ENV_ALLOW_LIST": "AGENT_DATA_URL,AGENT_DATA_API_KEY",
+      "AGENT_DATA_URL": "Agent Data service URL (Docker: http://agent-data:8000)",
+      "AGENT_DATA_API_KEY": "Agent Data API key for authentication"
+    },
+    "notes": [
+      "NO isolated-vm installed — exec operations fail silently",
+      "Condition operations silently fail for items.update events — use log type instead",
+      "items.create uses $trigger.key (singular); items.update uses $trigger.keys[0] (plural)",
+      "items.delete uses $trigger.keys[0] (plural)",
+      "Create and update MUST be separate flows due to different $trigger.key vs $trigger.keys",
+      "Flows created via API need Directus restart (docker restart incomex-directus)",
+      "NEVER patch operation options after creation — it corrupts the flow; delete and recreate instead",
+      "Docker networking: Directus container reaches Agent Data via http://agent-data:8000"
+    ]
+  },
+  "document_id_patterns": {
+    "tasks": "operations/tasks/task-{id}",
+    "task_comments": "operations/tasks/comments/comment-{id}"
+  },
+  "flows": [
+    {
+      "name": "[DOT] Tasks Create → Agent Data",
+      "icon": "add_task",
+      "color": "#3B82F6",
+      "status": "active",
+      "trigger": "event",
+      "options": {
+        "type": "action",
+        "scope": ["items.create"],
+        "collections": ["tasks"]
+      },
+      "operations": [
+        {
+          "name": "Gate", "key": "gate", "type": "log",
+          "options": { "message": "[DOT] Flow triggered: {{$trigger.event}} on {{$trigger.collection}}" },
+          "resolve": "read_item"
+        },
+        {
+          "name": "Read Item", "key": "read_item", "type": "item-read",
+          "options": { "collection": "tasks", "key": "{{$trigger.key}}" },
+          "resolve": "send_to_ad"
+        },
+        {
+          "name": "Send to Agent Data", "key": "send_to_ad", "type": "request",
+          "options": {
+            "method": "POST",
+            "url": "{{$env.AGENT_DATA_URL}}/documents?upsert=true",
+            "body": { "document_id": "operations/tasks/task-{{read_item.id}}", "..." : "full task fields" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "[DOT] Tasks Update → Agent Data",
+      "icon": "edit",
+      "color": "#2563EB",
+      "status": "active",
+      "trigger": "event",
+      "options": {
+        "type": "action",
+        "scope": ["items.update"],
+        "collections": ["tasks"]
+      },
+      "operations": [
+        {
+          "name": "Gate", "key": "gate", "type": "log",
+          "options": { "message": "[DOT] Flow triggered: {{$trigger.event}} on {{$trigger.collection}}" },
+          "resolve": "read_item"
+        },
+        {
+          "name": "Read Item", "key": "read_item", "type": "item-read",
+          "options": { "collection": "tasks", "key": "{{$trigger.keys[0]}}" },
+          "resolve": "send_to_ad"
+        },
+        {
+          "name": "Send to Agent Data", "key": "send_to_ad", "type": "request",
+          "options": { "method": "POST", "url": "{{$env.AGENT_DATA_URL}}/documents?upsert=true" }
+        }
+      ]
+    },
+    {
+      "name": "[DOT] Comments Create → Agent Data",
+      "icon": "add_comment",
+      "color": "#8B5CF6",
+      "status": "active",
+      "trigger": "event",
+      "options": {
+        "type": "action",
+        "scope": ["items.create"],
+        "collections": ["task_comments"]
+      },
+      "operations": [
+        { "name": "Gate", "key": "gate", "type": "log", "resolve": "read_item" },
+        {
+          "name": "Read Item", "key": "read_item", "type": "item-read",
+          "options": { "collection": "task_comments", "key": "{{$trigger.key}}" },
+          "resolve": "send_to_ad"
+        },
+        {
+          "name": "Send to Agent Data", "key": "send_to_ad", "type": "request",
+          "options": { "method": "POST", "url": "{{$env.AGENT_DATA_URL}}/documents?upsert=true" }
+        }
+      ]
+    },
+    {
+      "name": "[DOT] Comments Update → Agent Data",
+      "icon": "edit_note",
+      "color": "#7C3AED",
+      "status": "active",
+      "trigger": "event",
+      "options": {
+        "type": "action",
+        "scope": ["items.update"],
+        "collections": ["task_comments"]
+      },
+      "operations": [
+        { "name": "Gate", "key": "gate", "type": "log", "resolve": "read_item" },
+        {
+          "name": "Read Item", "key": "read_item", "type": "item-read",
+          "options": { "collection": "task_comments", "key": "{{$trigger.keys[0]}}" },
+          "resolve": "send_to_ad"
+        },
+        {
+          "name": "Send to Agent Data", "key": "send_to_ad", "type": "request",
+          "options": { "method": "POST", "url": "{{$env.AGENT_DATA_URL}}/documents?upsert=true" }
+        }
+      ]
+    },
+    {
+      "name": "[DOT] Tasks Delete from Agent Data",
+      "icon": "delete",
+      "color": "#EF4444",
+      "status": "active",
+      "trigger": "event",
+      "options": {
+        "type": "action",
+        "scope": ["items.delete"],
+        "collections": ["tasks"]
+      },
+      "operations": [
+        { "name": "Gate", "key": "gate", "type": "log", "resolve": "delete_from_ad" },
+        {
+          "name": "Delete from Agent Data", "key": "delete_from_ad", "type": "request",
+          "options": {
+            "method": "DELETE",
+            "url": "{{$env.AGENT_DATA_URL}}/documents/operations/tasks/task-{{$trigger.keys[0]}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "[DOT] Comments Delete from Agent Data",
+      "icon": "delete_sweep",
+      "color": "#F97316",
+      "status": "active",
+      "trigger": "event",
+      "options": {
+        "type": "action",
+        "scope": ["items.delete"],
+        "collections": ["task_comments"]
+      },
+      "operations": [
+        { "name": "Gate", "key": "gate", "type": "log", "resolve": "delete_from_ad" },
+        {
+          "name": "Delete from Agent Data", "key": "delete_from_ad", "type": "request",
+          "options": {
+            "method": "DELETE",
+            "url": "{{$env.AGENT_DATA_URL}}/documents/operations/tasks/comments/comment-{{$trigger.keys[0]}}"
+          }
+        }
+      ]
+    }
+  ]
+}
