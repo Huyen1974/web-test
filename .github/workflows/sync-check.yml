@@ -205,7 +205,7 @@ jobs:
           FAILED=0
 
           # Allowed top-level folders under knowledge/ (KS-LAW §2)
-          ALLOWED="agents current-state current-tasks dev ops other"
+          ALLOWED="agents current-state current-tasks dev foundation ops other"
 
           # Get all document IDs and extract top-level folders
           DOCS=$(curl -s --max-time 15 "$VPS_AGENT_DATA_URL/kb/list" 2>/dev/null)
