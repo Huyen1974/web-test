@@ -1,0 +1,450 @@
+#!/usr/bin/env bash
+
+# dot-flow-setup-tasks-sync: Configure Directus Flows for tasks/task_comments → Agent Data sync
+# Usage: ./dot/bin/dot-flow-setup-tasks-sync [--local|--cloud]
+#
+# Creates six Directus Flows via API (idempotent — safe to run multiple times):
+#   1. Tasks Create → Agent Data       (items.create → POST upsert)
+#   2. Tasks Update → Agent Data       (items.update → POST upsert)
+#   3. Comments Create → Agent Data    (items.create → POST upsert)
+#   4. Comments Update → Agent Data    (items.update → POST upsert)
+#   5. Tasks Delete from Agent Data    (items.delete → DELETE)
+#   6. Comments Delete from Agent Data (items.delete → DELETE)
+#
+# NOTE: Create and update are split because Directus 11.x uses different
+# trigger variables: items.create → $trigger.key (singular),
+# items.update → $trigger.keys[0] (plural array).
+#
+# Uses 'log' type as first operation because isolated-vm is NOT installed
+# and condition operations silently fail for some event types.
+#
+# Prerequisites:
+#   FLOWS_ENV_ALLOW_LIST must include: AGENT_DATA_URL,AGENT_DATA_API_KEY
+#
+# Options:
+#   --local     Use local development environment
+#   --cloud     Use cloud/production environment
+#   --dry-run   Show what would be created without making changes
+#   --help, -h  Show this help
+
+set -euo pipefail
+
+# Determine script directory
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+elif [[ -n "${0:-}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+else
+  SCRIPT_DIR="$(pwd)/dot/bin"
+fi
+
+# Source central environment config
+source "$SCRIPT_DIR/../config/environment.sh"
+
+# Parse arguments
+ENV_FLAG=""
+DRY_RUN=""
+
+for arg in "$@"; do
+  case "$arg" in
+    --local)  ENV_FLAG="--local" ;;
+    --cloud)  ENV_FLAG="--cloud" ;;
+    --dry-run) DRY_RUN="yes" ;;
+    --help|-h)
+      head -28 "$0" | tail -26
+      exit 0
+      ;;
+  esac
+done
+
+# Initialize environment
+init_environment "$ENV_FLAG"
+print_environment_banner "$ENV_FLAG"
+
+TOKEN="${DIRECTUS_TOKEN:-}"
+if [[ -z "$TOKEN" ]]; then
+  echo -e "${RED}[ERROR]${NC} Failed to authenticate with Directus" >&2
+  exit 1
+fi
+
+echo "============================================================"
+echo "  Directus Flow Setup: Tasks/Comments → Agent Data Sync"
+echo "  (log-first, split create/update for trigger compatibility)"
+echo "============================================================"
+echo ""
+
+# ─────────────────────────────────────────────────────────────────
+# Helper Functions
+# ─────────────────────────────────────────────────────────────────
+
+cleanup_existing_flows() {
+  local name="$1"
+  python3 -c "
+import urllib.request, json, sys, ssl
+url = '${DIRECTUS_URL}'
+token = '${TOKEN}'
+name = '''$name'''
+headers = {'Authorization': f'Bearer {token}'}
+
+ctx = ssl.create_default_context()
+if url.startswith('https'):
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
+encoded = urllib.parse.quote(name, safe='')
+req = urllib.request.Request(f'{url}/flows?filter[name][_eq]={encoded}&fields=id', headers=headers)
+try:
+    resp = urllib.request.urlopen(req, context=ctx)
+    flows = json.loads(resp.read())['data']
+except Exception as e:
+    print(f'  Warning: Could not list flows: {e}', file=sys.stderr)
+    sys.exit(0)
+
+for f in flows:
+    fid = f['id']
+    print(f'  Removing existing flow {fid}...')
+    req = urllib.request.Request(f'{url}/flows/{fid}', headers=headers, method='DELETE')
+    try:
+        urllib.request.urlopen(req, context=ctx)
+    except Exception as e:
+        print(f'  Warning: Could not delete flow {fid}: {e}', file=sys.stderr)
+" 2>&1
+}
+
+create_flow() {
+  local payload="$1"
+  local response
+  response=$(curl -sf --max-time 15 -X POST \
+    "${DIRECTUS_URL}/flows" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "$payload" 2>/dev/null || echo "")
+
+  if [[ -z "$response" ]]; then
+    echo -e "${RED}[ERROR]${NC} Failed to create flow" >&2
+    return 1
+  fi
+
+  local flow_id
+  flow_id=$(echo "$response" | jq -r '.data.id // empty')
+  if [[ -z "$flow_id" || "$flow_id" == "null" ]]; then
+    echo -e "${RED}[ERROR]${NC} No flow ID returned" >&2
+    echo "$response" | jq . 2>/dev/null >&2 || echo "$response" >&2
+    return 1
+  fi
+
+  echo "$flow_id"
+}
+
+create_operation() {
+  local payload="$1"
+  local response
+  response=$(curl -sf --max-time 15 -X POST \
+    "${DIRECTUS_URL}/operations" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "$payload" 2>/dev/null || echo "")
+
+  if [[ -z "$response" ]]; then
+    echo -e "${RED}[ERROR]${NC} Failed to create operation" >&2
+    return 1
+  fi
+
+  local op_id
+  op_id=$(echo "$response" | jq -r '.data.id // empty')
+  if [[ -z "$op_id" || "$op_id" == "null" ]]; then
+    echo -e "${RED}[ERROR]${NC} No operation ID returned" >&2
+    echo "$response" | jq . 2>/dev/null >&2 || echo "$response" >&2
+    return 1
+  fi
+
+  echo "$op_id"
+}
+
+patch_resource() {
+  local resource="$1" id="$2" payload="$3"
+  curl -sf --max-time 15 -X PATCH \
+    "${DIRECTUS_URL}/${resource}/${id}" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "$payload" >/dev/null 2>&1
+}
+
+# ─────────────────────────────────────────────────────────────────
+# Generic sync flow builder
+# Args: flow_name icon color scope collection trigger_key_expr
+#       read_collection body_template metadata_template doc_id_template
+# ─────────────────────────────────────────────────────────────────
+
+setup_sync_flow() {
+  local flow_name="$1" icon="$2" color="$3" scope="$4" collection="$5"
+  local trigger_key="$6" read_collection="$7" doc_id_template="$8"
+  local body_template="$9" metadata_template="${10}"
+
+  echo -e "${BOLD}${flow_name}${NC}"
+
+  if [[ -z "$DRY_RUN" ]]; then
+    cleanup_existing_flows "$flow_name"
+  fi
+
+  if [[ -n "$DRY_RUN" ]]; then
+    echo -e "  ${YELLOW}[DRY RUN]${NC} Would create flow with 3 operations"
+    return
+  fi
+
+  local flow_id
+  flow_id=$(create_flow "$(jq -n \
+    --arg name "$flow_name" \
+    --arg icon "$icon" \
+    --arg color "$color" \
+    --arg collection "$collection" \
+    --argjson scope "$scope" \
+    '{
+      name: $name,
+      icon: $icon,
+      color: $color,
+      status: "active",
+      trigger: "event",
+      accountability: "all",
+      options: {
+        type: "action",
+        scope: $scope,
+        collections: [$collection]
+      }
+    }')")
+  echo -e "  Flow: ${GREEN}${flow_id}${NC}"
+
+  # Op0: Log gate
+  local gate_id
+  gate_id=$(create_operation "$(jq -n --arg flow "$flow_id" '{
+    flow: $flow,
+    name: "Gate",
+    key: "gate",
+    type: "log",
+    position_x: 10,
+    position_y: 1,
+    options: { message: "[DOT] Flow triggered: {{$trigger.event}} on {{$trigger.collection}}" }
+  }')")
+
+  # Op1: Item-read
+  local read_id
+  read_id=$(create_operation "$(jq -n \
+    --arg flow "$flow_id" \
+    --arg coll "$read_collection" \
+    --arg key "$trigger_key" \
+    '{
+      flow: $flow,
+      name: "Read Item",
+      key: "read_item",
+      type: "item-read",
+      position_x: 25,
+      position_y: 1,
+      options: { collection: $coll, key: $key }
+    }')")
+
+  # Op2: Request to Agent Data
+  local send_id
+  send_id=$(create_operation "$(jq -n \
+    --arg flow "$flow_id" \
+    --arg doc_id "$doc_id_template" \
+    --argjson body "$body_template" \
+    --argjson meta "$metadata_template" \
+    '{
+      flow: $flow,
+      name: "Send to Agent Data",
+      key: "send_to_ad",
+      type: "request",
+      position_x: 40,
+      position_y: 1,
+      options: {
+        method: "POST",
+        url: "{{$env.AGENT_DATA_URL}}/documents?upsert=true",
+        headers: [
+          { header: "Content-Type", value: "application/json" },
+          { header: "X-API-Key", value: "{{$env.AGENT_DATA_API_KEY}}" }
+        ],
+        body: {
+          document_id: $doc_id,
+          parent_id: "root",
+          content: { mime_type: "text/markdown", body: $body },
+          metadata: $meta,
+          is_human_readable: true
+        }
+      }
+    }')")
+
+  # Chain: gate → read_item → send_to_ad
+  patch_resource "operations" "$gate_id" "$(jq -n --arg r "$read_id" '{resolve: $r}')"
+  patch_resource "operations" "$read_id" "$(jq -n --arg r "$send_id" '{resolve: $r}')"
+  patch_resource "flows" "$flow_id" "$(jq -n --arg op "$gate_id" '{operation: $op}')"
+  echo -e "  Chain: gate → read → send ${GREEN}OK${NC}"
+}
+
+# ─────────────────────────────────────────────────────────────────
+# Task body/metadata templates (shared by create and update)
+# ─────────────────────────────────────────────────────────────────
+
+TASK_BODY='"# {{read_item.name}}\n\n**Status:** {{read_item.status}}\n**Priority:** {{read_item.priority}}\n**Assigned to:** {{read_item.assigned_to}}\n\n## Description\n{{read_item.description}}\n\n## Targets\n{{read_item.content_targets}}\n\n## Rules\n{{read_item.content_rules}}\n\n## Checklist\n{{read_item.content_checklist}}\n\n## Plan\n{{read_item.content_plan}}\n\n## Prompt\n{{read_item.content_prompt}}\n\n## Reports\n{{read_item.content_reports}}\n\n## Verify\n{{read_item.content_verify}}\n\n## Test\n{{read_item.content_test}}"'
+
+TASK_META='{"title":"{{read_item.name}}","status":"{{read_item.status}}","priority":"{{read_item.priority}}","assigned_to":"{{read_item.assigned_to}}","source":"directus","collection":"tasks"}'
+
+COMMENT_BODY='"## Comment by {{read_item.agent_type}}\n\n**Task:** #{{read_item.task_id}}\n**Tab:** {{read_item.tab_scope}}\n**Action:** {{read_item.action}}\n\n{{read_item.content}}"'
+
+COMMENT_META='{"title":"Comment #{{read_item.id}} on Task #{{read_item.task_id}}","task_id":"{{read_item.task_id}}","tab_scope":"{{read_item.tab_scope}}","agent_type":"{{read_item.agent_type}}","action":"{{read_item.action}}","source":"directus","collection":"task_comments"}'
+
+# ─────────────────────────────────────────────────────────────────
+# Flow 1: Tasks Create → Agent Data
+# ─────────────────────────────────────────────────────────────────
+
+setup_sync_flow \
+  "[DOT] Tasks Create → Agent Data" "add_task" "#3B82F6" '["items.create"]' "tasks" \
+  '{{$trigger.key}}' "tasks" \
+  '"operations/tasks/task-{{read_item.id}}"' \
+  "$TASK_BODY" "$TASK_META"
+
+echo ""
+
+# ─────────────────────────────────────────────────────────────────
+# Flow 2: Tasks Update → Agent Data
+# ─────────────────────────────────────────────────────────────────
+
+setup_sync_flow \
+  "[DOT] Tasks Update → Agent Data" "edit" "#2563EB" '["items.update"]' "tasks" \
+  '{{$trigger.keys[0]}}' "tasks" \
+  '"operations/tasks/task-{{read_item.id}}"' \
+  "$TASK_BODY" "$TASK_META"
+
+echo ""
+
+# ─────────────────────────────────────────────────────────────────
+# Flow 3: Comments Create → Agent Data
+# ─────────────────────────────────────────────────────────────────
+
+setup_sync_flow \
+  "[DOT] Comments Create → Agent Data" "add_comment" "#8B5CF6" '["items.create"]' "task_comments" \
+  '{{$trigger.key}}' "task_comments" \
+  '"operations/tasks/comments/comment-{{read_item.id}}"' \
+  "$COMMENT_BODY" "$COMMENT_META"
+
+echo ""
+
+# ─────────────────────────────────────────────────────────────────
+# Flow 4: Comments Update → Agent Data
+# ─────────────────────────────────────────────────────────────────
+
+setup_sync_flow \
+  "[DOT] Comments Update → Agent Data" "edit_note" "#7C3AED" '["items.update"]' "task_comments" \
+  '{{$trigger.keys[0]}}' "task_comments" \
+  '"operations/tasks/comments/comment-{{read_item.id}}"' \
+  "$COMMENT_BODY" "$COMMENT_META"
+
+echo ""
+
+# ─────────────────────────────────────────────────────────────────
+# Flow 5: Tasks Delete from Agent Data
+# Chain: log → request DELETE
+# ─────────────────────────────────────────────────────────────────
+
+setup_delete_flow() {
+  local flow_name="$1" icon="$2" color="$3" collection="$4" url_template="$5"
+
+  echo -e "${BOLD}${flow_name}${NC}"
+
+  if [[ -z "$DRY_RUN" ]]; then
+    cleanup_existing_flows "$flow_name"
+  fi
+
+  if [[ -n "$DRY_RUN" ]]; then
+    echo -e "  ${YELLOW}[DRY RUN]${NC} Would create delete flow with 2 operations"
+    return
+  fi
+
+  local flow_id
+  flow_id=$(create_flow "$(jq -n \
+    --arg name "$flow_name" \
+    --arg icon "$icon" \
+    --arg color "$color" \
+    --arg collection "$collection" \
+    '{
+      name: $name,
+      icon: $icon,
+      color: $color,
+      status: "active",
+      trigger: "event",
+      accountability: "all",
+      options: {
+        type: "action",
+        scope: ["items.delete"],
+        collections: [$collection]
+      }
+    }')")
+  echo -e "  Flow: ${GREEN}${flow_id}${NC}"
+
+  # Op0: Log gate
+  local gate_id
+  gate_id=$(create_operation "$(jq -n --arg flow "$flow_id" '{
+    flow: $flow,
+    name: "Gate",
+    key: "gate",
+    type: "log",
+    position_x: 10,
+    position_y: 1,
+    options: { message: "[DOT] Flow triggered: {{$trigger.event}} on {{$trigger.collection}}" }
+  }')")
+
+  # Op1: DELETE request
+  local del_id
+  del_id=$(create_operation "$(jq -n \
+    --arg flow "$flow_id" \
+    --arg url "$url_template" \
+    '{
+      flow: $flow,
+      name: "Delete from Agent Data",
+      key: "delete_from_ad",
+      type: "request",
+      position_x: 25,
+      position_y: 1,
+      options: {
+        method: "DELETE",
+        url: $url,
+        headers: [
+          { header: "X-API-Key", value: "{{$env.AGENT_DATA_API_KEY}}" }
+        ]
+      }
+    }')")
+
+  # Chain: gate → delete_from_ad
+  patch_resource "operations" "$gate_id" "$(jq -n --arg r "$del_id" '{resolve: $r}')"
+  patch_resource "flows" "$flow_id" "$(jq -n --arg op "$gate_id" '{operation: $op}')"
+  echo -e "  Chain: gate → delete ${GREEN}OK${NC}"
+}
+
+setup_delete_flow \
+  "[DOT] Tasks Delete from Agent Data" "delete" "#EF4444" "tasks" \
+  '{{$env.AGENT_DATA_URL}}/documents/operations/tasks/task-{{$trigger.keys[0]}}'
+
+echo ""
+
+# ─────────────────────────────────────────────────────────────────
+# Flow 6: Comments Delete from Agent Data
+# ─────────────────────────────────────────────────────────────────
+
+setup_delete_flow \
+  "[DOT] Comments Delete from Agent Data" "delete_sweep" "#F97316" "task_comments" \
+  '{{$env.AGENT_DATA_URL}}/documents/operations/tasks/comments/comment-{{$trigger.keys[0]}}'
+
+echo ""
+echo "============================================================"
+echo -e "${GREEN}[SUCCESS]${NC} Directus Flows for tasks/comments configured"
+echo "============================================================"
+echo ""
+echo "Flows created: 6 (2 task sync + 2 comment sync + 2 delete)"
+echo "  - Create flows use \$trigger.key (singular)"
+echo "  - Update flows use \$trigger.keys[0] (plural)"
+echo "  - Log-first pattern (no isolated-vm needed)"
+echo ""
+echo "Document ID patterns:"
+echo "  Tasks:    operations/tasks/task-{id}"
+echo "  Comments: operations/tasks/comments/comment-{id}"
+echo ""
+echo "Verify flows in Directus: ${DIRECTUS_URL}/admin/settings/flows"
