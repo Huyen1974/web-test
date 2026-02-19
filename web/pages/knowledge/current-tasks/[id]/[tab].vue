@@ -146,7 +146,7 @@ function formatCommentDate(dateStr?: string): string {
 
 						<!-- Action badge -->
 						<span
-							v-if="comment.action"
+							v-if="comment.action && COMMENT_ACTION_META[comment.action]"
 							:class="`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-${COMMENT_ACTION_META[comment.action].color}-100 text-${COMMENT_ACTION_META[comment.action].color}-800 dark:bg-${COMMENT_ACTION_META[comment.action].color}-900/30 dark:text-${COMMENT_ACTION_META[comment.action].color}-400`"
 						>
 							{{ COMMENT_ACTION_META[comment.action].label }}
