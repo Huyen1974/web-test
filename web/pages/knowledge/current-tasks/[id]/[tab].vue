@@ -7,9 +7,9 @@ const route = useRoute();
 const taskId = route.params.id as string;
 const tabKey = computed(() => route.params.tab as TabScope);
 
-// Get task from parent layout
-const task = inject<Ref<Task | null>>('task');
-const refreshTask = inject<() => Promise<void>>('refreshTask');
+// Get task from parent layout (with safe defaults)
+const task = inject<Ref<Task | null>>('task', ref(null));
+const refreshTask = inject<() => Promise<void>>('refreshTask', async () => {});
 
 // Find current tab config
 const currentTab = computed(() => TAB_CONFIG.find((t) => t.key === tabKey.value));
@@ -22,8 +22,19 @@ const tabContent = computed(() => {
 
 const renderedContent = computed(() => {
 	if (!tabContent.value) return '';
-	return markdownToHtml(tabContent.value);
+	try {
+		return markdownToHtml(tabContent.value);
+	} catch {
+		return `<pre>${tabContent.value}</pre>`;
+	}
 });
+
+// Safe accessor for agent type metadata (guards against unknown agent_type values)
+function getAgentMeta(agentType: string) {
+	return (
+		AGENT_TYPE_META[agentType as AgentType] || { label: agentType || 'Unknown', color: 'gray', icon: '' }
+	);
+}
 
 // Fetch comments for this tab
 const {
@@ -124,7 +135,7 @@ function formatCommentDate(dateStr?: string): string {
 						<div class="flex items-center gap-2">
 							<!-- Agent icon -->
 							<span
-								:class="`inline-flex h-6 w-6 items-center justify-center rounded-full bg-${AGENT_TYPE_META[comment.agent_type].color}-100 dark:bg-${AGENT_TYPE_META[comment.agent_type].color}-900/30`"
+								:class="`inline-flex h-6 w-6 items-center justify-center rounded-full bg-${getAgentMeta(comment.agent_type).color}-100 dark:bg-${getAgentMeta(comment.agent_type).color}-900/30`"
 							>
 								<span class="text-xs">{{
 									comment.agent_type === 'user'
@@ -133,13 +144,15 @@ function formatCommentDate(dateStr?: string): string {
 											? 'C'
 											: comment.agent_type === 'gpt'
 												? 'G'
-												: 'S'
+											: comment.agent_type === 'system'
+												? 'S'
+												: '?'
 								}}</span>
 							</span>
 							<span
-								:class="`text-sm font-medium text-${AGENT_TYPE_META[comment.agent_type].color}-700 dark:text-${AGENT_TYPE_META[comment.agent_type].color}-400`"
+								:class="`text-sm font-medium text-${getAgentMeta(comment.agent_type).color}-700 dark:text-${getAgentMeta(comment.agent_type).color}-400`"
 							>
-								{{ AGENT_TYPE_META[comment.agent_type].label }}
+								{{ getAgentMeta(comment.agent_type).label }}
 							</span>
 							<span class="text-xs text-gray-400">{{ formatCommentDate(comment.date_created) }}</span>
 						</div>
