@@ -299,7 +299,7 @@ COMMENT_META='{"title":"Comment #{{read_item.id}} on Task #{{read_item.task_id}}
 setup_sync_flow \
   "[DOT] Tasks Create → Agent Data" "add_task" "#3B82F6" '["items.create"]' "tasks" \
   '{{$trigger.key}}' "tasks" \
-  '"operations/tasks/task-{{read_item.id}}"' \
+  'operations/tasks/task-{{read_item.id}}' \
   "$TASK_BODY" "$TASK_META"
 
 echo ""
@@ -311,7 +311,7 @@ echo ""
 setup_sync_flow \
   "[DOT] Tasks Update → Agent Data" "edit" "#2563EB" '["items.update"]' "tasks" \
   '{{$trigger.keys[0]}}' "tasks" \
-  '"operations/tasks/task-{{read_item.id}}"' \
+  'operations/tasks/task-{{read_item.id}}' \
   "$TASK_BODY" "$TASK_META"
 
 echo ""
@@ -323,7 +323,7 @@ echo ""
 setup_sync_flow \
   "[DOT] Comments Create → Agent Data" "add_comment" "#8B5CF6" '["items.create"]' "task_comments" \
   '{{$trigger.key}}' "task_comments" \
-  '"operations/tasks/comments/comment-{{read_item.id}}"' \
+  'operations/tasks/comments/comment-{{read_item.id}}' \
   "$COMMENT_BODY" "$COMMENT_META"
 
 echo ""
@@ -335,7 +335,7 @@ echo ""
 setup_sync_flow \
   "[DOT] Comments Update → Agent Data" "edit_note" "#7C3AED" '["items.update"]' "task_comments" \
   '{{$trigger.keys[0]}}' "task_comments" \
-  '"operations/tasks/comments/comment-{{read_item.id}}"' \
+  'operations/tasks/comments/comment-{{read_item.id}}' \
   "$COMMENT_BODY" "$COMMENT_META"
 
 echo ""
