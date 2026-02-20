@@ -243,35 +243,69 @@ setup_sync_flow() {
     }')")
 
   # Op2: Request to Agent Data
+  # NOTE: Uses Python to create request operation to ensure body is stored as
+  # a JSON object (not a serialized string). When body is a string, Directus
+  # does raw template substitution without JSON-escaping, causing 422 errors
+  # when content fields contain markdown (newlines, quotes).
   local send_id
-  send_id=$(create_operation "$(jq -n \
-    --arg flow "$flow_id" \
-    --arg doc_id "$doc_id_template" \
-    --argjson body "$body_template" \
-    --argjson meta "$metadata_template" \
-    '{
-      flow: $flow,
-      name: "Send to Agent Data",
-      key: "send_to_ad",
-      type: "request",
-      position_x: 40,
-      position_y: 1,
-      options: {
-        method: "POST",
-        url: "{{$env.AGENT_DATA_URL}}/documents?upsert=true",
-        headers: [
-          { header: "Content-Type", value: "application/json" },
-          { header: "X-API-Key", value: "{{$env.AGENT_DATA_API_KEY}}" }
+  send_id=$(python3 -c "
+import urllib.request, json, sys, ssl
+url = '${DIRECTUS_URL}'
+token = '${TOKEN}'
+flow_id = '$flow_id'
+doc_id = '''$doc_id_template'''
+body_str = '''$body_template'''
+meta_str = '''$metadata_template'''
+
+ctx = ssl.create_default_context()
+if url.startswith('https'):
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
+# Parse body_template (JSON string) and meta_template (JSON object)
+body_val = json.loads(body_str)  # string value
+meta_val = json.loads(meta_str)  # dict value
+
+payload = {
+    'flow': flow_id,
+    'name': 'Send to Agent Data',
+    'key': 'send_to_ad',
+    'type': 'request',
+    'position_x': 40,
+    'position_y': 1,
+    'options': {
+        'method': 'POST',
+        'url': '{{' + '\$env.AGENT_DATA_URL}}/documents?upsert=true',
+        'headers': [
+            {'header': 'Content-Type', 'value': 'application/json'},
+            {'header': 'X-API-Key', 'value': '{{' + '\$env.AGENT_DATA_API_KEY}}'}
         ],
-        body: {
-          document_id: $doc_id,
-          parent_id: "root",
-          content: { mime_type: "text/markdown", body: $body },
-          metadata: $meta,
-          is_human_readable: true
+        'body': {
+            'document_id': doc_id,
+            'parent_id': 'root',
+            'content': {'mime_type': 'text/markdown', 'body': body_val},
+            'metadata': meta_val,
+            'is_human_readable': True
         }
-      }
-    }')")
+    }
+}
+
+data = json.dumps(payload).encode()
+headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+req = urllib.request.Request(f'{url}/operations', data=data, headers=headers)
+try:
+    resp = urllib.request.urlopen(req, context=ctx)
+    result = json.loads(resp.read())
+    op_id = result.get('data', {}).get('id', '')
+    if op_id:
+        print(op_id, end='')
+    else:
+        print('ERROR: No operation ID returned', file=sys.stderr)
+        sys.exit(1)
+except Exception as e:
+    print(f'ERROR: {e}', file=sys.stderr)
+    sys.exit(1)
+")
 
   # Chain: gate → read_item → send_to_ad
   patch_resource "operations" "$gate_id" "$(jq -n --arg r "$read_id" '{resolve: $r}')"
