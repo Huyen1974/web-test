@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# DOT Tool: Remove a navigation item from Directus by title
+# Usage: dot-nav-remove-item <menu-id> <item-title>
+# Example: dot-nav-remove-item main Home
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [[ $# -lt 2 ]]; then
+  echo "Usage: dot-nav-remove-item <menu-id> <item-title>"
+  echo "Example: dot-nav-remove-item main Home"
+  exit 1
+fi
+
+MENU_ID="$1"
+ITEM_TITLE="$2"
+
+BASE_URL="${DIRECTUS_BASE_URL:-https://directus.incomexsaigoncorp.vn}"
+EMAIL="${DIRECTUS_ADMIN_EMAIL:-admin@example.com}"
+PASSWORD="${DIRECTUS_ADMIN_PASSWORD:-}"
+
+if [[ -z "$PASSWORD" ]]; then
+  echo "ERROR: DIRECTUS_ADMIN_PASSWORD not set" >&2
+  exit 1
+fi
+
+echo "========================================="
+echo "DOT Tool: Remove Navigation Item"
+echo "========================================="
+echo "Menu: ${MENU_ID}"
+echo "Remove item: ${ITEM_TITLE}"
+echo "Target: ${BASE_URL}"
+echo ""
+
+# Auth (use temp file to avoid shell escaping issues with special chars in password)
+AUTH_TMP=$(mktemp)
+trap 'rm -f "$AUTH_TMP"' EXIT
+cat > "$AUTH_TMP" <<AUTHEOF
+{"email":"${EMAIL}","password":"${PASSWORD}"}
+AUTHEOF
+AUTH_RESP=$(curl -sS -X POST "${BASE_URL}/auth/login" \
+  -H "Content-Type: application/json" \
+  -d "@${AUTH_TMP}")
+TOKEN=$(echo "$AUTH_RESP" | jq -r '.data.access_token // empty')
+
+if [[ -z "$TOKEN" ]]; then
+  echo "ERROR: Authentication failed" >&2
+  exit 1
+fi
+echo "[OK] Authenticated"
+
+# Get current navigation items
+NAV_JSON=$(curl -sS "${BASE_URL}/items/navigation/${MENU_ID}?fields=items.*" \
+  -H "Authorization: Bearer ${TOKEN}")
+
+ITEM_COUNT=$(echo "$NAV_JSON" | jq '.data.items | length')
+echo "[INFO] Current items: ${ITEM_COUNT}"
+
+# Find the item ID to delete
+ITEM_ID=$(echo "$NAV_JSON" | jq -r --arg title "$ITEM_TITLE" '.data.items[] | select(.title == $title) | .id // empty')
+
+if [[ -z "$ITEM_ID" ]]; then
+  echo "[WARN] Item '${ITEM_TITLE}' not found in menu '${MENU_ID}'"
+  exit 0
+fi
+
+echo "[INFO] Removing '${ITEM_TITLE}' (${ITEM_ID}) from navigation"
+
+# Delete the navigation item
+HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" -X DELETE \
+  "${BASE_URL}/items/navigation_items/${ITEM_ID}" \
+  -H "Authorization: Bearer ${TOKEN}")
+
+if [[ "$HTTP_CODE" == "204" || "$HTTP_CODE" == "200" ]]; then
+  echo "[OK] Item '${ITEM_TITLE}' (${ITEM_ID}) removed"
+else
+  echo "[ERR] Failed to remove item (HTTP ${HTTP_CODE})" >&2
+  exit 1
+fi
+
+# Verify
+VERIFY_JSON=$(curl -sS "${BASE_URL}/items/navigation/${MENU_ID}?fields=items.title,items.sort" \
+  -H "Authorization: Bearer ${TOKEN}")
+echo ""
+echo "[INFO] Remaining items:"
+echo "$VERIFY_JSON" | jq -r '.data.items | sort_by(.sort) | .[] | "  \(.sort). \(.title)"'
+
+echo ""
+echo "========================================="
+echo "DOT Tool: Remove Navigation Item - COMPLETE"
+echo "========================================="
