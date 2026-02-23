@@ -58,11 +58,22 @@ export function buildDocsTree(documents: AgentView[]): DocsTreeNode[] {
 		parentChildren.push(docNode);
 	}
 
-	// Sort children: folders first, then files, alphabetically
+	// Top-level folder display order (KS-LAW §2)
+	const FOLDER_ORDER: Record<string, number> = {
+		'current-tasks': 1,
+		'current-state': 2,
+		dev: 3,
+		other: 4,
+	};
+
+	// Sort children: folders first (by priority then alphabetically), then files
 	const sortChildren = (nodes: DocsTreeNode[]) => {
 		nodes.sort((a, b) => {
 			if (a.isFolder && !b.isFolder) return -1;
 			if (!a.isFolder && b.isFolder) return 1;
+			const aPri = FOLDER_ORDER[a.name] ?? 99;
+			const bPri = FOLDER_ORDER[b.name] ?? 99;
+			if (aPri !== bPri) return aPri - bPri;
 			return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
 		});
 		for (const node of nodes) {

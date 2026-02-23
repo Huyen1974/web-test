@@ -44,9 +44,19 @@ function toggleFolder(node: DocsTreeNode) {
 	}
 }
 
+// Top-level folders with dedicated pages
+const FOLDER_ROUTES: Record<string, string> = {
+	'current-tasks': '/knowledge/current-tasks',
+};
+
 function handleClick(node: DocsTreeNode) {
 	if (node.isFolder) {
-		toggleFolder(node);
+		const route = props.level === 0 ? FOLDER_ROUTES[node.name] : undefined;
+		if (route) {
+			navigateTo(route);
+		} else {
+			toggleFolder(node);
+		}
 	} else {
 		emit('select', node);
 	}
