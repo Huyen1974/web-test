@@ -6,13 +6,11 @@
       "**/.*",
       "**/node_modules/**"
     ],
-    "rewrites": [
+    "redirects": [
       {
-        "source": "**",
-        "run": {
-          "serviceId": "nuxt-ssr-pfne2mqwja",
-          "region": "asia-southeast1"
-        }
+        "source": "/:path*",
+        "destination": "https://vps.incomexsaigoncorp.vn/:path",
+        "type": 301
       }
     ]
   }
