@@ -26,7 +26,7 @@ jobs:
           FAILED=0
 
           echo -n "Nuxt (website)......... "
-          HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$WEBSITE_URL/" 2>/dev/null || echo "000")
+          HTTP=$(curl -s -L -o /dev/null -w "%{http_code}" --max-time 20 "$WEBSITE_URL/" 2>/dev/null || echo "000")
           if [ "$HTTP" = "200" ]; then echo "OK ($HTTP)"; else echo "FAIL ($HTTP)"; FAILED=1; fi
 
           echo -n "Directus............... "
@@ -100,8 +100,8 @@ jobs:
             URL="$WEBSITE_URL/knowledge/$CLEAN"
 
             echo -n "Page: $TITLE... "
-            HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$URL" 2>/dev/null || echo "000")
-            BODY=$(curl -s --max-time 20 "$URL" 2>/dev/null)
+            HTTP=$(curl -s -L -o /dev/null -w "%{http_code}" --max-time 20 "$URL" 2>/dev/null || echo "000")
+            BODY=$(curl -s -L --max-time 20 "$URL" 2>/dev/null)
             NOT_FOUND=$(echo "$BODY" | grep -c "Document not found" || true)
 
             if [ "$HTTP" = "200" ] && [ "$NOT_FOUND" = "0" ]; then
@@ -121,7 +121,7 @@ jobs:
           FAILED=0
 
           echo -n "Cache headers.......... "
-          HEADERS=$(curl -sI --max-time 15 "$WEBSITE_URL/knowledge/" 2>/dev/null)
+          HEADERS=$(curl -sI -L --max-time 15 "$WEBSITE_URL/knowledge/" 2>/dev/null)
           HAS_CACHE=$(echo "$HEADERS" | grep -ic 'cache-control.*s-maxage' || true)
           if [ "$HAS_CACHE" -gt 0 ]; then
             CACHE_VAL=$(echo "$HEADERS" | grep -i 'cache-control' | head -1 | tr -d '\r')
