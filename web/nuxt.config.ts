@@ -139,6 +139,13 @@ export default defineNuxtConfig({
 		},
 	},
 
+	// Sitemap — dynamic knowledge pages (WEB-80d)
+	// @nuxtjs/sitemap (bundled in @nuxtjs/seo) auto-discovers
+	// server/routes/__sitemap__/urls.ts as a dynamic source
+	site: {
+		url: process.env.NUXT_PUBLIC_SITE_URL || 'https://vps.incomexsaigoncorp.vn',
+	},
+
 	// Nuxt DevTools - https://devtools.nuxtjs.org/
 	devtools: { enabled: true },
 

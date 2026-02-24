@@ -212,6 +212,7 @@ const {
 					id: doc.file_path || doc.slug,
 					title: doc.title || doc.file_path?.split('/').pop()?.replace(/\.md$/, '') || fullSlug.value,
 					content: doc.content,
+					summary: doc.summary || '',
 					tags: doc.tags || [],
 					revision: doc.version_number || 1,
 					readTime: Math.ceil((doc.content?.length || 0) / 1000),
@@ -239,6 +240,7 @@ const {
 				id: doc.file_path || doc.slug,
 				title: doc.title || fullSlug.value,
 				content: doc.content,
+				summary: doc.summary || '',
 				tags: doc.tags || [],
 				revision: doc.version_number || 1,
 				readTime: Math.ceil((doc.content?.length || 0) / 1000),
@@ -390,9 +392,9 @@ useHead({
 
 useServerSeoMeta({
 	title: () => document.value?.title || 'Knowledge Document',
-	description: () => `Knowledge base document - ${document.value?.title || fullSlug.value}`,
+	description: () => document.value?.summary || `Knowledge base document - ${document.value?.title || fullSlug.value}`,
 	ogTitle: () => document.value?.title || 'Knowledge Document',
-	ogDescription: () => `Knowledge base document - ${document.value?.title || fullSlug.value}`,
+	ogDescription: () => document.value?.summary || `Knowledge base document - ${document.value?.title || fullSlug.value}`,
 });
 </script>
 
