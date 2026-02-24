@@ -204,8 +204,8 @@ jobs:
           echo "=== CHECK 7: Knowledge Structure Validation ==="
           FAILED=0
 
-          # Allowed top-level folders under knowledge/ (KS-LAW §2)
-          ALLOWED="agents current-state current-tasks dev foundation ops other"
+          # Allowed top-level folders under knowledge/ (KS-LAW v1.0 §2)
+          ALLOWED="current-state current-tasks dev other"
 
           # Get all document IDs and extract top-level folders
           DOCS=$(curl -s --max-time 15 "$VPS_AGENT_DATA_URL/kb/list" 2>/dev/null)
@@ -236,6 +236,42 @@ jobs:
           if [ $FAILED -ne 0 ]; then echo "::error::CHECK 7 FAILED — unauthorized knowledge folders"; exit 1; fi
           echo "CHECK 7: PASS"
 
+      - name: "CHECK 8 — AD↔Directus Sync Gap"
+        run: |
+          echo "=== CHECK 8: AD↔Directus Sync Gap ==="
+          FAILED=0
+
+          # Count non-folder knowledge docs in Agent Data
+          AD_LIST=$(curl -s --max-time 15 "$VPS_AGENT_DATA_URL/kb/list" 2>/dev/null)
+          AD_COUNT=$(echo "$AD_LIST" | jq '[.items[] | select(.document_id // "" | startswith("knowledge/")) | select(.is_folder != true)] | length' 2>/dev/null || echo "0")
+
+          # Count non-folder knowledge docs in Directus
+          DX_COUNT=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/items/knowledge_documents?filter%5Bis_folder%5D%5B_eq%5D=false&aggregate%5Bcount%5D=id" 2>/dev/null | jq -r '.data[0].count.id // 0')
+
+          # Calculate gap (Directus may have extra docs, so use absolute diff)
+          if [ "$AD_COUNT" -gt "$DX_COUNT" ] 2>/dev/null; then
+            GAP=$((AD_COUNT - DX_COUNT))
+          else
+            GAP=$((DX_COUNT - AD_COUNT))
+          fi
+
+          echo "Agent Data knowledge docs: $AD_COUNT"
+          echo "Directus knowledge docs:   $DX_COUNT"
+          echo "Gap:                       $GAP"
+
+          echo -n "Sync gap............... "
+          if [ "$GAP" -eq 0 ] 2>/dev/null; then
+            echo "OK (0 gap)"
+          elif [ "$GAP" -le 5 ] 2>/dev/null; then
+            echo "WARN ($GAP docs gap — reconcile may be pending)"
+          else
+            echo "FAIL ($GAP docs gap — expected <=5)"
+            FAILED=1
+          fi
+
+          if [ $FAILED -ne 0 ]; then echo "::error::CHECK 8 FAILED — AD↔Directus sync gap too large"; exit 1; fi
+          echo "CHECK 8: PASS"
+
       - name: Summary
         if: always()
         run: |
@@ -243,7 +279,7 @@ jobs:
           echo "========================================"
           echo "  HEALTH CHECK COMPLETE"
           echo "========================================"
-          echo "  Checks: Services, Data, Content, Cache, Search, Flows, Structure"
+          echo "  Checks: Services, Data, Content, Cache, Search, Flows, Structure, Sync"
           echo "  VPS: $VPS_AGENT_DATA_URL"
           echo "  Web: $WEBSITE_URL"
           echo "========================================"
