@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Incomex OPS Proxy — Task Management API",
-    "description": "CRUD API for AI agents (GPT, Claude) to manage tasks and task comments via the Directus-backed OPS proxy. Rate-limited, API-key authenticated.",
-    "version": "1.1.0"
+    "description": "CRUD API for AI agents (GPT, Claude) to manage tasks, task comments, and AI task queue via the Directus-backed OPS proxy. Rate-limited, API-key authenticated.",
+    "version": "1.2.0"
   },
   "servers": [
     {
@@ -90,6 +90,46 @@
         "type": "object",
         "properties": {
           "data": { "$ref": "#/components/schemas/TaskComment" }
+        }
+      },
+      "AiTask": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "description": "Primary key" },
+          "name": { "type": "string", "description": "Short descriptive name" },
+          "task_id": { "type": "integer", "nullable": true, "description": "Foreign key to tasks" },
+          "round": { "type": "integer", "description": "Round number (increments each cycle)" },
+          "work_type": { "type": "string", "enum": ["direct", "execution"], "description": "Work type" },
+          "assigned_agent": { "type": "string", "enum": ["claude_desktop", "claude_code", "gpt", "gemini"], "description": "Assigned AI agent" },
+          "agent_role": { "type": "string", "enum": ["lead", "reviewer", "supervisor"], "description": "Agent role in this task" },
+          "prompt_payload": { "type": "string", "nullable": true, "description": "Prompt content sent to agent" },
+          "status": { "type": "string", "enum": ["queued", "dispatched", "in_progress", "completed", "failed", "needs_revision"], "description": "Current status" },
+          "result_summary": { "type": "string", "nullable": true, "description": "Agent result summary" },
+          "result_evidence": { "type": "string", "nullable": true, "description": "Links to PRs, logs, screenshots" },
+          "review_verdict": { "type": "string", "enum": ["approved", "needs_work", "escalate"], "nullable": true, "description": "Review verdict" },
+          "review_notes": { "type": "string", "nullable": true, "description": "Reviewer/supervisor notes" },
+          "next_action": { "type": "string", "nullable": true, "description": "Next action if needs_work" },
+          "retry_count": { "type": "integer", "description": "Number of retries" },
+          "max_retries": { "type": "integer", "description": "Maximum retries allowed" },
+          "dispatched_at": { "type": "string", "format": "date-time", "nullable": true, "description": "When dispatched" },
+          "completed_at": { "type": "string", "format": "date-time", "nullable": true, "description": "When completed" },
+          "date_created": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+          "date_updated": { "type": "string", "format": "date-time", "nullable": true, "description": "Last update timestamp" }
+        }
+      },
+      "AiTaskList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AiTask" }
+          }
+        }
+      },
+      "AiTaskSingle": {
+        "type": "object",
+        "properties": {
+          "data": { "$ref": "#/components/schemas/AiTask" }
         }
       }
     }
@@ -410,6 +450,153 @@
         "responses": {
           "204": { "description": "Comment deleted successfully" },
           "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      }
+    },
+    "/items/ai_tasks": {
+      "get": {
+        "operationId": "listAiTasks",
+        "summary": "List AI tasks",
+        "description": "Retrieve AI agent job queue items. Supports Directus query parameters for filtering, sorting, and pagination.",
+        "tags": ["AI Tasks"],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 100 },
+            "description": "Maximum number of items to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": { "type": "integer" },
+            "description": "Number of items to skip"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Sort field (prefix with - for descending)"
+          },
+          {
+            "name": "filter[status][_eq]",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter by status"
+          },
+          {
+            "name": "filter[assigned_agent][_eq]",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter by assigned agent"
+          },
+          {
+            "name": "filter[agent_role][_eq]",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter by agent role"
+          },
+          {
+            "name": "filter[task_id][_eq]",
+            "in": "query",
+            "schema": { "type": "integer" },
+            "description": "Filter by parent task ID"
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Comma-separated list of fields to return"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of AI tasks",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AiTaskList" }
+              }
+            }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      }
+    },
+    "/items/ai_tasks/{ai_task_id}": {
+      "get": {
+        "operationId": "getAiTask",
+        "summary": "Get a single AI task",
+        "tags": ["AI Tasks"],
+        "parameters": [
+          {
+            "name": "ai_task_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" },
+            "description": "AI Task ID"
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Comma-separated list of fields to return"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AI task details",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AiTaskSingle" }
+              }
+            }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "patch": {
+        "operationId": "updateAiTask",
+        "summary": "Update an AI task",
+        "description": "Update result fields on an AI task. AI agents can only update: status, result_summary, result_evidence, review_verdict, review_notes, next_action, completed_at.",
+        "tags": ["AI Tasks"],
+        "parameters": [
+          {
+            "name": "ai_task_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" },
+            "description": "AI Task ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": { "type": "string", "enum": ["in_progress", "completed", "failed"] },
+                  "result_summary": { "type": "string", "description": "Agent result summary" },
+                  "result_evidence": { "type": "string", "description": "Links to PRs, logs, screenshots" },
+                  "review_verdict": { "type": "string", "enum": ["approved", "needs_work", "escalate"] },
+                  "review_notes": { "type": "string", "description": "Reviewer notes" },
+                  "next_action": { "type": "string", "description": "Next action description" },
+                  "completed_at": { "type": "string", "format": "date-time", "description": "Completion timestamp" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated AI task",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AiTaskSingle" }
+              }
+            }
+          },
+          "403": { "description": "Missing or invalid API key or field not allowed" }
         }
       }
     }
