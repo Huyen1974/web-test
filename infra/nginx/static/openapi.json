@@ -635,7 +635,7 @@
                   "tab_scope": { "type": "string", "description": "Tab scope (e.g. 'targets', 'plan')" },
                   "content": { "type": "string", "description": "Comment content (supports markdown)" },
                   "agent_type": { "type": "string", "description": "Agent identifier (e.g. 'claude', 'gpt', 'user')" },
-                  "action": { "type": "string", "nullable": true, "enum": ["approve", "reject", "request_changes", null], "description": "Optional action tag" }
+                  "action": { "type": "string", "nullable": true, "enum": ["approve", "reject", "request_changes"], "description": "Optional action tag" }
                 }
               }
             }
@@ -683,7 +683,7 @@
                 "type": "object",
                 "properties": {
                   "content": { "type": "string" },
-                  "action": { "type": "string", "nullable": true, "enum": ["approve", "reject", "request_changes", null] }
+                  "action": { "type": "string", "nullable": true, "enum": ["approve", "reject", "request_changes"] }
                 }
               }
             }
