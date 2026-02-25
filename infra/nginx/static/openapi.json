@@ -11,7 +11,7 @@
       "description": "Agent Data — Knowledge Base"
     },
     {
-      "url": "https://vps.incomexsaigoncorp.vn/ops",
+      "url": "https://ops.incomexsaigoncorp.vn",
       "description": "OPS Proxy — Task Management (Directus)"
     }
   ],
@@ -413,7 +413,7 @@
       }
     },
     "/items/tasks": {
-      "servers": [{ "url": "https://vps.incomexsaigoncorp.vn/ops" }],
+      "servers": [{ "url": "https://ops.incomexsaigoncorp.vn" }],
       "get": {
         "operationId": "listTasks",
         "tags": ["tasks"],
@@ -471,7 +471,7 @@
       }
     },
     "/items/tasks/{task_id}": {
-      "servers": [{ "url": "https://vps.incomexsaigoncorp.vn/ops" }],
+      "servers": [{ "url": "https://ops.incomexsaigoncorp.vn" }],
       "get": {
         "operationId": "getTask",
         "tags": ["tasks"],
@@ -562,7 +562,7 @@
       }
     },
     "/items/task_comments": {
-      "servers": [{ "url": "https://vps.incomexsaigoncorp.vn/ops" }],
+      "servers": [{ "url": "https://ops.incomexsaigoncorp.vn" }],
       "get": {
         "operationId": "listTaskComments",
         "tags": ["task_comments"],
@@ -660,7 +660,7 @@
       }
     },
     "/items/task_comments/{comment_id}": {
-      "servers": [{ "url": "https://vps.incomexsaigoncorp.vn/ops" }],
+      "servers": [{ "url": "https://ops.incomexsaigoncorp.vn" }],
       "patch": {
         "operationId": "updateTaskComment",
         "tags": ["task_comments"],
