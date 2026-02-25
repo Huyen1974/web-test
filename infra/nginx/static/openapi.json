@@ -3,29 +3,31 @@
   "info": {
     "title": "Incomex Knowledge Hub API",
     "version": "1.1.0",
-    "description": "Knowledge management and task operations API for Incomex Saigon Corp. Provides CRUD operations on documents, semantic search, and task management for AI agents."
+    "description": "Knowledge management API for Incomex Saigon Corp. Provides CRUD operations on documents and semantic search for AI agents."
   },
   "servers": [
     {
       "url": "https://vps.incomexsaigoncorp.vn/api",
       "description": "Agent Data — Knowledge Base"
-    },
-    {
-      "url": "https://ops.incomexsaigoncorp.vn",
-      "description": "OPS Proxy — Task Management (Directus)"
     }
   ],
   "tags": [
-    { "name": "knowledge", "description": "Knowledge base document operations" },
-    { "name": "search", "description": "Semantic search" },
-    { "name": "tasks", "description": "Task CRUD via OPS proxy (Directus)" },
-    { "name": "task_comments", "description": "Task comment CRUD via OPS proxy (Directus)" }
+    {
+      "name": "knowledge",
+      "description": "Knowledge base document operations"
+    },
+    {
+      "name": "search",
+      "description": "Semantic search"
+    }
   ],
   "paths": {
     "/health": {
       "get": {
         "operationId": "healthCheck",
-        "tags": ["knowledge"],
+        "tags": [
+          "knowledge"
+        ],
         "summary": "System health check",
         "description": "Returns system health status including service connectivity and data integrity metrics.",
         "responses": {
@@ -36,16 +38,30 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "status": { "type": "string" },
-                    "version": { "type": "string" },
-                    "langroid_available": { "type": "boolean" },
-                    "service_count": { "type": "integer" },
+                    "status": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "langroid_available": {
+                      "type": "boolean"
+                    },
+                    "service_count": {
+                      "type": "integer"
+                    },
                     "data_integrity": {
                       "type": "object",
                       "properties": {
-                        "document_count": { "type": "integer" },
-                        "vector_point_count": { "type": "integer" },
-                        "sync_status": { "type": "string" }
+                        "document_count": {
+                          "type": "integer"
+                        },
+                        "vector_point_count": {
+                          "type": "integer"
+                        },
+                        "sync_status": {
+                          "type": "string"
+                        }
                       }
                     }
                   }
@@ -59,7 +75,9 @@
     "/kb/list": {
       "get": {
         "operationId": "listDocuments",
-        "tags": ["knowledge"],
+        "tags": [
+          "knowledge"
+        ],
         "summary": "List all documents in knowledge base",
         "description": "Returns a list of all documents with their IDs, titles, tags, and revision numbers. Optionally filter by path prefix.",
         "parameters": [
@@ -67,7 +85,9 @@
             "name": "prefix",
             "in": "query",
             "required": false,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Filter documents by path prefix (e.g. 'knowledge/dev')"
           }
         ],
@@ -79,17 +99,32 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "count": { "type": "integer" },
+                    "count": {
+                      "type": "integer"
+                    },
                     "items": {
                       "type": "array",
                       "items": {
                         "type": "object",
                         "properties": {
-                          "document_id": { "type": "string" },
-                          "parent_id": { "type": "string" },
-                          "title": { "type": "string" },
-                          "tags": { "type": "array", "items": { "type": "string" } },
-                          "revision": { "type": "integer" }
+                          "document_id": {
+                            "type": "string"
+                          },
+                          "parent_id": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "tags": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "revision": {
+                            "type": "integer"
+                          }
                         }
                       }
                     }
@@ -104,7 +139,9 @@
     "/kb/get/{doc_id}": {
       "get": {
         "operationId": "getDocument",
-        "tags": ["knowledge"],
+        "tags": [
+          "knowledge"
+        ],
         "summary": "Get a document by ID",
         "description": "Retrieves the full content and metadata of a single document. The doc_id typically starts with 'knowledge/' prefix.",
         "parameters": [
@@ -112,7 +149,10 @@
             "name": "doc_id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string", "minLength": 1 },
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
             "description": "Document ID (e.g. 'knowledge/dev/ssot/constitution-v1.11e.md')"
           }
         ],
@@ -124,13 +164,24 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "document_id": { "type": "string" },
-                    "content": { "type": "string" },
+                    "document_id": {
+                      "type": "string"
+                    },
+                    "content": {
+                      "type": "string"
+                    },
                     "metadata": {
                       "type": "object",
                       "properties": {
-                        "title": { "type": "string" },
-                        "tags": { "type": "array", "items": { "type": "string" } }
+                        "title": {
+                          "type": "string"
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
                       }
                     }
                   }
@@ -147,7 +198,9 @@
     "/documents": {
       "post": {
         "operationId": "createDocument",
-        "tags": ["knowledge"],
+        "tags": [
+          "knowledge"
+        ],
         "summary": "Create a new document",
         "description": "Creates a new document in the knowledge base. Use upsert=true to create or update if the document already exists.",
         "parameters": [
@@ -155,7 +208,10 @@
             "name": "upsert",
             "in": "query",
             "required": false,
-            "schema": { "type": "boolean", "default": false },
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
             "description": "If true, update existing document instead of failing"
           }
         ],
@@ -165,7 +221,12 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["document_id", "parent_id", "content", "metadata"],
+                "required": [
+                  "document_id",
+                  "parent_id",
+                  "content",
+                  "metadata"
+                ],
                 "properties": {
                   "document_id": {
                     "type": "string",
@@ -177,11 +238,18 @@
                   },
                   "content": {
                     "type": "object",
-                    "required": ["mime_type", "body"],
+                    "required": [
+                      "mime_type",
+                      "body"
+                    ],
                     "properties": {
                       "mime_type": {
                         "type": "string",
-                        "enum": ["text/markdown", "text/plain", "application/json"]
+                        "enum": [
+                          "text/markdown",
+                          "text/plain",
+                          "application/json"
+                        ]
                       },
                       "body": {
                         "type": "string",
@@ -191,14 +259,22 @@
                   },
                   "metadata": {
                     "type": "object",
-                    "required": ["title"],
+                    "required": [
+                      "title"
+                    ],
                     "properties": {
-                      "title": { "type": "string" },
+                      "title": {
+                        "type": "string"
+                      },
                       "tags": {
                         "type": "array",
-                        "items": { "type": "string" }
+                        "items": {
+                          "type": "string"
+                        }
                       },
-                      "source": { "type": "string" }
+                      "source": {
+                        "type": "string"
+                      }
                     }
                   }
                 }
@@ -214,9 +290,15 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "id": { "type": "string" },
-                    "status": { "type": "string" },
-                    "revision": { "type": "integer" }
+                    "id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "revision": {
+                      "type": "integer"
+                    }
                   }
                 }
               }
@@ -228,7 +310,9 @@
     "/documents/{doc_id}": {
       "put": {
         "operationId": "updateDocument",
-        "tags": ["knowledge"],
+        "tags": [
+          "knowledge"
+        ],
         "summary": "Update an existing document",
         "description": "Updates specific fields of an existing document. Specify which fields to update via update_mask.",
         "parameters": [
@@ -236,7 +320,10 @@
             "name": "doc_id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string", "minLength": 1 },
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
             "description": "Document ID to update"
           }
         ],
@@ -246,7 +333,11 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["document_id", "patch", "update_mask"],
+                "required": [
+                  "document_id",
+                  "patch",
+                  "update_mask"
+                ],
                 "properties": {
                   "document_id": {
                     "type": "string",
@@ -261,25 +352,45 @@
                         "properties": {
                           "mime_type": {
                             "type": "string",
-                            "enum": ["text/markdown", "text/plain", "application/json"]
+                            "enum": [
+                              "text/markdown",
+                              "text/plain",
+                              "application/json"
+                            ]
                           },
-                          "body": { "type": "string" }
+                          "body": {
+                            "type": "string"
+                          }
                         },
-                        "required": ["mime_type", "body"]
+                        "required": [
+                          "mime_type",
+                          "body"
+                        ]
                       },
                       "metadata": {
                         "type": "object",
                         "properties": {
-                          "title": { "type": "string" },
-                          "tags": { "type": "array", "items": { "type": "string" } },
-                          "source": { "type": "string" }
+                          "title": {
+                            "type": "string"
+                          },
+                          "tags": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "source": {
+                            "type": "string"
+                          }
                         }
                       }
                     }
                   },
                   "update_mask": {
                     "type": "array",
-                    "items": { "type": "string" },
+                    "items": {
+                      "type": "string"
+                    },
                     "description": "List of fields to update (e.g. ['content', 'metadata'])"
                   }
                 }
@@ -295,9 +406,15 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "id": { "type": "string" },
-                    "status": { "type": "string" },
-                    "revision": { "type": "integer" }
+                    "id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "revision": {
+                      "type": "integer"
+                    }
                   }
                 }
               }
@@ -307,7 +424,9 @@
       },
       "delete": {
         "operationId": "deleteDocument",
-        "tags": ["knowledge"],
+        "tags": [
+          "knowledge"
+        ],
         "summary": "Delete a document",
         "description": "Soft-deletes a document from the knowledge base. The document can be re-created later.",
         "parameters": [
@@ -315,7 +434,10 @@
             "name": "doc_id",
             "in": "path",
             "required": true,
-            "schema": { "type": "string", "minLength": 1 },
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
             "description": "Document ID to delete"
           }
         ],
@@ -327,9 +449,15 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "id": { "type": "string" },
-                    "status": { "type": "string" },
-                    "revision": { "type": "integer" }
+                    "id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "revision": {
+                      "type": "integer"
+                    }
                   }
                 }
               }
@@ -341,7 +469,9 @@
     "/chat": {
       "post": {
         "operationId": "searchKnowledge",
-        "tags": ["search"],
+        "tags": [
+          "search"
+        ],
         "summary": "Semantic search across knowledge base",
         "description": "Performs semantic search using RAG (Retrieval-Augmented Generation). Returns relevant document snippets ranked by relevance score. Use 'query' field for the search text.",
         "requestBody": {
@@ -350,7 +480,9 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["query"],
+                "required": [
+                  "query"
+                ],
                 "properties": {
                   "query": {
                     "type": "string",
@@ -384,21 +516,36 @@
                       "type": "string",
                       "description": "Same as response (backward compat)"
                     },
-                    "session_id": { "type": "string" },
+                    "session_id": {
+                      "type": "string"
+                    },
                     "context": {
                       "type": "array",
                       "description": "Ranked source documents",
                       "items": {
                         "type": "object",
                         "properties": {
-                          "document_id": { "type": "string" },
-                          "snippet": { "type": "string" },
-                          "score": { "type": "number" },
+                          "document_id": {
+                            "type": "string"
+                          },
+                          "snippet": {
+                            "type": "string"
+                          },
+                          "score": {
+                            "type": "number"
+                          },
                           "metadata": {
                             "type": "object",
                             "properties": {
-                              "title": { "type": "string" },
-                              "tags": { "type": "array", "items": { "type": "string" } }
+                              "title": {
+                                "type": "string"
+                              },
+                              "tags": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
                             }
                           }
                         }
@@ -411,341 +558,10 @@
           }
         }
       }
-    },
-    "/items/tasks": {
-      "servers": [{ "url": "https://ops.incomexsaigoncorp.vn" }],
-      "get": {
-        "operationId": "listTasks",
-        "tags": ["tasks"],
-        "summary": "List tasks",
-        "description": "Returns a list of tasks. Supports Directus filter, sort, limit, and fields parameters.",
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": { "type": "integer", "default": 100 },
-            "description": "Maximum number of items to return"
-          },
-          {
-            "name": "sort",
-            "in": "query",
-            "required": false,
-            "schema": { "type": "string" },
-            "description": "Sort field(s), prefix with - for descending (e.g. 'sort,-date_updated')"
-          },
-          {
-            "name": "fields",
-            "in": "query",
-            "required": false,
-            "schema": { "type": "string" },
-            "description": "Comma-separated list of fields to return (e.g. 'id,name,status')"
-          },
-          {
-            "name": "filter[status][_eq]",
-            "in": "query",
-            "required": false,
-            "schema": { "type": "string" },
-            "description": "Filter by status (e.g. 'active', 'completed')"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Task list",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "array",
-                      "items": { "$ref": "#/components/schemas/Task" }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "403": { "description": "Invalid or missing X-API-Key" }
-        }
-      }
-    },
-    "/items/tasks/{task_id}": {
-      "servers": [{ "url": "https://ops.incomexsaigoncorp.vn" }],
-      "get": {
-        "operationId": "getTask",
-        "tags": ["tasks"],
-        "summary": "Get a task by ID",
-        "description": "Retrieves a single task with all fields.",
-        "parameters": [
-          {
-            "name": "task_id",
-            "in": "path",
-            "required": true,
-            "schema": { "type": "integer" },
-            "description": "Task ID"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Task detail",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": { "$ref": "#/components/schemas/Task" }
-                  }
-                }
-              }
-            }
-          },
-          "403": { "description": "Invalid or missing X-API-Key" }
-        }
-      },
-      "patch": {
-        "operationId": "updateTask",
-        "tags": ["tasks"],
-        "summary": "Update a task",
-        "description": "Updates specific fields of a task. Only include the fields you want to change.",
-        "parameters": [
-          {
-            "name": "task_id",
-            "in": "path",
-            "required": true,
-            "schema": { "type": "integer" },
-            "description": "Task ID"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": { "type": "string" },
-                  "description": { "type": "string" },
-                  "status": { "type": "string", "enum": ["active", "completed", "archived"] },
-                  "priority": { "type": "string", "enum": ["high", "medium", "low"] },
-                  "assigned_to": { "type": "string" },
-                  "deadline": { "type": "string", "format": "date", "nullable": true },
-                  "content_targets": { "type": "string" },
-                  "content_plan": { "type": "string" },
-                  "content_rules": { "type": "string" },
-                  "content_prompt": { "type": "string" },
-                  "content_checklist": { "type": "string" },
-                  "content_test": { "type": "string" },
-                  "content_verify": { "type": "string" },
-                  "content_reports": { "type": "string" }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Updated task",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": { "$ref": "#/components/schemas/Task" }
-                  }
-                }
-              }
-            }
-          },
-          "403": { "description": "Invalid or missing X-API-Key" }
-        }
-      }
-    },
-    "/items/task_comments": {
-      "servers": [{ "url": "https://ops.incomexsaigoncorp.vn" }],
-      "get": {
-        "operationId": "listTaskComments",
-        "tags": ["task_comments"],
-        "summary": "List task comments",
-        "description": "Returns comments for tasks. Filter by task_id and/or tab_scope.",
-        "parameters": [
-          {
-            "name": "filter[task_id][_eq]",
-            "in": "query",
-            "required": false,
-            "schema": { "type": "integer" },
-            "description": "Filter by task ID"
-          },
-          {
-            "name": "filter[tab_scope][_eq]",
-            "in": "query",
-            "required": false,
-            "schema": { "type": "string" },
-            "description": "Filter by tab scope (e.g. 'targets', 'plan', 'test')"
-          },
-          {
-            "name": "sort",
-            "in": "query",
-            "required": false,
-            "schema": { "type": "string", "default": "-date_created" },
-            "description": "Sort field(s)"
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": { "type": "integer", "default": 50 },
-            "description": "Maximum items to return"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Comment list",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "array",
-                      "items": { "$ref": "#/components/schemas/TaskComment" }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "403": { "description": "Invalid or missing X-API-Key" }
-        }
-      },
-      "post": {
-        "operationId": "createTaskComment",
-        "tags": ["task_comments"],
-        "summary": "Create a task comment",
-        "description": "Adds a new comment to a task. The agent_type field identifies the AI agent posting the comment.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["task_id", "content", "agent_type"],
-                "properties": {
-                  "task_id": { "type": "integer", "description": "ID of the task to comment on" },
-                  "tab_scope": { "type": "string", "description": "Tab scope (e.g. 'targets', 'plan')" },
-                  "content": { "type": "string", "description": "Comment content (supports markdown)" },
-                  "agent_type": { "type": "string", "description": "Agent identifier (e.g. 'claude', 'gpt', 'user')" },
-                  "action": { "type": "string", "nullable": true, "enum": ["approve", "reject", "request_changes"], "description": "Optional action tag" }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Created comment",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": { "$ref": "#/components/schemas/TaskComment" }
-                  }
-                }
-              }
-            }
-          },
-          "403": { "description": "Invalid or missing X-API-Key" }
-        }
-      }
-    },
-    "/items/task_comments/{comment_id}": {
-      "servers": [{ "url": "https://ops.incomexsaigoncorp.vn" }],
-      "patch": {
-        "operationId": "updateTaskComment",
-        "tags": ["task_comments"],
-        "summary": "Update a task comment",
-        "description": "Updates specific fields of an existing comment.",
-        "parameters": [
-          {
-            "name": "comment_id",
-            "in": "path",
-            "required": true,
-            "schema": { "type": "integer" },
-            "description": "Comment ID"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "content": { "type": "string" },
-                  "action": { "type": "string", "nullable": true, "enum": ["approve", "reject", "request_changes"] }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Updated comment",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": { "$ref": "#/components/schemas/TaskComment" }
-                  }
-                }
-              }
-            }
-          },
-          "403": { "description": "Invalid or missing X-API-Key" }
-        }
-      }
     }
   },
   "components": {
-    "schemas": {
-      "Task": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "integer" },
-          "name": { "type": "string" },
-          "description": { "type": "string" },
-          "status": { "type": "string", "enum": ["active", "completed", "archived"] },
-          "priority": { "type": "string", "enum": ["high", "medium", "low"] },
-          "assigned_to": { "type": "string" },
-          "deadline": { "type": "string", "format": "date", "nullable": true },
-          "sort": { "type": "integer" },
-          "content_targets": { "type": "string" },
-          "content_plan": { "type": "string" },
-          "content_rules": { "type": "string" },
-          "content_prompt": { "type": "string" },
-          "content_checklist": { "type": "string" },
-          "content_test": { "type": "string" },
-          "content_verify": { "type": "string" },
-          "content_reports": { "type": "string" },
-          "date_created": { "type": "string", "format": "date-time" },
-          "date_updated": { "type": "string", "format": "date-time", "nullable": true }
-        }
-      },
-      "TaskComment": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "integer" },
-          "task_id": { "type": "integer" },
-          "tab_scope": { "type": "string" },
-          "content": { "type": "string" },
-          "agent_type": { "type": "string" },
-          "action": { "type": "string", "nullable": true },
-          "date_created": { "type": "string", "format": "date-time" }
-        }
-      }
-    },
+    "schemas": {},
     "securitySchemes": {
       "ApiKeyAuth": {
         "type": "apiKey",
@@ -755,6 +571,8 @@
     }
   },
   "security": [
-    { "ApiKeyAuth": [] }
+    {
+      "ApiKeyAuth": []
+    }
   ]
 }
