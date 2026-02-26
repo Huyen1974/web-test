@@ -1,0 +1,10 @@
+# Codex CLI MCP configuration for Web Test
+# Points to shared stdio server in agent-data-test repo
+
+[mcp.agent-data]
+command = "python3"
+args = ["../agent-data-test/mcp_server/stdio_server.py"]
+
+[mcp.agent-data.env]
+AGENT_DATA_URL = "https://vps.incomexsaigoncorp.vn/api"
+AGENT_DATA_API_KEY = "C38FE9FA-2BC6-4FBB-BA0C-981E8FB89450"
