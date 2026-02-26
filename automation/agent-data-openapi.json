@@ -3,7 +3,7 @@
   "info": {
     "title": "Agent Data API",
     "description": "Knowledge management for Incomex AI system",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "servers": [
     {
@@ -168,6 +168,86 @@
       }
     },
     "/documents/{doc_id}": {
+      "get": {
+        "operationId": "getDocumentTruncated",
+        "summary": "Get a document with truncated content and related docs",
+        "description": "Returns document content truncated to 500 chars by default. Use full=true for complete content. Optionally returns semantically related documents via vector search.",
+        "parameters": [
+          {
+            "name": "doc_id",
+            "in": "path",
+            "required": true,
+            "description": "Document ID path",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "required": false,
+            "description": "If true, return full content instead of truncated",
+            "schema": { "type": "boolean", "default": false }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "If true, include related documents via vector search",
+            "schema": { "type": "boolean", "default": true }
+          },
+          {
+            "name": "top_k",
+            "in": "query",
+            "required": false,
+            "description": "Number of related documents to return",
+            "schema": { "type": "integer", "default": 3, "minimum": 1, "maximum": 10 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document with optional truncation and related docs",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DocumentTruncatedResponse" }
+              }
+            }
+          },
+          "404": { "description": "Document not found" }
+        }
+      },
+      "patch": {
+        "operationId": "patchDocument",
+        "summary": "Apply a targeted string replacement",
+        "description": "Replaces old_str with new_str in the document content. old_str must appear exactly once. Returns 409 if not found or ambiguous.",
+        "parameters": [
+          {
+            "name": "doc_id",
+            "in": "path",
+            "required": true,
+            "description": "Document ID path to patch",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PatchRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Document patched",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DocumentResponse" }
+              }
+            }
+          },
+          "404": { "description": "Document not found" },
+          "409": { "description": "old_str not found or appears multiple times" }
+        }
+      },
       "delete": {
         "operationId": "deleteDocument",
         "summary": "Delete a document",
@@ -197,6 +277,32 @@
           "404": {
             "description": "Document not found"
           }
+        }
+      }
+    },
+    "/documents/batch": {
+      "post": {
+        "operationId": "batchReadDocuments",
+        "summary": "Read multiple documents in one call",
+        "description": "Returns content for up to 20 documents. Content is truncated by default (500 chars). Use full=true for complete content.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/BatchReadRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch read results",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/BatchReadResponse" }
+              }
+            }
+          },
+          "422": { "description": "Validation error (empty paths or exceeds max 20)" }
         }
       }
     }
@@ -332,6 +438,85 @@
           "id": { "type": "string" },
           "status": { "type": "string" },
           "revision": { "type": "integer" }
+        }
+      },
+      "DocumentTruncatedResponse": {
+        "type": "object",
+        "properties": {
+          "document_id": { "type": "string" },
+          "content": { "type": "string", "description": "Document content (truncated to 500 chars unless full=true)" },
+          "content_length": { "type": "integer", "description": "Full content length in chars" },
+          "truncated": { "type": "boolean" },
+          "metadata": {
+            "type": "object",
+            "properties": {
+              "title": { "type": "string" },
+              "tags": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "revision": { "type": "integer" },
+          "related": {
+            "type": "object",
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "document_id": { "type": "string" },
+                    "score": { "type": "number" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "PatchRequest": {
+        "type": "object",
+        "required": ["old_str", "new_str"],
+        "properties": {
+          "old_str": { "type": "string", "description": "Exact string to find (must appear exactly once)" },
+          "new_str": { "type": "string", "description": "Replacement string" }
+        }
+      },
+      "BatchReadRequest": {
+        "type": "object",
+        "required": ["paths"],
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": { "type": "string" },
+            "minItems": 1,
+            "maxItems": 20,
+            "description": "Document paths to read"
+          },
+          "full": {
+            "type": "boolean",
+            "default": false,
+            "description": "If true, return full content instead of truncated"
+          }
+        }
+      },
+      "BatchReadResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "document_id": { "type": "string" },
+                "content": { "type": "string" },
+                "truncated": { "type": "boolean" },
+                "content_length": { "type": "integer" },
+                "metadata": { "type": "object" },
+                "revision": { "type": "integer" },
+                "error": { "type": "string", "description": "Set to 'not_found' if document doesn't exist" }
+              }
+            }
+          },
+          "count": { "type": "integer" }
         }
       },
       "SearchRequest": {

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Incomex Knowledge Hub API",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "description": "Knowledge management API for Incomex Saigon Corp. Provides CRUD operations on documents and semantic search for AI agents."
   },
   "servers": [
@@ -307,7 +307,191 @@
         }
       }
     },
+    "/documents/batch": {
+      "post": {
+        "operationId": "batchReadDocuments",
+        "tags": ["knowledge"],
+        "summary": "Read multiple documents in one call",
+        "description": "Returns content for up to 20 documents. Content is truncated to 500 chars by default. Use full=true for complete content.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["paths"],
+                "properties": {
+                  "paths": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1,
+                    "maxItems": 20,
+                    "description": "Document paths to read"
+                  },
+                  "full": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "If true, return full content instead of truncated"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch read results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "document_id": { "type": "string" },
+                          "content": { "type": "string" },
+                          "truncated": { "type": "boolean" },
+                          "content_length": { "type": "integer" },
+                          "metadata": { "type": "object" },
+                          "revision": { "type": "integer" },
+                          "error": { "type": "string" }
+                        }
+                      }
+                    },
+                    "count": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{doc_id}": {
+      "get": {
+        "operationId": "getDocumentTruncated",
+        "tags": ["knowledge"],
+        "summary": "Get document with truncated content and related docs",
+        "description": "Returns document content truncated to 500 chars by default. Use full=true for complete content. Optionally returns semantically related documents.",
+        "parameters": [
+          {
+            "name": "doc_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1 },
+            "description": "Document ID path"
+          },
+          {
+            "name": "full",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "boolean", "default": false },
+            "description": "If true, return full content"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "boolean", "default": true },
+            "description": "If true, include related documents via vector search"
+          },
+          {
+            "name": "top_k",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "default": 3, "minimum": 1, "maximum": 10 },
+            "description": "Number of related documents"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document with optional truncation and related docs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "document_id": { "type": "string" },
+                    "content": { "type": "string" },
+                    "content_length": { "type": "integer" },
+                    "truncated": { "type": "boolean" },
+                    "metadata": { "type": "object" },
+                    "revision": { "type": "integer" },
+                    "related": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "document_id": { "type": "string" },
+                              "score": { "type": "number" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Document not found" }
+        }
+      },
+      "patch": {
+        "operationId": "patchDocument",
+        "tags": ["knowledge"],
+        "summary": "Apply a targeted string replacement",
+        "description": "Replaces old_str with new_str in the document content. old_str must appear exactly once. Returns 409 if not found or ambiguous.",
+        "parameters": [
+          {
+            "name": "doc_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1 },
+            "description": "Document ID path to patch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["old_str", "new_str"],
+                "properties": {
+                  "old_str": { "type": "string", "description": "Exact string to find (must appear once)" },
+                  "new_str": { "type": "string", "description": "Replacement string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Document patched",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "status": { "type": "string" },
+                    "revision": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Document not found" },
+          "409": { "description": "old_str not found or appears multiple times" }
+        }
+      },
       "put": {
         "operationId": "updateDocument",
         "tags": [
