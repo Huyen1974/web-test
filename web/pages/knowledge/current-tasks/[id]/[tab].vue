@@ -58,7 +58,11 @@ const submitting = ref(false);
 const agentOptions: Array<{ value: AgentType; label: string }> = [
 	{ value: 'user', label: 'User' },
 	{ value: 'claude', label: 'Claude' },
+	{ value: 'claude_code', label: 'Claude Code' },
+	{ value: 'claude_desktop', label: 'Claude Desktop' },
 	{ value: 'gpt', label: 'GPT' },
+	{ value: 'gemini', label: 'Gemini' },
+	{ value: 'codex', label: 'Codex' },
 	{ value: 'system', label: 'System' },
 ];
 
@@ -138,15 +142,7 @@ function formatCommentDate(dateStr?: string): string {
 								:class="`inline-flex h-6 w-6 items-center justify-center rounded-full bg-${getAgentMeta(comment.agent_type).color}-100 dark:bg-${getAgentMeta(comment.agent_type).color}-900/30`"
 							>
 								<span class="text-xs">{{
-									comment.agent_type === 'user'
-										? 'U'
-										: comment.agent_type === 'claude'
-											? 'C'
-											: comment.agent_type === 'gpt'
-												? 'G'
-											: comment.agent_type === 'system'
-												? 'S'
-												: '?'
+									({ user: 'U', claude: 'C', claude_code: 'CC', claude_desktop: 'CD', gpt: 'G', gemini: 'Ge', codex: 'Cx', system: 'S' })[comment.agent_type] || '?'
 								}}</span>
 							</span>
 							<span

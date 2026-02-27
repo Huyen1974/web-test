@@ -1,5 +1,14 @@
 <script setup lang="ts">
+import type { TaskStatus, TaskPriority } from '~/types/tasks';
 import { TASK_STATUS_META, TASK_PRIORITY_META, TAB_CONFIG } from '~/types/tasks';
+
+function statusMeta(status: string) {
+	return TASK_STATUS_META[status as TaskStatus] || { label: status, color: 'gray', icon: '' };
+}
+
+function priorityMeta(priority: string) {
+	return TASK_PRIORITY_META[priority as TaskPriority] || { label: priority, color: 'gray' };
+}
 
 const route = useRoute();
 const taskId = route.params.id as string;
@@ -63,15 +72,15 @@ provide('refreshTask', refresh);
 
 					<div class="flex flex-wrap items-center gap-2">
 						<span
-							:class="`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-${TASK_STATUS_META[task.status].color}-100 text-${TASK_STATUS_META[task.status].color}-800 dark:bg-${TASK_STATUS_META[task.status].color}-900/30 dark:text-${TASK_STATUS_META[task.status].color}-400`"
+							:class="`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-${statusMeta(task.status).color}-100 text-${statusMeta(task.status).color}-800 dark:bg-${statusMeta(task.status).color}-900/30 dark:text-${statusMeta(task.status).color}-400`"
 						>
-							{{ TASK_STATUS_META[task.status].label }}
+							{{ statusMeta(task.status).label }}
 						</span>
 						<span
 							v-if="task.priority"
-							:class="`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-${TASK_PRIORITY_META[task.priority].color}-100 text-${TASK_PRIORITY_META[task.priority].color}-800 dark:bg-${TASK_PRIORITY_META[task.priority].color}-900/30 dark:text-${TASK_PRIORITY_META[task.priority].color}-400`"
+							:class="`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-${priorityMeta(task.priority!).color}-100 text-${priorityMeta(task.priority!).color}-800 dark:bg-${priorityMeta(task.priority!).color}-900/30 dark:text-${priorityMeta(task.priority!).color}-400`"
 						>
-							{{ TASK_PRIORITY_META[task.priority].label }}
+							{{ priorityMeta(task.priority!).label }}
 						</span>
 						<span
 							v-if="task.assigned_to"
