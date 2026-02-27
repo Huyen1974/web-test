@@ -17,11 +17,20 @@ modules/comment-module/
 ## Usage
 
 ```vue
-<!-- Basic -->
+<!-- Flat list (backward compatible) -->
 <ModulesCommentModuleCommentModule :task-id="4" />
 
-<!-- With tab scope and custom title -->
+<!-- Fixed tab scope -->
 <ModulesCommentModuleCommentModule :task-id="4" tab-scope="planning" title="Planning Discussion" />
+
+<!-- Inline tab bar (all default tabs) -->
+<ModulesCommentModuleCommentModule :task-id="4" :tabs="TAB_DEFINITIONS" default-tab="targets" />
+
+<!-- Custom subset of tabs -->
+<ModulesCommentModuleCommentModule :task-id="4" :tabs="[
+  { key: 'planning', label: 'Planning', icon: '🗓️' },
+  { key: 'verify', label: 'Verify', icon: '✅' },
+]" />
 
 <!-- Readonly mode -->
 <ModulesCommentModuleCommentModule :task-id="4" :readonly="true" />
@@ -29,12 +38,14 @@ modules/comment-module/
 
 ## Props
 
-| Prop       | Type             | Default       | Description                     |
-|------------|------------------|---------------|---------------------------------|
-| `taskId`   | `number\|string` | **required**  | Directus task ID                |
-| `tabScope` | `TabScope`       | `undefined`   | Filter by tab scope             |
-| `readonly` | `boolean`        | `false`       | Hide input form                 |
-| `title`    | `string`         | `'Discussion'`| Section header title            |
+| Prop         | Type               | Default       | Description                           |
+|--------------|--------------------|---------------|---------------------------------------|
+| `taskId`     | `number\|string`   | **required**  | Directus task ID                      |
+| `tabScope`   | `TabScope`         | `undefined`   | Fixed tab scope filter                |
+| `readonly`   | `boolean`          | `false`       | Hide input form                       |
+| `title`      | `string`           | `'Discussion'`| Section header title                  |
+| `tabs`       | `TabDefinition[]`  | `undefined`   | Show inline tab bar (omit = flat list)|
+| `defaultTab` | `string`           | first tab key | Initial active tab                    |
 
 ## Slots (v2 readiness)
 
