@@ -10,6 +10,7 @@
 import { readItems } from '@directus/sdk';
 import type { BreadcrumbItem } from '~/types/view-model-0032';
 import type { DocsTreeNode } from '~/types/agent-views';
+import type { Task } from '~/types/tasks';
 import { buildDocsTree, filterDocsByTitle } from '~/composables/useAgentViews';
 import { markdownToHtml } from '~/utils/markdown';
 
@@ -396,6 +397,16 @@ useServerSeoMeta({
 	ogTitle: () => document.value?.title || 'Knowledge Document',
 	ogDescription: () => document.value?.summary || `Knowledge base document - ${document.value?.title || fullSlug.value}`,
 });
+
+// Linked planning task — find task with plan_document_path matching this document
+const { data: linkedTask } = await useAsyncData(`linked-task-${fullSlug.value}`, async () => {
+	if (!document.value?.id) return null;
+	try {
+		return await useLinkedTask(document.value.id);
+	} catch {
+		return null;
+	}
+});
 </script>
 
 <template>
@@ -649,6 +660,26 @@ useServerSeoMeta({
 				<!-- Document Content -->
 				<div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 lg:p-10">
 					<TypographyProse :content="renderedContent" size="md" />
+				</div>
+
+				<!-- Planning Discussion (linked task comments) -->
+				<div v-if="linkedTask" class="mt-6 print:hidden">
+					<div class="mb-3 flex items-center gap-2">
+						<span class="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+							Planning
+						</span>
+						<NuxtLink
+							:to="`/knowledge/current-tasks/${linkedTask.id}`"
+							class="text-sm text-primary-600 hover:text-primary-700"
+						>
+							Task #{{ linkedTask.id }}: {{ linkedTask.name }}
+						</NuxtLink>
+					</div>
+					<CommentsCommentModule
+						:task-id="linkedTask.id"
+						tab-scope="planning"
+						title="Planning Discussion"
+					/>
 				</div>
 
 				<!-- Footer -->
