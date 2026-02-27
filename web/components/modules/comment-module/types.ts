@@ -5,6 +5,27 @@
 
 import type { AgentType, CommentAction, TabScope } from '~/types/tasks';
 
+/** Tab definition for inline tab bar */
+export interface TabDefinition {
+	key: string;
+	label: string;
+	icon?: string;
+}
+
+/** Default tab definitions matching task content tabs */
+export const TAB_DEFINITIONS: TabDefinition[] = [
+	{ key: 'targets', label: 'Targets', icon: '🎯' },
+	{ key: 'rules', label: 'Rules', icon: '📏' },
+	{ key: 'checklist', label: 'Checklist', icon: '☑️' },
+	{ key: 'plan', label: 'Plan', icon: '📋' },
+	{ key: 'planning', label: 'Planning', icon: '🗓️' },
+	{ key: 'prompt', label: 'Prompt', icon: '💬' },
+	{ key: 'reports', label: 'Reports', icon: '📊' },
+	{ key: 'verify', label: 'Verify', icon: '✅' },
+	{ key: 'test', label: 'Test', icon: '🧪' },
+	{ key: 'general', label: 'General', icon: '💭' },
+];
+
 /** Props interface for CommentModule entry point */
 export interface CommentModuleProps {
 	/** Directus task ID to load comments for */
@@ -15,6 +36,10 @@ export interface CommentModuleProps {
 	readonly?: boolean;
 	/** Section title */
 	title?: string;
+	/** Tab definitions for inline tab bar. Omit for flat list (backward compatible). */
+	tabs?: TabDefinition[];
+	/** Default active tab key when tabs are provided */
+	defaultTab?: string;
 }
 
 /** Agent display config for chat-style rendering */
