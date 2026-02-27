@@ -79,6 +79,31 @@ export async function createTaskComment(data: {
 }
 
 /**
+ * Find a task linked to a knowledge document by plan_document_path
+ * Returns the first matching planning task, or null
+ */
+export async function useLinkedTask(documentPath: string) {
+	// Try multiple path variants (knowledge/..., docs/...)
+	const variants = [documentPath];
+	if (!documentPath.startsWith('knowledge/')) variants.push(`knowledge/${documentPath}`);
+	if (documentPath.startsWith('docs/')) variants.push(documentPath.replace(/^docs\//, 'knowledge/'));
+	// Also try with/without .md
+	const withMd = variants.flatMap((v) => (v.endsWith('.md') ? [v] : [v, `${v}.md`]));
+
+	const items = await useDirectus<Task[]>(
+		readItems('tasks', {
+			filter: {
+				plan_document_path: { _in: withMd },
+			},
+			fields: ['id', 'name', 'task_type', 'plan_document_path', 'lead_ai', 'critic_ai', 'status'],
+			limit: 1,
+		}),
+	);
+
+	return items?.length ? items[0] : null;
+}
+
+/**
  * Update a task's fields
  */
 export async function updateTask(id: number | string, updates: Partial<Task>) {
