@@ -42,11 +42,12 @@
         "display": "labels",
         "options": {
           "choices": [
-            { "text": "Claude Desktop", "value": "claude_desktop" },
+            { "text": "Claude AI", "value": "claude_ai" },
             { "text": "GPT", "value": "gpt" },
             { "text": "Gemini", "value": "gemini" },
             { "text": "Claude Code", "value": "claude_code" },
-            { "text": "Codex", "value": "codex" }
+            { "text": "Codex", "value": "codex" },
+            { "text": "Antigravity", "value": "antigravity" }
           ]
         },
         "note": "Lead AI for this planning discussion"
@@ -63,11 +64,12 @@
         "display": "labels",
         "options": {
           "choices": [
-            { "text": "Claude Desktop", "value": "claude_desktop" },
+            { "text": "Claude AI", "value": "claude_ai" },
             { "text": "GPT", "value": "gpt" },
             { "text": "Gemini", "value": "gemini" },
             { "text": "Claude Code", "value": "claude_code" },
-            { "text": "Codex", "value": "codex" }
+            { "text": "Codex", "value": "codex" },
+            { "text": "Antigravity", "value": "antigravity" }
           ]
         },
         "note": "Critic/reviewer AI for this planning discussion"
