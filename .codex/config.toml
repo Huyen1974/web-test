@@ -1,10 +1,3 @@
-# Codex CLI MCP configuration for Web Test
-# HTTP transport to VPS Agent Data MCP endpoint
-# Set AGENT_DATA_API_KEY env var before running: export AGENT_DATA_API_KEY="your-key"
-
-[mcp.agent-data]
-type = "http"
-url = "https://vps.incomexsaigoncorp.vn/api/mcp"
-
-[mcp.agent-data.headers]
-X-API-Key = "${AGENT_DATA_API_KEY}"
+# Codex CLI project config for Web Test
+# MCP + model settings are in ~/.codex/config.toml (global)
+# No project-level overrides needed

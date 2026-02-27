@@ -1,0 +1,79 @@
+{
+  "collection": "tasks",
+  "fields": [
+    {
+      "field": "task_type",
+      "type": "string",
+      "schema": {
+        "is_nullable": true,
+        "default_value": "task"
+      },
+      "meta": {
+        "interface": "select-dropdown",
+        "display": "labels",
+        "options": {
+          "choices": [
+            { "text": "Task", "value": "task" },
+            { "text": "Planning", "value": "planning" }
+          ]
+        },
+        "note": "Type: regular task or planning discussion"
+      }
+    },
+    {
+      "field": "plan_document_path",
+      "type": "string",
+      "schema": {
+        "is_nullable": true
+      },
+      "meta": {
+        "interface": "input",
+        "note": "Agent Data document path, e.g. knowledge/dev/planning/plan-001-web-integration.md"
+      }
+    },
+    {
+      "field": "lead_ai",
+      "type": "string",
+      "schema": {
+        "is_nullable": true
+      },
+      "meta": {
+        "interface": "select-dropdown",
+        "display": "labels",
+        "options": {
+          "choices": [
+            { "text": "Claude AI", "value": "claude_ai" },
+            { "text": "GPT", "value": "gpt" },
+            { "text": "Gemini", "value": "gemini" },
+            { "text": "Claude Code", "value": "claude_code" },
+            { "text": "Codex", "value": "codex" },
+            { "text": "Antigravity", "value": "antigravity" }
+          ]
+        },
+        "note": "Lead AI for this planning discussion"
+      }
+    },
+    {
+      "field": "critic_ai",
+      "type": "string",
+      "schema": {
+        "is_nullable": true
+      },
+      "meta": {
+        "interface": "select-dropdown",
+        "display": "labels",
+        "options": {
+          "choices": [
+            { "text": "Claude AI", "value": "claude_ai" },
+            { "text": "GPT", "value": "gpt" },
+            { "text": "Gemini", "value": "gemini" },
+            { "text": "Claude Code", "value": "claude_code" },
+            { "text": "Codex", "value": "codex" },
+            { "text": "Antigravity", "value": "antigravity" }
+          ]
+        },
+        "note": "Critic/reviewer AI for this planning discussion"
+      }
+    }
+  ]
+}

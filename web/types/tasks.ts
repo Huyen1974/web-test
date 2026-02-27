@@ -26,7 +26,7 @@ export type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
 /**
  * Agent types for comments
  */
-export type AgentType = 'user' | 'claude' | 'gpt' | 'system';
+export type AgentType = 'user' | 'claude_ai' | 'gpt' | 'gemini' | 'claude_code' | 'codex' | 'antigravity' | 'system';
 
 /**
  * Tab scopes for content and comments
@@ -36,6 +36,7 @@ export type TabScope =
 	| 'rules'
 	| 'checklist'
 	| 'plan'
+	| 'planning'
 	| 'prompt'
 	| 'reports'
 	| 'verify'
@@ -66,6 +67,10 @@ export interface Task {
 	content_reports?: string;
 	content_verify?: string;
 	content_test?: string;
+	task_type?: string;
+	plan_document_path?: string;
+	lead_ai?: string;
+	critic_ai?: string;
 	sort?: number;
 	user_created?: string | User;
 	date_created?: string;
@@ -126,6 +131,7 @@ export const TAB_CONFIG: Array<{ key: TabScope; label: string; field: keyof Task
 	{ key: 'rules', label: 'Rules', field: 'content_rules' },
 	{ key: 'checklist', label: 'Checklist', field: 'content_checklist' },
 	{ key: 'plan', label: 'Plan', field: 'content_plan' },
+	{ key: 'planning', label: 'Planning', field: 'content_plan' },
 	{ key: 'prompt', label: 'Prompt', field: 'content_prompt' },
 	{ key: 'reports', label: 'Reports', field: 'content_reports' },
 	{ key: 'verify', label: 'Verify', field: 'content_verify' },
@@ -146,9 +152,17 @@ export const TASK_PRIORITY_META: Record<TaskPriority, { label: string; color: st
  * Agent type display metadata
  */
 export const AGENT_TYPE_META: Record<AgentType, { label: string; color: string; icon: string }> = {
+	// User (from Directus user system)
 	user: { label: 'User', color: 'purple', icon: 'i-heroicons-user' },
-	claude: { label: 'Claude', color: 'orange', icon: 'i-heroicons-cpu-chip' },
+	// AI
+	claude_ai: { label: 'Claude AI', color: 'orange', icon: 'i-heroicons-cpu-chip' },
 	gpt: { label: 'GPT', color: 'green', icon: 'i-heroicons-sparkles' },
+	gemini: { label: 'Gemini', color: 'blue', icon: 'i-heroicons-bolt' },
+	// Agents
+	claude_code: { label: 'Claude Code', color: 'orange', icon: 'i-heroicons-command-line' },
+	codex: { label: 'Codex', color: 'yellow', icon: 'i-heroicons-code-bracket' },
+	antigravity: { label: 'Antigravity', color: 'pink', icon: 'i-heroicons-rocket-launch' },
+	// System
 	system: { label: 'System', color: 'gray', icon: 'i-heroicons-cog-6-tooth' },
 };
 
