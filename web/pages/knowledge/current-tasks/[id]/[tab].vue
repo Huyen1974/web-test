@@ -46,6 +46,6 @@ const renderedContent = computed(() => {
 		</div>
 
 		<!-- Feedback Stream — reusable CommentModule -->
-		<CommentsCommentModule :task-id="taskId" :tab-scope="tabKey" title="Feedback" />
+		<ModulesCommentModuleCommentModule :task-id="taskId" :tab-scope="tabKey" title="Feedback" />
 	</div>
 </template>
