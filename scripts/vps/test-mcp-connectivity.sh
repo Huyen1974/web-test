@@ -50,7 +50,7 @@ fi
 
 # Test 3: Agent Data health
 echo -n "3. Agent Data /health... "
-RESULT=$(curl -sf --max-time 5 https://vps.incomexsaigoncorp.vn/api/health -o /dev/null -w "%{http_code}")
+RESULT=$(curl -sf --max-time 15 https://vps.incomexsaigoncorp.vn/api/health -o /dev/null -w "%{http_code}")
 if [ "$RESULT" = "200" ]; then
   echo "PASS"
   PASS=$((PASS+1))
@@ -61,7 +61,7 @@ fi
 
 # Test 4: Directus health
 echo -n "4. Directus health... "
-RESULT=$(curl -sf --max-time 5 https://directus.incomexsaigoncorp.vn/server/health -o /dev/null -w "%{http_code}")
+RESULT=$(curl -sf --max-time 15 https://directus.incomexsaigoncorp.vn/server/health -o /dev/null -w "%{http_code}")
 if [ "$RESULT" = "200" ]; then
   echo "PASS"
   PASS=$((PASS+1))
@@ -72,7 +72,7 @@ fi
 
 # Test 5: OPS Proxy (Directus via ops subdomain)
 echo -n "5. OPS Proxy (tasks endpoint)... "
-RESULT=$(curl -s --max-time 5 -o /dev/null -w "%{http_code}" \
+RESULT=$(curl -s --max-time 15 -o /dev/null -w "%{http_code}" \
   "https://ops.incomexsaigoncorp.vn/items/tasks?limit=1" \
   -H "X-API-Key: $API_KEY")
 if [ "$RESULT" = "200" ]; then
