@@ -5,16 +5,16 @@
  *
  * Usage:
  *   <!-- Flat list (backward compatible) -->
- *   <ModulesCommentModuleCommentModule :task-id="4" />
+ *   <ModulesCommentModule :task-id="4" />
  *
  *   <!-- Fixed tab scope -->
- *   <ModulesCommentModuleCommentModule :task-id="4" tab-scope="planning" />
+ *   <ModulesCommentModule :task-id="4" tab-scope="planning" />
  *
  *   <!-- Inline tab bar -->
- *   <ModulesCommentModuleCommentModule :task-id="4" :tabs="TAB_DEFINITIONS" default-tab="targets" />
+ *   <ModulesCommentModule :task-id="4" :tabs="TAB_DEFINITIONS" default-tab="targets" />
  *
  *   <!-- Custom subset of tabs -->
- *   <ModulesCommentModuleCommentModule :task-id="4" :tabs="[{ key: 'planning', label: 'Planning' }]" />
+ *   <ModulesCommentModule :task-id="4" :tabs="[{ key: 'planning', label: 'Planning' }]" />
  *
  * Slots (v2 readiness):
  *   #header  — Override title area

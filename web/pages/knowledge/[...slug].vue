@@ -675,7 +675,7 @@ const { data: linkedTask } = await useAsyncData(`linked-task-${fullSlug.value}`,
 							Task #{{ linkedTask.id }}: {{ linkedTask.name }}
 						</NuxtLink>
 					</div>
-					<ModulesCommentModuleCommentModule
+					<ModulesCommentModule
 						:task-id="linkedTask.id"
 						tab-scope="planning"
 						title="Planning Discussion"
