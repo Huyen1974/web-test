@@ -1,0 +1,32 @@
+# =============================================================================
+# INCOMEX VPS Log Rotation — Production
+# =============================================================================
+# Install: cp /opt/incomex/infra/logrotate/incomex /etc/logrotate.d/incomex
+# Verify:  logrotate -d /etc/logrotate.d/incomex
+# =============================================================================
+
+/var/log/mcp-health.log
+/var/log/config-integrity.log
+/var/log/reconcile-tasks.log
+/var/log/reconcile-knowledge.log
+{
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0644 root root
+}
+
+/opt/incomex/backups/mysql/backup.log
+/opt/incomex/backups/qdrant/backup.log
+{
+    weekly
+    rotate 4
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0644 root root
+}
