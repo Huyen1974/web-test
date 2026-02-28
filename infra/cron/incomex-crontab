@@ -1,0 +1,33 @@
+# =============================================================================
+# INCOMEX VPS Crontab — Production
+# =============================================================================
+# Install: crontab /opt/incomex/infra/cron/incomex-crontab
+# Verify:  crontab -l
+# =============================================================================
+
+# Disk monitoring — hourly
+0 * * * * /opt/incomex/scripts/disk-monitor.sh
+
+# MySQL backup — daily 2AM, 7-day retention
+0 2 * * * /opt/incomex/scripts/mysql-backup.sh >> /opt/incomex/backups/mysql/backup.log 2>&1
+
+# Qdrant backup — daily 3AM, 7-day retention
+0 3 * * * /opt/incomex/scripts/qdrant-backup.sh >> /opt/incomex/backups/qdrant/backup.log 2>&1
+
+# CDN cache warm — daily 4AM
+0 4 * * * /opt/incomex/scripts/cdn-cache-warm.sh
+
+# Reconcile Directus tasks/comments with Agent Data (every 6 hours)
+0 */6 * * * /opt/incomex/scripts/reconcile-tasks.sh >> /var/log/reconcile-tasks.log 2>&1
+
+# Reconcile Agent Data knowledge docs → Directus (every 6h)
+0 */6 * * * /opt/incomex/scripts/reconcile-knowledge.sh >> /var/log/reconcile-knowledge.log 2>&1
+
+# Workflow Postgres backup — daily 2AM
+0 2 * * * /opt/workflow/postgres/backup.sh >> /opt/workflow/postgres/backup.log 2>&1
+
+# MCP connectivity smoke test — every 5 minutes
+*/5 * * * * /opt/incomex/scripts/test-mcp-connectivity.sh >> /var/log/mcp-health.log 2>&1
+
+# Config integrity check — hourly
+0 * * * * /opt/incomex/scripts/check-config-integrity.sh >> /var/log/config-integrity.log 2>&1
