@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Incomex OPS Proxy — Task Management API",
-    "description": "CRUD API for AI agents (GPT, Claude) to manage tasks, task comments, and AI task queue via the Directus-backed OPS proxy. Rate-limited, API-key authenticated.",
-    "version": "1.2.0"
+    "title": "Incomex OPS Proxy — Multi-Collection API",
+    "description": "CRUD API for AI agents (GPT, Claude) to manage 23 collections via the Directus-backed OPS proxy. Covers tasks, comments, AI tasks, posts, pages, help articles, navigation, contacts, organizations, feedbacks, content requests, categories, AI discussions, knowledge documents, and agent views. Rate-limited, API-key authenticated.",
+    "version": "2.0.0"
   },
   "servers": [
     {
@@ -131,6 +131,59 @@
         "properties": {
           "data": { "$ref": "#/components/schemas/AiTask" }
         }
+      },
+      "DirectusItem": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Generic Directus collection item with dynamic fields"
+      },
+      "DirectusItemList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/DirectusItem" }
+          }
+        }
+      },
+      "DirectusItemSingle": {
+        "type": "object",
+        "properties": {
+          "data": { "$ref": "#/components/schemas/DirectusItem" }
+        }
+      }
+    },
+    "parameters": {
+      "itemId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string" },
+        "description": "Item ID"
+      },
+      "limit": {
+        "name": "limit",
+        "in": "query",
+        "schema": { "type": "integer", "default": 100 },
+        "description": "Maximum number of items to return"
+      },
+      "offset": {
+        "name": "offset",
+        "in": "query",
+        "schema": { "type": "integer" },
+        "description": "Number of items to skip"
+      },
+      "sort": {
+        "name": "sort",
+        "in": "query",
+        "schema": { "type": "string" },
+        "description": "Sort field (prefix with - for descending, e.g. -date_created)"
+      },
+      "fields": {
+        "name": "fields",
+        "in": "query",
+        "schema": { "type": "string" },
+        "description": "Comma-separated list of fields to return"
       }
     }
   },
@@ -597,6 +650,1632 @@
             }
           },
           "403": { "description": "Missing or invalid API key or field not allowed" }
+        }
+      }
+    },
+
+    "/items/posts": {
+      "get": {
+        "operationId": "listPosts",
+        "summary": "List posts",
+        "tags": ["Posts"],
+        "parameters": [
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of posts",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemList" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      },
+      "post": {
+        "operationId": "createPost",
+        "summary": "Create a post",
+        "tags": ["Posts"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Created post",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      }
+    },
+    "/items/posts/{id}": {
+      "get": {
+        "operationId": "getPost",
+        "summary": "Get a single post",
+        "tags": ["Posts"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Post details",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "patch": {
+        "operationId": "updatePost",
+        "summary": "Update a post",
+        "tags": ["Posts"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated post",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "delete": {
+        "operationId": "deletePost",
+        "summary": "Delete a post",
+        "tags": ["Posts"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "responses": {
+          "204": { "description": "Post deleted successfully" },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      }
+    },
+
+    "/items/pages": {
+      "get": {
+        "operationId": "listPages",
+        "summary": "List pages",
+        "tags": ["Pages"],
+        "parameters": [
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of pages",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemList" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      },
+      "post": {
+        "operationId": "createPage",
+        "summary": "Create a page",
+        "tags": ["Pages"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Created page",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      }
+    },
+    "/items/pages/{id}": {
+      "get": {
+        "operationId": "getPage",
+        "summary": "Get a single page",
+        "tags": ["Pages"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page details",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "patch": {
+        "operationId": "updatePage",
+        "summary": "Update a page",
+        "tags": ["Pages"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated page",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "delete": {
+        "operationId": "deletePage",
+        "summary": "Delete a page",
+        "tags": ["Pages"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "responses": {
+          "204": { "description": "Page deleted successfully" },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      }
+    },
+
+    "/items/page_blocks": {
+      "get": {
+        "operationId": "listPageBlocks",
+        "summary": "List page blocks",
+        "tags": ["Page Blocks"],
+        "parameters": [
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of page blocks",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemList" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      },
+      "post": {
+        "operationId": "createPageBlock",
+        "summary": "Create a page block",
+        "tags": ["Page Blocks"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Created page block",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      }
+    },
+    "/items/page_blocks/{id}": {
+      "get": {
+        "operationId": "getPageBlock",
+        "summary": "Get a single page block",
+        "tags": ["Page Blocks"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page block details",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "patch": {
+        "operationId": "updatePageBlock",
+        "summary": "Update a page block",
+        "tags": ["Page Blocks"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated page block",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "delete": {
+        "operationId": "deletePageBlock",
+        "summary": "Delete a page block",
+        "tags": ["Page Blocks"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "responses": {
+          "204": { "description": "Page block deleted successfully" },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      }
+    },
+
+    "/items/help_articles": {
+      "get": {
+        "operationId": "listHelpArticles",
+        "summary": "List help articles",
+        "tags": ["Help Articles"],
+        "parameters": [
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of help articles",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemList" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      },
+      "post": {
+        "operationId": "createHelpArticle",
+        "summary": "Create a help article",
+        "tags": ["Help Articles"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Created help article",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      }
+    },
+    "/items/help_articles/{id}": {
+      "get": {
+        "operationId": "getHelpArticle",
+        "summary": "Get a single help article",
+        "tags": ["Help Articles"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Help article details",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "patch": {
+        "operationId": "updateHelpArticle",
+        "summary": "Update a help article",
+        "tags": ["Help Articles"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated help article",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteHelpArticle",
+        "summary": "Delete a help article",
+        "tags": ["Help Articles"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "responses": {
+          "204": { "description": "Help article deleted successfully" },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      }
+    },
+
+    "/items/help_collections": {
+      "get": {
+        "operationId": "listHelpCollections",
+        "summary": "List help collections",
+        "tags": ["Help Collections"],
+        "parameters": [
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of help collections",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemList" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      },
+      "post": {
+        "operationId": "createHelpCollection",
+        "summary": "Create a help collection",
+        "tags": ["Help Collections"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Created help collection",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      }
+    },
+    "/items/help_collections/{id}": {
+      "get": {
+        "operationId": "getHelpCollection",
+        "summary": "Get a single help collection",
+        "tags": ["Help Collections"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Help collection details",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "patch": {
+        "operationId": "updateHelpCollection",
+        "summary": "Update a help collection",
+        "tags": ["Help Collections"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated help collection",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteHelpCollection",
+        "summary": "Delete a help collection",
+        "tags": ["Help Collections"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "responses": {
+          "204": { "description": "Help collection deleted successfully" },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      }
+    },
+
+    "/items/navigation": {
+      "get": {
+        "operationId": "listNavigation",
+        "summary": "List navigation",
+        "tags": ["Navigation"],
+        "parameters": [
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of navigation items",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemList" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      },
+      "post": {
+        "operationId": "createNavigation",
+        "summary": "Create a navigation entry",
+        "tags": ["Navigation"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Created navigation entry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      }
+    },
+    "/items/navigation/{id}": {
+      "get": {
+        "operationId": "getNavigation",
+        "summary": "Get a single navigation entry",
+        "tags": ["Navigation"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Navigation entry details",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "patch": {
+        "operationId": "updateNavigation",
+        "summary": "Update a navigation entry",
+        "tags": ["Navigation"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated navigation entry",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteNavigation",
+        "summary": "Delete a navigation entry",
+        "tags": ["Navigation"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "responses": {
+          "204": { "description": "Navigation entry deleted successfully" },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      }
+    },
+
+    "/items/navigation_items": {
+      "get": {
+        "operationId": "listNavigationItems",
+        "summary": "List navigation items",
+        "tags": ["Navigation Items"],
+        "parameters": [
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of navigation items",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemList" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      },
+      "post": {
+        "operationId": "createNavigationItem",
+        "summary": "Create a navigation item",
+        "tags": ["Navigation Items"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Created navigation item",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      }
+    },
+    "/items/navigation_items/{id}": {
+      "get": {
+        "operationId": "getNavigationItem",
+        "summary": "Get a single navigation item",
+        "tags": ["Navigation Items"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Navigation item details",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "patch": {
+        "operationId": "updateNavigationItem",
+        "summary": "Update a navigation item",
+        "tags": ["Navigation Items"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated navigation item",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteNavigationItem",
+        "summary": "Delete a navigation item",
+        "tags": ["Navigation Items"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "responses": {
+          "204": { "description": "Navigation item deleted successfully" },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      }
+    },
+
+    "/items/navigation_navigation_items": {
+      "get": {
+        "operationId": "listNavigationNavigationItems",
+        "summary": "List navigation-navigation item junctions",
+        "tags": ["Navigation Junction"],
+        "parameters": [
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of navigation-navigation item junctions",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemList" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      },
+      "post": {
+        "operationId": "createNavigationNavigationItem",
+        "summary": "Create a navigation-navigation item junction",
+        "tags": ["Navigation Junction"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Created junction",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      }
+    },
+    "/items/navigation_navigation_items/{id}": {
+      "get": {
+        "operationId": "getNavigationNavigationItem",
+        "summary": "Get a single navigation-navigation item junction",
+        "tags": ["Navigation Junction"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Junction details",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "patch": {
+        "operationId": "updateNavigationNavigationItem",
+        "summary": "Update a navigation-navigation item junction",
+        "tags": ["Navigation Junction"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated junction",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteNavigationNavigationItem",
+        "summary": "Delete a navigation-navigation item junction",
+        "tags": ["Navigation Junction"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "responses": {
+          "204": { "description": "Junction deleted successfully" },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      }
+    },
+
+    "/items/globals": {
+      "get": {
+        "operationId": "listGlobals",
+        "summary": "List globals",
+        "tags": ["Globals"],
+        "parameters": [
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of globals",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemList" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      },
+      "post": {
+        "operationId": "createGlobal",
+        "summary": "Create a global",
+        "tags": ["Globals"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Created global",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      }
+    },
+    "/items/globals/{id}": {
+      "get": {
+        "operationId": "getGlobal",
+        "summary": "Get a single global",
+        "tags": ["Globals"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Global details",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "patch": {
+        "operationId": "updateGlobal",
+        "summary": "Update a global",
+        "tags": ["Globals"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated global",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteGlobal",
+        "summary": "Delete a global",
+        "tags": ["Globals"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "responses": {
+          "204": { "description": "Global deleted successfully" },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      }
+    },
+
+    "/items/contacts": {
+      "get": {
+        "operationId": "listContacts",
+        "summary": "List contacts",
+        "tags": ["Contacts"],
+        "parameters": [
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of contacts",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemList" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      },
+      "post": {
+        "operationId": "createContact",
+        "summary": "Create a contact",
+        "tags": ["Contacts"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Created contact",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      }
+    },
+    "/items/contacts/{id}": {
+      "get": {
+        "operationId": "getContact",
+        "summary": "Get a single contact",
+        "tags": ["Contacts"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contact details",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "patch": {
+        "operationId": "updateContact",
+        "summary": "Update a contact",
+        "tags": ["Contacts"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated contact",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteContact",
+        "summary": "Delete a contact",
+        "tags": ["Contacts"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "responses": {
+          "204": { "description": "Contact deleted successfully" },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      }
+    },
+
+    "/items/organizations": {
+      "get": {
+        "operationId": "listOrganizations",
+        "summary": "List organizations",
+        "tags": ["Organizations"],
+        "parameters": [
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of organizations",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemList" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      },
+      "post": {
+        "operationId": "createOrganization",
+        "summary": "Create an organization",
+        "tags": ["Organizations"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Created organization",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      }
+    },
+    "/items/organizations/{id}": {
+      "get": {
+        "operationId": "getOrganization",
+        "summary": "Get a single organization",
+        "tags": ["Organizations"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Organization details",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "patch": {
+        "operationId": "updateOrganization",
+        "summary": "Update an organization",
+        "tags": ["Organizations"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated organization",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteOrganization",
+        "summary": "Delete an organization",
+        "tags": ["Organizations"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "responses": {
+          "204": { "description": "Organization deleted successfully" },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      }
+    },
+
+    "/items/organizations_contacts": {
+      "get": {
+        "operationId": "listOrganizationsContacts",
+        "summary": "List organization-contact junctions",
+        "tags": ["Organizations Contacts"],
+        "parameters": [
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of organization-contact junctions",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemList" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      },
+      "post": {
+        "operationId": "createOrganizationsContact",
+        "summary": "Create an organization-contact junction",
+        "tags": ["Organizations Contacts"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Created junction",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      }
+    },
+    "/items/organizations_contacts/{id}": {
+      "get": {
+        "operationId": "getOrganizationsContact",
+        "summary": "Get a single organization-contact junction",
+        "tags": ["Organizations Contacts"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Junction details",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "patch": {
+        "operationId": "updateOrganizationsContact",
+        "summary": "Update an organization-contact junction",
+        "tags": ["Organizations Contacts"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated junction",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteOrganizationsContact",
+        "summary": "Delete an organization-contact junction",
+        "tags": ["Organizations Contacts"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "responses": {
+          "204": { "description": "Junction deleted successfully" },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      }
+    },
+
+    "/items/organization_addresses": {
+      "get": {
+        "operationId": "listOrganizationAddresses",
+        "summary": "List organization addresses",
+        "tags": ["Organization Addresses"],
+        "parameters": [
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of organization addresses",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemList" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      },
+      "post": {
+        "operationId": "createOrganizationAddress",
+        "summary": "Create an organization address",
+        "tags": ["Organization Addresses"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Created organization address",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      }
+    },
+    "/items/organization_addresses/{id}": {
+      "get": {
+        "operationId": "getOrganizationAddress",
+        "summary": "Get a single organization address",
+        "tags": ["Organization Addresses"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Organization address details",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "patch": {
+        "operationId": "updateOrganizationAddress",
+        "summary": "Update an organization address",
+        "tags": ["Organization Addresses"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated organization address",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteOrganizationAddress",
+        "summary": "Delete an organization address",
+        "tags": ["Organization Addresses"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "responses": {
+          "204": { "description": "Organization address deleted successfully" },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      }
+    },
+
+    "/items/feedbacks": {
+      "get": {
+        "operationId": "listFeedbacks",
+        "summary": "List feedbacks",
+        "tags": ["Feedbacks"],
+        "parameters": [
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of feedbacks",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemList" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      },
+      "post": {
+        "operationId": "createFeedback",
+        "summary": "Create a feedback",
+        "tags": ["Feedbacks"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Created feedback",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      }
+    },
+    "/items/feedbacks/{id}": {
+      "get": {
+        "operationId": "getFeedback",
+        "summary": "Get a single feedback",
+        "tags": ["Feedbacks"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Feedback details",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "patch": {
+        "operationId": "updateFeedback",
+        "summary": "Update a feedback",
+        "tags": ["Feedbacks"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated feedback",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteFeedback",
+        "summary": "Delete a feedback",
+        "tags": ["Feedbacks"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "responses": {
+          "204": { "description": "Feedback deleted successfully" },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      }
+    },
+
+    "/items/content_requests": {
+      "get": {
+        "operationId": "listContentRequests",
+        "summary": "List content requests",
+        "tags": ["Content Requests"],
+        "parameters": [
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of content requests",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemList" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      },
+      "post": {
+        "operationId": "createContentRequest",
+        "summary": "Create a content request",
+        "tags": ["Content Requests"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Created content request",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      }
+    },
+    "/items/content_requests/{id}": {
+      "get": {
+        "operationId": "getContentRequest",
+        "summary": "Get a single content request",
+        "tags": ["Content Requests"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Content request details",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "patch": {
+        "operationId": "updateContentRequest",
+        "summary": "Update a content request",
+        "tags": ["Content Requests"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated content request",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteContentRequest",
+        "summary": "Delete a content request",
+        "tags": ["Content Requests"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "responses": {
+          "204": { "description": "Content request deleted successfully" },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      }
+    },
+
+    "/items/categories": {
+      "get": {
+        "operationId": "listCategories",
+        "summary": "List categories",
+        "tags": ["Categories"],
+        "parameters": [
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of categories",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemList" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      },
+      "post": {
+        "operationId": "createCategory",
+        "summary": "Create a category",
+        "tags": ["Categories"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Created category",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      }
+    },
+    "/items/categories/{id}": {
+      "get": {
+        "operationId": "getCategory",
+        "summary": "Get a single category",
+        "tags": ["Categories"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Category details",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "patch": {
+        "operationId": "updateCategory",
+        "summary": "Update a category",
+        "tags": ["Categories"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated category",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteCategory",
+        "summary": "Delete a category",
+        "tags": ["Categories"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "responses": {
+          "204": { "description": "Category deleted successfully" },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      }
+    },
+
+    "/items/ai_discussions": {
+      "get": {
+        "operationId": "listAiDiscussions",
+        "summary": "List AI discussions",
+        "tags": ["AI Discussions"],
+        "parameters": [
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of AI discussions",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemList" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      },
+      "post": {
+        "operationId": "createAiDiscussion",
+        "summary": "Create an AI discussion",
+        "tags": ["AI Discussions"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Created AI discussion",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      }
+    },
+    "/items/ai_discussions/{id}": {
+      "get": {
+        "operationId": "getAiDiscussion",
+        "summary": "Get a single AI discussion",
+        "tags": ["AI Discussions"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "AI discussion details",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "patch": {
+        "operationId": "updateAiDiscussion",
+        "summary": "Update an AI discussion",
+        "tags": ["AI Discussions"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated AI discussion",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteAiDiscussion",
+        "summary": "Delete an AI discussion",
+        "tags": ["AI Discussions"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "responses": {
+          "204": { "description": "AI discussion deleted successfully" },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      }
+    },
+
+    "/items/ai_discussion_comments": {
+      "get": {
+        "operationId": "listAiDiscussionComments",
+        "summary": "List AI discussion comments",
+        "tags": ["AI Discussion Comments"],
+        "parameters": [
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of AI discussion comments",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemList" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      },
+      "post": {
+        "operationId": "createAiDiscussionComment",
+        "summary": "Create an AI discussion comment",
+        "tags": ["AI Discussion Comments"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Created AI discussion comment",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      }
+    },
+    "/items/ai_discussion_comments/{id}": {
+      "get": {
+        "operationId": "getAiDiscussionComment",
+        "summary": "Get a single AI discussion comment",
+        "tags": ["AI Discussion Comments"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "AI discussion comment details",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "patch": {
+        "operationId": "updateAiDiscussionComment",
+        "summary": "Update an AI discussion comment",
+        "tags": ["AI Discussion Comments"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItem" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated AI discussion comment",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteAiDiscussionComment",
+        "summary": "Delete an AI discussion comment",
+        "tags": ["AI Discussion Comments"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "responses": {
+          "204": { "description": "AI discussion comment deleted successfully" },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      }
+    },
+
+    "/items/knowledge_documents": {
+      "get": {
+        "operationId": "listKnowledgeDocuments",
+        "summary": "List knowledge documents (read-only)",
+        "tags": ["Knowledge Documents"],
+        "parameters": [
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of knowledge documents",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemList" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      }
+    },
+    "/items/knowledge_documents/{id}": {
+      "get": {
+        "operationId": "getKnowledgeDocument",
+        "summary": "Get a single knowledge document (read-only)",
+        "tags": ["Knowledge Documents"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Knowledge document details",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
+        }
+      }
+    },
+
+    "/items/agent_views": {
+      "get": {
+        "operationId": "listAgentViews",
+        "summary": "List agent views (read-only)",
+        "tags": ["Agent Views"],
+        "parameters": [
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of agent views",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemList" } } }
+          },
+          "403": { "description": "Missing or invalid API key" }
+        }
+      }
+    },
+    "/items/agent_views/{id}": {
+      "get": {
+        "operationId": "getAgentView",
+        "summary": "Get a single agent view (read-only)",
+        "tags": ["Agent Views"],
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent view details",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectusItemSingle" } } }
+          },
+          "403": { "description": "Missing or invalid API key or item not found" }
         }
       }
     }
