@@ -3,7 +3,7 @@
   "info": {
     "title": "OPS Proxy API — AI Council",
     "version": "1.0.0",
-    "description": "Slim OPS Proxy spec for GPT AI Council (14 operations, 7 collections). Full spec at /openapi.json (105 operations)."
+    "description": "Slim OPS Proxy spec for GPT AI Council (17 operations, 7 collections). Full spec at /openapi.json (105 operations)."
   },
   "servers": [
     {
@@ -399,6 +399,96 @@
           }
         }
       }
+    },
+    "/items/pages": {
+      "get": {
+        "operationId": "listPages",
+        "summary": "List pages",
+        "description": "List website pages with optional filtering.",
+        "parameters": [
+          { "$ref": "#/components/parameters/fields" },
+          { "$ref": "#/components/parameters/filter" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of pages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Page" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/navigation": {
+      "get": {
+        "operationId": "listNavigation",
+        "summary": "List navigation menus",
+        "description": "List navigation menus (main, footer).",
+        "parameters": [
+          { "$ref": "#/components/parameters/fields" },
+          { "$ref": "#/components/parameters/filter" },
+          { "$ref": "#/components/parameters/limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of navigation menus",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Navigation" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/globals": {
+      "get": {
+        "operationId": "listGlobals",
+        "summary": "List global settings",
+        "description": "List global site settings (branding, SEO, social links).",
+        "parameters": [
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of global settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Globals" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -523,6 +613,38 @@
           "content": { "type": "string" }
         },
         "required": ["title"]
+      },
+      "Page": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "title": { "type": "string" },
+          "permalink": { "type": "string" },
+          "status": { "type": "string" },
+          "blocks": { "type": "array", "items": { "type": "object" } },
+          "date_created": { "type": "string", "format": "date-time" },
+          "date_updated": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Navigation": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "title": { "type": "string" },
+          "items": { "type": "array", "items": { "type": "object" } }
+        }
+      },
+      "Globals": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "url": { "type": "string" },
+          "logo": { "type": "string" },
+          "social_links": { "type": "array", "items": { "type": "object" } },
+          "og_image": { "type": "string" }
+        }
       }
     }
   }
