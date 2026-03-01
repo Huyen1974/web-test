@@ -1,0 +1,529 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OPS Proxy API — AI Council",
+    "version": "1.0.0",
+    "description": "Slim OPS Proxy spec for GPT AI Council (14 operations, 7 collections). Full spec at /openapi.json (105 operations)."
+  },
+  "servers": [
+    {
+      "url": "https://ops.incomexsaigoncorp.vn",
+      "description": "OPS Proxy (Directus via Nginx)"
+    }
+  ],
+  "security": [
+    {
+      "ApiKeyAuth": []
+    }
+  ],
+  "paths": {
+    "/items/tasks": {
+      "get": {
+        "operationId": "listTasks",
+        "summary": "List tasks",
+        "description": "List tasks with optional filtering, sorting, and pagination.",
+        "parameters": [
+          { "$ref": "#/components/parameters/fields" },
+          { "$ref": "#/components/parameters/filter" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of tasks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Task" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/tasks/{id}": {
+      "get": {
+        "operationId": "getTask",
+        "summary": "Get task by ID",
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Single task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/Task" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/task_comments": {
+      "get": {
+        "operationId": "listComments",
+        "summary": "List task comments",
+        "description": "List task comments with optional filtering by task_id, agent_type, tab_scope.",
+        "parameters": [
+          { "$ref": "#/components/parameters/fields" },
+          { "$ref": "#/components/parameters/filter" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of comments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/TaskComment" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createComment",
+        "summary": "Create a task comment",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TaskCommentInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created comment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/TaskComment" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/task_comments/{id}": {
+      "get": {
+        "operationId": "getComment",
+        "summary": "Get comment by ID",
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Single comment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/TaskComment" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateComment",
+        "summary": "Update a task comment",
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TaskCommentInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated comment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/TaskComment" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteComment",
+        "summary": "Delete a task comment",
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/items/ai_tasks": {
+      "get": {
+        "operationId": "listAiTasks",
+        "summary": "List AI tasks",
+        "description": "List AI agent job queue items.",
+        "parameters": [
+          { "$ref": "#/components/parameters/fields" },
+          { "$ref": "#/components/parameters/filter" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of AI tasks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/AiTask" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/ai_tasks/{id}": {
+      "get": {
+        "operationId": "getAiTask",
+        "summary": "Get AI task by ID",
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Single AI task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AiTask" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateAiTask",
+        "summary": "Update an AI task",
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AiTaskInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated AI task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AiTask" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/posts": {
+      "get": {
+        "operationId": "listPosts",
+        "summary": "List blog posts",
+        "parameters": [
+          { "$ref": "#/components/parameters/fields" },
+          { "$ref": "#/components/parameters/filter" },
+          { "$ref": "#/components/parameters/sort" },
+          { "$ref": "#/components/parameters/limit" },
+          { "$ref": "#/components/parameters/offset" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of posts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Post" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createPost",
+        "summary": "Create a blog post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PostInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created post",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/Post" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/posts/{id}": {
+      "get": {
+        "operationId": "getPost",
+        "summary": "Get post by ID",
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" },
+          { "$ref": "#/components/parameters/fields" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Single post",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/Post" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updatePost",
+        "summary": "Update a blog post",
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PostInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated post",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/Post" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "OPS Proxy API key (same key as Agent Data)"
+      }
+    },
+    "parameters": {
+      "itemId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "integer" },
+        "description": "Item ID"
+      },
+      "fields": {
+        "name": "fields",
+        "in": "query",
+        "schema": { "type": "string" },
+        "description": "Comma-separated field names to return (e.g. id,name,status)"
+      },
+      "filter": {
+        "name": "filter",
+        "in": "query",
+        "schema": { "type": "string" },
+        "description": "Directus filter as JSON object (e.g. {\"status\":{\"_eq\":\"active\"}})"
+      },
+      "sort": {
+        "name": "sort",
+        "in": "query",
+        "schema": { "type": "string" },
+        "description": "Sort field, prefix with - for descending (e.g. -date_created)"
+      },
+      "limit": {
+        "name": "limit",
+        "in": "query",
+        "schema": { "type": "integer", "default": 25 },
+        "description": "Maximum items to return"
+      },
+      "offset": {
+        "name": "offset",
+        "in": "query",
+        "schema": { "type": "integer", "default": 0 },
+        "description": "Number of items to skip"
+      }
+    },
+    "schemas": {
+      "Task": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "status": { "type": "string" },
+          "priority": { "type": "string" },
+          "date_created": { "type": "string", "format": "date-time" }
+        }
+      },
+      "TaskComment": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "task_id": { "type": "integer" },
+          "content": { "type": "string" },
+          "agent_type": { "type": "string" },
+          "tab_scope": { "type": "string" },
+          "action": { "type": "string" },
+          "date_created": { "type": "string", "format": "date-time" }
+        }
+      },
+      "TaskCommentInput": {
+        "type": "object",
+        "properties": {
+          "task_id": { "type": "integer" },
+          "content": { "type": "string" },
+          "agent_type": { "type": "string", "description": "Agent identifier: gpt, claude, codex, gemini, claude_code" },
+          "tab_scope": { "type": "string", "description": "Tab: discussion, checklist, reports, targets, rules, prompt, test, verify, plan" },
+          "action": { "type": "string" }
+        },
+        "required": ["task_id", "content"]
+      },
+      "AiTask": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "status": { "type": "string" },
+          "assigned_agent": { "type": "string" },
+          "work_type": { "type": "string" },
+          "task_id": { "type": "integer" },
+          "result_summary": { "type": "string" }
+        }
+      },
+      "AiTaskInput": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string" },
+          "result_summary": { "type": "string" },
+          "assigned_agent": { "type": "string" }
+        }
+      },
+      "Post": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "title": { "type": "string" },
+          "status": { "type": "string" },
+          "slug": { "type": "string" },
+          "content": { "type": "string" },
+          "date_created": { "type": "string", "format": "date-time" }
+        }
+      },
+      "PostInput": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "status": { "type": "string" },
+          "slug": { "type": "string" },
+          "content": { "type": "string" }
+        },
+        "required": ["title"]
+      }
+    }
+  }
+}
