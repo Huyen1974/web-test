@@ -11,3 +11,4 @@ export type * from './schema';
 export type * from './agent-views';
 export type * from './tasks';
 export type * from './workflows';
+export type * from './checkpoints';

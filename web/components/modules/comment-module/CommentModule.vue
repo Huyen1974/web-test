@@ -31,6 +31,7 @@ const props = withDefaults(defineProps<CommentModuleProps>(), {
 	title: 'Discussion',
 	tabs: undefined,
 	defaultTab: undefined,
+	showCheckpoints: false,
 });
 
 const emit = defineEmits<{
@@ -96,6 +97,11 @@ function selectTab(key: string) {
 					{{ tab.label }}
 				</button>
 			</nav>
+		</div>
+
+		<!-- Checkpoint Panel -->
+		<div v-if="showCheckpoints" class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+			<ModulesCommentModulePartialsCheckpointPanel :task-id="taskId" />
 		</div>
 
 		<!-- Thread -->
