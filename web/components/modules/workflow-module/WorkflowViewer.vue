@@ -123,4 +123,18 @@ onBeforeUnmount(() => {
 .bpmn-container :deep(.bjs-powered-by) {
 	display: none;
 }
+
+/* Dark mode: canvas background */
+:root.dark .bpmn-container :deep(.bjs-container) {
+	background: #111827;
+}
+
+/* Dark mode: SVG elements */
+:root.dark .bpmn-container :deep(.djs-element .djs-visual > :is(rect, circle, polygon, path)) {
+	stroke: #9ca3af;
+}
+
+:root.dark .bpmn-container :deep(.djs-element .djs-visual text) {
+	fill: #e5e7eb;
+}
 </style>

@@ -185,18 +185,28 @@ async function handleAnnotationAdded(payload: { elementId: string; annotationTex
 					</div>
 				</div>
 
-				<!-- Viewer (read-only) -->
-				<ModulesWorkflowModuleWorkflowViewer
-					v-if="workflowMode === 'view'"
-					:workflow-id="firstWorkflowId"
-				/>
+				<!-- Error boundary: if bpmn-js crashes, show fallback instead of crashing page -->
+				<NuxtErrorBoundary>
+					<!-- Viewer (read-only) -->
+					<ModulesWorkflowModuleWorkflowViewer
+						v-if="workflowMode === 'view'"
+						:workflow-id="firstWorkflowId"
+					/>
 
-				<!-- Modeler (full editor) -->
-				<ModulesWorkflowModuleWorkflowModeler
-					v-else
-					:workflow-id="firstWorkflowId"
-					@annotation-added="handleAnnotationAdded"
-				/>
+					<!-- Modeler (full editor) -->
+					<ModulesWorkflowModuleWorkflowModeler
+						v-else
+						:workflow-id="firstWorkflowId"
+						@annotation-added="handleAnnotationAdded"
+					/>
+
+					<template #error="{ error: bpmnError }">
+						<div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-900/20">
+							<p class="text-sm font-medium text-red-700 dark:text-red-300">Unable to load workflow diagram</p>
+							<p class="mt-1 text-xs text-red-500 dark:text-red-400">{{ bpmnError?.message || 'Unknown error' }}</p>
+						</div>
+					</template>
+				</NuxtErrorBoundary>
 			</div>
 
 			<!-- Live CommentModule -->

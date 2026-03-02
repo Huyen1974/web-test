@@ -34,6 +34,8 @@ const containerRef = ref<HTMLDivElement>();
 const modelerError = ref<string>();
 const saving = ref(false);
 const dirty = ref(false);
+const canUndo = ref(false);
+const canRedo = ref(false);
 let modeler: any = null;
 
 async function initModeler(xml: string) {
@@ -53,10 +55,13 @@ async function initModeler(xml: string) {
 		modelerError.value = undefined;
 		dirty.value = false;
 
-		// Track changes
+		// Track changes + undo/redo state
 		const eventBus = modeler.get('eventBus');
+		const commandStack = modeler.get('commandStack');
 		eventBus.on('commandStack.changed', () => {
 			dirty.value = true;
+			canUndo.value = commandStack.canUndo();
+			canRedo.value = commandStack.canRedo();
 		});
 
 		// Detect text annotation additions
@@ -96,6 +101,14 @@ async function initModeler(xml: string) {
 	} catch (err: any) {
 		modelerError.value = err.message || 'Failed to load BPMN diagram';
 	}
+}
+
+function handleUndo() {
+	if (modeler) modeler.get('commandStack').undo();
+}
+
+function handleRedo() {
+	if (modeler) modeler.get('commandStack').redo();
 }
 
 async function handleSave() {
@@ -139,6 +152,22 @@ onBeforeUnmount(() => {
 					{{ workflow?.title || 'Workflow Editor' }}
 				</h3>
 				<div class="flex items-center gap-2">
+					<button
+						:disabled="!canUndo"
+						class="rounded px-2 py-1 text-xs text-gray-600 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30 dark:text-gray-400 dark:hover:bg-gray-700"
+						title="Undo (Ctrl+Z)"
+						@click="handleUndo"
+					>
+						Undo
+					</button>
+					<button
+						:disabled="!canRedo"
+						class="rounded px-2 py-1 text-xs text-gray-600 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30 dark:text-gray-400 dark:hover:bg-gray-700"
+						title="Redo (Ctrl+Y)"
+						@click="handleRedo"
+					>
+						Redo
+					</button>
 					<span
 						v-if="dirty"
 						class="text-xs text-amber-600 dark:text-amber-400"
@@ -190,5 +219,57 @@ onBeforeUnmount(() => {
 
 .bpmn-modeler-container :deep(.bjs-powered-by) {
 	display: none;
+}
+
+/* Dark mode: palette sidebar */
+:root.dark .bpmn-modeler-container :deep(.djs-palette) {
+	background: #1f2937;
+	border-color: #374151;
+}
+
+:root.dark .bpmn-modeler-container :deep(.djs-palette .entry:hover) {
+	background: #374151;
+}
+
+/* Dark mode: context pad (element actions popup) */
+:root.dark .bpmn-modeler-container :deep(.djs-context-pad) {
+	background: #1f2937;
+	border-color: #374151;
+}
+
+:root.dark .bpmn-modeler-container :deep(.djs-context-pad .entry:hover) {
+	background: #374151;
+}
+
+/* Dark mode: popup menu (element type selector) */
+:root.dark .bpmn-modeler-container :deep(.djs-popup) {
+	background: #1f2937;
+	border-color: #374151;
+	color: #e5e7eb;
+}
+
+:root.dark .bpmn-modeler-container :deep(.djs-popup .entry:hover) {
+	background: #374151;
+}
+
+/* Dark mode: direct editing overlay */
+:root.dark .bpmn-modeler-container :deep(.djs-direct-editing-parent) {
+	background: #1f2937;
+	color: #e5e7eb;
+	border-color: #3b82f6;
+}
+
+/* Dark mode: canvas background */
+:root.dark .bpmn-modeler-container :deep(.bjs-container) {
+	background: #111827;
+}
+
+/* Dark mode: SVG elements */
+:root.dark .bpmn-modeler-container :deep(.djs-element .djs-visual > :is(rect, circle, polygon, path)) {
+	stroke: #9ca3af;
+}
+
+:root.dark .bpmn-modeler-container :deep(.djs-element .djs-visual text) {
+	fill: #e5e7eb;
 }
 </style>
