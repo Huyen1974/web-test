@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { readItem, readItems } from '@directus/sdk';
-import type { Task, TaskStatus, TaskPriority } from '~/types/tasks';
+import { readItem, readItems, createItem } from '@directus/sdk';
+import type { Task, TaskStatus, TaskPriority, TaskComment } from '~/types/tasks';
 import type { Workflow } from '~/types/workflows';
 import { TASK_STATUS_META, TASK_PRIORITY_META } from '~/types/tasks';
 
@@ -46,6 +46,35 @@ const { data: workflows } = await useAsyncData(
 );
 
 const firstWorkflowId = computed(() => workflows.value?.[0]?.id);
+
+// Workflow mode toggle: view | edit
+const workflowMode = ref<'view' | 'edit'>('view');
+
+function toggleWorkflowMode() {
+	workflowMode.value = workflowMode.value === 'view' ? 'edit' : 'view';
+}
+
+// Annotation → Comment pipeline
+const commentModuleRef = ref<{ refresh?: () => void }>();
+
+async function handleAnnotationAdded(payload: { elementId: string; annotationText: string; workflowId: number | string }) {
+	const taskId = mod.value?.id;
+	if (!taskId) return;
+
+	await useDirectus<TaskComment>(
+		createItem('task_comments', {
+			task_id: taskId,
+			tab_scope: 'planning',
+			agent_type: 'user',
+			content: `[ANNOTATION] Node: ${payload.elementId} — ${payload.annotationText}`,
+			workflow_id: Number(payload.workflowId),
+			bpmn_element_id: payload.elementId,
+		}),
+	);
+
+	// Refresh CommentModule to show the new comment
+	commentModuleRef.value?.refresh?.();
+}
 </script>
 
 <template>
@@ -130,14 +159,48 @@ const firstWorkflowId = computed(() => workflows.value?.[0]?.id);
 				</NuxtLink>
 			</div>
 
-			<!-- Workflow Viewer (if linked workflows exist) -->
-			<ModulesWorkflowModuleWorkflowViewer
-				v-if="firstWorkflowId"
-				:workflow-id="firstWorkflowId"
-			/>
+			<!-- Workflow Section (if linked workflows exist) -->
+			<div v-if="firstWorkflowId">
+				<!-- Mode Toggle -->
+				<div class="mb-2 flex justify-end">
+					<div class="inline-flex rounded-md shadow-sm">
+						<button
+							class="rounded-l-md px-3 py-1.5 text-xs font-medium transition-colors"
+							:class="workflowMode === 'view'
+								? 'bg-blue-600 text-white'
+								: 'bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'"
+							@click="workflowMode = 'view'"
+						>
+							View
+						</button>
+						<button
+							class="rounded-r-md px-3 py-1.5 text-xs font-medium transition-colors"
+							:class="workflowMode === 'edit'
+								? 'bg-blue-600 text-white'
+								: 'bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'"
+							@click="workflowMode = 'edit'"
+						>
+							Edit
+						</button>
+					</div>
+				</div>
+
+				<!-- Viewer (read-only) -->
+				<ModulesWorkflowModuleWorkflowViewer
+					v-if="workflowMode === 'view'"
+					:workflow-id="firstWorkflowId"
+				/>
+
+				<!-- Modeler (full editor) -->
+				<ModulesWorkflowModuleWorkflowModeler
+					v-else
+					:workflow-id="firstWorkflowId"
+					@annotation-added="handleAnnotationAdded"
+				/>
+			</div>
 
 			<!-- Live CommentModule -->
-			<ModulesCommentModule :task-id="mod.id" title="Module Discussion" show-checkpoints />
+			<ModulesCommentModule ref="commentModuleRef" :task-id="mod.id" title="Module Discussion" show-checkpoints />
 		</div>
 	</div>
 </template>
