@@ -1498,6 +1498,7 @@
         "name": "X-API-Key",
         "description": "OPS Proxy API key (same key as Agent Data)"
       }
-    }
+    },
+    "schemas": {}
   }
 }
