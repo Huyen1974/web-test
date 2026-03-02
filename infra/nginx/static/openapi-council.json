@@ -3,7 +3,7 @@
   "info": {
     "title": "OPS Proxy API — AI Council",
     "version": "1.0.0",
-    "description": "Slim OPS Proxy spec for GPT AI Council (17 operations, 7 collections). Full spec at /openapi.json (105 operations)."
+    "description": "Slim OPS Proxy spec for GPT AI Council (19 operations, 7 collections). Full spec at /openapi.json (105 operations)."
   },
   "servers": [
     {
@@ -60,6 +60,36 @@
         "responses": {
           "200": {
             "description": "Single task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/Task" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateTask",
+        "summary": "Update task content fields",
+        "parameters": [
+          { "$ref": "#/components/parameters/itemId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TaskInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated task",
             "content": {
               "application/json": {
                 "schema": {
@@ -224,6 +254,33 @@
                       "type": "array",
                       "items": { "$ref": "#/components/schemas/AiTask" }
                     }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createAiTask",
+        "summary": "Create AI task for agent dispatch",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AiTaskCreate" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created AI task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/AiTask" }
                   }
                 }
               }
@@ -550,6 +607,16 @@
           "date_created": { "type": "string", "format": "date-time" }
         }
       },
+      "TaskInput": {
+        "type": "object",
+        "properties": {
+          "content_checklist": { "type": "string", "description": "Checklist content" },
+          "content_brief": { "type": "string", "description": "Brief/summary" },
+          "content_requirements": { "type": "string", "description": "Requirements" },
+          "status": { "type": "string", "description": "Task status" },
+          "checklist_version": { "type": "integer", "description": "Checklist version number" }
+        }
+      },
       "TaskComment": {
         "type": "object",
         "properties": {
@@ -592,6 +659,20 @@
           "result_summary": { "type": "string" },
           "assigned_agent": { "type": "string" }
         }
+      },
+      "AiTaskCreate": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "description": "Task name" },
+          "status": { "type": "string", "enum": ["draft", "pending", "in_progress", "completed", "failed"], "default": "draft" },
+          "assigned_agent": { "type": "string", "description": "Agent to assign: claude_code, codex, gpt, gemini" },
+          "prompt_payload": { "type": "string", "description": "Task instructions/prompt" },
+          "priority": { "type": "string", "enum": ["low", "normal", "high", "urgent"], "default": "normal" },
+          "task_id": { "type": "integer", "description": "Parent task reference" },
+          "source_agent": { "type": "string", "description": "Agent creating this task" },
+          "expected_output": { "type": "string", "description": "Description of expected result" }
+        },
+        "required": ["name", "assigned_agent", "prompt_payload"]
       },
       "Post": {
         "type": "object",
