@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "OPS Proxy API — AI Council",
+    "title": "OPS Proxy API \u2014 AI Council",
     "version": "1.0.0",
     "description": "Slim OPS Proxy spec for GPT AI Council (19 operations, 7 collections). Full spec at /openapi.json (105 operations)."
   },
@@ -1482,6 +1482,231 @@
                       }
                     }
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/workflows": {
+      "get": {
+        "operationId": "listWorkflows",
+        "summary": "List workflows (read-only)",
+        "description": "List BPMN workflows with optional filtering by task_id, status.",
+        "parameters": [
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated fields"
+          },
+          {
+            "name": "filter[task_id][_eq]",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Filter by task ID"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 25
+            },
+            "description": "Max items"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of workflows",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/task_checkpoints": {
+      "get": {
+        "operationId": "listTaskCheckpoints",
+        "summary": "List task checkpoints",
+        "description": "List checkpoints for a task. Filter by task_id, layer, status.",
+        "parameters": [
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated fields"
+          },
+          {
+            "name": "filter[task_id][_eq]",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Filter by task ID"
+          },
+          {
+            "name": "filter[layer][_eq]",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "L0",
+                "L1",
+                "L2"
+              ]
+            },
+            "description": "Filter by tier"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 25
+            },
+            "description": "Max items"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of checkpoints",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createTaskCheckpoint",
+        "summary": "Create a task checkpoint",
+        "description": "Create a new checkpoint for a task.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "task_id": {
+                    "type": "integer"
+                  },
+                  "checkpoint_key": {
+                    "type": "string"
+                  },
+                  "layer": {
+                    "type": "string",
+                    "enum": [
+                      "L0",
+                      "L1",
+                      "L2"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "pending",
+                      "passed",
+                      "failed",
+                      "skipped"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created checkpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/task_checkpoints/{id}": {
+      "patch": {
+        "operationId": "updateTaskCheckpoint",
+        "summary": "Update a task checkpoint",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "pending",
+                      "passed",
+                      "failed",
+                      "skipped"
+                    ]
+                  },
+                  "verified_by": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated checkpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }

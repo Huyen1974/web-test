@@ -48,7 +48,7 @@ importers:
         specifier: ^3.0.3
         version: 3.0.3(magicast@0.5.1)(vue@3.5.25(typescript@5.9.3))
       bpmn-js:
-        specifier: ^18.12.1
+        specifier: 18.12.1
         version: 18.12.1
       diff:
         specifier: ^8.0.2
