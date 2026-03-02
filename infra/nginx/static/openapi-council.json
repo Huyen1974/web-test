@@ -23,11 +23,48 @@
         "summary": "List tasks",
         "description": "List tasks with optional filtering, sorting, and pagination.",
         "parameters": [
-          { "$ref": "#/components/parameters/fields" },
-          { "$ref": "#/components/parameters/filter" },
-          { "$ref": "#/components/parameters/sort" },
-          { "$ref": "#/components/parameters/limit" },
-          { "$ref": "#/components/parameters/offset" }
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated field names to return (e.g. id,name,status)"
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Directus filter as JSON object (e.g. {\"status\":{\"_eq\":\"active\"}})"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sort field, prefix with - for descending (e.g. -date_created)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 25
+            },
+            "description": "Maximum items to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            },
+            "description": "Number of items to skip"
+          }
         ],
         "responses": {
           "200": {
@@ -39,7 +76,27 @@
                   "properties": {
                     "data": {
                       "type": "array",
-                      "items": { "$ref": "#/components/schemas/Task" }
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "priority": {
+                            "type": "string"
+                          },
+                          "date_created": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -54,8 +111,23 @@
         "operationId": "getTask",
         "summary": "Get task by ID",
         "parameters": [
-          { "$ref": "#/components/parameters/itemId" },
-          { "$ref": "#/components/parameters/fields" }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Item ID"
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated field names to return (e.g. id,name,status)"
+          }
         ],
         "responses": {
           "200": {
@@ -65,7 +137,27 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": { "$ref": "#/components/schemas/Task" }
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "priority": {
+                          "type": "string"
+                        },
+                        "date_created": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -77,13 +169,69 @@
         "operationId": "updateTask",
         "summary": "Update task content fields",
         "parameters": [
-          { "$ref": "#/components/parameters/itemId" }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Item ID"
+          }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/TaskInput" }
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "description": "Task status"
+                  },
+                  "content_checklist": {
+                    "type": "string",
+                    "description": "Checklist content (markdown)"
+                  },
+                  "content_plan": {
+                    "type": "string",
+                    "description": "Plan content"
+                  },
+                  "content_reports": {
+                    "type": "string",
+                    "description": "Reports content"
+                  },
+                  "content_prompt": {
+                    "type": "string",
+                    "description": "Prompt content"
+                  },
+                  "content_targets": {
+                    "type": "string",
+                    "description": "Targets content"
+                  },
+                  "content_rules": {
+                    "type": "string",
+                    "description": "Rules content"
+                  },
+                  "content_test": {
+                    "type": "string",
+                    "description": "Test content"
+                  },
+                  "content_verify": {
+                    "type": "string",
+                    "description": "Verify content"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Task description"
+                  },
+                  "checklist_version": {
+                    "type": "integer",
+                    "description": "Checklist version number"
+                  }
+                }
+              }
             }
           }
         },
@@ -95,7 +243,27 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": { "$ref": "#/components/schemas/Task" }
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "priority": {
+                          "type": "string"
+                        },
+                        "date_created": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -110,11 +278,48 @@
         "summary": "List task comments",
         "description": "List task comments with optional filtering by task_id, agent_type, tab_scope.",
         "parameters": [
-          { "$ref": "#/components/parameters/fields" },
-          { "$ref": "#/components/parameters/filter" },
-          { "$ref": "#/components/parameters/sort" },
-          { "$ref": "#/components/parameters/limit" },
-          { "$ref": "#/components/parameters/offset" }
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated field names to return (e.g. id,name,status)"
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Directus filter as JSON object (e.g. {\"status\":{\"_eq\":\"active\"}})"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sort field, prefix with - for descending (e.g. -date_created)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 25
+            },
+            "description": "Maximum items to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            },
+            "description": "Number of items to skip"
+          }
         ],
         "responses": {
           "200": {
@@ -126,7 +331,33 @@
                   "properties": {
                     "data": {
                       "type": "array",
-                      "items": { "$ref": "#/components/schemas/TaskComment" }
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer"
+                          },
+                          "task_id": {
+                            "type": "integer"
+                          },
+                          "content": {
+                            "type": "string"
+                          },
+                          "agent_type": {
+                            "type": "string"
+                          },
+                          "tab_scope": {
+                            "type": "string"
+                          },
+                          "action": {
+                            "type": "string"
+                          },
+                          "date_created": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -142,7 +373,32 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/TaskCommentInput" }
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "task_id": {
+                    "type": "integer"
+                  },
+                  "content": {
+                    "type": "string"
+                  },
+                  "agent_type": {
+                    "type": "string",
+                    "description": "Agent identifier: gpt, claude, codex, gemini, claude_code"
+                  },
+                  "tab_scope": {
+                    "type": "string",
+                    "description": "Tab: discussion, checklist, reports, targets, rules, prompt, test, verify, plan"
+                  },
+                  "action": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "task_id",
+                  "content"
+                ]
+              }
             }
           }
         },
@@ -154,7 +410,33 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": { "$ref": "#/components/schemas/TaskComment" }
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer"
+                        },
+                        "task_id": {
+                          "type": "integer"
+                        },
+                        "content": {
+                          "type": "string"
+                        },
+                        "agent_type": {
+                          "type": "string"
+                        },
+                        "tab_scope": {
+                          "type": "string"
+                        },
+                        "action": {
+                          "type": "string"
+                        },
+                        "date_created": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -168,8 +450,23 @@
         "operationId": "getComment",
         "summary": "Get comment by ID",
         "parameters": [
-          { "$ref": "#/components/parameters/itemId" },
-          { "$ref": "#/components/parameters/fields" }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Item ID"
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated field names to return (e.g. id,name,status)"
+          }
         ],
         "responses": {
           "200": {
@@ -179,7 +476,33 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": { "$ref": "#/components/schemas/TaskComment" }
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer"
+                        },
+                        "task_id": {
+                          "type": "integer"
+                        },
+                        "content": {
+                          "type": "string"
+                        },
+                        "agent_type": {
+                          "type": "string"
+                        },
+                        "tab_scope": {
+                          "type": "string"
+                        },
+                        "action": {
+                          "type": "string"
+                        },
+                        "date_created": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -191,13 +514,46 @@
         "operationId": "updateComment",
         "summary": "Update a task comment",
         "parameters": [
-          { "$ref": "#/components/parameters/itemId" }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Item ID"
+          }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/TaskCommentInput" }
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "task_id": {
+                    "type": "integer"
+                  },
+                  "content": {
+                    "type": "string"
+                  },
+                  "agent_type": {
+                    "type": "string",
+                    "description": "Agent identifier: gpt, claude, codex, gemini, claude_code"
+                  },
+                  "tab_scope": {
+                    "type": "string",
+                    "description": "Tab: discussion, checklist, reports, targets, rules, prompt, test, verify, plan"
+                  },
+                  "action": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "task_id",
+                  "content"
+                ]
+              }
             }
           }
         },
@@ -209,7 +565,33 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": { "$ref": "#/components/schemas/TaskComment" }
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer"
+                        },
+                        "task_id": {
+                          "type": "integer"
+                        },
+                        "content": {
+                          "type": "string"
+                        },
+                        "agent_type": {
+                          "type": "string"
+                        },
+                        "tab_scope": {
+                          "type": "string"
+                        },
+                        "action": {
+                          "type": "string"
+                        },
+                        "date_created": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -221,7 +603,15 @@
         "operationId": "deleteComment",
         "summary": "Delete a task comment",
         "parameters": [
-          { "$ref": "#/components/parameters/itemId" }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Item ID"
+          }
         ],
         "responses": {
           "204": {
@@ -236,11 +626,48 @@
         "summary": "List AI tasks",
         "description": "List AI agent job queue items.",
         "parameters": [
-          { "$ref": "#/components/parameters/fields" },
-          { "$ref": "#/components/parameters/filter" },
-          { "$ref": "#/components/parameters/sort" },
-          { "$ref": "#/components/parameters/limit" },
-          { "$ref": "#/components/parameters/offset" }
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated field names to return (e.g. id,name,status)"
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Directus filter as JSON object (e.g. {\"status\":{\"_eq\":\"active\"}})"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sort field, prefix with - for descending (e.g. -date_created)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 25
+            },
+            "description": "Maximum items to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            },
+            "description": "Number of items to skip"
+          }
         ],
         "responses": {
           "200": {
@@ -252,7 +679,32 @@
                   "properties": {
                     "data": {
                       "type": "array",
-                      "items": { "$ref": "#/components/schemas/AiTask" }
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "assigned_agent": {
+                            "type": "string"
+                          },
+                          "work_type": {
+                            "type": "string"
+                          },
+                          "task_id": {
+                            "type": "integer"
+                          },
+                          "result_summary": {
+                            "type": "string"
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -268,7 +720,56 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/AiTaskCreate" }
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Task name (required)"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "pending",
+                      "in_progress",
+                      "completed",
+                      "failed"
+                    ],
+                    "default": "draft"
+                  },
+                  "assigned_agent": {
+                    "type": "string",
+                    "description": "Agent to assign: claude_code, codex, gpt, gemini"
+                  },
+                  "agent_role": {
+                    "type": "string",
+                    "description": "Agent role for this task"
+                  },
+                  "prompt_payload": {
+                    "type": "string",
+                    "description": "Task instructions/prompt"
+                  },
+                  "work_type": {
+                    "type": "string",
+                    "description": "Type of work"
+                  },
+                  "task_id": {
+                    "type": "integer",
+                    "description": "Parent task reference"
+                  },
+                  "max_retries": {
+                    "type": "integer",
+                    "description": "Maximum retry attempts",
+                    "default": 3
+                  }
+                },
+                "required": [
+                  "name",
+                  "assigned_agent",
+                  "prompt_payload"
+                ]
+              }
             }
           }
         },
@@ -280,7 +781,32 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": { "$ref": "#/components/schemas/AiTask" }
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "assigned_agent": {
+                          "type": "string"
+                        },
+                        "work_type": {
+                          "type": "string"
+                        },
+                        "task_id": {
+                          "type": "integer"
+                        },
+                        "result_summary": {
+                          "type": "string"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -294,8 +820,23 @@
         "operationId": "getAiTask",
         "summary": "Get AI task by ID",
         "parameters": [
-          { "$ref": "#/components/parameters/itemId" },
-          { "$ref": "#/components/parameters/fields" }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Item ID"
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated field names to return (e.g. id,name,status)"
+          }
         ],
         "responses": {
           "200": {
@@ -305,7 +846,32 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": { "$ref": "#/components/schemas/AiTask" }
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "assigned_agent": {
+                          "type": "string"
+                        },
+                        "work_type": {
+                          "type": "string"
+                        },
+                        "task_id": {
+                          "type": "integer"
+                        },
+                        "result_summary": {
+                          "type": "string"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -317,13 +883,34 @@
         "operationId": "updateAiTask",
         "summary": "Update an AI task",
         "parameters": [
-          { "$ref": "#/components/parameters/itemId" }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Item ID"
+          }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/AiTaskInput" }
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string"
+                  },
+                  "result_summary": {
+                    "type": "string"
+                  },
+                  "assigned_agent": {
+                    "type": "string"
+                  }
+                }
+              }
             }
           }
         },
@@ -335,7 +922,32 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": { "$ref": "#/components/schemas/AiTask" }
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "assigned_agent": {
+                          "type": "string"
+                        },
+                        "work_type": {
+                          "type": "string"
+                        },
+                        "task_id": {
+                          "type": "integer"
+                        },
+                        "result_summary": {
+                          "type": "string"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -349,11 +961,48 @@
         "operationId": "listPosts",
         "summary": "List blog posts",
         "parameters": [
-          { "$ref": "#/components/parameters/fields" },
-          { "$ref": "#/components/parameters/filter" },
-          { "$ref": "#/components/parameters/sort" },
-          { "$ref": "#/components/parameters/limit" },
-          { "$ref": "#/components/parameters/offset" }
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated field names to return (e.g. id,name,status)"
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Directus filter as JSON object (e.g. {\"status\":{\"_eq\":\"active\"}})"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sort field, prefix with - for descending (e.g. -date_created)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 25
+            },
+            "description": "Maximum items to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            },
+            "description": "Number of items to skip"
+          }
         ],
         "responses": {
           "200": {
@@ -365,7 +1014,30 @@
                   "properties": {
                     "data": {
                       "type": "array",
-                      "items": { "$ref": "#/components/schemas/Post" }
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "slug": {
+                            "type": "string"
+                          },
+                          "content": {
+                            "type": "string"
+                          },
+                          "date_created": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -381,7 +1053,26 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PostInput" }
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "slug": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "title"
+                ]
+              }
             }
           }
         },
@@ -393,7 +1084,30 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": { "$ref": "#/components/schemas/Post" }
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "slug": {
+                          "type": "string"
+                        },
+                        "content": {
+                          "type": "string"
+                        },
+                        "date_created": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -407,8 +1121,23 @@
         "operationId": "getPost",
         "summary": "Get post by ID",
         "parameters": [
-          { "$ref": "#/components/parameters/itemId" },
-          { "$ref": "#/components/parameters/fields" }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Item ID"
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated field names to return (e.g. id,name,status)"
+          }
         ],
         "responses": {
           "200": {
@@ -418,7 +1147,30 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": { "$ref": "#/components/schemas/Post" }
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "slug": {
+                          "type": "string"
+                        },
+                        "content": {
+                          "type": "string"
+                        },
+                        "date_created": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -430,13 +1182,40 @@
         "operationId": "updatePost",
         "summary": "Update a blog post",
         "parameters": [
-          { "$ref": "#/components/parameters/itemId" }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Item ID"
+          }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/PostInput" }
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "slug": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "title"
+                ]
+              }
             }
           }
         },
@@ -448,7 +1227,30 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": { "$ref": "#/components/schemas/Post" }
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "integer"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "slug": {
+                          "type": "string"
+                        },
+                        "content": {
+                          "type": "string"
+                        },
+                        "date_created": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -463,11 +1265,48 @@
         "summary": "List pages",
         "description": "List website pages with optional filtering.",
         "parameters": [
-          { "$ref": "#/components/parameters/fields" },
-          { "$ref": "#/components/parameters/filter" },
-          { "$ref": "#/components/parameters/sort" },
-          { "$ref": "#/components/parameters/limit" },
-          { "$ref": "#/components/parameters/offset" }
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated field names to return (e.g. id,name,status)"
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Directus filter as JSON object (e.g. {\"status\":{\"_eq\":\"active\"}})"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Sort field, prefix with - for descending (e.g. -date_created)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 25
+            },
+            "description": "Maximum items to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            },
+            "description": "Number of items to skip"
+          }
         ],
         "responses": {
           "200": {
@@ -479,7 +1318,37 @@
                   "properties": {
                     "data": {
                       "type": "array",
-                      "items": { "$ref": "#/components/schemas/Page" }
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "permalink": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "blocks": {
+                            "type": "array",
+                            "items": {
+                              "type": "object"
+                            }
+                          },
+                          "date_created": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "date_updated": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -495,9 +1364,31 @@
         "summary": "List navigation menus",
         "description": "List navigation menus (main, footer).",
         "parameters": [
-          { "$ref": "#/components/parameters/fields" },
-          { "$ref": "#/components/parameters/filter" },
-          { "$ref": "#/components/parameters/limit" }
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated field names to return (e.g. id,name,status)"
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Directus filter as JSON object (e.g. {\"status\":{\"_eq\":\"active\"}})"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 25
+            },
+            "description": "Maximum items to return"
+          }
         ],
         "responses": {
           "200": {
@@ -509,7 +1400,23 @@
                   "properties": {
                     "data": {
                       "type": "array",
-                      "items": { "$ref": "#/components/schemas/Navigation" }
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "type": "object"
+                            }
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -525,7 +1432,14 @@
         "summary": "List global settings",
         "description": "List global site settings (branding, SEO, social links).",
         "parameters": [
-          { "$ref": "#/components/parameters/fields" }
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated field names to return (e.g. id,name,status)"
+          }
         ],
         "responses": {
           "200": {
@@ -537,7 +1451,35 @@
                   "properties": {
                     "data": {
                       "type": "array",
-                      "items": { "$ref": "#/components/schemas/Globals" }
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "logo": {
+                            "type": "string"
+                          },
+                          "social_links": {
+                            "type": "array",
+                            "items": {
+                              "type": "object"
+                            }
+                          },
+                          "og_image": {
+                            "type": "string"
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -555,183 +1497,6 @@
         "in": "header",
         "name": "X-API-Key",
         "description": "OPS Proxy API key (same key as Agent Data)"
-      }
-    },
-    "parameters": {
-      "itemId": {
-        "name": "id",
-        "in": "path",
-        "required": true,
-        "schema": { "type": "integer" },
-        "description": "Item ID"
-      },
-      "fields": {
-        "name": "fields",
-        "in": "query",
-        "schema": { "type": "string" },
-        "description": "Comma-separated field names to return (e.g. id,name,status)"
-      },
-      "filter": {
-        "name": "filter",
-        "in": "query",
-        "schema": { "type": "string" },
-        "description": "Directus filter as JSON object (e.g. {\"status\":{\"_eq\":\"active\"}})"
-      },
-      "sort": {
-        "name": "sort",
-        "in": "query",
-        "schema": { "type": "string" },
-        "description": "Sort field, prefix with - for descending (e.g. -date_created)"
-      },
-      "limit": {
-        "name": "limit",
-        "in": "query",
-        "schema": { "type": "integer", "default": 25 },
-        "description": "Maximum items to return"
-      },
-      "offset": {
-        "name": "offset",
-        "in": "query",
-        "schema": { "type": "integer", "default": 0 },
-        "description": "Number of items to skip"
-      }
-    },
-    "schemas": {
-      "Task": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "integer" },
-          "name": { "type": "string" },
-          "status": { "type": "string" },
-          "priority": { "type": "string" },
-          "date_created": { "type": "string", "format": "date-time" }
-        }
-      },
-      "TaskInput": {
-        "type": "object",
-        "properties": {
-          "status": { "type": "string", "description": "Task status" },
-          "content_checklist": { "type": "string", "description": "Checklist content (markdown)" },
-          "content_plan": { "type": "string", "description": "Plan content" },
-          "content_reports": { "type": "string", "description": "Reports content" },
-          "content_prompt": { "type": "string", "description": "Prompt content" },
-          "content_targets": { "type": "string", "description": "Targets content" },
-          "content_rules": { "type": "string", "description": "Rules content" },
-          "content_test": { "type": "string", "description": "Test content" },
-          "content_verify": { "type": "string", "description": "Verify content" },
-          "description": { "type": "string", "description": "Task description" },
-          "checklist_version": { "type": "integer", "description": "Checklist version number" }
-        }
-      },
-      "TaskComment": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "integer" },
-          "task_id": { "type": "integer" },
-          "content": { "type": "string" },
-          "agent_type": { "type": "string" },
-          "tab_scope": { "type": "string" },
-          "action": { "type": "string" },
-          "date_created": { "type": "string", "format": "date-time" }
-        }
-      },
-      "TaskCommentInput": {
-        "type": "object",
-        "properties": {
-          "task_id": { "type": "integer" },
-          "content": { "type": "string" },
-          "agent_type": { "type": "string", "description": "Agent identifier: gpt, claude, codex, gemini, claude_code" },
-          "tab_scope": { "type": "string", "description": "Tab: discussion, checklist, reports, targets, rules, prompt, test, verify, plan" },
-          "action": { "type": "string" }
-        },
-        "required": ["task_id", "content"]
-      },
-      "AiTask": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "integer" },
-          "name": { "type": "string" },
-          "status": { "type": "string" },
-          "assigned_agent": { "type": "string" },
-          "work_type": { "type": "string" },
-          "task_id": { "type": "integer" },
-          "result_summary": { "type": "string" }
-        }
-      },
-      "AiTaskInput": {
-        "type": "object",
-        "properties": {
-          "status": { "type": "string" },
-          "result_summary": { "type": "string" },
-          "assigned_agent": { "type": "string" }
-        }
-      },
-      "AiTaskCreate": {
-        "type": "object",
-        "properties": {
-          "name": { "type": "string", "description": "Task name (required)" },
-          "status": { "type": "string", "enum": ["draft", "pending", "in_progress", "completed", "failed"], "default": "draft" },
-          "assigned_agent": { "type": "string", "description": "Agent to assign: claude_code, codex, gpt, gemini" },
-          "agent_role": { "type": "string", "description": "Agent role for this task" },
-          "prompt_payload": { "type": "string", "description": "Task instructions/prompt" },
-          "work_type": { "type": "string", "description": "Type of work" },
-          "task_id": { "type": "integer", "description": "Parent task reference" },
-          "max_retries": { "type": "integer", "description": "Maximum retry attempts", "default": 3 }
-        },
-        "required": ["name", "assigned_agent", "prompt_payload"]
-      },
-      "Post": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "integer" },
-          "title": { "type": "string" },
-          "status": { "type": "string" },
-          "slug": { "type": "string" },
-          "content": { "type": "string" },
-          "date_created": { "type": "string", "format": "date-time" }
-        }
-      },
-      "PostInput": {
-        "type": "object",
-        "properties": {
-          "title": { "type": "string" },
-          "status": { "type": "string" },
-          "slug": { "type": "string" },
-          "content": { "type": "string" }
-        },
-        "required": ["title"]
-      },
-      "Page": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "integer" },
-          "title": { "type": "string" },
-          "permalink": { "type": "string" },
-          "status": { "type": "string" },
-          "blocks": { "type": "array", "items": { "type": "object" } },
-          "date_created": { "type": "string", "format": "date-time" },
-          "date_updated": { "type": "string", "format": "date-time" }
-        }
-      },
-      "Navigation": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "integer" },
-          "title": { "type": "string" },
-          "items": { "type": "array", "items": { "type": "object" } }
-        }
-      },
-      "Globals": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "integer" },
-          "title": { "type": "string" },
-          "description": { "type": "string" },
-          "url": { "type": "string" },
-          "logo": { "type": "string" },
-          "social_links": { "type": "array", "items": { "type": "object" } },
-          "og_image": { "type": "string" }
-        }
       }
     }
   }
