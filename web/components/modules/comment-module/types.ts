@@ -40,6 +40,8 @@ export interface CommentModuleProps {
 	tabs?: TabDefinition[];
 	/** Default active tab key when tabs are provided */
 	defaultTab?: string;
+	/** Show 3-tier checkpoint panel above the thread */
+	showCheckpoints?: boolean;
 }
 
 /** Agent display config for chat-style rendering */

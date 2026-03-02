@@ -137,7 +137,7 @@ const firstWorkflowId = computed(() => workflows.value?.[0]?.id);
 			/>
 
 			<!-- Live CommentModule -->
-			<ModulesCommentModule :task-id="mod.id" title="Module Discussion" />
+			<ModulesCommentModule :task-id="mod.id" title="Module Discussion" show-checkpoints />
 		</div>
 	</div>
 </template>
