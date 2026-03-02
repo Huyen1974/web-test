@@ -610,10 +610,16 @@
       "TaskInput": {
         "type": "object",
         "properties": {
-          "content_checklist": { "type": "string", "description": "Checklist content" },
-          "content_brief": { "type": "string", "description": "Brief/summary" },
-          "content_requirements": { "type": "string", "description": "Requirements" },
           "status": { "type": "string", "description": "Task status" },
+          "content_checklist": { "type": "string", "description": "Checklist content (markdown)" },
+          "content_plan": { "type": "string", "description": "Plan content" },
+          "content_reports": { "type": "string", "description": "Reports content" },
+          "content_prompt": { "type": "string", "description": "Prompt content" },
+          "content_targets": { "type": "string", "description": "Targets content" },
+          "content_rules": { "type": "string", "description": "Rules content" },
+          "content_test": { "type": "string", "description": "Test content" },
+          "content_verify": { "type": "string", "description": "Verify content" },
+          "description": { "type": "string", "description": "Task description" },
           "checklist_version": { "type": "integer", "description": "Checklist version number" }
         }
       },
@@ -663,14 +669,14 @@
       "AiTaskCreate": {
         "type": "object",
         "properties": {
-          "name": { "type": "string", "description": "Task name" },
+          "name": { "type": "string", "description": "Task name (required)" },
           "status": { "type": "string", "enum": ["draft", "pending", "in_progress", "completed", "failed"], "default": "draft" },
           "assigned_agent": { "type": "string", "description": "Agent to assign: claude_code, codex, gpt, gemini" },
+          "agent_role": { "type": "string", "description": "Agent role for this task" },
           "prompt_payload": { "type": "string", "description": "Task instructions/prompt" },
-          "priority": { "type": "string", "enum": ["low", "normal", "high", "urgent"], "default": "normal" },
+          "work_type": { "type": "string", "description": "Type of work" },
           "task_id": { "type": "integer", "description": "Parent task reference" },
-          "source_agent": { "type": "string", "description": "Agent creating this task" },
-          "expected_output": { "type": "string", "description": "Description of expected result" }
+          "max_retries": { "type": "integer", "description": "Maximum retry attempts", "default": 3 }
         },
         "required": ["name", "assigned_agent", "prompt_payload"]
       },
