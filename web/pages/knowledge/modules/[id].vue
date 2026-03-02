@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { readItem } from '@directus/sdk';
+import { readItem, readItems } from '@directus/sdk';
 import type { Task, TaskStatus, TaskPriority } from '~/types/tasks';
+import type { Workflow } from '~/types/workflows';
 import { TASK_STATUS_META, TASK_PRIORITY_META } from '~/types/tasks';
 
 const route = useRoute();
@@ -29,6 +30,22 @@ function statusMeta(status: string) {
 function priorityMeta(priority: string) {
 	return TASK_PRIORITY_META[priority as TaskPriority] || { label: priority, color: 'gray' };
 }
+
+// Load workflows linked to this module (by task_id)
+const { data: workflows } = await useAsyncData(
+	`module-${moduleId}-workflows`,
+	async () => {
+		return await useDirectus<Workflow[]>(
+			readItems('workflows', {
+				filter: { task_id: { _eq: moduleId } },
+				fields: ['id', 'title', 'status'],
+				limit: 10,
+			}),
+		);
+	},
+);
+
+const firstWorkflowId = computed(() => workflows.value?.[0]?.id);
 </script>
 
 <template>
@@ -112,6 +129,12 @@ function priorityMeta(priority: string) {
 					View full task detail &rarr;
 				</NuxtLink>
 			</div>
+
+			<!-- Workflow Viewer (if linked workflows exist) -->
+			<ModulesWorkflowModuleWorkflowViewer
+				v-if="firstWorkflowId"
+				:workflow-id="firstWorkflowId"
+			/>
 
 			<!-- Live CommentModule -->
 			<ModulesCommentModule :task-id="mod.id" title="Module Discussion" />

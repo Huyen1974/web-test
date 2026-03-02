@@ -10,3 +10,4 @@ export type * from './knowledge-documents';
 export type * from './schema';
 export type * from './agent-views';
 export type * from './tasks';
+export type * from './workflows';

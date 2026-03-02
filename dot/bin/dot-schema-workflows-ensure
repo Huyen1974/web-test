@@ -1,0 +1,358 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-schema-workflows-ensure - Ensure workflows collection in Directus
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-03-03): Initial version for M-002 WorkflowModule
+#     - workflows: 7 fields (title, description, bpmn_xml, status, task_id, version, etc.)
+#     - Relation: task_id M2O -> tasks (SET NULL on delete)
+#     - Idempotent: checks existence before create, patches missing fields
+#     - Based on dot-schema-tasks-ensure pattern
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOT_AUTH="${SCRIPT_DIR}/dot-auth"
+
+# Source environment configuration
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+COLLECTION="workflows"
+
+# Logging
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_skip() { echo "[SKIP] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+require_cmds() {
+  for cmd in curl jq; do
+    command -v "$cmd" >/dev/null 2>&1 || { log_err "Missing required command: $cmd"; exit 1; }
+  done
+}
+
+api_request() {
+  local method="$1" url="$2" data="${3-}"
+  if [[ -n "${data-}" ]]; then
+    curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "$data" -w "\n%{http_code}"
+  else
+    curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -w "\n%{http_code}"
+  fi
+}
+
+# Required fields list (for verification)
+REQUIRED_FIELDS=(title description bpmn_xml status task_id version user_created date_created date_updated)
+
+field_payload() {
+  case "$1" in
+    title)
+      cat <<'JSON'
+{"field":"title","type":"string","meta":{"required":true,"interface":"input","width":"full","note":"Workflow name"},"schema":{"is_nullable":false}}
+JSON
+      ;;
+    description)
+      cat <<'JSON'
+{"field":"description","type":"text","meta":{"required":false,"interface":"input-multiline","width":"full","note":"Workflow description"},"schema":{"is_nullable":true}}
+JSON
+      ;;
+    bpmn_xml)
+      cat <<'JSON'
+{"field":"bpmn_xml","type":"text","meta":{"required":true,"interface":"input-code","options":{"language":"xml"},"width":"full","note":"BPMN 2.0 XML content"},"schema":{"is_nullable":false}}
+JSON
+      ;;
+    status)
+      cat <<'JSON'
+{"field":"status","type":"string","meta":{"required":true,"interface":"select-dropdown","options":{"choices":[{"text":"Draft","value":"draft"},{"text":"Active","value":"active"},{"text":"Archived","value":"archived"}]},"width":"half","note":"Workflow status"},"schema":{"is_nullable":false,"default_value":"draft"}}
+JSON
+      ;;
+    task_id)
+      cat <<'JSON'
+{"field":"task_id","type":"integer","meta":{"required":false,"interface":"select-dropdown-m2o","special":["m2o"],"width":"half","note":"FK -> tasks"},"schema":{"is_nullable":true}}
+JSON
+      ;;
+    version)
+      cat <<'JSON'
+{"field":"version","type":"integer","meta":{"required":true,"interface":"input","width":"half","note":"Version counter"},"schema":{"is_nullable":false,"default_value":1}}
+JSON
+      ;;
+    user_created)
+      cat <<'JSON'
+{"field":"user_created","type":"uuid","meta":{"interface":"select-dropdown-m2o","special":["user-created"],"readonly":true,"hidden":true},"schema":{"foreign_key_table":"directus_users","foreign_key_column":"id"}}
+JSON
+      ;;
+    date_created)
+      cat <<'JSON'
+{"field":"date_created","type":"timestamp","meta":{"interface":"datetime","special":["date-created"],"readonly":true,"width":"half"},"schema":{"is_nullable":false}}
+JSON
+      ;;
+    date_updated)
+      cat <<'JSON'
+{"field":"date_updated","type":"timestamp","meta":{"interface":"datetime","special":["date-updated"],"readonly":true,"width":"half"},"schema":{"is_nullable":true}}
+JSON
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+collection_exists() {
+  local resp body code
+  resp=$(api_request GET "${BASE_URL}/collections/${COLLECTION}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+  [[ "$code" == "200" ]]
+}
+
+field_exists() {
+  local field_name="$1"
+  local resp body code
+  resp=$(api_request GET "${BASE_URL}/fields/${COLLECTION}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+  if [[ "$code" == "200" ]]; then
+    echo "$body" | jq -e --arg field "$field_name" '.data[]? | select(.field == $field)' >/dev/null 2>&1
+    return $?
+  fi
+  return 1
+}
+
+create_collection() {
+  local payload
+  payload=$(jq -nc \
+    --arg collection "$COLLECTION" \
+    '{
+      collection: $collection,
+      schema: {},
+      meta: {
+        collection: $collection,
+        icon: "account_tree",
+        note: "BPMN 2.0 Workflow definitions for M-002 WorkflowModule - Created by DOT v1.0.0",
+        display_template: "{{title}} ({{status}})",
+        sort_field: "date_created"
+      }
+    }')
+
+  log_info "Creating collection ${COLLECTION}"
+  local resp body code
+  resp=$(api_request POST "${BASE_URL}/collections" "$payload")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to create collection ${COLLECTION} (HTTP $code)"
+    echo "$body" | head -c 300 >&2
+    exit 1
+  fi
+  log_ok "Collection ${COLLECTION} created"
+}
+
+create_field() {
+  local field_name="$1"
+  local payload resp body code
+  payload=$(field_payload "$field_name")
+
+  log_info "Creating field ${COLLECTION}.${field_name}"
+  resp=$(api_request POST "${BASE_URL}/fields/${COLLECTION}" "$payload")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to create field ${COLLECTION}.${field_name} (HTTP $code)"
+    echo "$body" | head -c 200 >&2
+    exit 1
+  fi
+  log_ok "Field ${COLLECTION}.${field_name} created"
+}
+
+setup_relations() {
+  log_info "Setting up relations..."
+
+  # workflows.task_id -> tasks (SET NULL on delete)
+  local relation_payload
+  relation_payload=$(jq -nc '{
+    collection: "workflows",
+    field: "task_id",
+    related_collection: "tasks",
+    meta: {
+      one_field: "workflows",
+      sort_field: null,
+      one_deselect_action: "nullify"
+    },
+    schema: {
+      on_delete: "SET NULL"
+    }
+  }')
+
+  local resp code
+  resp=$(api_request POST "${BASE_URL}/relations" "$relation_payload")
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" == "200" ]]; then
+    log_ok "Relation workflows.task_id -> tasks created (SET NULL)"
+  elif [[ "$code" == "400" ]]; then
+    log_skip "Relation workflows.task_id -> tasks already exists"
+  else
+    log_warn "Could not create task_id relation (HTTP $code)"
+  fi
+}
+
+verify_fields() {
+  local resp body code missing=()
+  resp=$(api_request GET "${BASE_URL}/fields/${COLLECTION}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to list fields for ${COLLECTION} (HTTP $code)"
+    exit 1
+  fi
+
+  local field_count
+  field_count=$(echo "$body" | jq '.data | length')
+
+  for field in "${REQUIRED_FIELDS[@]}"; do
+    if ! echo "$body" | jq -e --arg field "$field" '.data[]? | select(.field == $field)' >/dev/null 2>&1; then
+      missing+=("$field")
+    fi
+  done
+
+  if [[ "${#missing[@]}" -gt 0 ]]; then
+    log_err "Missing required fields: ${missing[*]}"
+    exit 1
+  fi
+
+  log_ok "${COLLECTION}: All required fields present (${field_count} total)"
+}
+
+show_help() {
+  cat << EOF
+dot-schema-workflows-ensure v${VERSION} - Ensure workflows collection
+
+Usage:
+  dot-schema-workflows-ensure [options]
+
+Options:
+  --local       Use local development environment
+  --cloud       Use cloud/production environment (default)
+  --dry-run     Show what would be done without making changes
+  --help, -h    Show this help message
+
+Collection: workflows (9 fields)
+  - title          Workflow name (required)
+  - description    Description (nullable)
+  - bpmn_xml       BPMN 2.0 XML content (required)
+  - status         draft|active|archived (default: draft)
+  - task_id        M2O -> tasks (SET NULL)
+  - version        Version counter (default: 1)
+  - user_created   Auto: creator user
+  - date_created   Auto: creation timestamp
+  - date_updated   Auto: update timestamp
+
+EOF
+  show_environment_help
+}
+
+main() {
+  local DRY_RUN=false
+
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h) show_help; exit 0 ;;
+      --dry-run) DRY_RUN=true ;;
+    esac
+  done
+
+  require_cmds
+  init_environment "$@"
+  BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: Schema Workflows Ensure v${VERSION}"
+  echo "========================================="
+  print_environment_banner "$@"
+  echo "Ensuring workflows collection for M-002 WorkflowModule"
+  echo ""
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log_warn "DRY RUN MODE - No changes will be made"
+    echo ""
+  fi
+
+  # Authentication
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    if [[ ! -f "$DOT_AUTH" ]]; then
+      log_err "dot-auth not found at ${DOT_AUTH}"
+      exit 1
+    fi
+    log_info "Authenticating with Directus..."
+    source "$DOT_AUTH" "$@"
+  fi
+
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "DOT_TOKEN is empty after authentication"
+    exit 1
+  fi
+
+  # === COLLECTION: workflows ===
+  echo ""
+  echo "--- Collection: ${COLLECTION} ---"
+
+  if collection_exists; then
+    log_skip "Collection '${COLLECTION}' already exists"
+  else
+    if [[ "$DRY_RUN" == "true" ]]; then
+      log_info "Would create collection '${COLLECTION}'"
+    else
+      create_collection
+    fi
+  fi
+
+  # === FIELDS ===
+  log_info "Ensuring required fields..."
+  for field in "${REQUIRED_FIELDS[@]}"; do
+    if field_exists "$field"; then
+      log_skip "Field ${COLLECTION}.${field} already exists"
+    else
+      if [[ "$DRY_RUN" == "true" ]]; then
+        log_info "Would create field ${COLLECTION}.${field}"
+      else
+        create_field "$field"
+      fi
+    fi
+  done
+
+  # === RELATIONS ===
+  echo ""
+  if [[ "$DRY_RUN" != "true" ]]; then
+    setup_relations
+  else
+    log_info "Would create relation workflows.task_id -> tasks"
+  fi
+
+  # === VERIFICATION ===
+  echo ""
+  if [[ "$DRY_RUN" != "true" ]]; then
+    log_info "Running final verification..."
+    if ! collection_exists; then
+      log_err "Collection ${COLLECTION} missing after ensure"
+      exit 1
+    fi
+    verify_fields
+  fi
+
+  log_ok "Collection workflows ready"
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Schema Workflows Ensure - COMPLETE"
+  echo "========================================="
+}
+
+main "$@"
