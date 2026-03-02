@@ -74,6 +74,8 @@ export async function createTaskComment(data: {
 	agent_type: string;
 	content: string;
 	action?: string;
+	workflow_id?: number;
+	bpmn_element_id?: string;
 }) {
 	return await useDirectus<TaskComment>(createItem('task_comments', data));
 }

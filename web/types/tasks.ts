@@ -88,6 +88,8 @@ export interface TaskComment {
 	agent_type: AgentType;
 	content: string;
 	action?: CommentAction;
+	workflow_id?: number;
+	bpmn_element_id?: string;
 	user_created?: string | User;
 	date_created?: string;
 }

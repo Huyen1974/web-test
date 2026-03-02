@@ -60,6 +60,8 @@ async function handleSubmit(payload: { agent_type: AgentType; content: string; a
 function selectTab(key: string) {
 	activeTab.value = key;
 }
+
+defineExpose({ refresh });
 </script>
 
 <template>

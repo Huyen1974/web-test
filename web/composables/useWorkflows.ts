@@ -3,7 +3,7 @@
  * Provides data access layer for workflow operations via Directus SDK
  */
 
-import { readItems, readItem } from '@directus/sdk';
+import { readItems, readItem, updateItem } from '@directus/sdk';
 import type { Workflow } from '~/types/workflows';
 
 /**
@@ -38,6 +38,15 @@ export async function useWorkflowsList(taskId?: number | string) {
 	}
 
 	return await useDirectus<Workflow[]>(readItems('workflows', params));
+}
+
+/**
+ * Save workflow BPMN XML back to Directus
+ */
+export async function saveWorkflow(id: number | string, bpmnXml: string) {
+	return await useDirectus<Workflow>(
+		updateItem('workflows', id, { bpmn_xml: bpmnXml }),
+	);
 }
 
 /**
