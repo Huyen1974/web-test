@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { readItems } from '@directus/sdk';
 import { useDebounceFn } from '@vueuse/shared';
-import type { WorkflowLevel, WorkflowStatus } from '~/types/workflows';
-import { useWorkflowRegistry } from '~/composables/useWorkflows';
+import type { Workflow, WorkflowLevel, WorkflowStatus } from '~/types/workflows';
 
 const props = withDefaults(
 	defineProps<{
@@ -43,6 +43,15 @@ watch(
 	}, 300),
 );
 
+type WorkflowRegistryItem = Workflow & {
+	stepCount: number;
+};
+
+type WorkflowStepCountRow = {
+	id: number;
+	workflow_id: number;
+};
+
 const requestKey = computed(() =>
 	[
 		'workflow-registry',
@@ -61,14 +70,59 @@ const {
 	refresh,
 } = await useAsyncData(
 	() => requestKey.value,
-	async () =>
-		useWorkflowRegistry({
-			page: props.page,
-			pageSize: props.pageSize,
-			searchQuery: props.searchQuery,
-			filterStatus: props.filterStatus,
-			filterLevel: props.filterLevel,
-		}),
+	async () => {
+		const filter: Record<string, any> = {};
+
+		if (props.filterStatus) {
+			filter.status = { _eq: props.filterStatus };
+		}
+
+		if (props.filterLevel !== null && props.filterLevel !== '') {
+			filter.level = { _eq: props.filterLevel };
+		}
+
+		const limit = props.pageSize + 1;
+		const offset = (props.page - 1) * props.pageSize;
+
+		const workflows = await useDirectus<Workflow[]>(
+			readItems('workflows', {
+				fields: ['id', 'process_code', 'title', 'description', 'sort', 'level', 'status', 'parent_workflow_id'],
+				filter: Object.keys(filter).length ? filter : undefined,
+				search: props.searchQuery?.trim() || undefined,
+				sort: ['sort', 'title', 'id'],
+				limit,
+				offset,
+			}),
+		);
+
+		const hasNextPage = workflows.length > props.pageSize;
+		const pagedItems = workflows.slice(0, props.pageSize);
+		const workflowIds = pagedItems.map((workflow) => workflow.id);
+
+		let stepCounts: WorkflowStepCountRow[] = [];
+		if (workflowIds.length) {
+			stepCounts = await useDirectus<WorkflowStepCountRow[]>(
+				readItems('workflow_steps', {
+					filter: { workflow_id: { _in: workflowIds } },
+					fields: ['id', 'workflow_id'],
+					limit: -1,
+				}),
+			);
+		}
+
+		const stepCountByWorkflow = stepCounts.reduce<Record<number, number>>((counts, row) => {
+			counts[row.workflow_id] = (counts[row.workflow_id] || 0) + 1;
+			return counts;
+		}, {});
+
+		return {
+			items: pagedItems.map((workflow) => ({
+				...workflow,
+				stepCount: stepCountByWorkflow[workflow.id] || 0,
+			})) as WorkflowRegistryItem[],
+			hasNextPage,
+		};
+	},
 	{
 		watch: [
 			() => props.page,

@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { readItems } from '@directus/sdk';
 import type { WorkflowActorType, WorkflowStep, WorkflowStepRelation, WorkflowStepType } from '~/types/workflow-dsl';
-import { useWorkflowMatrix } from '~/composables/useWorkflows';
 
 const props = defineProps<{
 	workflowId: number;
@@ -19,7 +19,42 @@ const {
 	refresh,
 } = await useAsyncData(
 	() => requestKey.value,
-	async () => useWorkflowMatrix(props.workflowId),
+	async () => {
+		const [steps, relations] = await Promise.all([
+			useDirectus<WorkflowStep[]>(
+				readItems('workflow_steps', {
+					filter: { workflow_id: { _eq: props.workflowId } },
+					fields: [
+						'id',
+						'workflow_id',
+						'step_key',
+						'step_type',
+						'title',
+						'description',
+						'actor_type',
+						'sort_order',
+						'trigger_in_text',
+						'trigger_out_text',
+					],
+					sort: ['sort_order', 'id'],
+					limit: -1,
+				}),
+			),
+			useDirectus<WorkflowStepRelation[]>(
+				readItems('workflow_step_relations', {
+					filter: { workflow_id: { _eq: props.workflowId } },
+					fields: ['id', 'workflow_id', 'from_step_id', 'to_step_id', 'relation_type', 'label', 'sort_order'],
+					sort: ['sort_order', 'id'],
+					limit: -1,
+				}),
+			),
+		]);
+
+		return {
+			steps,
+			relations,
+		};
+	},
 	{
 		watch: [() => props.workflowId],
 	},

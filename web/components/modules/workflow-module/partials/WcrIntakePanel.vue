@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { createItem, readItems } from '@directus/sdk';
 import type { WorkflowChangeRequest, WorkflowChangeType } from '~/types/workflow-dsl';
-import { createWorkflowChangeRequest, useWorkflowChangeRequests } from '~/composables/useWorkflows';
 
 const props = defineProps<{
 	workflowId: number;
@@ -26,7 +26,24 @@ const {
 	refresh,
 } = await useAsyncData(
 	() => requestKey.value,
-	async () => useWorkflowChangeRequests(props.workflowId),
+	async () =>
+		useDirectus<WorkflowChangeRequest[]>(
+			readItems('workflow_change_requests', {
+				filter: { workflow_id: { _eq: props.workflowId } },
+				fields: [
+					'id',
+					'workflow_id',
+					'change_type',
+					'title',
+					'description',
+					'position_context',
+					'status',
+					'date_created',
+				],
+				sort: ['-date_created', '-id'],
+				limit: 100,
+			}),
+		),
 	{
 		watch: [() => props.workflowId],
 	},
@@ -70,13 +87,16 @@ async function submitRequest() {
 
 	try {
 		const summary = description.value.trim().split('\n')[0].slice(0, 80);
-		const created = await createWorkflowChangeRequest({
+		const created = await useDirectus<WorkflowChangeRequest>(
+			createItem('workflow_change_requests', {
 			workflow_id: props.workflowId,
 			change_type: changeType.value,
 			title: summary || 'Workflow change request',
 			description: description.value.trim(),
 			position_context: positionContext.value.trim() || null,
-		});
+				status: 'draft',
+			}),
+		);
 
 		description.value = '';
 		positionContext.value = '';
