@@ -8,10 +8,10 @@ export type WorkflowStatus = 'draft' | 'active' | 'archived';
 export interface Workflow {
 	id: number;
 	title: string;
-	description?: string;
+	description?: string | null;
 	bpmn_xml: string;
 	status: WorkflowStatus;
-	task_id?: number;
+	task_id?: number | null;
 	version: number;
 	user_created?: string;
 	date_created?: string;

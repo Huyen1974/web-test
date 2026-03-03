@@ -30,6 +30,10 @@ import type { Inbox, HelpArticle, HelpCollection, HelpFeedback } from './help';
 import type { File, User } from './system';
 import type { ContentRequest, KnowledgeDocument } from './content-requests';
 import type { AgentView } from './agent-views';
+import type { Task, TaskComment } from './tasks';
+import type { TaskCheckpoint } from './checkpoints';
+import type { Workflow } from './workflows';
+import type { BlockLibraryItem, WorkflowChangeRequest, WorkflowStep, WorkflowStepRelation } from './workflow-dsl';
 import type {
 	Conversation,
 	Message,
@@ -153,6 +157,16 @@ export interface Schema {
 
 	// E1: GitHub-synced Documentation (WEB-20)
 	agent_views: AgentView[];
+
+	// M-001 / M-002
+	tasks: Task[];
+	task_comments: TaskComment[];
+	task_checkpoints: TaskCheckpoint[];
+	workflows: Workflow[];
+	workflow_steps: WorkflowStep[];
+	workflow_step_relations: WorkflowStepRelation[];
+	block_library: BlockLibraryItem[];
+	workflow_change_requests: WorkflowChangeRequest[];
 
 	// System
 	directus_files: File[];

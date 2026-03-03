@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Incomex OPS Proxy \u2014 Multi-Collection API",
-    "description": "CRUD API for AI agents (GPT, Claude) to manage 25 collections via the Directus-backed OPS proxy. Covers tasks, comments, AI tasks, posts, pages, help articles, navigation, contacts, organizations, feedbacks, content requests, categories, AI discussions, knowledge documents, and agent views. Rate-limited, API-key authenticated.",
+    "description": "CRUD API for AI agents (GPT, Claude) to manage Directus collections via the OPS proxy, including tasks, comments, workflow governance, content, knowledge, and support modules. Rate-limited and API-key authenticated.",
     "version": "2.0.0"
   },
   "servers": [
@@ -463,6 +463,319 @@
             "format": "date-time",
             "nullable": true,
             "description": "Last update timestamp"
+          }
+        }
+      },
+      "WorkflowStep": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Primary key"
+          },
+          "workflow_id": {
+            "type": "integer",
+            "description": "Linked workflow ID"
+          },
+          "step_key": {
+            "type": "string",
+            "description": "Unique step key within the workflow"
+          },
+          "step_type": {
+            "type": "string",
+            "enum": [
+              "action",
+              "agent_call",
+              "condition",
+              "wait_for_event",
+              "human_checkpoint",
+              "loop",
+              "parallel"
+            ],
+            "description": "Deterministic DSL step type"
+          },
+          "title": {
+            "type": "string",
+            "description": "Step title"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "description": "Optional step description"
+          },
+          "actor_type": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "user",
+              "claude_ai",
+              "claude_code",
+              "gemini",
+              "gpt",
+              "system",
+              "orchestrator",
+              "codex"
+            ],
+            "description": "Assigned actor for agent or human steps"
+          },
+          "config": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true,
+            "description": "Structured config for the step type"
+          },
+          "position_x": {
+            "type": "number",
+            "description": "Canvas X position"
+          },
+          "position_y": {
+            "type": "number",
+            "description": "Canvas Y position"
+          },
+          "block_id": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Optional source block from block_library"
+          },
+          "sort_order": {
+            "type": "integer",
+            "description": "Ordering index"
+          },
+          "date_created": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp"
+          },
+          "date_updated": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Last update timestamp"
+          }
+        }
+      },
+      "WorkflowStepRelation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Primary key"
+          },
+          "workflow_id": {
+            "type": "integer",
+            "description": "Linked workflow ID"
+          },
+          "from_step_id": {
+            "type": "integer",
+            "description": "Source workflow_step ID"
+          },
+          "to_step_id": {
+            "type": "integer",
+            "description": "Target workflow_step ID"
+          },
+          "relation_type": {
+            "type": "string",
+            "enum": [
+              "sequence",
+              "conditional",
+              "parallel_fork",
+              "parallel_join",
+              "loop_back"
+            ],
+            "description": "DSL relation type"
+          },
+          "condition_expression": {
+            "type": "string",
+            "nullable": true,
+            "description": "Condition expression for branching relations"
+          },
+          "label": {
+            "type": "string",
+            "nullable": true,
+            "description": "Optional relation label"
+          },
+          "sort_order": {
+            "type": "integer",
+            "description": "Ordering index"
+          }
+        }
+      },
+      "BlockLibraryItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Primary key"
+          },
+          "block_key": {
+            "type": "string",
+            "description": "Unique block key"
+          },
+          "title": {
+            "type": "string",
+            "description": "Block title"
+          },
+          "description": {
+            "type": "string",
+            "description": "Block description"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "review",
+              "approval",
+              "dispatch",
+              "validation",
+              "notification",
+              "custom"
+            ],
+            "description": "Block category"
+          },
+          "template_steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "description": "Template workflow steps"
+          },
+          "template_relations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "description": "Template workflow relations"
+          },
+          "input_params": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Runtime input parameters"
+          },
+          "version": {
+            "type": "integer",
+            "description": "Block version"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "active",
+              "deprecated"
+            ],
+            "description": "Lifecycle status"
+          },
+          "date_created": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp"
+          }
+        }
+      },
+      "WorkflowChangeRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Primary key"
+          },
+          "workflow_id": {
+            "type": "integer",
+            "description": "Linked workflow ID"
+          },
+          "change_type": {
+            "type": "string",
+            "enum": [
+              "add_step",
+              "modify_step",
+              "remove_step",
+              "reorder",
+              "add_block",
+              "restructure"
+            ],
+            "description": "Requested workflow change type"
+          },
+          "title": {
+            "type": "string",
+            "description": "Change request title"
+          },
+          "description": {
+            "type": "string",
+            "description": "Change request description"
+          },
+          "position_context": {
+            "type": "string",
+            "nullable": true,
+            "description": "Human-readable insertion context"
+          },
+          "suggested_actor_type": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "user",
+              "claude_ai",
+              "claude_code",
+              "gemini",
+              "gpt",
+              "system",
+              "orchestrator",
+              "codex"
+            ],
+            "description": "Optional suggested actor"
+          },
+          "suggested_block_id": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Optional suggested block from block_library"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "ai_reviewing",
+              "needs_clarification",
+              "ready_for_approval",
+              "approved",
+              "rejected",
+              "applied"
+            ],
+            "description": "Workflow governance status"
+          },
+          "schema_warnings": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "description": "Integrity warnings generated by schema scan"
+          },
+          "dsl_diff": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true,
+            "description": "Preview/apply diff against workflow DSL"
+          },
+          "approved_by": {
+            "type": "string",
+            "nullable": true,
+            "description": "Approver identity"
+          },
+          "applied_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Apply timestamp"
+          },
+          "task_id": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Linked governance task"
+          },
+          "date_created": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp"
           }
         }
       },
@@ -4350,6 +4663,567 @@
                   "properties": {
                     "data": {
                       "$ref": "#/components/schemas/Workflow"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/workflow_steps": {
+      "get": {
+        "operationId": "listWorkflowSteps",
+        "summary": "List workflow DSL steps",
+        "tags": [
+          "Workflow DSL Steps"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/limit"
+          },
+          {
+            "$ref": "#/components/parameters/offset"
+          },
+          {
+            "$ref": "#/components/parameters/sort"
+          },
+          {
+            "$ref": "#/components/parameters/fields"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of workflow steps",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/WorkflowStep"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createWorkflowStep",
+        "summary": "Create a workflow DSL step",
+        "tags": [
+          "Workflow DSL Steps"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowStep"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created workflow step",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowStep"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/workflow_steps/{id}": {
+      "get": {
+        "operationId": "getWorkflowStep",
+        "summary": "Get a single workflow DSL step",
+        "tags": [
+          "Workflow DSL Steps"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/itemId"
+          },
+          {
+            "$ref": "#/components/parameters/fields"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Single workflow step",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowStep"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateWorkflowStep",
+        "summary": "Update a workflow DSL step",
+        "tags": [
+          "Workflow DSL Steps"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/itemId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowStep"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated workflow step",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowStep"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteWorkflowStep",
+        "summary": "Delete a workflow DSL step",
+        "tags": [
+          "Workflow DSL Steps"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/itemId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Workflow step deleted"
+          }
+        }
+      }
+    },
+    "/items/workflow_step_relations": {
+      "get": {
+        "operationId": "listWorkflowStepRelations",
+        "summary": "List workflow DSL relations",
+        "tags": [
+          "Workflow DSL Relations"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/limit"
+          },
+          {
+            "$ref": "#/components/parameters/offset"
+          },
+          {
+            "$ref": "#/components/parameters/sort"
+          },
+          {
+            "$ref": "#/components/parameters/fields"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of workflow step relations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/WorkflowStepRelation"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createWorkflowStepRelation",
+        "summary": "Create a workflow DSL relation",
+        "tags": [
+          "Workflow DSL Relations"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowStepRelation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created workflow step relation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowStepRelation"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/workflow_step_relations/{id}": {
+      "get": {
+        "operationId": "getWorkflowStepRelation",
+        "summary": "Get a single workflow DSL relation",
+        "tags": [
+          "Workflow DSL Relations"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/itemId"
+          },
+          {
+            "$ref": "#/components/parameters/fields"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Single workflow step relation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowStepRelation"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateWorkflowStepRelation",
+        "summary": "Update a workflow DSL relation",
+        "tags": [
+          "Workflow DSL Relations"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/itemId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowStepRelation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated workflow step relation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowStepRelation"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteWorkflowStepRelation",
+        "summary": "Delete a workflow DSL relation",
+        "tags": [
+          "Workflow DSL Relations"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/itemId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Workflow step relation deleted"
+          }
+        }
+      }
+    },
+    "/items/block_library": {
+      "get": {
+        "operationId": "listBlockLibrary",
+        "summary": "List workflow blocks",
+        "tags": [
+          "Workflow Blocks"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/limit"
+          },
+          {
+            "$ref": "#/components/parameters/offset"
+          },
+          {
+            "$ref": "#/components/parameters/sort"
+          },
+          {
+            "$ref": "#/components/parameters/fields"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of workflow blocks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/BlockLibraryItem"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/block_library/{id}": {
+      "get": {
+        "operationId": "getBlockLibraryItem",
+        "summary": "Get a single workflow block",
+        "tags": [
+          "Workflow Blocks"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/itemId"
+          },
+          {
+            "$ref": "#/components/parameters/fields"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Single workflow block",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BlockLibraryItem"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/workflow_change_requests": {
+      "get": {
+        "operationId": "listWorkflowChangeRequests",
+        "summary": "List workflow change requests",
+        "tags": [
+          "Workflow Change Requests"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/limit"
+          },
+          {
+            "$ref": "#/components/parameters/offset"
+          },
+          {
+            "$ref": "#/components/parameters/sort"
+          },
+          {
+            "$ref": "#/components/parameters/fields"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of workflow change requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/WorkflowChangeRequest"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createWorkflowChangeRequest",
+        "summary": "Create a workflow change request",
+        "tags": [
+          "Workflow Change Requests"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowChangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created workflow change request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowChangeRequest"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/workflow_change_requests/{id}": {
+      "get": {
+        "operationId": "getWorkflowChangeRequest",
+        "summary": "Get a single workflow change request",
+        "tags": [
+          "Workflow Change Requests"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/itemId"
+          },
+          {
+            "$ref": "#/components/parameters/fields"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Single workflow change request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowChangeRequest"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateWorkflowChangeRequest",
+        "summary": "Update a workflow change request",
+        "tags": [
+          "Workflow Change Requests"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/itemId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowChangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated workflow change request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowChangeRequest"
                     }
                   }
                 }

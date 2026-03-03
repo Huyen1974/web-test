@@ -28,7 +28,7 @@ const emit = defineEmits<{
 }>();
 
 const workflowIdRef = computed(() => props.workflowId);
-const { workflow, bpmnXml, loading, error, refresh } = useWorkflow(workflowIdRef);
+const { workflow, bpmnXml, dslAvailable, stepCount, loading, error } = useWorkflow(workflowIdRef);
 
 const containerRef = ref<HTMLDivElement>();
 const modelerError = ref<string>();
@@ -58,6 +58,7 @@ async function initModeler(xml: string) {
 		// Track changes + undo/redo state
 		const eventBus = modeler.get('eventBus');
 		const commandStack = modeler.get('commandStack');
+
 		eventBus.on('commandStack.changed', () => {
 			dirty.value = true;
 			canUndo.value = commandStack.canUndo();
@@ -67,11 +68,13 @@ async function initModeler(xml: string) {
 		// Detect text annotation additions
 		eventBus.on('shape.added', (event: any) => {
 			const element = event.element;
+
 			if (element.type === 'bpmn:TextAnnotation') {
 				// Defer to let BPMN modeler finalize the element
 				nextTick(() => {
 					const bo = element.businessObject;
 					const text = bo?.text || '';
+
 					if (text) {
 						emit('annotation-added', {
 							elementId: element.id,
@@ -86,9 +89,11 @@ async function initModeler(xml: string) {
 		// Also detect annotation text changes (user edits after creation)
 		eventBus.on('element.changed', (event: any) => {
 			const element = event.element;
+
 			if (element.type === 'bpmn:TextAnnotation') {
 				const bo = element.businessObject;
 				const text = bo?.text || '';
+
 				if (text) {
 					emit('annotation-added', {
 						elementId: element.id,
@@ -114,7 +119,15 @@ function handleRedo() {
 async function handleSave() {
 	if (!modeler || saving.value) return;
 
+	if (dslAvailable.value) {
+		modelerError.value =
+			'This workflow is governed by DSL. Submit a workflow change request instead of saving BPMN XML directly.';
+
+		return;
+	}
+
 	saving.value = true;
+
 	try {
 		const { xml } = await modeler.saveXML({ format: true });
 		await saveWorkflow(props.workflowId, xml);
@@ -168,14 +181,9 @@ onBeforeUnmount(() => {
 					>
 						Redo
 					</button>
-					<span
-						v-if="dirty"
-						class="text-xs text-amber-600 dark:text-amber-400"
-					>
-						Unsaved changes
-					</span>
+					<span v-if="dirty" class="text-xs text-amber-600 dark:text-amber-400">Unsaved changes</span>
 					<button
-						:disabled="!dirty || saving"
+						:disabled="dslAvailable || !dirty || saving"
 						class="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
 						@click="handleSave"
 					>
@@ -183,6 +191,10 @@ onBeforeUnmount(() => {
 					</button>
 				</div>
 			</div>
+			<p v-if="dslAvailable" class="mt-2 text-xs text-amber-600 dark:text-amber-400">
+				Workflow is running in DSL governance mode. {{ stepCount }} DSL steps loaded; BPMN edits are view-only until a
+				WCR is approved.
+			</p>
 		</div>
 
 		<!-- Loading -->

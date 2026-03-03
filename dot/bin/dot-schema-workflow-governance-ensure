@@ -1,0 +1,683 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-schema-workflow-governance-ensure - Ensure M-002 Phase 2A schema in Directus
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-03-03): Create workflow DSL + governance foundation
+#     - workflow_steps
+#     - workflow_step_relations
+#     - block_library
+#     - workflow_change_requests
+#     - AI Agent permissions
+#     - Optional block seed data
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOT_AUTH="${SCRIPT_DIR}/dot-auth"
+DOT_PERMISSION="${SCRIPT_DIR}/dot-permission-ensure"
+
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+
+log_info() { echo "[INFO] $1"; }
+log_ok() { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_skip() { echo "[SKIP] $1"; }
+log_err() { echo "[ERR]  $1" >&2; }
+
+require_cmds() {
+	for cmd in curl jq; do
+		command -v "$cmd" >/dev/null 2>&1 || { log_err "Missing required command: $cmd"; exit 1; }
+	done
+}
+
+api_request() {
+	local method="$1" url="$2" data="${3-}"
+	if [[ -n "${data-}" ]]; then
+		curl -sS --globoff -X "$method" "$url" \
+			-H "Authorization: Bearer $DOT_TOKEN" \
+			-H "Content-Type: application/json" \
+			-d "$data" -w "\n%{http_code}"
+	else
+		curl -sS --globoff -X "$method" "$url" \
+			-H "Authorization: Bearer $DOT_TOKEN" \
+			-w "\n%{http_code}"
+	fi
+}
+
+collection_exists() {
+	local collection="$1"
+	local resp code
+	resp=$(api_request GET "${BASE_URL}/collections/${collection}")
+	code="${resp##*$'\n'}"
+	[[ "$code" == "200" ]]
+}
+
+field_exists() {
+	local collection="$1" field="$2"
+	local resp body code
+	resp=$(api_request GET "${BASE_URL}/fields/${collection}")
+	body="${resp%$'\n'*}"
+	code="${resp##*$'\n'}"
+	[[ "$code" == "200" ]] || return 1
+	echo "$body" | jq -e --arg field "$field" '.data[]? | select(.field == $field)' >/dev/null 2>&1
+}
+
+create_collection() {
+	local collection="$1" icon="$2" note="$3" display_template="$4" sort_field="$5"
+	local payload
+	payload=$(jq -nc \
+		--arg collection "$collection" \
+		--arg icon "$icon" \
+		--arg note "$note" \
+		--arg display_template "$display_template" \
+		--arg sort_field "$sort_field" \
+		'{
+			collection: $collection,
+			schema: {},
+			meta: {
+				collection: $collection,
+				icon: $icon,
+				note: $note,
+				display_template: $display_template,
+				sort_field: $sort_field
+			}
+		}')
+
+	local resp body code
+	resp=$(api_request POST "${BASE_URL}/collections" "$payload")
+	body="${resp%$'\n'*}"
+	code="${resp##*$'\n'}"
+
+	if [[ "$code" != "200" ]]; then
+		log_err "Failed to create collection ${collection} (HTTP $code)"
+		echo "$body" | head -c 300 >&2
+		exit 1
+	fi
+
+	log_ok "Collection ${collection} created"
+}
+
+create_field() {
+	local collection="$1" field="$2"
+	local payload resp body code
+	payload=$(field_payload "$collection" "$field")
+
+	resp=$(api_request POST "${BASE_URL}/fields/${collection}" "$payload")
+	body="${resp%$'\n'*}"
+	code="${resp##*$'\n'}"
+
+	if [[ "$code" != "200" ]]; then
+		log_err "Failed to create field ${collection}.${field} (HTTP $code)"
+		echo "$body" | head -c 200 >&2
+		exit 1
+	fi
+
+	log_ok "Field ${collection}.${field} created"
+}
+
+ensure_relation() {
+	local label="$1" payload="$2"
+	local resp code
+	resp=$(api_request POST "${BASE_URL}/relations" "$payload")
+	code="${resp##*$'\n'}"
+
+	if [[ "$code" == "200" ]]; then
+		log_ok "Relation ${label} created"
+	elif [[ "$code" == "400" ]]; then
+		log_skip "Relation ${label} already exists"
+	else
+		log_warn "Relation ${label} returned HTTP $code"
+	fi
+}
+
+ensure_permission() {
+	local collection="$1" action="$2" fields="$3"
+	if [[ "$DRY_RUN" == "true" ]]; then
+		log_info "Would ensure AI Agent permission ${collection}.${action}"
+		return 0
+	fi
+
+	"$DOT_PERMISSION" "${ENV_ARGS[@]}" --policy ai-agent --collection "$collection" --action "$action" --fields "$fields"
+}
+
+field_payload() {
+	local collection="$1" field="$2"
+	case "${collection}.${field}" in
+		workflow_steps.workflow_id)
+			cat <<'JSON'
+{"field":"workflow_id","type":"integer","meta":{"required":true,"interface":"select-dropdown-m2o","special":["m2o"],"width":"half","note":"FK -> workflows (required)"},"schema":{"is_nullable":false}}
+JSON
+			;;
+		workflow_steps.step_key)
+			cat <<'JSON'
+{"field":"step_key","type":"string","meta":{"required":true,"interface":"input","width":"half","note":"Deterministic step key. Composite uniqueness enforced by WCR scanner per workflow."},"schema":{"is_nullable":false}}
+JSON
+			;;
+		workflow_steps.step_type)
+			cat <<'JSON'
+{"field":"step_type","type":"string","meta":{"required":true,"interface":"select-dropdown","options":{"choices":[{"text":"Action","value":"action"},{"text":"Agent Call","value":"agent_call"},{"text":"Condition","value":"condition"},{"text":"Wait For Event","value":"wait_for_event"},{"text":"Human Checkpoint","value":"human_checkpoint"},{"text":"Loop","value":"loop"},{"text":"Parallel","value":"parallel"}]},"width":"half","note":"Deterministic DSL step type"},"schema":{"is_nullable":false}}
+JSON
+			;;
+		workflow_steps.title)
+			cat <<'JSON'
+{"field":"title","type":"string","meta":{"required":true,"interface":"input","width":"full","note":"Step title"},"schema":{"is_nullable":false}}
+JSON
+			;;
+		workflow_steps.description)
+			cat <<'JSON'
+{"field":"description","type":"text","meta":{"required":false,"interface":"input-multiline","width":"full","note":"Optional step description"},"schema":{"is_nullable":true}}
+JSON
+			;;
+		workflow_steps.actor_type)
+			cat <<'JSON'
+{"field":"actor_type","type":"string","meta":{"required":false,"interface":"select-dropdown","options":{"choices":[{"text":"User","value":"user"},{"text":"Claude AI","value":"claude_ai"},{"text":"Claude Code","value":"claude_code"},{"text":"Gemini","value":"gemini"},{"text":"GPT","value":"gpt"},{"text":"System","value":"system"},{"text":"Orchestrator","value":"orchestrator"},{"text":"Codex","value":"codex"}]},"width":"half","note":"Actor assigned to this step when relevant"},"schema":{"is_nullable":true}}
+JSON
+			;;
+		workflow_steps.config)
+			cat <<'JSON'
+{"field":"config","type":"json","meta":{"required":false,"interface":"input-code","options":{"language":"json"},"width":"full","note":"Structured DSL config payload"},"schema":{"is_nullable":true}}
+JSON
+			;;
+		workflow_steps.position_x)
+			cat <<'JSON'
+{"field":"position_x","type":"float","meta":{"required":false,"interface":"input","width":"half","note":"Canvas X position"},"schema":{"is_nullable":true}}
+JSON
+			;;
+		workflow_steps.position_y)
+			cat <<'JSON'
+{"field":"position_y","type":"float","meta":{"required":false,"interface":"input","width":"half","note":"Canvas Y position"},"schema":{"is_nullable":true}}
+JSON
+			;;
+		workflow_steps.block_id)
+			cat <<'JSON'
+{"field":"block_id","type":"integer","meta":{"required":false,"interface":"select-dropdown-m2o","special":["m2o"],"width":"half","note":"Optional source block from block_library"},"schema":{"is_nullable":true}}
+JSON
+			;;
+		workflow_steps.sort_order)
+			cat <<'JSON'
+{"field":"sort_order","type":"integer","meta":{"required":false,"interface":"input","width":"half","note":"Deterministic ordering for DSL and rendering"},"schema":{"is_nullable":true}}
+JSON
+			;;
+		workflow_steps.date_created)
+			cat <<'JSON'
+{"field":"date_created","type":"timestamp","meta":{"interface":"datetime","special":["date-created"],"readonly":true,"width":"half"},"schema":{"is_nullable":false}}
+JSON
+			;;
+		workflow_steps.date_updated)
+			cat <<'JSON'
+{"field":"date_updated","type":"timestamp","meta":{"interface":"datetime","special":["date-updated"],"readonly":true,"width":"half"},"schema":{"is_nullable":true}}
+JSON
+			;;
+
+		workflow_step_relations.workflow_id)
+			cat <<'JSON'
+{"field":"workflow_id","type":"integer","meta":{"required":true,"interface":"select-dropdown-m2o","special":["m2o"],"width":"half","note":"FK -> workflows (required)"},"schema":{"is_nullable":false}}
+JSON
+			;;
+		workflow_step_relations.from_step_id)
+			cat <<'JSON'
+{"field":"from_step_id","type":"integer","meta":{"required":true,"interface":"select-dropdown-m2o","special":["m2o"],"width":"half","note":"FK -> workflow_steps (source)"},"schema":{"is_nullable":false}}
+JSON
+			;;
+		workflow_step_relations.to_step_id)
+			cat <<'JSON'
+{"field":"to_step_id","type":"integer","meta":{"required":true,"interface":"select-dropdown-m2o","special":["m2o"],"width":"half","note":"FK -> workflow_steps (target)"},"schema":{"is_nullable":false}}
+JSON
+			;;
+		workflow_step_relations.relation_type)
+			cat <<'JSON'
+{"field":"relation_type","type":"string","meta":{"required":true,"interface":"select-dropdown","options":{"choices":[{"text":"Sequence","value":"sequence"},{"text":"Conditional","value":"conditional"},{"text":"Parallel Fork","value":"parallel_fork"},{"text":"Parallel Join","value":"parallel_join"},{"text":"Loop Back","value":"loop_back"}]},"width":"half","note":"Deterministic relation type"},"schema":{"is_nullable":false}}
+JSON
+			;;
+		workflow_step_relations.condition_expression)
+			cat <<'JSON'
+{"field":"condition_expression","type":"string","meta":{"required":false,"interface":"input","width":"full","note":"Optional condition expression"},"schema":{"is_nullable":true}}
+JSON
+			;;
+		workflow_step_relations.label)
+			cat <<'JSON'
+{"field":"label","type":"string","meta":{"required":false,"interface":"input","width":"half","note":"Optional human label for the edge"},"schema":{"is_nullable":true}}
+JSON
+			;;
+		workflow_step_relations.sort_order)
+			cat <<'JSON'
+{"field":"sort_order","type":"integer","meta":{"required":false,"interface":"input","width":"half","note":"Deterministic ordering"},"schema":{"is_nullable":true}}
+JSON
+			;;
+
+		block_library.block_key)
+			cat <<'JSON'
+{"field":"block_key","type":"string","meta":{"required":true,"interface":"input","width":"half","note":"Unique stable key for this reusable block"},"schema":{"is_nullable":false,"is_unique":true}}
+JSON
+			;;
+		block_library.title)
+			cat <<'JSON'
+{"field":"title","type":"string","meta":{"required":true,"interface":"input","width":"full","note":"Block title"},"schema":{"is_nullable":false}}
+JSON
+			;;
+		block_library.description)
+			cat <<'JSON'
+{"field":"description","type":"text","meta":{"required":false,"interface":"input-multiline","width":"full","note":"Reusable block description"},"schema":{"is_nullable":true}}
+JSON
+			;;
+		block_library.category)
+			cat <<'JSON'
+{"field":"category","type":"string","meta":{"required":true,"interface":"select-dropdown","options":{"choices":[{"text":"Review","value":"review"},{"text":"Approval","value":"approval"},{"text":"Dispatch","value":"dispatch"},{"text":"Validation","value":"validation"},{"text":"Notification","value":"notification"},{"text":"Custom","value":"custom"}]},"width":"half","note":"Block category"},"schema":{"is_nullable":false}}
+JSON
+			;;
+		block_library.template_steps)
+			cat <<'JSON'
+{"field":"template_steps","type":"json","meta":{"required":true,"interface":"input-code","options":{"language":"json"},"width":"full","note":"Array of step templates"},"schema":{"is_nullable":false}}
+JSON
+			;;
+		block_library.template_relations)
+			cat <<'JSON'
+{"field":"template_relations","type":"json","meta":{"required":true,"interface":"input-code","options":{"language":"json"},"width":"full","note":"Array of relation templates"},"schema":{"is_nullable":false}}
+JSON
+			;;
+		block_library.input_params)
+			cat <<'JSON'
+{"field":"input_params","type":"json","meta":{"required":false,"interface":"input-code","options":{"language":"json"},"width":"full","note":"Parameter schema for block expansion"},"schema":{"is_nullable":true}}
+JSON
+			;;
+		block_library.version)
+			cat <<'JSON'
+{"field":"version","type":"integer","meta":{"required":true,"interface":"input","width":"half","note":"Block version"},"schema":{"is_nullable":false}}
+JSON
+			;;
+		block_library.status)
+			cat <<'JSON'
+{"field":"status","type":"string","meta":{"required":true,"interface":"select-dropdown","options":{"choices":[{"text":"Draft","value":"draft"},{"text":"Active","value":"active"},{"text":"Deprecated","value":"deprecated"}]},"width":"half","note":"Block lifecycle status"},"schema":{"is_nullable":false}}
+JSON
+			;;
+		block_library.date_created)
+			cat <<'JSON'
+{"field":"date_created","type":"timestamp","meta":{"interface":"datetime","special":["date-created"],"readonly":true,"width":"half"},"schema":{"is_nullable":false}}
+JSON
+			;;
+
+		workflow_change_requests.workflow_id)
+			cat <<'JSON'
+{"field":"workflow_id","type":"integer","meta":{"required":true,"interface":"select-dropdown-m2o","special":["m2o"],"width":"half","note":"FK -> workflows (required)"},"schema":{"is_nullable":false}}
+JSON
+			;;
+		workflow_change_requests.change_type)
+			cat <<'JSON'
+{"field":"change_type","type":"string","meta":{"required":true,"interface":"select-dropdown","options":{"choices":[{"text":"Add Step","value":"add_step"},{"text":"Modify Step","value":"modify_step"},{"text":"Remove Step","value":"remove_step"},{"text":"Reorder","value":"reorder"},{"text":"Add Block","value":"add_block"},{"text":"Restructure","value":"restructure"}]},"width":"half","note":"Requested governance change type"},"schema":{"is_nullable":false}}
+JSON
+			;;
+		workflow_change_requests.title)
+			cat <<'JSON'
+{"field":"title","type":"string","meta":{"required":true,"interface":"input","width":"full","note":"Short change title"},"schema":{"is_nullable":false}}
+JSON
+			;;
+		workflow_change_requests.description)
+			cat <<'JSON'
+{"field":"description","type":"text","meta":{"required":false,"interface":"input-multiline","width":"full","note":"Detailed change request description"},"schema":{"is_nullable":true}}
+JSON
+			;;
+		workflow_change_requests.position_context)
+			cat <<'JSON'
+{"field":"position_context","type":"string","meta":{"required":false,"interface":"input","width":"full","note":"Human context like after step X"},"schema":{"is_nullable":true}}
+JSON
+			;;
+		workflow_change_requests.suggested_actor_type)
+			cat <<'JSON'
+{"field":"suggested_actor_type","type":"string","meta":{"required":false,"interface":"select-dropdown","options":{"choices":[{"text":"User","value":"user"},{"text":"Claude AI","value":"claude_ai"},{"text":"Claude Code","value":"claude_code"},{"text":"Gemini","value":"gemini"},{"text":"GPT","value":"gpt"},{"text":"System","value":"system"},{"text":"Orchestrator","value":"orchestrator"},{"text":"Codex","value":"codex"}]},"width":"half","note":"Suggested actor for generated steps"},"schema":{"is_nullable":true}}
+JSON
+			;;
+		workflow_change_requests.suggested_block_id)
+			cat <<'JSON'
+{"field":"suggested_block_id","type":"integer","meta":{"required":false,"interface":"select-dropdown-m2o","special":["m2o"],"width":"half","note":"Optional source block from block_library"},"schema":{"is_nullable":true}}
+JSON
+			;;
+		workflow_change_requests.status)
+			cat <<'JSON'
+{"field":"status","type":"string","meta":{"required":true,"interface":"select-dropdown","options":{"choices":[{"text":"Draft","value":"draft"},{"text":"AI Reviewing","value":"ai_reviewing"},{"text":"Needs Clarification","value":"needs_clarification"},{"text":"Ready For Approval","value":"ready_for_approval"},{"text":"Approved","value":"approved"},{"text":"Rejected","value":"rejected"},{"text":"Applied","value":"applied"}]},"width":"half","note":"Governance status"},"schema":{"is_nullable":false,"default_value":"draft"}}
+JSON
+			;;
+		workflow_change_requests.schema_warnings)
+			cat <<'JSON'
+{"field":"schema_warnings","type":"json","meta":{"required":false,"interface":"input-code","options":{"language":"json"},"width":"full","note":"Integrity scan warnings"},"schema":{"is_nullable":true}}
+JSON
+			;;
+		workflow_change_requests.dsl_diff)
+			cat <<'JSON'
+{"field":"dsl_diff","type":"json","meta":{"required":false,"interface":"input-code","options":{"language":"json"},"width":"full","note":"Preview and apply payload for DSL changes"},"schema":{"is_nullable":true}}
+JSON
+			;;
+		workflow_change_requests.approved_by)
+			cat <<'JSON'
+{"field":"approved_by","type":"string","meta":{"required":false,"interface":"input","width":"half","note":"Approver identity"},"schema":{"is_nullable":true}}
+JSON
+			;;
+		workflow_change_requests.applied_at)
+			cat <<'JSON'
+{"field":"applied_at","type":"timestamp","meta":{"required":false,"interface":"datetime","width":"half","note":"Timestamp when DSL diff was applied"},"schema":{"is_nullable":true}}
+JSON
+			;;
+		workflow_change_requests.task_id)
+			cat <<'JSON'
+{"field":"task_id","type":"integer","meta":{"required":false,"interface":"select-dropdown-m2o","special":["m2o"],"width":"half","note":"Linked governance task"},"schema":{"is_nullable":true}}
+JSON
+			;;
+		workflow_change_requests.date_created)
+			cat <<'JSON'
+{"field":"date_created","type":"timestamp","meta":{"interface":"datetime","special":["date-created"],"readonly":true,"width":"half"},"schema":{"is_nullable":false}}
+JSON
+			;;
+		*)
+			log_err "Unknown field payload ${collection}.${field}"
+			exit 1
+			;;
+	esac
+}
+
+ensure_collection() {
+	local collection="$1" icon="$2" note="$3" display_template="$4" sort_field="$5"
+	shift 5
+	local fields=("$@")
+
+	echo ""
+	echo "--- Collection: ${collection} ---"
+
+	if collection_exists "$collection"; then
+		log_skip "Collection '${collection}' already exists"
+	else
+		if [[ "$DRY_RUN" == "true" ]]; then
+			log_info "Would create collection '${collection}'"
+		else
+			create_collection "$collection" "$icon" "$note" "$display_template" "$sort_field"
+		fi
+	fi
+
+	for field in "${fields[@]}"; do
+		if field_exists "$collection" "$field"; then
+			log_skip "Field ${collection}.${field} already exists"
+		else
+			if [[ "$DRY_RUN" == "true" ]]; then
+				log_info "Would create field ${collection}.${field}"
+			else
+				create_field "$collection" "$field"
+			fi
+		fi
+	done
+}
+
+ensure_permissions() {
+	local STEP_FIELDS='["workflow_id","step_key","step_type","title","description","actor_type","config","position_x","position_y","block_id","sort_order","date_created","date_updated"]'
+	local RELATION_FIELDS='["workflow_id","from_step_id","to_step_id","relation_type","condition_expression","label","sort_order"]'
+	local WCR_CREATE_FIELDS='["workflow_id","change_type","title","description","position_context","suggested_actor_type","suggested_block_id","status","schema_warnings","dsl_diff","approved_by","applied_at","task_id","date_created"]'
+	local WCR_UPDATE_FIELDS='["status","schema_warnings","dsl_diff"]'
+
+	echo ""
+	echo "--- Permissions: AI Agent ---"
+
+	ensure_permission "workflow_steps" "read" '["*"]'
+	ensure_permission "workflow_steps" "create" "$STEP_FIELDS"
+	ensure_permission "workflow_steps" "update" "$STEP_FIELDS"
+	ensure_permission "workflow_steps" "delete" '["id"]'
+
+	ensure_permission "workflow_step_relations" "read" '["*"]'
+	ensure_permission "workflow_step_relations" "create" "$RELATION_FIELDS"
+	ensure_permission "workflow_step_relations" "update" "$RELATION_FIELDS"
+	ensure_permission "workflow_step_relations" "delete" '["id"]'
+
+	ensure_permission "block_library" "read" '["*"]'
+
+	ensure_permission "workflow_change_requests" "read" '["*"]'
+	ensure_permission "workflow_change_requests" "create" "$WCR_CREATE_FIELDS"
+	ensure_permission "workflow_change_requests" "update" "$WCR_UPDATE_FIELDS"
+}
+
+block_payload() {
+	case "$1" in
+		planning_council)
+			cat <<'JSON'
+{"block_key":"planning_council","title":"Planning Council","description":"AI lead drafts, AI critic reviews, owner approves.","category":"review","template_steps":[{"template_key":"lead_draft","step_type":"agent_call","title":"Lead Draft","actor_type":"orchestrator","actor_param":"lead_actor_type","config":{"role":"lead"},"sort_order":10},{"template_key":"critic_review","step_type":"agent_call","title":"Critic Review","actor_type":"claude_ai","actor_param":"critic_actor_type","config":{"role":"critic"},"sort_order":20},{"template_key":"owner_approve","step_type":"human_checkpoint","title":"Owner Approval","actor_type":"user","config":{"role":"owner"},"sort_order":30}],"template_relations":[{"from_template_key":"lead_draft","to_template_key":"critic_review","relation_type":"sequence","sort_order":10},{"from_template_key":"critic_review","to_template_key":"owner_approve","relation_type":"sequence","sort_order":20}],"input_params":{"lead_actor_type":"orchestrator","critic_actor_type":"claude_ai"},"version":1,"status":"active"}
+JSON
+			;;
+		ai_review_block)
+			cat <<'JSON'
+{"block_key":"ai_review_block","title":"AI Review Block","description":"AI review followed by approve or request changes branches.","category":"review","template_steps":[{"template_key":"reviewer_call","step_type":"agent_call","title":"AI Review","actor_type":"claude_ai","actor_param":"reviewer_actor_type","config":{"role":"reviewer"},"sort_order":10},{"template_key":"pass_gate","step_type":"condition","title":"Pass?","config":{"condition":"review_passed"},"sort_order":20},{"template_key":"approve_action","step_type":"action","title":"Approve","config":{"result":"approve"},"sort_order":30},{"template_key":"request_changes_action","step_type":"action","title":"Request Changes","config":{"result":"request_changes"},"sort_order":40}],"template_relations":[{"from_template_key":"reviewer_call","to_template_key":"pass_gate","relation_type":"sequence","sort_order":10},{"from_template_key":"pass_gate","to_template_key":"approve_action","relation_type":"conditional","label":"pass","condition_expression":"review_passed","sort_order":20},{"from_template_key":"pass_gate","to_template_key":"request_changes_action","relation_type":"conditional","label":"fail","condition_expression":"!review_passed","sort_order":30}],"input_params":{"reviewer_actor_type":"claude_ai"},"version":1,"status":"active"}
+JSON
+			;;
+		code_review_loop)
+			cat <<'JSON'
+{"block_key":"code_review_loop","title":"Code Review Loop","description":"Review with retry loop when rejected.","category":"validation","template_steps":[{"template_key":"code_review","step_type":"agent_call","title":"Code Review","actor_type":"claude_code","actor_param":"reviewer_actor_type","config":{"role":"code_reviewer"},"sort_order":10},{"template_key":"quality_gate","step_type":"condition","title":"Pass?","config":{"condition":"review_passed"},"sort_order":20},{"template_key":"approve_action","step_type":"action","title":"Approve","config":{"result":"approve"},"sort_order":30},{"template_key":"retry_loop","step_type":"loop","title":"Retry Loop","config":{"loop":"retry"},"sort_order":40}],"template_relations":[{"from_template_key":"code_review","to_template_key":"quality_gate","relation_type":"sequence","sort_order":10},{"from_template_key":"quality_gate","to_template_key":"approve_action","relation_type":"conditional","label":"pass","condition_expression":"review_passed","sort_order":20},{"from_template_key":"quality_gate","to_template_key":"retry_loop","relation_type":"conditional","label":"fail","condition_expression":"!review_passed","sort_order":30},{"from_template_key":"retry_loop","to_template_key":"code_review","relation_type":"loop_back","label":"retry","sort_order":40}],"input_params":{"reviewer_actor_type":"claude_code"},"version":1,"status":"active"}
+JSON
+			;;
+		approval_with_retry)
+			cat <<'JSON'
+{"block_key":"approval_with_retry","title":"Approval With Retry","description":"Human approval with timeout and reminder loop.","category":"approval","template_steps":[{"template_key":"human_approval","step_type":"human_checkpoint","title":"Human Approval","actor_type":"user","config":{"role":"approver"},"sort_order":10},{"template_key":"approval_timeout","step_type":"wait_for_event","title":"Wait For Timeout","config":{"event":"timeout"},"sort_order":20},{"template_key":"reminder_notify","step_type":"agent_call","title":"Send Reminder","actor_type":"system","actor_param":"notify_actor_type","config":{"role":"notifier"},"sort_order":30}],"template_relations":[{"from_template_key":"human_approval","to_template_key":"approval_timeout","relation_type":"sequence","sort_order":10},{"from_template_key":"approval_timeout","to_template_key":"reminder_notify","relation_type":"sequence","sort_order":20},{"from_template_key":"reminder_notify","to_template_key":"human_approval","relation_type":"loop_back","label":"remind","sort_order":30}],"input_params":{"notify_actor_type":"system"},"version":1,"status":"active"}
+JSON
+			;;
+		agent_dispatch_block)
+			cat <<'JSON'
+{"block_key":"agent_dispatch_block","title":"Agent Dispatch Block","description":"Dispatch execution to an agent and validate the result.","category":"dispatch","template_steps":[{"template_key":"executor_call","step_type":"agent_call","title":"Dispatch Agent","actor_type":"codex","actor_param":"executor_actor_type","config":{"role":"executor"},"sort_order":10},{"template_key":"wait_done","step_type":"wait_for_event","title":"Wait Done","config":{"event":"done"},"sort_order":20},{"template_key":"validate_action","step_type":"action","title":"Validate Result","config":{"result":"validate"},"sort_order":30}],"template_relations":[{"from_template_key":"executor_call","to_template_key":"wait_done","relation_type":"sequence","sort_order":10},{"from_template_key":"wait_done","to_template_key":"validate_action","relation_type":"sequence","sort_order":20}],"input_params":{"executor_actor_type":"codex"},"version":1,"status":"active"}
+JSON
+			;;
+		*)
+			log_err "Unknown block payload: $1"
+			exit 1
+			;;
+	esac
+}
+
+upsert_block() {
+	local block_key="$1"
+	local payload="$2"
+	local resp body code existing_id update_resp update_code
+
+	resp=$(api_request GET "${BASE_URL}/items/block_library?filter[block_key][_eq]=${block_key}&limit=1")
+	body="${resp%$'\n'*}"
+	code="${resp##*$'\n'}"
+
+	if [[ "$code" != "200" ]]; then
+		log_err "Failed to query block_library for ${block_key} (HTTP $code)"
+		exit 1
+	fi
+
+	existing_id=$(echo "$body" | jq -r '.data[0].id // empty')
+	if [[ -n "$existing_id" ]]; then
+		update_resp=$(api_request PATCH "${BASE_URL}/items/block_library/${existing_id}" "$payload")
+		update_code="${update_resp##*$'\n'}"
+		if [[ "$update_code" != "200" ]]; then
+			log_err "Failed to update block ${block_key} (HTTP $update_code)"
+			exit 1
+		fi
+		log_ok "Block ${block_key} updated"
+	else
+		update_resp=$(api_request POST "${BASE_URL}/items/block_library" "$payload")
+		update_code="${update_resp##*$'\n'}"
+		if [[ "$update_code" != "200" ]]; then
+			log_err "Failed to create block ${block_key} (HTTP $update_code)"
+			exit 1
+		fi
+		log_ok "Block ${block_key} created"
+	fi
+}
+
+seed_blocks() {
+	echo ""
+	echo "--- Seed: block_library ---"
+	for block_key in planning_council ai_review_block code_review_loop approval_with_retry agent_dispatch_block; do
+		local payload
+		payload=$(block_payload "$block_key")
+		if [[ "$DRY_RUN" == "true" ]]; then
+			log_info "Would upsert block ${block_key}"
+		else
+			upsert_block "$block_key" "$payload"
+		fi
+	done
+}
+
+main() {
+	DRY_RUN=false
+	SEED_BLOCKS=false
+	ENV_ARGS=()
+
+	for arg in "$@"; do
+		case "$arg" in
+			--dry-run) DRY_RUN=true ;;
+			--seed-blocks) SEED_BLOCKS=true ;;
+			--local|--cloud) ENV_ARGS+=("$arg") ;;
+			--help|-h)
+				cat <<EOF
+dot-schema-workflow-governance-ensure v${VERSION}
+
+Usage:
+  dot-schema-workflow-governance-ensure [--local|--cloud] [--dry-run] [--seed-blocks]
+
+Ensures:
+  - workflow_steps
+  - workflow_step_relations
+  - block_library
+  - workflow_change_requests
+  - AI Agent permissions
+  - Optional block seed data
+EOF
+				exit 0
+				;;
+		esac
+	done
+
+	require_cmds
+	init_environment "$@"
+	BASE_URL="$DIRECTUS_URL"
+
+	echo "========================================="
+	echo "DOT Tool: Workflow Governance Ensure v${VERSION}"
+	echo "========================================="
+	print_environment_banner "$@"
+	echo "Ensuring M-002 Phase 2A schema"
+	echo ""
+
+	if [[ "$DRY_RUN" == "true" ]]; then
+		log_warn "DRY RUN MODE - No changes will be made"
+		echo ""
+	fi
+
+	if [[ -z "${DOT_TOKEN:-}" ]]; then
+		log_info "Authenticating with Directus..."
+		source "$DOT_AUTH" "$@"
+	fi
+
+	if [[ -z "${DOT_TOKEN:-}" ]]; then
+		log_err "DOT_TOKEN is empty after authentication"
+		exit 1
+	fi
+
+	ensure_collection \
+		"workflow_steps" \
+		"route" \
+		"Workflow DSL steps. step_key uniqueness is enforced per workflow by governance validation." \
+		"{{title}} ({{step_type}})" \
+		"sort_order" \
+		workflow_id step_key step_type title description actor_type config position_x position_y block_id sort_order date_created date_updated
+
+	ensure_collection \
+		"workflow_step_relations" \
+		"share" \
+		"Workflow DSL relations between workflow_steps." \
+		"{{relation_type}}" \
+		"sort_order" \
+		workflow_id from_step_id to_step_id relation_type condition_expression label sort_order
+
+	ensure_collection \
+		"block_library" \
+		"view_quilt" \
+		"Reusable Lego-style workflow blocks for governance assembly." \
+		"{{title}} v{{version}}" \
+		"date_created" \
+		block_key title description category template_steps template_relations input_params version status date_created
+
+	ensure_collection \
+		"workflow_change_requests" \
+		"rule_folder" \
+		"Governed workflow change requests. DSL changes must pass through this gate." \
+		"{{title}} ({{status}})" \
+		"date_created" \
+		workflow_id change_type title description position_context suggested_actor_type suggested_block_id status schema_warnings dsl_diff approved_by applied_at task_id date_created
+
+	echo ""
+	echo "--- Relations ---"
+	if [[ "$DRY_RUN" == "true" ]]; then
+		log_info "Would create workflow DSL relations"
+	else
+		ensure_relation "workflow_steps.workflow_id -> workflows" "$(jq -nc '{
+			collection:"workflow_steps",
+			field:"workflow_id",
+			related_collection:"workflows",
+			meta:{one_field:"dsl_steps",one_deselect_action:"nullify"},
+			schema:{on_delete:"CASCADE"}
+		}')"
+		ensure_relation "workflow_steps.block_id -> block_library" "$(jq -nc '{
+			collection:"workflow_steps",
+			field:"block_id",
+			related_collection:"block_library",
+			meta:{one_field:"generated_steps",one_deselect_action:"nullify"},
+			schema:{on_delete:"SET NULL"}
+		}')"
+		ensure_relation "workflow_step_relations.workflow_id -> workflows" "$(jq -nc '{
+			collection:"workflow_step_relations",
+			field:"workflow_id",
+			related_collection:"workflows",
+			meta:{one_field:"dsl_relations",one_deselect_action:"nullify"},
+			schema:{on_delete:"CASCADE"}
+		}')"
+		ensure_relation "workflow_step_relations.from_step_id -> workflow_steps" "$(jq -nc '{
+			collection:"workflow_step_relations",
+			field:"from_step_id",
+			related_collection:"workflow_steps",
+			meta:{one_field:null,one_deselect_action:"nullify"},
+			schema:{on_delete:"CASCADE"}
+		}')"
+		ensure_relation "workflow_step_relations.to_step_id -> workflow_steps" "$(jq -nc '{
+			collection:"workflow_step_relations",
+			field:"to_step_id",
+			related_collection:"workflow_steps",
+			meta:{one_field:null,one_deselect_action:"nullify"},
+			schema:{on_delete:"CASCADE"}
+		}')"
+		ensure_relation "workflow_change_requests.workflow_id -> workflows" "$(jq -nc '{
+			collection:"workflow_change_requests",
+			field:"workflow_id",
+			related_collection:"workflows",
+			meta:{one_field:"change_requests",one_deselect_action:"nullify"},
+			schema:{on_delete:"CASCADE"}
+		}')"
+		ensure_relation "workflow_change_requests.suggested_block_id -> block_library" "$(jq -nc '{
+			collection:"workflow_change_requests",
+			field:"suggested_block_id",
+			related_collection:"block_library",
+			meta:{one_field:"change_requests",one_deselect_action:"nullify"},
+			schema:{on_delete:"SET NULL"}
+		}')"
+		ensure_relation "workflow_change_requests.task_id -> tasks" "$(jq -nc '{
+			collection:"workflow_change_requests",
+			field:"task_id",
+			related_collection:"tasks",
+			meta:{one_field:null,one_deselect_action:"nullify"},
+			schema:{on_delete:"SET NULL"}
+		}')"
+	fi
+
+	ensure_permissions
+
+	if [[ "$SEED_BLOCKS" == "true" ]]; then
+		seed_blocks
+	fi
+
+	echo ""
+	echo "========================================="
+	echo "DOT Tool: Workflow Governance Ensure - COMPLETE"
+	echo "========================================="
+}
+
+main "$@"

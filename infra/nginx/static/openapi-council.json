@@ -3,7 +3,7 @@
   "info": {
     "title": "OPS Proxy API \u2014 AI Council",
     "version": "1.0.0",
-    "description": "Slim OPS Proxy spec for GPT AI Council (19 operations, 7 collections). Full spec at /openapi.json (105 operations)."
+    "description": "Slim OPS Proxy spec for GPT AI Council, including workflow governance collections used by DSL and WCR operations. Full spec is available at /openapi.json."
   },
   "servers": [
     {
@@ -1662,6 +1662,637 @@
         }
       }
     },
+    "/items/workflow_steps": {
+      "get": {
+        "operationId": "listWorkflowSteps",
+        "summary": "List workflow DSL steps",
+        "description": "List workflow steps by workflow_id and sort_order.",
+        "parameters": [
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated fields"
+          },
+          {
+            "name": "filter[workflow_id][_eq]",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Filter by workflow ID"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 100
+            },
+            "description": "Max items"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of workflow steps",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/WorkflowStep"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createWorkflowStep",
+        "summary": "Create workflow DSL step",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowStep"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created workflow step",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowStep"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/workflow_steps/{id}": {
+      "get": {
+        "operationId": "getWorkflowStep",
+        "summary": "Get workflow DSL step",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated fields"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Single workflow step",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowStep"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateWorkflowStep",
+        "summary": "Update workflow DSL step",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowStep"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated workflow step",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteWorkflowStep",
+        "summary": "Delete workflow DSL step",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Workflow step deleted"
+          }
+        }
+      }
+    },
+    "/items/workflow_step_relations": {
+      "get": {
+        "operationId": "listWorkflowStepRelations",
+        "summary": "List workflow DSL relations",
+        "description": "List step relations by workflow_id and relation_type.",
+        "parameters": [
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated fields"
+          },
+          {
+            "name": "filter[workflow_id][_eq]",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Filter by workflow ID"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 100
+            },
+            "description": "Max items"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of workflow relations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/WorkflowStepRelation"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createWorkflowStepRelation",
+        "summary": "Create workflow DSL relation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowStepRelation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created workflow relation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/workflow_step_relations/{id}": {
+      "get": {
+        "operationId": "getWorkflowStepRelation",
+        "summary": "Get workflow DSL relation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated fields"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Single workflow relation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowStepRelation"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateWorkflowStepRelation",
+        "summary": "Update workflow DSL relation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowStepRelation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated workflow relation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteWorkflowStepRelation",
+        "summary": "Delete workflow DSL relation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Workflow relation deleted"
+          }
+        }
+      }
+    },
+    "/items/block_library": {
+      "get": {
+        "operationId": "listBlockLibrary",
+        "summary": "List workflow blocks",
+        "description": "List reusable workflow blocks by status and category.",
+        "parameters": [
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated fields"
+          },
+          {
+            "name": "filter[status][_eq]",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "active",
+                "deprecated"
+              ]
+            },
+            "description": "Filter by block status"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 100
+            },
+            "description": "Max items"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of workflow blocks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/BlockLibraryItem"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/block_library/{id}": {
+      "get": {
+        "operationId": "getBlockLibraryItem",
+        "summary": "Get workflow block",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated fields"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Single workflow block",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BlockLibraryItem"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/workflow_change_requests": {
+      "get": {
+        "operationId": "listWorkflowChangeRequests",
+        "summary": "List workflow change requests",
+        "description": "List WCR items by workflow_id and status.",
+        "parameters": [
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated fields"
+          },
+          {
+            "name": "filter[workflow_id][_eq]",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Filter by workflow ID"
+          },
+          {
+            "name": "filter[status][_eq]",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "ai_reviewing",
+                "needs_clarification",
+                "ready_for_approval",
+                "approved",
+                "rejected",
+                "applied"
+              ]
+            },
+            "description": "Filter by governance status"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 100
+            },
+            "description": "Max items"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of workflow change requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/WorkflowChangeRequest"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createWorkflowChangeRequest",
+        "summary": "Create workflow change request",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowChangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created workflow change request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/items/workflow_change_requests/{id}": {
+      "get": {
+        "operationId": "getWorkflowChangeRequest",
+        "summary": "Get workflow change request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated fields"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Single workflow change request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WorkflowChangeRequest"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateWorkflowChangeRequest",
+        "summary": "Update workflow change request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowChangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated workflow change request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/items/task_checkpoints/{id}": {
       "patch": {
         "operationId": "updateTaskCheckpoint",
@@ -1724,6 +2355,255 @@
         "description": "OPS Proxy API key (same key as Agent Data)"
       }
     },
-    "schemas": {}
+    "schemas": {
+      "WorkflowStep": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "workflow_id": {
+            "type": "integer"
+          },
+          "step_key": {
+            "type": "string"
+          },
+          "step_type": {
+            "type": "string",
+            "enum": [
+              "action",
+              "agent_call",
+              "condition",
+              "wait_for_event",
+              "human_checkpoint",
+              "loop",
+              "parallel"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "actor_type": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "user",
+              "claude_ai",
+              "claude_code",
+              "gemini",
+              "gpt",
+              "system",
+              "orchestrator",
+              "codex"
+            ]
+          },
+          "config": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          },
+          "position_x": {
+            "type": "number"
+          },
+          "position_y": {
+            "type": "number"
+          },
+          "block_id": {
+            "type": "integer",
+            "nullable": true
+          },
+          "sort_order": {
+            "type": "integer"
+          }
+        }
+      },
+      "WorkflowStepRelation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "workflow_id": {
+            "type": "integer"
+          },
+          "from_step_id": {
+            "type": "integer"
+          },
+          "to_step_id": {
+            "type": "integer"
+          },
+          "relation_type": {
+            "type": "string",
+            "enum": [
+              "sequence",
+              "conditional",
+              "parallel_fork",
+              "parallel_join",
+              "loop_back"
+            ]
+          },
+          "condition_expression": {
+            "type": "string",
+            "nullable": true
+          },
+          "label": {
+            "type": "string",
+            "nullable": true
+          },
+          "sort_order": {
+            "type": "integer"
+          }
+        }
+      },
+      "BlockLibraryItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "block_key": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "review",
+              "approval",
+              "dispatch",
+              "validation",
+              "notification",
+              "custom"
+            ]
+          },
+          "template_steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "template_relations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "input_params": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "version": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "active",
+              "deprecated"
+            ]
+          }
+        }
+      },
+      "WorkflowChangeRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "workflow_id": {
+            "type": "integer"
+          },
+          "change_type": {
+            "type": "string",
+            "enum": [
+              "add_step",
+              "modify_step",
+              "remove_step",
+              "reorder",
+              "add_block",
+              "restructure"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "position_context": {
+            "type": "string",
+            "nullable": true
+          },
+          "suggested_actor_type": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "user",
+              "claude_ai",
+              "claude_code",
+              "gemini",
+              "gpt",
+              "system",
+              "orchestrator",
+              "codex"
+            ]
+          },
+          "suggested_block_id": {
+            "type": "integer",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "ai_reviewing",
+              "needs_clarification",
+              "ready_for_approval",
+              "approved",
+              "rejected",
+              "applied"
+            ]
+          },
+          "schema_warnings": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "dsl_diff": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          },
+          "approved_by": {
+            "type": "string",
+            "nullable": true
+          },
+          "applied_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "task_id": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      }
+    }
   }
 }
