@@ -2,13 +2,18 @@
 # =============================================================================
 # dot-schema-workflows-ensure - Ensure workflows collection in Directus
 # =============================================================================
-# VERSION: 1.0.0
+# VERSION: 1.1.0
 # CHANGELOG:
 #   v1.0.0 (2026-03-03): Initial version for M-002 WorkflowModule
 #     - workflows: 7 fields (title, description, bpmn_xml, status, task_id, version, etc.)
 #     - Relation: task_id M2O -> tasks (SET NULL on delete)
 #     - Idempotent: checks existence before create, patches missing fields
 #     - Based on dot-schema-tasks-ensure pattern
+#   v1.1.0 (2026-03-03): Extend workflows for Process Registry / Supervisor UI
+#     - process_code (unique process code)
+#     - sort (display order)
+#     - parent_workflow_id (self M2O)
+#     - level (1/2/3 hierarchy)
 # =============================================================================
 
 set -euo pipefail
@@ -19,7 +24,7 @@ DOT_AUTH="${SCRIPT_DIR}/dot-auth"
 # Source environment configuration
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="1.0.0"
+VERSION="1.1.0"
 COLLECTION="workflows"
 
 # Logging
@@ -50,7 +55,7 @@ api_request() {
 }
 
 # Required fields list (for verification)
-REQUIRED_FIELDS=(title description bpmn_xml status task_id version user_created date_created date_updated)
+REQUIRED_FIELDS=(title description bpmn_xml status task_id version process_code sort parent_workflow_id level user_created date_created date_updated)
 
 field_payload() {
   case "$1" in
@@ -77,6 +82,26 @@ JSON
     task_id)
       cat <<'JSON'
 {"field":"task_id","type":"integer","meta":{"required":false,"interface":"select-dropdown-m2o","special":["m2o"],"width":"half","note":"FK -> tasks"},"schema":{"is_nullable":true}}
+JSON
+      ;;
+    process_code)
+      cat <<'JSON'
+{"field":"process_code","type":"string","meta":{"required":false,"interface":"input","width":"half","note":"Unique process code, e.g. WF-001"},"schema":{"is_nullable":true,"is_unique":true}}
+JSON
+      ;;
+    sort)
+      cat <<'JSON'
+{"field":"sort","type":"integer","meta":{"required":false,"interface":"input","width":"half","note":"Display order in supervisor registry"},"schema":{"is_nullable":true}}
+JSON
+      ;;
+    parent_workflow_id)
+      cat <<'JSON'
+{"field":"parent_workflow_id","type":"integer","meta":{"required":false,"interface":"select-dropdown-m2o","special":["m2o"],"width":"half","note":"Optional parent workflow for 3-level hierarchy"},"schema":{"is_nullable":true}}
+JSON
+      ;;
+    level)
+      cat <<'JSON'
+{"field":"level","type":"integer","meta":{"required":true,"interface":"select-dropdown","options":{"choices":[{"text":"1 — Cụ","value":1},{"text":"2 — Bà","value":2},{"text":"3 — Mẹ","value":3}]},"width":"half","note":"Hierarchy level (max 3)"},"schema":{"is_nullable":false,"default_value":1}}
 JSON
       ;;
     version)
@@ -134,9 +159,9 @@ create_collection() {
       meta: {
         collection: $collection,
         icon: "account_tree",
-        note: "BPMN 2.0 Workflow definitions for M-002 WorkflowModule - Created by DOT v1.0.0",
-        display_template: "{{title}} ({{status}})",
-        sort_field: "date_created"
+        note: "BPMN 2.0 Workflow definitions for M-002 WorkflowModule - Process Registry ready via DOT v1.1.0",
+        display_template: "{{process_code}} {{title}}",
+        sort_field: "sort"
       }
     }')
 
@@ -202,6 +227,32 @@ setup_relations() {
   else
     log_warn "Could not create task_id relation (HTTP $code)"
   fi
+
+  # workflows.parent_workflow_id -> workflows (SET NULL on delete)
+  relation_payload=$(jq -nc '{
+    collection: "workflows",
+    field: "parent_workflow_id",
+    related_collection: "workflows",
+    meta: {
+      one_field: null,
+      sort_field: null,
+      one_deselect_action: "nullify"
+    },
+    schema: {
+      on_delete: "SET NULL"
+    }
+  }')
+
+  resp=$(api_request POST "${BASE_URL}/relations" "$relation_payload")
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" == "200" ]]; then
+    log_ok "Relation workflows.parent_workflow_id -> workflows created (SET NULL)"
+  elif [[ "$code" == "400" ]]; then
+    log_skip "Relation workflows.parent_workflow_id -> workflows already exists"
+  else
+    log_warn "Could not create parent_workflow_id relation (HTTP $code)"
+  fi
 }
 
 verify_fields() {
@@ -245,13 +296,17 @@ Options:
   --dry-run     Show what would be done without making changes
   --help, -h    Show this help message
 
-Collection: workflows (9 fields)
+Collection: workflows (13 fields)
   - title          Workflow name (required)
   - description    Description (nullable)
   - bpmn_xml       BPMN 2.0 XML content (required)
   - status         draft|active|archived (default: draft)
   - task_id        M2O -> tasks (SET NULL)
   - version        Version counter (default: 1)
+  - process_code   Unique process code (e.g. WF-001)
+  - sort           Display order
+  - parent_workflow_id  Self M2O -> workflows (SET NULL)
+  - level          Hierarchy level 1/2/3 (default: 1)
   - user_created   Auto: creator user
   - date_created   Auto: creation timestamp
   - date_updated   Auto: update timestamp
@@ -335,6 +390,7 @@ main() {
     setup_relations
   else
     log_info "Would create relation workflows.task_id -> tasks"
+    log_info "Would create relation workflows.parent_workflow_id -> workflows"
   fi
 
   # === VERIFICATION ===

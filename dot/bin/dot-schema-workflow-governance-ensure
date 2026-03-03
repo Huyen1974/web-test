@@ -2,7 +2,7 @@
 # =============================================================================
 # dot-schema-workflow-governance-ensure - Ensure M-002 Phase 2A schema in Directus
 # =============================================================================
-# VERSION: 1.0.0
+# VERSION: 1.1.0
 # CHANGELOG:
 #   v1.0.0 (2026-03-03): Create workflow DSL + governance foundation
 #     - workflow_steps
@@ -11,6 +11,7 @@
 #     - workflow_change_requests
 #     - AI Agent permissions
 #     - Optional block seed data
+#   v1.1.0 (2026-03-03): Extend workflow_steps for supervisor-readable trigger text
 # =============================================================================
 
 set -euo pipefail
@@ -21,7 +22,7 @@ DOT_PERMISSION="${SCRIPT_DIR}/dot-permission-ensure"
 
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="1.0.0"
+VERSION="1.1.0"
 
 log_info() { echo "[INFO] $1"; }
 log_ok() { echo "[OK]   $1"; }
@@ -201,6 +202,16 @@ JSON
 		workflow_steps.sort_order)
 			cat <<'JSON'
 {"field":"sort_order","type":"integer","meta":{"required":false,"interface":"input","width":"half","note":"Deterministic ordering for DSL and rendering"},"schema":{"is_nullable":true}}
+JSON
+			;;
+		workflow_steps.trigger_in_text)
+			cat <<'JSON'
+{"field":"trigger_in_text","type":"text","meta":{"required":false,"interface":"input-multiline","width":"full","note":"Supervisor-readable text: what triggers this step to begin"},"schema":{"is_nullable":true}}
+JSON
+			;;
+		workflow_steps.trigger_out_text)
+			cat <<'JSON'
+{"field":"trigger_out_text","type":"text","meta":{"required":false,"interface":"input-multiline","width":"full","note":"Supervisor-readable text: what this step triggers next"},"schema":{"is_nullable":true}}
 JSON
 			;;
 		workflow_steps.date_created)
@@ -410,7 +421,7 @@ ensure_collection() {
 }
 
 ensure_permissions() {
-	local STEP_FIELDS='["workflow_id","step_key","step_type","title","description","actor_type","config","position_x","position_y","block_id","sort_order","date_created","date_updated"]'
+	local STEP_FIELDS='["workflow_id","step_key","step_type","title","description","actor_type","config","position_x","position_y","block_id","sort_order","trigger_in_text","trigger_out_text","date_created","date_updated"]'
 	local RELATION_FIELDS='["workflow_id","from_step_id","to_step_id","relation_type","condition_expression","label","sort_order"]'
 	local WCR_CREATE_FIELDS='["workflow_id","change_type","title","description","position_context","suggested_actor_type","suggested_block_id","status","schema_warnings","dsl_diff","approved_by","applied_at","task_id","date_created"]'
 	local WCR_UPDATE_FIELDS='["status","schema_warnings","dsl_diff"]'
@@ -579,7 +590,7 @@ EOF
 		"Workflow DSL steps. step_key uniqueness is enforced per workflow by governance validation." \
 		"{{title}} ({{step_type}})" \
 		"sort_order" \
-		workflow_id step_key step_type title description actor_type config position_x position_y block_id sort_order date_created date_updated
+		workflow_id step_key step_type title description actor_type config position_x position_y block_id sort_order trigger_in_text trigger_out_text date_created date_updated
 
 	ensure_collection \
 		"workflow_step_relations" \

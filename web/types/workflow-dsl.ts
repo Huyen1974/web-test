@@ -49,6 +49,8 @@ export interface WorkflowStep {
 	position_y?: number | null;
 	block_id?: number | null;
 	sort_order?: number;
+	trigger_in_text?: string | null;
+	trigger_out_text?: string | null;
 	date_created?: string;
 	date_updated?: string;
 }

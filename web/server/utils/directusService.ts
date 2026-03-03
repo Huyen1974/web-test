@@ -31,6 +31,10 @@ const WORKFLOW_FIELDS = [
 	'status',
 	'task_id',
 	'version',
+	'process_code',
+	'sort',
+	'parent_workflow_id',
+	'level',
 	'date_created',
 	'date_updated',
 ] as const;
@@ -48,6 +52,8 @@ const WORKFLOW_STEP_FIELDS = [
 	'position_y',
 	'block_id',
 	'sort_order',
+	'trigger_in_text',
+	'trigger_out_text',
 	'date_created',
 	'date_updated',
 ] as const;
@@ -151,12 +157,53 @@ export async function updateWorkflowRecord(workflowId: number | string, payload:
 	return await createDirectusServiceClient().request<Workflow>(updateItem('workflows', workflowId, payload));
 }
 
+export async function listWorkflowRecords(options?: {
+	limit?: number;
+	offset?: number;
+	search?: string;
+	status?: Workflow['status'] | null;
+	level?: number | null;
+}) {
+	const filter: Record<string, any> = {};
+
+	if (options?.status) {
+		filter.status = { _eq: options.status };
+	}
+
+	if (options?.level) {
+		filter.level = { _eq: options.level };
+	}
+
+	return await createDirectusServiceClient().request<Workflow[]>(
+		readItems('workflows', {
+			fields: [...WORKFLOW_FIELDS],
+			filter: Object.keys(filter).length ? filter : undefined,
+			search: options?.search?.trim() || undefined,
+			sort: ['sort', 'title', 'id'],
+			limit: options?.limit ?? 25,
+			offset: options?.offset ?? 0,
+		}),
+	);
+}
+
 export async function getWorkflowSteps(workflowId: number | string) {
 	return await createDirectusServiceClient().request<WorkflowStep[]>(
 		readItems('workflow_steps', {
 			filter: { workflow_id: { _eq: workflowId } },
 			fields: [...WORKFLOW_STEP_FIELDS],
 			sort: ['sort_order', 'id'],
+			limit: -1,
+		}),
+	);
+}
+
+export async function getWorkflowStepCounts(workflowIds: number[]) {
+	if (!workflowIds.length) return [] as Array<Pick<WorkflowStep, 'id' | 'workflow_id'>>;
+
+	return await createDirectusServiceClient().request<Array<Pick<WorkflowStep, 'id' | 'workflow_id'>>>(
+		readItems('workflow_steps', {
+			filter: { workflow_id: { _in: workflowIds } },
+			fields: ['id', 'workflow_id'],
 			limit: -1,
 		}),
 	);
@@ -244,6 +291,17 @@ export async function getWorkflowChangeRequestRecord(changeRequestId: number | s
 	return await createDirectusServiceClient().request<WorkflowChangeRequest>(
 		readItem('workflow_change_requests', changeRequestId, {
 			fields: [...WCR_FIELDS],
+		}),
+	);
+}
+
+export async function listWorkflowChangeRequestRecords(workflowId: number | string) {
+	return await createDirectusServiceClient().request<WorkflowChangeRequest[]>(
+		readItems('workflow_change_requests', {
+			filter: { workflow_id: { _eq: workflowId } },
+			fields: [...WCR_FIELDS],
+			sort: ['-date_created', '-id'],
+			limit: 100,
 		}),
 	);
 }
