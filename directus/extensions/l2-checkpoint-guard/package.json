@@ -1,0 +1,11 @@
+{
+  "name": "directus-extension-l2-checkpoint-guard",
+  "version": "1.0.0",
+  "type": "module",
+  "directus:extension": {
+    "type": "hook",
+    "path": "index.js",
+    "source": "index.js",
+    "host": "^11.0.0"
+  }
+}

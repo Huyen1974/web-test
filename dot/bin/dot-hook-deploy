@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-hook-deploy — Deploy Directus hook extensions to VPS
+# =============================================================================
+# Usage: dot-hook-deploy [--local|--cloud] [extension-name]
+#
+# Deploys hook extensions from directus/extensions/ to the VPS Directus
+# container. If extension-name is given, deploys only that extension.
+# Otherwise deploys all extensions.
+#
+# After deployment, restarts the Directus container to pick up changes.
+# =============================================================================
+
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/../config/environment.sh"
+
+# Parse args
+EXT_NAME=""
+ENV_FLAG=""
+for arg in "$@"; do
+  case "$arg" in
+    --local|--cloud) ENV_FLAG="$arg" ;;
+    *) EXT_NAME="$arg" ;;
+  esac
+done
+
+init_environment "$ENV_FLAG"
+print_environment_banner "$ENV_FLAG"
+
+# Paths
+LOCAL_EXT_DIR="$PROJECT_ROOT/directus/extensions"
+VPS_HOST="root@38.242.240.89"
+VPS_SSH_KEY="$HOME/.ssh/contabo_vps"
+VPS_EXT_DIR="/opt/incomex/docker/directus/extensions"
+
+# ---------------------------------------------------------------------------
+# Discover extensions
+# ---------------------------------------------------------------------------
+if [[ -n "$EXT_NAME" ]]; then
+  if [[ ! -d "$LOCAL_EXT_DIR/$EXT_NAME" ]]; then
+    echo -e "${RED}ERROR: Extension '$EXT_NAME' not found at $LOCAL_EXT_DIR/$EXT_NAME${NC}"
+    exit 1
+  fi
+  EXTENSIONS=("$EXT_NAME")
+else
+  EXTENSIONS=()
+  for d in "$LOCAL_EXT_DIR"/*/; do
+    name="$(basename "$d")"
+    # Skip node_modules and hidden dirs
+    [[ "$name" == "node_modules" || "$name" == .* ]] && continue
+    [[ -f "$d/package.json" ]] && EXTENSIONS+=("$name")
+  done
+fi
+
+if [[ ${#EXTENSIONS[@]} -eq 0 ]]; then
+  echo -e "${YELLOW}No extensions found to deploy.${NC}"
+  exit 0
+fi
+
+echo -e "${BOLD}Extensions to deploy:${NC}"
+for ext in "${EXTENSIONS[@]}"; do
+  echo "  - $ext"
+done
+echo ""
+
+# ---------------------------------------------------------------------------
+# Deploy
+# ---------------------------------------------------------------------------
+for ext in "${EXTENSIONS[@]}"; do
+  echo -e "${BLUE}Deploying: $ext${NC}"
+
+  # Create remote directory
+  ssh -i "$VPS_SSH_KEY" "$VPS_HOST" "mkdir -p $VPS_EXT_DIR/$ext"
+
+  # Copy files (exclude node_modules)
+  rsync -avz --exclude='node_modules' \
+    -e "ssh -i $VPS_SSH_KEY" \
+    "$LOCAL_EXT_DIR/$ext/" \
+    "$VPS_HOST:$VPS_EXT_DIR/$ext/"
+
+  echo -e "${GREEN}  Deployed: $ext${NC}"
+done
+
+# ---------------------------------------------------------------------------
+# Restart Directus
+# ---------------------------------------------------------------------------
+echo ""
+echo -e "${YELLOW}Restarting Directus to load extensions...${NC}"
+ssh -i "$VPS_SSH_KEY" "$VPS_HOST" \
+  "cd /opt/incomex/docker && docker compose restart directus"
+
+# Wait for health check
+echo -n "Waiting for Directus health..."
+for i in $(seq 1 30); do
+  sleep 2
+  HTTP=$(curl -sf -o /dev/null -w "%{http_code}" --max-time 5 "$DIRECTUS_URL/server/health" 2>/dev/null || echo "000")
+  if [[ "$HTTP" == "200" ]]; then
+    echo -e " ${GREEN}OK${NC}"
+    break
+  fi
+  echo -n "."
+  if [[ $i -eq 30 ]]; then
+    echo -e " ${RED}TIMEOUT${NC}"
+    echo -e "${RED}WARNING: Directus may not have restarted properly. Check logs:${NC}"
+    echo "  ssh -i $VPS_SSH_KEY $VPS_HOST 'docker logs incomex-directus --tail 50'"
+    exit 1
+  fi
+done
+
+# ---------------------------------------------------------------------------
+# Verify extension loaded
+# ---------------------------------------------------------------------------
+echo ""
+echo -e "${BOLD}Verifying extensions loaded...${NC}"
+ssh -i "$VPS_SSH_KEY" "$VPS_HOST" \
+  "docker logs incomex-directus --tail 100 2>&1 | grep -i 'extension\|l2.guard\|hook' | tail -10" || true
+
+echo ""
+echo -e "${GREEN}${BOLD}Deploy complete.${NC}"
+echo "  Extensions: ${EXTENSIONS[*]}"
+echo "  Target: $VPS_EXT_DIR"
+echo "  Directus: $DIRECTUS_URL"
