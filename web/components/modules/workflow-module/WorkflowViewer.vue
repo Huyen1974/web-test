@@ -25,7 +25,7 @@ const emit = defineEmits<{
 }>();
 
 const workflowIdRef = computed(() => props.workflowId);
-const { workflow, bpmnXml, loading, error } = useWorkflow(workflowIdRef);
+const { workflow, bpmnXml, dslSource, dslAvailable, stepCount, loading, error } = useWorkflow(workflowIdRef);
 
 const containerRef = ref<HTMLDivElement>();
 const viewerError = ref<string>();
@@ -85,7 +85,16 @@ onBeforeUnmount(() => {
 				>
 					{{ workflow.status }}
 				</span>
+				<span
+					v-if="dslAvailable"
+					class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+				>
+					DSL SSOT
+				</span>
 			</div>
+			<p v-if="dslAvailable" class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+				Rendered from {{ dslSource === 'dsl' ? 'workflow_steps + relations' : 'cached BPMN' }}. {{ stepCount }} steps.
+			</p>
 		</div>
 
 		<!-- Loading -->
@@ -105,12 +114,7 @@ onBeforeUnmount(() => {
 
 		<!-- BPMN Canvas -->
 		<ClientOnly>
-			<div
-				v-show="!loading && !error && bpmnXml"
-				ref="containerRef"
-				class="bpmn-container"
-				:style="{ height }"
-			/>
+			<div v-show="!loading && !error && bpmnXml" ref="containerRef" class="bpmn-container" :style="{ height }" />
 		</ClientOnly>
 	</div>
 </template>

@@ -3,18 +3,26 @@
  * Provides data access layer for workflow operations via Directus SDK
  */
 
-import { readItems, readItem, updateItem } from '@directus/sdk';
+import { readItems, updateItem } from '@directus/sdk';
 import type { Workflow } from '~/types/workflows';
 
 /**
- * Fetch a single workflow by ID
+ * Runtime workflow payload for viewer/modeler
+ */
+export interface WorkflowRuntimeDetail {
+	workflow: Workflow;
+	bpmnXml: string;
+	source: 'dsl' | 'bpmn_cache';
+	dslAvailable: boolean;
+	stepCount: number;
+	relationCount: number;
+}
+
+/**
+ * Fetch workflow detail + renderable BPMN XML
  */
 export async function useWorkflowDetail(id: number | string) {
-	return await useDirectus<Workflow>(
-		readItem('workflows', id, {
-			fields: ['id', 'title', 'description', 'bpmn_xml', 'status', 'task_id', 'version', 'date_created', 'date_updated'],
-		}),
-	);
+	return await $fetch<WorkflowRuntimeDetail>(`/api/workflows/${id}/diagram`);
 }
 
 /**
@@ -44,29 +52,40 @@ export async function useWorkflowsList(taskId?: number | string) {
  * Save workflow BPMN XML back to Directus
  */
 export async function saveWorkflow(id: number | string, bpmnXml: string) {
-	return await useDirectus<Workflow>(
-		updateItem('workflows', id, { bpmn_xml: bpmnXml }),
-	);
+	const runtime = await useWorkflowDetail(id);
+
+	if (runtime.dslAvailable) {
+		throw new Error(
+			'This workflow is governed by DSL. Submit a workflow change request instead of saving BPMN XML directly.',
+		);
+	}
+
+	return await useDirectus<Workflow>(updateItem('workflows', id, { bpmn_xml: bpmnXml }));
 }
 
 /**
  * Reactive composable for loading a workflow and its BPMN XML
  */
 export function useWorkflow(workflowId: Ref<number | string>) {
-	const key = computed(() => `workflow-${workflowId.value}`);
+	const key = computed(() => `workflow-runtime-${workflowId.value}`);
 
 	const {
-		data: workflow,
+		data: runtime,
 		refresh,
 		pending: loading,
 		error,
 	} = useAsyncData(
-		key.value,
+		() => key.value,
 		async () => useWorkflowDetail(workflowId.value),
 		{ watch: [workflowId] },
 	);
 
-	const bpmnXml = computed(() => workflow.value?.bpmn_xml || '');
+	const workflow = computed(() => runtime.value?.workflow || null);
+	const bpmnXml = computed(() => runtime.value?.bpmnXml || '');
+	const dslSource = computed(() => runtime.value?.source || 'bpmn_cache');
+	const dslAvailable = computed(() => runtime.value?.dslAvailable || false);
+	const stepCount = computed(() => runtime.value?.stepCount || 0);
+	const relationCount = computed(() => runtime.value?.relationCount || 0);
 
-	return { workflow, bpmnXml, loading, error, refresh };
+	return { workflow, bpmnXml, dslSource, dslAvailable, stepCount, relationCount, loading, error, refresh };
 }

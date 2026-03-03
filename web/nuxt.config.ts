@@ -82,7 +82,16 @@ export default defineNuxtConfig({
 		// Server-side Directus URL for SSR/proxy (Docker internal or Cloud Run)
 		// NUXT_DIRECTUS_URL is for Docker internal network (http://directus:8055)
 		// Falls back to public URL if not set
-		directusInternalUrl: process.env.NUXT_DIRECTUS_URL || process.env.DIRECTUS_INTERNAL_URL || process.env.NUXT_PUBLIC_DIRECTUS_URL || 'https://directus.incomexsaigoncorp.vn',
+		directusInternalUrl:
+			process.env.NUXT_DIRECTUS_URL ||
+			process.env.DIRECTUS_INTERNAL_URL ||
+			process.env.NUXT_PUBLIC_DIRECTUS_URL ||
+			'https://directus.incomexsaigoncorp.vn',
+		directusServiceToken:
+			process.env.NUXT_DIRECTUS_SERVICE_TOKEN ||
+			process.env.DIRECTUS_ADMIN_TOKEN ||
+			process.env.DIRECTUS_SERVER_TOKEN ||
+			'',
 		agentData: {
 			apiKey: process.env.AGENT_DATA_API_KEY || '',
 		},
@@ -90,14 +99,17 @@ export default defineNuxtConfig({
 			siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://github-chatgpt-ggcloud.web.app',
 			// Standard Directus runtime config (env-first, golden fallback)
 			directus: {
-				url: process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus.incomexsaigoncorp.vn',
+				url:
+					process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus.incomexsaigoncorp.vn',
 				rest: {
-					baseUrl: process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus.incomexsaigoncorp.vn',
+					baseUrl:
+						process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus.incomexsaigoncorp.vn',
 					nuxtBaseUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://github-chatgpt-ggcloud.web.app',
 				},
 			},
 			// Legacy key kept for compatibility
-			directusUrl: process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus.incomexsaigoncorp.vn',
+			directusUrl:
+				process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus.incomexsaigoncorp.vn',
 			agentData: {
 				baseUrl: process.env.NUXT_PUBLIC_AGENT_DATA_BASE_URL || '',
 				enabled: process.env.NUXT_PUBLIC_AGENT_DATA_ENABLED === 'true',
@@ -122,7 +134,11 @@ export default defineNuxtConfig({
 	// Note: baseUrl is used for SSR calls. For browser, NUXT_PUBLIC_DIRECTUS_URL is used via runtimeConfig.
 	directus: {
 		rest: {
-			baseUrl: process.env.NUXT_DIRECTUS_URL || process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus.incomexsaigoncorp.vn',
+			baseUrl:
+				process.env.NUXT_DIRECTUS_URL ||
+				process.env.NUXT_PUBLIC_DIRECTUS_URL ||
+				process.env.DIRECTUS_URL ||
+				'https://directus.incomexsaigoncorp.vn',
 			nuxtBaseUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
 		},
 		auth: {

@@ -56,6 +56,7 @@
 		"@vueuse/motion": "^3.0.3",
 		"bpmn-js": "18.12.1",
 		"diff": "^8.0.2",
+		"fast-xml-parser": "^5.3.3",
 		"firebase": "^12.6.0",
 		"google-auth-library": "^10.5.0",
 		"micromark": "^4.0.2",
