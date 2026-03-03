@@ -205,7 +205,8 @@ jobs:
           FAILED=0
 
           # Allowed top-level folders under knowledge/ (KS-LAW v1.0 §2)
-          ALLOWED="current-state current-tasks dev ops other"
+          # Read from config file to avoid hardcoding (TD-053)
+          ALLOWED=$(jq -r '.allowed | join(" ")' .sync-allowed-folders.json 2>/dev/null || echo "current-state current-tasks dev ops other")
 
           # Get all document IDs and extract top-level folders
           DOCS=$(curl -s --max-time 15 "$VPS_AGENT_DATA_URL/kb/list" 2>/dev/null)
@@ -262,10 +263,10 @@ jobs:
           echo -n "Sync gap............... "
           if [ "$GAP" -eq 0 ] 2>/dev/null; then
             echo "OK (0 gap)"
-          elif [ "$GAP" -le 20 ] 2>/dev/null; then
+          elif [ "$GAP" -le 5 ] 2>/dev/null; then
             echo "WARN ($GAP docs gap — reconcile may be pending)"
           else
-            echo "FAIL ($GAP docs gap — expected <=20)"
+            echo "FAIL ($GAP docs gap — expected <=5)"
             FAILED=1
           fi
 
