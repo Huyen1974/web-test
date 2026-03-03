@@ -1,0 +1,4 @@
+{
+  "_comment": "Allowed top-level folders under knowledge/ (KS-LAW v1.0 §2). CI sync-check reads this file.",
+  "allowed": ["current-state", "current-tasks", "dev", "ops", "other"]
+}
