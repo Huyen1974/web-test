@@ -14,6 +14,7 @@ export interface TaskCheckpoint {
 	status: CheckpointStatus;
 	verified_by?: string;
 	comment_id?: number;
+	workflow_step_id?: number | null;
 	date_created?: string;
 	date_updated?: string;
 }

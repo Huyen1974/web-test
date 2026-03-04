@@ -3,10 +3,12 @@
  * Vertical Steps Timeline — Tailwind CSS only
  * Features: accordion expand/collapse, auto-position to current step,
  * scrollable container, status-based coloring.
+ * M-002 GOV-UX: checkable mode + insert marks for inline WCR creation.
  *
  * Props:
  *   steps — array of workflow steps (sorted by sort_order)
- *   Each step carries a `status` for checkpoint integration.
+ *   checkable — show per-step checkbox for completion tracking
+ *   showInsertMarks — show "+" buttons between steps for inline WCR creation
  */
 
 export type StepStatus = 'done' | 'current' | 'pending';
@@ -21,14 +23,25 @@ export interface TimelineStep {
 	triggerOut?: string | null;
 	config?: Record<string, any> | null;
 	status: StepStatus;
+	checkpointStatus?: 'passed' | 'pending' | null;
 }
 
-const props = defineProps<{
-	steps: TimelineStep[];
-}>();
+const props = withDefaults(
+	defineProps<{
+		steps: TimelineStep[];
+		checkable?: boolean;
+		showInsertMarks?: boolean;
+	}>(),
+	{
+		checkable: false,
+		showInsertMarks: false,
+	},
+);
 
 const emit = defineEmits<{
 	(e: 'scrollToIndex', index: number): void;
+	(e: 'toggle-step-complete', stepId: number, currentStatus: 'passed' | 'pending' | null): void;
+	(e: 'insert-at', afterStepId: number, afterIndex: number): void;
 }>();
 
 const expandedStepId = ref<number | null>(null);
@@ -114,6 +127,16 @@ const stepTypeBadge: Record<string, string> = {
 function hasDetails(step: TimelineStep): boolean {
 	return !!(step.description || step.triggerIn || step.triggerOut || (step.config && Object.keys(step.config).length > 0));
 }
+
+function onCheckboxClick(event: Event, step: TimelineStep) {
+	event.stopPropagation();
+	emit('toggle-step-complete', step.id, step.checkpointStatus || null);
+}
+
+function onInsertClick(event: Event, step: TimelineStep, index: number) {
+	event.stopPropagation();
+	emit('insert-at', step.id, index);
+}
 </script>
 
 <template>
@@ -122,7 +145,7 @@ function hasDetails(step: TimelineStep): boolean {
 			<li
 				v-for="(step, index) in steps"
 				:key="step.id"
-		:data-step-index="index"
+				:data-step-index="index"
 				:data-step-status="step.status"
 				class="relative"
 			>
@@ -176,6 +199,14 @@ function hasDetails(step: TimelineStep): boolean {
 
 					<!-- Step compact content -->
 					<div class="flex min-w-0 flex-1 items-center gap-2 py-1">
+						<!-- Checkbox for step completion -->
+						<input
+							v-if="checkable"
+							type="checkbox"
+							:checked="step.checkpointStatus === 'passed'"
+							class="h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 dark:border-gray-600 dark:bg-gray-800"
+							@click="onCheckboxClick($event, step)"
+						/>
 						<p
 							class="flex-1 text-sm font-medium leading-snug transition-colors duration-200"
 							:class="step.status === 'done'
@@ -260,8 +291,25 @@ function hasDetails(step: TimelineStep): boolean {
 					</div>
 				</Transition>
 
-				<!-- Bottom spacing for non-last items when collapsed -->
-				<div v-if="expandedStepId !== step.id" class="h-2" />
+				<!-- Insert mark "+" between steps -->
+				<div
+					v-if="showInsertMarks && index < steps.length - 1"
+					class="group relative ml-[10px] flex h-5 items-center"
+				>
+					<button
+						type="button"
+						class="flex h-4 w-4 items-center justify-center rounded-full border border-dashed border-gray-300 bg-white text-gray-400 opacity-0 transition-all duration-200 hover:border-amber-400 hover:bg-amber-50 hover:text-amber-600 group-hover:opacity-100 dark:border-gray-600 dark:bg-gray-800 dark:hover:border-amber-500 dark:hover:bg-amber-900/30 dark:hover:text-amber-400"
+						title="Thêm đề xuất tại đây"
+						@click="onInsertClick($event, step, index)"
+					>
+						<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+						</svg>
+					</button>
+				</div>
+
+				<!-- Bottom spacing for non-last items when collapsed (only when no insert marks) -->
+				<div v-if="expandedStepId !== step.id && !showInsertMarks" class="h-2" />
 			</li>
 		</ol>
 	</nav>

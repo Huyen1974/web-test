@@ -14,7 +14,7 @@ export async function useCheckpointsList(taskId: number | string) {
 	return await useDirectus<TaskCheckpoint[]>(
 		readItems('task_checkpoints', {
 			filter: { task_id: { _eq: taskId } },
-			fields: ['id', 'task_id', 'checkpoint_key', 'layer', 'status', 'verified_by', 'comment_id', 'date_created', 'date_updated'],
+			fields: ['id', 'task_id', 'checkpoint_key', 'layer', 'status', 'verified_by', 'comment_id', 'workflow_step_id', 'date_created', 'date_updated'],
 			sort: ['layer', 'checkpoint_key'],
 			limit: 100,
 		}),

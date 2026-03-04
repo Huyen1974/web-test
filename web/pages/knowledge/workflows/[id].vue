@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import type { FieldConfig } from '~/composables/useDirectusTable';
-import { readItems, updateItem } from '@directus/sdk';
+import { readItems, updateItem, createItem } from '@directus/sdk';
 import type { TimelineStep } from '~/components/modules/workflow-module/partials/StepsTimeline.vue';
+import type { WorkflowChangeRequest } from '~/types/workflow-dsl';
+import type { CheckpointStatus } from '~/types/checkpoints';
 
 const route = useRoute();
 const workflowId = computed(() => Number(route.params.id));
@@ -42,6 +44,31 @@ async function saveNarrative() {
 		alert(err?.message || 'Không lưu được mô tả.');
 	} finally {
 		savingNarrative.value = false;
+	}
+}
+
+// CTA: Create WCR from narrative (restructure type)
+const creatingNarrativeWcr = ref(false);
+
+async function createNarrativeWcr() {
+	if (!workflow.value) return;
+	creatingNarrativeWcr.value = true;
+	try {
+		await useDirectus<WorkflowChangeRequest>(
+			createItem('workflow_change_requests', {
+				workflow_id: workflow.value.id,
+				change_type: 'restructure',
+				title: 'Tái cấu trúc trình tự từ mô tả',
+				description: `Cập nhật trình tự dựa trên mô tả quy trình:\n\n${workflow.value.narrative || '(trống)'}`,
+				status: 'draft',
+			}),
+		);
+		await refreshPendingWcrs();
+		alert('Đã tạo đề xuất tái cấu trúc.');
+	} catch (err: any) {
+		alert(err?.message || 'Không tạo được đề xuất.');
+	} finally {
+		creatingNarrativeWcr.value = false;
 	}
 }
 
@@ -109,19 +136,90 @@ const { data: stepsRaw } = await useAsyncData(
 	{ watch: [workflowId] },
 );
 
-const timelineSteps = computed<TimelineStep[]>(() =>
-	(stepsRaw.value || []).map((step) => ({
-		id: step.id,
-		title: step.title,
-		description: step.description,
-		actorType: step.actor_type,
-		stepType: step.step_type,
-		triggerIn: step.trigger_in_text,
-		triggerOut: step.trigger_out_text,
-		config: step.config,
-		status: 'pending' as const,
-	})),
+// Step IDs for checkpoint composable
+const stepIds = computed(() => (stepsRaw.value || []).map((s) => s.id));
+const taskIdRef = computed(() => workflow.value?.task_id || 0);
+
+// Step-level checkpoints
+const { stepStatusMap, toggleStepComplete, refresh: refreshStepCheckpoints } = useStepCheckpoints(
+	taskIdRef as Ref<number | string>,
+	stepIds,
 );
+
+// Compute timeline steps with checkpoint status
+const timelineSteps = computed<TimelineStep[]>(() => {
+	const steps = stepsRaw.value || [];
+	let foundFirstIncomplete = false;
+
+	return steps.map((step) => {
+		const cpStatus = stepStatusMap.value.get(step.id) || null;
+		let status: 'done' | 'current' | 'pending';
+
+		if (cpStatus === 'passed') {
+			status = 'done';
+		} else if (!foundFirstIncomplete) {
+			foundFirstIncomplete = true;
+			status = 'current';
+		} else {
+			status = 'pending';
+		}
+
+		return {
+			id: step.id,
+			title: step.title,
+			description: step.description,
+			actorType: step.actor_type,
+			stepType: step.step_type,
+			triggerIn: step.trigger_in_text,
+			triggerOut: step.trigger_out_text,
+			config: step.config,
+			status,
+			checkpointStatus: cpStatus,
+		};
+	});
+});
+
+// Handle step checkbox toggle
+async function handleToggleStepComplete(stepId: number, _currentStatus: 'passed' | 'pending' | null) {
+	await toggleStepComplete(stepId);
+}
+
+// Fetch pending WCRs for inline display
+const { data: pendingWcrs, refresh: refreshPendingWcrs } = useAsyncData(
+	`workflow-pending-wcrs:${workflowId.value}`,
+	async () => {
+		if (!workflowId.value) return [];
+		return await useDirectus<Array<{ id: number; title: string; change_type: string; position_context: string | null; status: string }>>(
+			readItems('workflow_change_requests', {
+				filter: {
+					workflow_id: { _eq: workflowId.value },
+					status: { _in: ['draft', 'ai_reviewing', 'needs_clarification', 'ready_for_approval'] },
+				},
+				fields: ['id', 'title', 'change_type', 'position_context', 'status'],
+				sort: ['-date_created'],
+				limit: 50,
+			}),
+		);
+	},
+	{ watch: [workflowId] },
+);
+
+// Inline WCR popup state
+const showWcrPopup = ref(false);
+const wcrInsertAfterStepId = ref(0);
+const wcrInsertAfterTitle = ref('');
+
+function handleInsertAt(afterStepId: number, afterIndex: number) {
+	const step = (stepsRaw.value || []).find((s) => s.id === afterStepId);
+	wcrInsertAfterStepId.value = afterStepId;
+	wcrInsertAfterTitle.value = step?.title || `Bước ${afterIndex + 1}`;
+	showWcrPopup.value = true;
+}
+
+async function handleWcrCreated() {
+	showWcrPopup.value = false;
+	await refreshPendingWcrs();
+}
 
 // [3] Auto-position: scroll to current step at position 3 from top
 const tableScrollRef = ref<HTMLElement | null>(null);
@@ -294,7 +392,7 @@ const categoryBreadcrumb = computed(() => {
 				</NuxtLink>
 			</nav>
 
-			<!-- Narrative tab: Mo ta -->
+			<!-- Narrative tab: Mô tả -->
 			<div v-if="activeTab === 'narrative'" class="space-y-6">
 				<div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
 					<div class="mb-4 flex items-center justify-between">
@@ -345,125 +443,180 @@ const categoryBreadcrumb = computed(() => {
 					</div>
 				</div>
 
-				<!-- Hoi dong AI placeholder -->
-				<div class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center dark:border-gray-600 dark:bg-gray-800/50">
-					<p class="text-sm font-medium text-gray-500 dark:text-gray-400">Hội đồng AI</p>
-					<p class="mt-1 text-xs text-gray-400 dark:text-gray-500">CommentModule sẽ được lắp vào đây (Phase 2B)</p>
+				<!-- CTA: Create WCR from narrative [A2][A3] -->
+				<div v-if="workflow.narrative" class="flex">
+					<button
+						class="inline-flex items-center gap-2 rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-amber-700 disabled:opacity-60"
+						:disabled="creatingNarrativeWcr"
+						@click="createNarrativeWcr"
+					>
+						<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+						</svg>
+						{{ creatingNarrativeWcr ? 'Đang tạo...' : 'Tạo/Cập nhật trình tự từ mô tả' }}
+					</button>
 				</div>
+
+				<!-- Hội đồng AI: CommentModule [A2] -->
+				<ModulesCommentModule
+					v-if="workflow.task_id"
+					:task-id="workflow.task_id"
+					title="Hội đồng AI"
+					show-checkpoints
+				/>
 			</div>
 
-			<!-- Steps tab: DirectusDataTable -->
-			<SharedDirectusDataTable
-				v-if="activeTab === 'matrix'"
-				collection="workflow_steps"
-				:fields="stepFields"
-				:filters="{ workflow_id: { _eq: workflowId } }"
-				:default-sort="['sort_order', 'id']"
-				:page-size="50"
-				:searchable="false"
-				title="Trình tự"
-				:stt="true"
-			>
-				<template #cell-step_type="{ value }">
-					<span
-						class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
-						:class="{
-							'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300': value === 'action',
-							'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300': value === 'condition',
-							'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300': value === 'agent_call',
-							'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300': value === 'human_checkpoint',
-							'bg-slate-100 text-slate-700 dark:bg-slate-700/50 dark:text-slate-200': value === 'wait_for_event',
-							'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300': value === 'loop',
-							'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300': value === 'parallel',
-						}"
-					>
-						{{ value }}
-					</span>
-				</template>
-			</SharedDirectusDataTable>
+			<!-- Matrix tab: WorkflowMatrixView [B1] -->
+			<div v-if="activeTab === 'matrix'" class="relative">
+				<ModulesWorkflowModulePartialsWorkflowMatrixView
+					:workflow-id="workflowId"
+					show-insert-marks
+					:pending-wcrs="pendingWcrs || []"
+					@insert-at="handleInsertAt"
+				/>
+
+				<!-- Inline WCR popup -->
+				<ModulesWorkflowModulePartialsInlineWcrPopup
+					v-if="workflow"
+					:workflow-id="workflow.id"
+					:after-step-id="wcrInsertAfterStepId"
+					:after-step-title="wcrInsertAfterTitle"
+					:visible="showWcrPopup"
+					style="top: 50%; left: 50%; transform: translate(-50%, -50%);"
+					@close="showWcrPopup = false"
+					@wcr-created="handleWcrCreated"
+				/>
+			</div>
 
 			<!-- [1][2][3][4][6] Diagram tab: Golden ratio layout with scrollable containers -->
-			<div v-else-if="activeTab === 'diagram'" class="grid gap-4 lg:grid-cols-[38fr_62fr]">
-				<!-- Left: Compact steps table (~38%) with scroll -->
-				<div class="flex flex-col rounded-lg bg-white shadow dark:bg-gray-800">
-					<div class="shrink-0 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-						<h3 class="text-sm font-semibold text-gray-900 dark:text-white">Trình tự</h3>
-						<p class="mt-0.5 text-xs text-gray-400 dark:text-gray-500">{{ timelineSteps.length }} bước</p>
+			<div v-else-if="activeTab === 'diagram'" class="relative">
+				<div class="grid gap-4 lg:grid-cols-[38fr_62fr]">
+					<!-- Left: Compact steps table (~38%) with scroll -->
+					<div class="flex flex-col rounded-lg bg-white shadow dark:bg-gray-800">
+						<div class="shrink-0 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+							<h3 class="text-sm font-semibold text-gray-900 dark:text-white">Trình tự</h3>
+							<p class="mt-0.5 text-xs text-gray-400 dark:text-gray-500">{{ timelineSteps.length }} bước</p>
+						</div>
+						<div
+							ref="tableScrollRef"
+							class="scrollbar-thin min-h-0 flex-1 overflow-y-auto"
+							style="max-height: calc(100vh - 280px);"
+						>
+							<table class="min-w-full">
+								<thead class="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900/60">
+									<tr>
+										<th v-if="true" class="w-8 px-2 py-2"></th>
+										<th class="w-12 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">STT</th>
+										<th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Tên bước</th>
+										<th class="w-24 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Tác nhân</th>
+									</tr>
+								</thead>
+								<tbody class="divide-y divide-gray-100 dark:divide-gray-700/50">
+									<tr v-if="!timelineSteps.length">
+										<td colspan="4" class="px-3 py-8 text-center text-sm text-gray-400 dark:text-gray-500">
+											Chưa có bước nào
+										</td>
+									</tr>
+									<template v-for="(step, index) in timelineSteps" v-else :key="step.id">
+										<tr
+											:data-table-row-index="index"
+											class="transition-colors duration-150"
+											:class="{
+												'bg-emerald-50/60 dark:bg-emerald-900/10': step.status === 'done',
+												'bg-amber-50/60 dark:bg-amber-900/10': step.status === 'current',
+												'hover:bg-gray-50 dark:hover:bg-gray-700/30': step.status === 'pending',
+											}"
+										>
+											<!-- Checkbox column -->
+											<td class="px-2 py-2">
+												<input
+													type="checkbox"
+													:checked="step.checkpointStatus === 'passed'"
+													class="h-4 w-4 cursor-pointer rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 dark:border-gray-600 dark:bg-gray-800"
+													@change="handleToggleStepComplete(step.id, step.checkpointStatus || null)"
+												/>
+											</td>
+											<td
+												class="whitespace-nowrap px-3 py-2 text-xs tabular-nums"
+												:class="{
+													'font-semibold text-emerald-600 dark:text-emerald-400': step.status === 'done',
+													'font-bold text-amber-600 dark:text-amber-400': step.status === 'current',
+													'text-gray-400 dark:text-gray-500': step.status === 'pending',
+												}"
+											>{{ index + 1 }}</td>
+											<td
+												class="px-3 py-2 text-sm"
+												:class="{
+													'text-emerald-700 dark:text-emerald-300': step.status === 'done',
+													'font-medium text-amber-700 dark:text-amber-300': step.status === 'current',
+													'text-gray-700 dark:text-gray-300': step.status === 'pending',
+												}"
+											>{{ step.title }}</td>
+											<td class="whitespace-nowrap px-3 py-2 text-xs text-gray-400 dark:text-gray-500">{{ step.actorType || '—' }}</td>
+										</tr>
+										<!-- Insert mark in compact table -->
+										<tr
+											v-if="index < timelineSteps.length - 1"
+											class="group"
+										>
+											<td colspan="4" class="px-2 py-0">
+												<div class="flex h-5 items-center">
+													<button
+														type="button"
+														class="flex h-4 w-4 items-center justify-center rounded-full border border-dashed border-gray-300 bg-white text-gray-400 opacity-0 transition-all duration-200 hover:border-amber-400 hover:bg-amber-50 hover:text-amber-600 group-hover:opacity-100 dark:border-gray-600 dark:bg-gray-800 dark:hover:border-amber-500 dark:hover:bg-amber-900/30 dark:hover:text-amber-400"
+														title="Thêm đề xuất tại đây"
+														@click="handleInsertAt(step.id, index)"
+													>
+														<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+															<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+														</svg>
+													</button>
+												</div>
+											</td>
+										</tr>
+									</template>
+								</tbody>
+							</table>
+						</div>
 					</div>
-					<div
-						ref="tableScrollRef"
-						class="scrollbar-thin min-h-0 flex-1 overflow-y-auto"
-						style="max-height: calc(100vh - 280px);"
-					>
-						<table class="min-w-full">
-							<thead class="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900/60">
-								<tr>
-									<th class="w-12 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">STT</th>
-									<th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Tên bước</th>
-									<th class="w-24 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Tác nhân</th>
-								</tr>
-							</thead>
-							<tbody class="divide-y divide-gray-100 dark:divide-gray-700/50">
-								<tr v-if="!timelineSteps.length">
-									<td colspan="3" class="px-3 py-8 text-center text-sm text-gray-400 dark:text-gray-500">
-										Chưa có bước nào
-									</td>
-								</tr>
-								<tr
-									v-for="(step, index) in timelineSteps"
-									v-else
-									:key="step.id"
-									:data-table-row-index="index"
-									class="transition-colors duration-150"
-									:class="{
-										'bg-emerald-50/60 dark:bg-emerald-900/10': step.status === 'done',
-										'bg-amber-50/60 dark:bg-amber-900/10': step.status === 'current',
-										'hover:bg-gray-50 dark:hover:bg-gray-700/30': step.status === 'pending',
-									}"
-								>
-									<td
-										class="whitespace-nowrap px-3 py-2 text-xs tabular-nums"
-										:class="{
-											'font-semibold text-emerald-600 dark:text-emerald-400': step.status === 'done',
-											'font-bold text-amber-600 dark:text-amber-400': step.status === 'current',
-											'text-gray-400 dark:text-gray-500': step.status === 'pending',
-										}"
-									>{{ index + 1 }}</td>
-									<td
-										class="px-3 py-2 text-sm"
-										:class="{
-											'text-emerald-700 dark:text-emerald-300': step.status === 'done',
-											'font-medium text-amber-700 dark:text-amber-300': step.status === 'current',
-											'text-gray-700 dark:text-gray-300': step.status === 'pending',
-										}"
-									>{{ step.title }}</td>
-									<td class="whitespace-nowrap px-3 py-2 text-xs text-gray-400 dark:text-gray-500">{{ step.actorType || '—' }}</td>
-								</tr>
-							</tbody>
-						</table>
+
+					<!-- Right: Vertical Steps Timeline (~62%) with scroll -->
+					<div class="flex flex-col rounded-lg bg-white shadow dark:bg-gray-800">
+						<div class="shrink-0 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+							<h3 class="text-sm font-semibold text-gray-900 dark:text-white">Tiến trình thực hiện</h3>
+							<p class="mt-0.5 text-xs text-gray-400 dark:text-gray-500">Bấm vào bước để xem chi tiết</p>
+						</div>
+						<div
+							ref="timelineScrollRef"
+							class="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-4 py-3"
+							style="max-height: calc(100vh - 280px);"
+						>
+							<div v-if="!timelineSteps.length" class="py-8 text-center text-sm text-gray-400 dark:text-gray-500">
+								Chưa có bước nào
+							</div>
+							<ModulesWorkflowModulePartialsStepsTimeline
+								v-else
+								:steps="timelineSteps"
+								checkable
+								show-insert-marks
+								@toggle-step-complete="handleToggleStepComplete"
+								@insert-at="handleInsertAt"
+							/>
+						</div>
 					</div>
 				</div>
 
-				<!-- Right: Vertical Steps Timeline (~62%) with scroll -->
-				<div class="flex flex-col rounded-lg bg-white shadow dark:bg-gray-800">
-					<div class="shrink-0 border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-						<h3 class="text-sm font-semibold text-gray-900 dark:text-white">Tiến trình thực hiện</h3>
-						<p class="mt-0.5 text-xs text-gray-400 dark:text-gray-500">Bấm vào bước để xem chi tiết</p>
-					</div>
-					<div
-						ref="timelineScrollRef"
-						class="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-4 py-3"
-						style="max-height: calc(100vh - 280px);"
-					>
-						<div v-if="!timelineSteps.length" class="py-8 text-center text-sm text-gray-400 dark:text-gray-500">
-							Chưa có bước nào
-						</div>
-						<ModulesWorkflowModulePartialsStepsTimeline
-							v-else
-							:steps="timelineSteps"
-						/>
-					</div>
-				</div>
+				<!-- Inline WCR popup for diagram tab -->
+				<ModulesWorkflowModulePartialsInlineWcrPopup
+					v-if="workflow"
+					:workflow-id="workflow.id"
+					:after-step-id="wcrInsertAfterStepId"
+					:after-step-title="wcrInsertAfterTitle"
+					:visible="showWcrPopup"
+					style="top: 50%; left: 50%; transform: translate(-50%, -50%);"
+					@close="showWcrPopup = false"
+					@wcr-created="handleWcrCreated"
+				/>
 			</div>
 
 			<!-- WCR tab: WCR panel + steps table below for reference -->
@@ -472,41 +625,32 @@ const categoryBreadcrumb = computed(() => {
 					:workflow-id="workflow.id"
 				/>
 
-				<!-- Steps table below WCR for reference -->
-				<SharedDirectusDataTable
-					collection="workflow_steps"
-					:fields="stepFields"
-					:filters="{ workflow_id: { _eq: workflowId } }"
-					:default-sort="['sort_order', 'id']"
-					:page-size="50"
-					:searchable="false"
-					title="Quy trình hiện tại (tham chiếu)"
-					:stt="true"
-				>
-					<template #cell-step_type="{ value }">
-						<span
-							class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
-							:class="{
-								'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300': value === 'action',
-								'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300': value === 'condition',
-								'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300': value === 'agent_call',
-								'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300': value === 'human_checkpoint',
-								'bg-slate-100 text-slate-700 dark:bg-slate-700/50 dark:text-slate-200': value === 'wait_for_event',
-								'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300': value === 'loop',
-								'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300': value === 'parallel',
-							}"
-						>
-							{{ value }}
-						</span>
-					</template>
-				</SharedDirectusDataTable>
+				<!-- Steps table below WCR for reference — with insert marks -->
+				<div class="relative">
+					<ModulesWorkflowModulePartialsWorkflowMatrixView
+						:workflow-id="workflowId"
+						show-insert-marks
+						:pending-wcrs="pendingWcrs || []"
+						@insert-at="handleInsertAt"
+					/>
+
+					<ModulesWorkflowModulePartialsInlineWcrPopup
+						v-if="workflow"
+						:workflow-id="workflow.id"
+						:after-step-id="wcrInsertAfterStepId"
+						:after-step-title="wcrInsertAfterTitle"
+						:visible="showWcrPopup"
+						style="top: 50%; left: 50%; transform: translate(-50%, -50%);"
+						@close="showWcrPopup = false"
+						@wcr-created="handleWcrCreated"
+					/>
+				</div>
 			</template>
 
-			<ModulesCommentModule
+			<!-- Compact Approval Widget (replaces global CommentModule) -->
+			<SharedApprovalWidget
 				v-if="workflow.task_id"
 				:task-id="workflow.task_id"
-				title="Quản trị quy trình"
-				show-checkpoints
 			/>
 		</div>
 	</div>
