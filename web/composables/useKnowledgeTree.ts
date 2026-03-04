@@ -85,23 +85,28 @@ export async function useKnowledgeDocumentsList(filters?: KnowledgeDocumentFilte
 		directusFilter._or = [{ title: { _contains: filters.search } }, { content: { _contains: filters.search } }];
 	}
 
+	const params: Record<string, any> = {
+		fields: [
+			'id',
+			'title',
+			'slug',
+			'status',
+			'is_folder',
+			'content',
+			'parent_document_id',
+			'date_created',
+			'date_updated',
+		],
+		sort: ['title'],
+		limit: 500, // Increased for full tree
+	};
+
+	if (Object.keys(directusFilter).length > 0) {
+		params.filter = directusFilter;
+	}
+
 	return await useDirectus<KnowledgeDocument[]>(
-		readItems('knowledge_documents', {
-			fields: [
-				'id',
-				'title',
-				'slug',
-				'status',
-				'is_folder',
-				'content',
-				'parent_document_id',
-				'date_created',
-				'date_updated',
-			],
-			filter: Object.keys(directusFilter).length > 0 ? directusFilter : undefined,
-			sort: ['title'],
-			limit: 500, // Increased for full tree
-		}),
+		readItems('knowledge_documents', params),
 	);
 }
 
