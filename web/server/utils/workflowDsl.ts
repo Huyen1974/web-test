@@ -157,22 +157,23 @@ function shapeSize(renderKind: RenderKind) {
 	switch (renderKind) {
 		case 'exclusiveGateway':
 		case 'parallelGateway':
-			return { width: 50, height: 50 };
+			return { width: 60, height: 60 };
 		case 'startEvent':
 		case 'intermediateCatchEvent':
 		case 'endEvent':
 			return { width: 36, height: 36 };
 		default:
-			return { width: 120, height: 80 };
+			return { width: 160, height: 80 };
 	}
 }
 
-function shapeName(step: WorkflowStepDraft | WorkflowStep) {
+function shapeName(step: WorkflowStepDraft | WorkflowStep, stt?: number) {
+	const prefix = stt != null ? `${stt}. ` : '';
 	if (step.step_type === 'agent_call' && step.actor_type) {
-		return step.actor_type;
+		return `${prefix}${step.actor_type}`;
 	}
 
-	return step.title || step.step_key;
+	return `${prefix}${step.title || step.step_key}`;
 }
 
 function stepStateFromRecord(step: WorkflowStep): WorkflowStepDraft {
@@ -745,15 +746,84 @@ function buildShapeRegistry(
 		incoming.set(relation.to_step_key, [...(incoming.get(relation.to_step_key) || []), relation]);
 	}
 
+	// === TB (top→bottom) layout via BFS layering ===
+	const CENTER_X = 400;
+	const VERTICAL_SPACING = 200;
+	const HORIZONTAL_SPACING = 250;
+
+	// Build adjacency for BFS
+	const childrenOf = new Map<string, string[]>();
+	for (const relation of relations) {
+		if (!relation.from_step_key || !relation.to_step_key) continue;
+		childrenOf.set(relation.from_step_key, [...(childrenOf.get(relation.from_step_key) || []), relation.to_step_key]);
+	}
+
+	// Find entry steps (no incoming edges, not start/end events)
+	const allStepKeys = new Set(steps.map((s) => s.step_key));
+	const hasIncoming = new Set<string>();
+	for (const relation of relations) {
+		if (relation.to_step_key && allStepKeys.has(relation.to_step_key)) {
+			hasIncoming.add(relation.to_step_key);
+		}
+	}
+
+	// BFS to assign layers (depth)
+	const layerOf = new Map<string, number>();
+	const queue: string[] = [];
+	for (const step of steps) {
+		const isStartEvent = step.config?.render_as === 'startEvent';
+		if (isStartEvent || !hasIncoming.has(step.step_key)) {
+			layerOf.set(step.step_key, 0);
+			queue.push(step.step_key);
+		}
+	}
+
+	let head = 0;
+	while (head < queue.length) {
+		const current = queue[head++];
+		const currentLayer = layerOf.get(current) ?? 0;
+		for (const child of childrenOf.get(current) || []) {
+			const existingLayer = layerOf.get(child);
+			if (existingLayer === undefined || existingLayer < currentLayer + 1) {
+				layerOf.set(child, currentLayer + 1);
+				queue.push(child);
+			}
+		}
+	}
+
+	// Assign layers for any unvisited steps
+	for (const step of steps) {
+		if (!layerOf.has(step.step_key)) {
+			layerOf.set(step.step_key, steps.indexOf(step));
+		}
+	}
+
+	// Group steps by layer
+	const layers = new Map<number, (WorkflowStepDraft | WorkflowStep)[]>();
+	for (const step of steps) {
+		const layer = layerOf.get(step.step_key) ?? 0;
+		layers.set(layer, [...(layers.get(layer) || []), step]);
+	}
+
+	// Position nodes: y by layer, x spread within layer
 	const positionedSteps = steps.map((step, index) => {
 		const renderKind = defaultRenderKind(step);
 		const size = shapeSize(renderKind);
-		const x = step.position_x ?? 220 + index * 180;
-		const y = step.position_y ?? 200;
+		const layer = layerOf.get(step.step_key) ?? index;
+		const layerSteps = layers.get(layer) || [step];
+		const posInLayer = layerSteps.indexOf(step);
+		const layerWidth = layerSteps.length;
+
+		// Use explicit positions if set, otherwise compute TB layout
+		const x = step.position_x ?? (CENTER_X + (posInLayer - (layerWidth - 1) / 2) * HORIZONTAL_SPACING);
+		const y = step.position_y ?? (80 + layer * VERTICAL_SPACING);
+
+		// STT: use sort_order if available, otherwise index + 1
+		const stt = (step as any).sort_order ?? index + 1;
 
 		return {
 			id: step.step_key,
-			name: shapeName(step),
+			name: shapeName(step, stt),
 			renderKind,
 			x,
 			y,
@@ -774,29 +844,27 @@ function buildShapeRegistry(
 			step.renderKind !== 'startEvent' && step.renderKind !== 'endEvent' && !(outgoing.get(step.id) || []).length,
 	);
 
-	const minimumX = positionedSteps.length ? Math.min(...positionedSteps.map((step) => step.x)) : 220;
-	const maximumX = positionedSteps.length ? Math.max(...positionedSteps.map((step) => step.x)) : 220;
-
-	const averageY = entrySteps.length ? entrySteps.reduce((sum, step) => sum + step.y, 0) / entrySteps.length : 200;
+	const maxLayer = Math.max(0, ...Array.from(layerOf.values()));
+	const averageExitX = exitSteps.length ? exitSteps.reduce((sum, s) => sum + s.x, 0) / exitSteps.length : CENTER_X;
 
 	const startNode: BpmnNodeShape | null = explicitStartNodes.length
 		? null
 		: {
 				id: 'start_event',
-				name: 'Start',
+				name: 'Bắt đầu',
 				renderKind: 'startEvent',
-				x: minimumX - 140,
-				y: averageY,
+				x: CENTER_X - 18,
+				y: 10,
 				width: 36,
 				height: 36,
 			};
 
 	const endNodes = exitSteps.map((step, index) => ({
 		id: `end_event_${sanitizeKey(step.id)}_${index + 1}`,
-		name: step.name || 'End',
+		name: 'Kết thúc',
 		renderKind: 'endEvent' as const,
-		x: maximumX + 200,
-		y: step.y,
+		x: step.x,
+		y: 80 + (maxLayer + 1) * VERTICAL_SPACING,
 		width: 36,
 		height: 36,
 	}));
@@ -842,19 +910,22 @@ function buildWaypoints(source: BpmnNodeShape, target: BpmnNodeShape): Point[] {
 	const sourceCenter = eventCenter(source);
 	const targetCenter = eventCenter(target);
 
-	if (Math.abs(sourceCenter.y - targetCenter.y) <= 8) {
+	// Vertical (TB) layout: connections go from bottom of source to top of target
+	if (Math.abs(sourceCenter.x - targetCenter.x) <= 8) {
+		// Straight vertical line
 		return [
-			{ x: source.x + source.width, y: sourceCenter.y },
-			{ x: target.x, y: targetCenter.y },
+			{ x: sourceCenter.x, y: source.y + source.height },
+			{ x: targetCenter.x, y: target.y },
 		];
 	}
 
-	const middleX = source.x + source.width + Math.max(40, Math.round((target.x - (source.x + source.width)) / 2));
+	// Offset horizontally: route down then across then down
+	const middleY = source.y + source.height + Math.max(30, Math.round((target.y - (source.y + source.height)) / 2));
 	return [
-		{ x: source.x + source.width, y: sourceCenter.y },
-		{ x: middleX, y: sourceCenter.y },
-		{ x: middleX, y: targetCenter.y },
-		{ x: target.x, y: targetCenter.y },
+		{ x: sourceCenter.x, y: source.y + source.height },
+		{ x: sourceCenter.x, y: middleY },
+		{ x: targetCenter.x, y: middleY },
+		{ x: targetCenter.x, y: target.y },
 	];
 }
 

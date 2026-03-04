@@ -1,19 +1,48 @@
 <script setup lang="ts">
 import type { FieldConfig } from '~/composables/useDirectusTable';
-import { readItems } from '@directus/sdk';
+import { readItems, updateItem } from '@directus/sdk';
 
 const route = useRoute();
 const workflowId = computed(() => Number(route.params.id));
 const activeTab = computed(() => {
-	const tab = typeof route.query.tab === 'string' ? route.query.tab : 'matrix';
-	return ['matrix', 'diagram', 'wcr'].includes(tab) ? tab : 'matrix';
+	const tab = typeof route.query.tab === 'string' ? route.query.tab : 'narrative';
+	return ['narrative', 'matrix', 'diagram', 'wcr'].includes(tab) ? tab : 'narrative';
 });
 
 const tabs = [
+	{ name: 'Mô tả', key: 'narrative' },
 	{ name: 'Trình tự', key: 'matrix' },
 	{ name: 'Sơ đồ BPMN', key: 'diagram' },
 	{ name: 'Đề xuất thay đổi', key: 'wcr' },
 ];
+
+// Narrative inline edit
+const editingNarrative = ref(false);
+const narrativeDraft = ref('');
+const savingNarrative = ref(false);
+
+function startEditNarrative() {
+	narrativeDraft.value = workflow.value?.narrative || '';
+	editingNarrative.value = true;
+}
+
+function cancelEditNarrative() {
+	editingNarrative.value = false;
+}
+
+async function saveNarrative() {
+	if (!workflow.value) return;
+	savingNarrative.value = true;
+	try {
+		await useDirectus(updateItem('workflows', workflow.value.id, { narrative: narrativeDraft.value }));
+		workflow.value.narrative = narrativeDraft.value;
+		editingNarrative.value = false;
+	} catch (err: any) {
+		alert(err?.message || 'Không lưu được mô tả.');
+	} finally {
+		savingNarrative.value = false;
+	}
+}
 
 // Fetch workflow header info
 const {
@@ -29,7 +58,7 @@ const {
 		const items = await useDirectus<any[]>(
 			readItems('workflows', {
 				filter: { id: { _eq: workflowId.value } },
-				fields: ['id', 'title', 'description', 'status', 'task_id', 'version', 'process_code', 'sort', 'date_updated', 'category_id.name', 'category_id.parent_id.name', 'category_id.parent_id.parent_id.name'],
+				fields: ['id', 'title', 'description', 'status', 'task_id', 'version', 'process_code', 'sort', 'date_updated', 'narrative', 'category_id.name', 'category_id.parent_id.name', 'category_id.parent_id.parent_id.name'],
 				limit: 1,
 			}),
 		);
@@ -143,6 +172,64 @@ const stepFields: FieldConfig[] = [
 				</nav>
 			</div>
 
+			<!-- Narrative tab: Mô tả -->
+			<div v-if="activeTab === 'narrative'" class="space-y-6">
+				<div class="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
+					<div class="mb-4 flex items-center justify-between">
+						<h3 class="text-base font-semibold text-gray-900 dark:text-white">Mô tả quy trình</h3>
+						<button
+							v-if="!editingNarrative"
+							class="inline-flex items-center rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+							@click="startEditNarrative"
+						>
+							Chỉnh sửa
+						</button>
+					</div>
+
+					<!-- View mode -->
+					<div v-if="!editingNarrative">
+						<p v-if="workflow.narrative" class="whitespace-pre-wrap text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+							{{ workflow.narrative }}
+						</p>
+						<p v-else class="text-sm italic text-gray-400 dark:text-gray-500">
+							Chưa có mô tả. Nhấn Chỉnh sửa để thêm mô tả quy trình.
+						</p>
+					</div>
+
+					<!-- Edit mode -->
+					<div v-else class="space-y-3">
+						<textarea
+							v-model="narrativeDraft"
+							rows="10"
+							class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-primary-400 dark:focus:ring-primary-900"
+							placeholder="Nhập mô tả chi tiết về quy trình..."
+						/>
+						<div class="flex gap-2">
+							<button
+								class="inline-flex items-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+								:disabled="savingNarrative"
+								@click="saveNarrative"
+							>
+								{{ savingNarrative ? 'Đang lưu...' : 'Lưu' }}
+							</button>
+							<button
+								class="inline-flex items-center rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+								:disabled="savingNarrative"
+								@click="cancelEditNarrative"
+							>
+								Hủy
+							</button>
+						</div>
+					</div>
+				</div>
+
+				<!-- Hội đồng AI placeholder -->
+				<div class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center dark:border-gray-600 dark:bg-gray-800/50">
+					<p class="text-sm font-medium text-gray-500 dark:text-gray-400">Hội đồng AI</p>
+					<p class="mt-1 text-xs text-gray-400 dark:text-gray-500">CommentModule sẽ được lắp vào đây (Phase 2B)</p>
+				</div>
+			</div>
+
 			<!-- Steps tab: DirectusDataTable -->
 			<SharedDirectusDataTable
 				v-if="activeTab === 'matrix'"
@@ -217,7 +304,7 @@ const stepFields: FieldConfig[] = [
 			</template>
 
 			<!-- WCR tab: WCR panel + steps table below for reference -->
-			<template v-else>
+			<template v-else-if="activeTab === 'wcr'">
 				<ModulesWorkflowModulePartialsWcrIntakePanel
 					:workflow-id="workflow.id"
 				/>
