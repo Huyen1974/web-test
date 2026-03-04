@@ -10,7 +10,9 @@ const workflowFields: FieldConfig[] = [
 	{ key: 'process_code', label: 'Ma QT', sortable: true },
 	{ key: 'title', label: 'Ten', sortable: true },
 	{ key: 'description', label: 'Mo ta', sortable: false, render: (v: string) => v ? (v.length > 80 ? `${v.slice(0, 80)}...` : v) : '—' },
-	{ key: 'level', label: 'Tang', sortable: true, filterable: true, filterOptions: [{ label: 'Cu (1)', value: 1 }, { label: 'Ba (2)', value: 2 }, { label: 'Me (3)', value: 3 }] },
+	{ key: 'category_id.parent_id.parent_id.name', label: 'Cap 1', sortable: false },
+	{ key: 'category_id.parent_id.name', label: 'Cap 2', sortable: false },
+	{ key: 'category_id.name', label: 'Cap 3', sortable: false },
 	{
 		key: 'status',
 		label: 'Trang thai',
@@ -47,19 +49,6 @@ const workflowFields: FieldConfig[] = [
 			:page-size="25"
 			:row-link="(item: any) => `/knowledge/workflows/${item.id}`"
 		>
-			<template #cell-level="{ value }">
-				<span
-					class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
-					:class="{
-						'bg-slate-100 text-slate-700 dark:bg-slate-700/50 dark:text-slate-200': value === 1,
-						'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300': value === 2,
-						'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300': value === 3,
-					}"
-				>
-					{{ value === 1 ? 'Cu' : value === 2 ? 'Ba' : value === 3 ? 'Me' : `T${value}` }}
-				</span>
-			</template>
-
 			<template #cell-status="{ value }">
 				<span
 					class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium capitalize"
