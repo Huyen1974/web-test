@@ -28,7 +28,7 @@ const {
 		const items = await useDirectus<any[]>(
 			readItems('workflows', {
 				filter: { id: { _eq: workflowId.value } },
-				fields: ['id', 'title', 'description', 'status', 'task_id', 'version', 'process_code', 'sort', 'level', 'date_updated'],
+				fields: ['id', 'title', 'description', 'status', 'task_id', 'version', 'process_code', 'sort', 'date_updated', 'category_id.name', 'category_id.parent_id.name', 'category_id.parent_id.parent_id.name'],
 				limit: 1,
 			}),
 		);
@@ -53,15 +53,6 @@ const stepFields: FieldConfig[] = [
 	{ key: 'actor_type', label: 'Actor', sortable: true, render: (v: string) => v || '—' },
 ];
 
-const levelLabel: Record<number, string> = {
-	1: 'Cu',
-	2: 'Ba',
-	3: 'Me',
-};
-
-function workflowLevel(level?: number | null) {
-	return levelLabel[level || 1] || `Tang ${level || 1}`;
-}
 </script>
 
 <template>
@@ -110,9 +101,10 @@ function workflowLevel(level?: number | null) {
 							{{ workflow.status }}
 						</span>
 						<span
+							v-if="workflow.category_id?.name"
 							class="inline-flex rounded-full bg-sky-100 px-3 py-1 text-sm font-medium text-sky-700 dark:bg-sky-900/40 dark:text-sky-300"
 						>
-							{{ workflowLevel(workflow.level) }}
+							{{ workflow.category_id.name }}
 						</span>
 					</div>
 				</div>
