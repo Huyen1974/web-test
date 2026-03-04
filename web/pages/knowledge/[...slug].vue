@@ -17,6 +17,13 @@ import { markdownToHtml } from '~/utils/markdown';
 const route = useRoute();
 const toast = useToast();
 
+// Guard: sub-routes with their own pages should not be handled by this catch-all
+const KNOWN_SUB_ROUTES = ['workflows', 'modules', 'current-tasks'];
+const slugArray = Array.isArray(route.params.slug) ? route.params.slug : [route.params.slug];
+if (slugArray.length > 0 && KNOWN_SUB_ROUTES.includes(slugArray[0])) {
+	throw createError({ statusCode: 404, statusMessage: 'Page not found' });
+}
+
 // Readable folder labels — frozen 4-folder structure (KS-LAW §2)
 const FOLDER_LABELS: Record<string, string> = {
 	'current-state': 'Trạng thái hiện tại',
