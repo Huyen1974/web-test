@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { FieldConfig } from '~/composables/useDirectusTable';
 import { readItems, updateItem } from '@directus/sdk';
+import type { TimelineStep } from '~/components/modules/workflow-module/partials/StepsTimeline.vue';
 
 const route = useRoute();
 const workflowId = computed(() => Number(route.params.id));
@@ -12,7 +13,7 @@ const activeTab = computed(() => {
 const tabs = [
 	{ name: 'Mô tả', key: 'narrative' },
 	{ name: 'Trình tự', key: 'matrix' },
-	{ name: 'Sơ đồ BPMN', key: 'diagram' },
+	{ name: 'Tiến trình thực hiện', key: 'diagram' },
 	{ name: 'Đề xuất thay đổi', key: 'wcr' },
 ];
 
@@ -80,6 +81,33 @@ const stepFields: FieldConfig[] = [
 	{ key: 'step_type', label: 'Loại bước', sortable: true },
 	{ key: 'actor_type', label: 'Tác nhân', sortable: true, render: (v: string) => v || '—' },
 ];
+
+// Fetch steps for timeline (reused data — no extra API call when tab loads)
+const { data: stepsRaw } = await useAsyncData(
+	() => `workflow-steps:${workflowId.value}`,
+	async () => {
+		if (!Number.isInteger(workflowId.value) || workflowId.value <= 0) return [];
+		return await useDirectus<Array<{ id: number; title: string; actor_type: string | null; step_type: string | null; sort_order: number }>>(
+			readItems('workflow_steps', {
+				filter: { workflow_id: { _eq: workflowId.value } },
+				fields: ['id', 'title', 'actor_type', 'step_type', 'sort_order'],
+				sort: ['sort_order', 'id'],
+				limit: -1,
+			}),
+		);
+	},
+	{ watch: [workflowId] },
+);
+
+const timelineSteps = computed<TimelineStep[]>(() =>
+	(stepsRaw.value || []).map((step) => ({
+		id: step.id,
+		title: step.title,
+		actorType: step.actor_type,
+		stepType: step.step_type,
+		status: 'pending' as const,
+	})),
+);
 </script>
 
 <template>
@@ -260,48 +288,53 @@ const stepFields: FieldConfig[] = [
 				</template>
 			</SharedDirectusDataTable>
 
-			<!-- Diagram tab: BPMN viewer + steps table below -->
-			<template v-else-if="activeTab === 'diagram'">
-				<NuxtErrorBoundary>
-					<ModulesWorkflowModuleWorkflowViewer :workflow-id="workflow.id" />
+			<!-- Diagram tab: 2-column layout — compact table + vertical timeline -->
+			<div v-else-if="activeTab === 'diagram'" class="grid gap-6 lg:grid-cols-2">
+				<!-- Left: Compact steps table (STT / Tên bước / Tác nhân) -->
+				<div class="rounded-lg bg-white shadow dark:bg-gray-800">
+					<div class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+						<h3 class="text-base font-semibold text-gray-900 dark:text-white">Trình tự</h3>
+					</div>
+					<div class="overflow-x-auto">
+						<table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+							<thead class="bg-gray-50 dark:bg-gray-900/40">
+								<tr>
+									<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">STT</th>
+									<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Tên bước</th>
+									<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Tác nhân</th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+								<tr v-if="!timelineSteps.length">
+									<td colspan="3" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+										Chưa có bước nào
+									</td>
+								</tr>
+								<tr v-for="(step, index) in timelineSteps" v-else :key="step.id">
+									<td class="whitespace-nowrap px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300">{{ index + 1 }}</td>
+									<td class="px-4 py-2.5 text-sm text-gray-900 dark:text-white">{{ step.title }}</td>
+									<td class="whitespace-nowrap px-4 py-2.5 text-sm text-gray-500 dark:text-gray-400">{{ step.actorType || '—' }}</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</div>
 
-					<template #error="{ error: bpmnError }">
-						<div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-900/20">
-							<p class="text-sm font-medium text-red-700 dark:text-red-300">Không thể tải sơ đồ quy trình</p>
-							<p class="mt-1 text-xs text-red-500 dark:text-red-400">{{ bpmnError?.message || 'Lỗi không xác định' }}</p>
-						</div>
-					</template>
-				</NuxtErrorBoundary>
-
-				<!-- Steps table below diagram for reference -->
-				<SharedDirectusDataTable
-					collection="workflow_steps"
-					:fields="stepFields"
-					:filters="{ workflow_id: { _eq: workflowId } }"
-					:default-sort="['sort_order', 'id']"
-					:page-size="50"
-					:searchable="false"
-					title="Chi tiết các bước"
-					:stt="true"
-				>
-					<template #cell-step_type="{ value }">
-						<span
-							class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
-							:class="{
-								'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300': value === 'action',
-								'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300': value === 'condition',
-								'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300': value === 'agent_call',
-								'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300': value === 'human_checkpoint',
-								'bg-slate-100 text-slate-700 dark:bg-slate-700/50 dark:text-slate-200': value === 'wait_for_event',
-								'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300': value === 'loop',
-								'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300': value === 'parallel',
-							}"
-						>
-							{{ value }}
-						</span>
-					</template>
-				</SharedDirectusDataTable>
-			</template>
+				<!-- Right: Vertical Steps Timeline -->
+				<div class="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
+					<div class="mb-4 border-b border-gray-200 pb-3 dark:border-gray-700">
+						<h3 class="text-base font-semibold text-gray-900 dark:text-white">Tiến trình thực hiện</h3>
+						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Trạng thái sẽ cập nhật tự động khi tích hợp checkpoint</p>
+					</div>
+					<div v-if="!timelineSteps.length" class="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+						Chưa có bước nào
+					</div>
+					<ModulesWorkflowModulePartialsStepsTimeline
+						v-else
+						:steps="timelineSteps"
+					/>
+				</div>
+			</div>
 
 			<!-- WCR tab: WCR panel + steps table below for reference -->
 			<template v-else-if="activeTab === 'wcr'">

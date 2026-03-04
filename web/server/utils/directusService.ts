@@ -27,7 +27,6 @@ const WORKFLOW_FIELDS = [
 	'id',
 	'title',
 	'description',
-	'bpmn_xml',
 	'status',
 	'task_id',
 	'version',

@@ -54,7 +54,6 @@
 		"@sentry/nuxt": "^10.36.0",
 		"@stripe/stripe-js": "^6.1.0",
 		"@vueuse/motion": "^3.0.3",
-		"bpmn-js": "18.12.1",
 		"diff": "^8.0.2",
 		"fast-xml-parser": "^5.3.3",
 		"firebase": "^12.6.0",
