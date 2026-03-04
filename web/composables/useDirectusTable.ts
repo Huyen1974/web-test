@@ -33,8 +33,10 @@ export function useDirectusTable(options: DirectusTableOptions) {
 	const pageSize = options.pageSize || 25;
 
 	// Build the fields list for the SDK query (supports dot notation for relations)
+	// Always include 'id' for row identification (row-link, keys, etc.)
 	const sdkFields = computed(() => {
 		const fieldKeys = options.fields.map((f) => f.key);
+		if (!fieldKeys.includes('id')) fieldKeys.unshift('id');
 		return fieldKeys as string[];
 	});
 
