@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { FieldConfig } from '~/composables/useDirectusTable';
+
 const route = useRoute();
 const workflowId = computed(() => Number(route.params.id));
 const activeTab = computed(() => {
@@ -12,30 +14,44 @@ const tabs = computed(() => [
 	{ name: 'De xuat thay doi', href: `/knowledge/workflows/${workflowId.value}?tab=wcr` },
 ]);
 
+// Fetch workflow header info
 const {
-	data,
+	data: workflow,
 	pending,
 	error,
 } = await useAsyncData(
-	() => `workflow-detail-page:${workflowId.value}`,
+	() => `workflow-header:${workflowId.value}`,
 	async () => {
 		if (!Number.isInteger(workflowId.value) || workflowId.value <= 0) {
 			throw createError({ statusCode: 400, statusMessage: 'Workflow id must be a positive integer.' });
 		}
-
-		return await useWorkflowMatrix(workflowId.value);
+		const items = await useDirectus<any[]>(
+			readItems('workflows', {
+				filter: { id: { _eq: workflowId.value } },
+				fields: ['id', 'title', 'description', 'status', 'task_id', 'version', 'process_code', 'sort', 'level', 'date_updated'],
+				limit: 1,
+			}),
+		);
+		return items?.[0] || null;
 	},
-	{
-		watch: [workflowId],
-	},
+	{ watch: [workflowId] },
 );
 
-const workflow = computed(() => data.value?.workflow || null);
+import { readItems } from '@directus/sdk';
 
 useSeoMeta({
 	title: () => workflow.value?.title || 'Workflow Detail',
 	description: () => workflow.value?.description || 'Workflow supervisor view',
 });
+
+// Steps table config
+const stepFields: FieldConfig[] = [
+	{ key: 'step_key', label: 'Ma buoc', sortable: true },
+	{ key: 'title', label: 'Ten buoc', sortable: true },
+	{ key: 'description', label: 'Mo ta', sortable: false, render: (v: string) => v || '—' },
+	{ key: 'step_type', label: 'Loai buoc', sortable: true },
+	{ key: 'actor_type', label: 'Actor', sortable: true, render: (v: string) => v || '—' },
+];
 
 const levelLabel: Record<number, string> = {
 	1: 'Cu',
@@ -56,13 +72,13 @@ function workflowLevel(level?: number | null) {
 		</div>
 
 		<div
-			v-else-if="error"
+			v-else-if="error || !workflow"
 			class="rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20"
 		>
-			<p class="text-red-800 dark:text-red-200">Error loading workflow: {{ error.message }}</p>
+			<p class="text-red-800 dark:text-red-200">Error loading workflow: {{ error?.message || 'Not found' }}</p>
 		</div>
 
-		<div v-else-if="workflow" class="space-y-6">
+		<div v-else class="space-y-6">
 			<div>
 				<NuxtLink
 					to="/knowledge/workflows"
@@ -123,11 +139,37 @@ function workflowLevel(level?: number | null) {
 
 			<VHorizontalNavigation :items="tabs" />
 
-			<ModulesWorkflowModulePartialsWorkflowMatrixView
+			<!-- Steps tab: DirectusDataTable -->
+			<SharedDirectusDataTable
 				v-if="activeTab === 'matrix'"
-				:workflow-id="workflow.id"
-			/>
+				collection="workflow_steps"
+				:fields="stepFields"
+				:filters="{ workflow_id: { _eq: workflowId } }"
+				:default-sort="['sort_order', 'id']"
+				:page-size="50"
+				:searchable="false"
+				title="Bang buoc"
+				:stt="true"
+			>
+				<template #cell-step_type="{ value }">
+					<span
+						class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
+						:class="{
+							'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300': value === 'action',
+							'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300': value === 'condition',
+							'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300': value === 'agent_call',
+							'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300': value === 'human_checkpoint',
+							'bg-slate-100 text-slate-700 dark:bg-slate-700/50 dark:text-slate-200': value === 'wait_for_event',
+							'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300': value === 'loop',
+							'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300': value === 'parallel',
+						}"
+					>
+						{{ value }}
+					</span>
+				</template>
+			</SharedDirectusDataTable>
 
+			<!-- Diagram tab -->
 			<NuxtErrorBoundary v-else-if="activeTab === 'diagram'">
 				<ModulesWorkflowModuleWorkflowViewer :workflow-id="workflow.id" />
 
@@ -139,6 +181,7 @@ function workflowLevel(level?: number | null) {
 				</template>
 			</NuxtErrorBoundary>
 
+			<!-- WCR tab: keep existing component (has create form, not just a table) -->
 			<ModulesWorkflowModulePartialsWcrIntakePanel
 				v-else
 				:workflow-id="workflow.id"
