@@ -9,11 +9,11 @@ const activeTab = computed(() => {
 	return ['matrix', 'diagram', 'wcr'].includes(tab) ? tab : 'matrix';
 });
 
-const tabs = computed(() => [
-	{ name: 'Bảng bước', href: `/knowledge/workflows/${workflowId.value}?tab=matrix` },
-	{ name: 'Sơ đồ BPMN', href: `/knowledge/workflows/${workflowId.value}?tab=diagram` },
-	{ name: 'Đề xuất thay đổi', href: `/knowledge/workflows/${workflowId.value}?tab=wcr` },
-]);
+const tabs = [
+	{ name: 'Trình tự', key: 'matrix' },
+	{ name: 'Sơ đồ BPMN', key: 'diagram' },
+	{ name: 'Đề xuất thay đổi', key: 'wcr' },
+];
 
 // Fetch workflow header info
 const {
@@ -127,7 +127,21 @@ const stepFields: FieldConfig[] = [
 				</div>
 			</div>
 
-			<VHorizontalNavigation :items="tabs" />
+			<div class="inline-flex">
+				<nav class="flex gap-4">
+					<NuxtLink
+						v-for="tab in tabs"
+						:key="tab.key"
+						:href="`/knowledge/workflows/${workflowId}?tab=${tab.key}`"
+						class="px-3 py-2 text-sm font-medium transition duration-300 rounded-button"
+						:class="activeTab === tab.key
+							? 'text-primary-700 bg-primary-100 dark:bg-primary-900 dark:text-white'
+							: 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'"
+					>
+						{{ tab.name }}
+					</NuxtLink>
+				</nav>
+			</div>
 
 			<!-- Steps tab: DirectusDataTable -->
 			<SharedDirectusDataTable
@@ -138,7 +152,7 @@ const stepFields: FieldConfig[] = [
 				:default-sort="['sort_order', 'id']"
 				:page-size="50"
 				:searchable="false"
-				title="Bảng bước"
+				title="Trình tự"
 				:stt="true"
 			>
 				<template #cell-step_type="{ value }">

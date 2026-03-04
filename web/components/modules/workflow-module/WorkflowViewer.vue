@@ -58,16 +58,27 @@ function colorizeElements() {
 async function renderDiagram(xml: string) {
 	if (!containerRef.value || !xml) return;
 
-	const { default: BpmnViewer } = await import('bpmn-js/lib/NavigatedViewer');
+	const [{ default: BpmnViewer }, { layoutProcess }] = await Promise.all([
+		import('bpmn-js/lib/NavigatedViewer'),
+		import('bpmn-auto-layout'),
+	]);
 
 	if (viewer) {
 		viewer.destroy();
 	}
 
+	// Auto-layout: dagre top→bottom for readable vertical flow
+	let layoutedXml = xml;
+	try {
+		layoutedXml = await layoutProcess(xml);
+	} catch {
+		// Fallback to original XML if auto-layout fails
+	}
+
 	viewer = new BpmnViewer({ container: containerRef.value });
 
 	try {
-		await viewer.importXML(xml);
+		await viewer.importXML(layoutedXml);
 		viewer.get('canvas').zoom('fit-viewport');
 		colorizeElements();
 		viewerError.value = undefined;
