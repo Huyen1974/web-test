@@ -2,26 +2,26 @@
 import type { FieldConfig } from '~/composables/useDirectusTable';
 
 definePageMeta({
-	title: 'Workflows',
-	description: 'Workflow registry for supervisors',
+	title: 'Quy trình',
+	description: 'Danh sách quy trình cho quản lý viên',
 });
 
 const workflowFields: FieldConfig[] = [
-	{ key: 'process_code', label: 'Ma QT', sortable: true },
-	{ key: 'title', label: 'Ten', sortable: true },
-	{ key: 'description', label: 'Mo ta', sortable: false, render: (v: string) => v ? (v.length > 80 ? `${v.slice(0, 80)}...` : v) : '—' },
-	{ key: 'category_id.parent_id.parent_id.name', label: 'Cap 1', sortable: false },
-	{ key: 'category_id.parent_id.name', label: 'Cap 2', sortable: false },
-	{ key: 'category_id.name', label: 'Cap 3', sortable: false },
+	{ key: 'process_code', label: 'Mã QT', sortable: true },
+	{ key: 'title', label: 'Tên', sortable: true },
+	{ key: 'description', label: 'Mô tả', sortable: false, render: (v: string) => v ? (v.length > 80 ? `${v.slice(0, 80)}...` : v) : '—' },
+	{ key: 'category_id.parent_id.parent_id.name', label: 'Cấp 1', sortable: false },
+	{ key: 'category_id.parent_id.name', label: 'Cấp 2', sortable: false },
+	{ key: 'category_id.name', label: 'Cấp 3', sortable: false },
 	{
 		key: 'status',
-		label: 'Trang thai',
+		label: 'Trạng thái',
 		sortable: true,
 		filterable: true,
 		filterOptions: [
-			{ label: 'Active', value: 'active' },
-			{ label: 'Draft', value: 'draft' },
-			{ label: 'Archived', value: 'archived' },
+			{ label: 'Hoạt động', value: 'active' },
+			{ label: 'Nháp', value: 'draft' },
+			{ label: 'Lưu trữ', value: 'archived' },
 		],
 	},
 ];
@@ -34,11 +34,11 @@ const workflowFields: FieldConfig[] = [
 				to="/knowledge"
 				class="mb-4 inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
 			>
-				&larr; Knowledge Hub
+				&larr; Trung tâm tri thức
 			</NuxtLink>
-			<h1 class="text-3xl font-bold text-gray-900 dark:text-white">Workflows</h1>
+			<h1 class="text-3xl font-bold text-gray-900 dark:text-white">Quy trình</h1>
 			<p class="mt-2 text-gray-600 dark:text-gray-400">
-				Danh sach quy trinh duoc quan tri bang DSL + workflow change request.
+				Danh sách quy trình được quản trị bằng DSL + đề xuất thay đổi.
 			</p>
 		</div>
 

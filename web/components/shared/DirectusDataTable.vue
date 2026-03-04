@@ -106,11 +106,11 @@ function sortIcon(fieldKey: string) {
 				:class="filterableFields.length ? `md:grid-cols-[minmax(0,1fr)_${filterableFields.map(() => '180px').join('_')}]` : ''"
 			>
 				<div v-if="searchable">
-					<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Tim kiem</label>
+					<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Tìm kiếm</label>
 					<input
 						v-model="searchDraft"
 						type="text"
-						placeholder="Tim kiem..."
+						placeholder="Tìm kiếm..."
 						class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-primary-400 dark:focus:ring-primary-900"
 					>
 				</div>
@@ -121,7 +121,7 @@ function sortIcon(fieldKey: string) {
 						class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-primary-400 dark:focus:ring-primary-900"
 						@change="setFilter(ff.key, ($event.target as HTMLSelectElement).value)"
 					>
-						<option value="">Tat ca</option>
+						<option value="">Tất cả</option>
 						<option
 							v-for="opt in ff.filterOptions"
 							:key="String(opt.value)"
@@ -144,7 +144,7 @@ function sortIcon(fieldKey: string) {
 						class="inline-flex items-center rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
 						@click="refresh"
 					>
-						Lam moi
+						Làm mới
 					</button>
 				</div>
 			</div>
@@ -176,7 +176,7 @@ function sortIcon(fieldKey: string) {
 						<tr v-if="loading">
 							<td :colspan="fields.length + (stt ? 1 : 0)" class="px-4 py-12 text-center">
 								<div class="inline-block h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
-								<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Dang tai...</p>
+								<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Đang tải...</p>
 							</td>
 						</tr>
 
@@ -184,13 +184,13 @@ function sortIcon(fieldKey: string) {
 						<tr v-else-if="error">
 							<td :colspan="fields.length + (stt ? 1 : 0)" class="px-4 py-8 text-center">
 								<p class="text-sm text-red-600 dark:text-red-400">
-									Khong tai duoc du lieu: {{ error.message }}
+									Không tải được dữ liệu: {{ error.message }}
 								</p>
 								<button
 									class="mt-3 inline-flex items-center rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700"
 									@click="refresh"
 								>
-									Thu lai
+									Thử lại
 								</button>
 							</td>
 						</tr>
@@ -201,7 +201,7 @@ function sortIcon(fieldKey: string) {
 								:colspan="fields.length + (stt ? 1 : 0)"
 								class="px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-400"
 							>
-								Khong co du lieu
+								Không có dữ liệu
 							</td>
 						</tr>
 
@@ -239,7 +239,7 @@ function sortIcon(fieldKey: string) {
 				<p class="text-sm text-gray-500 dark:text-gray-400">
 					Trang {{ currentPage }}
 					<template v-if="totalPages"> / {{ totalPages }}</template>
-					<template v-if="totalCount !== null"> — {{ totalCount }} ban ghi</template>
+					<template v-if="totalCount !== null"> — {{ totalCount }} bản ghi</template>
 				</p>
 				<div class="flex items-center gap-2">
 					<button
@@ -247,14 +247,14 @@ function sortIcon(fieldKey: string) {
 						:disabled="currentPage <= 1 || loading"
 						@click="goToPage(currentPage - 1)"
 					>
-						Truoc
+						Trước
 					</button>
 					<button
 						class="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
 						:disabled="!hasNextPage || loading"
 						@click="goToPage(currentPage + 1)"
 					>
-						Sau
+						Tiếp
 					</button>
 				</div>
 			</div>
