@@ -78,7 +78,7 @@ const statusBadge: Record<string, string> = {
 
 async function submitRequest() {
 	if (!description.value.trim()) {
-		submitError.value = 'Can mo ta thay doi truoc khi tao de xuat.';
+		submitError.value = 'Cần mô tả thay đổi trước khi tạo đề xuất.';
 		return;
 	}
 
@@ -104,7 +104,7 @@ async function submitRequest() {
 		await refresh();
 		emit('wcr-created', created);
 	} catch (err: any) {
-		submitError.value = err?.data?.statusMessage || err?.message || 'Khong tao duoc de xuat thay doi.';
+		submitError.value = err?.data?.statusMessage || err?.message || 'Không tạo được đề xuất thay đổi.';
 	} finally {
 		submitting.value = false;
 	}
@@ -115,15 +115,15 @@ async function submitRequest() {
 	<div class="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
 		<div class="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
 			<div class="mb-4">
-				<h3 class="text-base font-semibold text-gray-900 dark:text-white">De xuat thay doi</h3>
+				<h3 class="text-base font-semibold text-gray-900 dark:text-white">Đề xuất thay đổi</h3>
 				<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-					Mo ta bang ngon ngu tu nhien. He thong se tao WCR o trang thai <code>draft</code>.
+					Mô tả bằng ngôn ngữ tự nhiên. Hệ thống sẽ tạo WCR ở trạng thái <code>draft</code>.
 				</p>
 			</div>
 
 			<div class="space-y-4">
 				<div>
-					<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Loai thay doi</label>
+					<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Loại thay đổi</label>
 					<select
 						v-model="changeType"
 						class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-primary-400 dark:focus:ring-primary-900"
@@ -138,21 +138,21 @@ async function submitRequest() {
 				</div>
 
 				<div>
-					<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Sau buoc nao?</label>
+					<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Sau bước nào?</label>
 					<input
 						v-model="positionContext"
 						type="text"
-						placeholder="Vi du: Sau buoc Review Task"
+						placeholder="Ví dụ: Sau bước Review Task"
 						class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-primary-400 dark:focus:ring-primary-900"
 					>
 				</div>
 
 				<div>
-					<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Mo ta thay doi ban muon...</label>
+					<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Mô tả thay đổi bạn muốn...</label>
 					<textarea
 						v-model="description"
 						rows="6"
-						placeholder="Vi du: Them buoc AI review sau Review Task de kiem tra logic truoc khi owner phe duyet."
+						placeholder="Ví dụ: Thêm bước AI review sau Review Task để kiểm tra logic trước khi owner phê duyệt."
 						class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-primary-400 dark:focus:ring-primary-900"
 					/>
 				</div>
@@ -164,8 +164,8 @@ async function submitRequest() {
 					:disabled="submitting"
 					@click="submitRequest"
 				>
-					<span v-if="submitting">Dang tao...</span>
-					<span v-else>Tao de xuat</span>
+					<span v-if="submitting">Đang tạo...</span>
+					<span v-else>Tạo đề xuất</span>
 				</button>
 			</div>
 		</div>
@@ -173,27 +173,27 @@ async function submitRequest() {
 		<div class="rounded-lg bg-white shadow dark:bg-gray-800">
 			<div class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
 				<div class="flex items-center justify-between gap-3">
-					<h3 class="text-base font-semibold text-gray-900 dark:text-white">Danh sach WCR</h3>
+					<h3 class="text-base font-semibold text-gray-900 dark:text-white">Danh sách WCR</h3>
 					<button
 						class="inline-flex items-center rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
 						@click="refresh"
 					>
-						Lam moi
+						Làm mới
 					</button>
 				</div>
 			</div>
 
 			<div v-if="pending" class="px-4 py-12 text-center">
 				<div class="inline-block h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
-				<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Dang tai de xuat...</p>
+				<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Đang tải đề xuất...</p>
 			</div>
 
 			<div v-else-if="error" class="px-4 py-8 text-center">
-				<p class="text-sm text-red-600 dark:text-red-400">Khong tai duoc WCR: {{ error.message }}</p>
+				<p class="text-sm text-red-600 dark:text-red-400">Không tải được WCR: {{ error.message }}</p>
 			</div>
 
 			<div v-else-if="!requests?.length" class="px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
-				Chua co de xuat nao
+				Chưa có đề xuất nào
 			</div>
 
 			<div v-else class="grid divide-y divide-gray-200 dark:divide-gray-700">
@@ -219,11 +219,11 @@ async function submitRequest() {
 
 			<div v-if="selectedWcr" class="border-t border-gray-200 px-4 py-4 dark:border-gray-700">
 				<h4 class="text-sm font-semibold text-gray-900 dark:text-white">{{ selectedWcr.title }}</h4>
-				<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">{{ selectedWcr.description || 'Khong co mo ta.' }}</p>
+				<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">{{ selectedWcr.description || 'Không có mô tả.' }}</p>
 				<div class="mt-3 flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
 					<span>ID #{{ selectedWcr.id }}</span>
-					<span v-if="selectedWcr.position_context">Vi tri: {{ selectedWcr.position_context }}</span>
-					<span>{{ selectedWcr.date_created ? new Date(selectedWcr.date_created).toLocaleString() : 'Chua co ngay tao' }}</span>
+					<span v-if="selectedWcr.position_context">Vị trí: {{ selectedWcr.position_context }}</span>
+					<span>{{ selectedWcr.date_created ? new Date(selectedWcr.date_created).toLocaleString() : 'Chưa có ngày tạo' }}</span>
 				</div>
 			</div>
 		</div>
