@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { readItem, readItems, createItem } from '@directus/sdk';
-import type { Task, TaskStatus, TaskPriority, TaskComment } from '~/types/tasks';
+import { readItem, readItems } from '@directus/sdk';
+import type { Task, TaskStatus, TaskPriority } from '~/types/tasks';
 import type { Workflow } from '~/types/workflows';
 import { TASK_STATUS_META, TASK_PRIORITY_META } from '~/types/tasks';
 
@@ -45,36 +45,9 @@ const { data: workflows } = await useAsyncData(
 	},
 );
 
-const firstWorkflowId = computed(() => workflows.value?.[0]?.id);
+const firstWorkflow = computed(() => workflows.value?.[0]);
 
-// Workflow mode toggle: view | edit
-const workflowMode = ref<'view' | 'edit'>('view');
-
-function toggleWorkflowMode() {
-	workflowMode.value = workflowMode.value === 'view' ? 'edit' : 'view';
-}
-
-// Annotation → Comment pipeline
 const commentModuleRef = ref<{ refresh?: () => void }>();
-
-async function handleAnnotationAdded(payload: { elementId: string; annotationText: string; workflowId: number | string }) {
-	const taskId = mod.value?.id;
-	if (!taskId) return;
-
-	await useDirectus<TaskComment>(
-		createItem('task_comments', {
-			task_id: taskId,
-			tab_scope: 'planning',
-			agent_type: 'user',
-			content: `[ANNOTATION] Node: ${payload.elementId} — ${payload.annotationText}`,
-			workflow_id: Number(payload.workflowId),
-			bpmn_element_id: payload.elementId,
-		}),
-	);
-
-	// Refresh CommentModule to show the new comment
-	commentModuleRef.value?.refresh?.();
-}
 </script>
 
 <template>
@@ -159,54 +132,15 @@ async function handleAnnotationAdded(payload: { elementId: string; annotationTex
 				</NuxtLink>
 			</div>
 
-			<!-- Workflow Section (if linked workflows exist) -->
-			<div v-if="firstWorkflowId">
-				<!-- Mode Toggle -->
-				<div class="mb-2 flex justify-end">
-					<div class="inline-flex rounded-md shadow-sm">
-						<button
-							class="rounded-l-md px-3 py-1.5 text-xs font-medium transition-colors"
-							:class="workflowMode === 'view'
-								? 'bg-blue-600 text-white'
-								: 'bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'"
-							@click="workflowMode = 'view'"
-						>
-							View
-						</button>
-						<button
-							class="rounded-r-md px-3 py-1.5 text-xs font-medium transition-colors"
-							:class="workflowMode === 'edit'
-								? 'bg-blue-600 text-white'
-								: 'bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'"
-							@click="workflowMode = 'edit'"
-						>
-							Edit
-						</button>
-					</div>
-				</div>
-
-				<!-- Error boundary: if bpmn-js crashes, show fallback instead of crashing page -->
-				<NuxtErrorBoundary>
-					<!-- Viewer (read-only) -->
-					<ModulesWorkflowModuleWorkflowViewer
-						v-if="workflowMode === 'view'"
-						:workflow-id="firstWorkflowId"
-					/>
-
-					<!-- Modeler (full editor) -->
-					<ModulesWorkflowModuleWorkflowModeler
-						v-else
-						:workflow-id="firstWorkflowId"
-						@annotation-added="handleAnnotationAdded"
-					/>
-
-					<template #error="{ error: bpmnError }">
-						<div class="rounded-lg border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-900/20">
-							<p class="text-sm font-medium text-red-700 dark:text-red-300">Unable to load workflow diagram</p>
-							<p class="mt-1 text-xs text-red-500 dark:text-red-400">{{ bpmnError?.message || 'Unknown error' }}</p>
-						</div>
-					</template>
-				</NuxtErrorBoundary>
+			<!-- Linked Workflow -->
+			<div v-if="firstWorkflow" class="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
+				<p class="text-sm font-medium text-gray-500 dark:text-gray-400">Quy trình liên kết</p>
+				<NuxtLink
+					:to="`/knowledge/workflows/${firstWorkflow.id}`"
+					class="mt-1 block text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400"
+				>
+					{{ firstWorkflow.title }} &rarr;
+				</NuxtLink>
 			</div>
 
 			<!-- Live CommentModule -->

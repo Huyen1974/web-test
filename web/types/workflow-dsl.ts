@@ -104,7 +104,6 @@ export interface BlockLibraryItem {
 
 export interface WorkflowStepDraft extends Omit<WorkflowStep, 'id' | 'workflow_id' | 'date_created' | 'date_updated'> {
 	existing_id?: number;
-	source_bpmn_id?: string;
 }
 
 export interface WorkflowStepPatch {
@@ -182,11 +181,3 @@ export interface WorkflowChangeRequest {
 	date_created?: string;
 }
 
-export interface WorkflowRuntimePayload {
-	workflow: Workflow;
-	bpmnXml: string;
-	source: 'dsl' | 'bpmn_cache';
-	dslAvailable: boolean;
-	stepCount: number;
-	relationCount: number;
-}

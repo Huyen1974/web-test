@@ -10,7 +10,6 @@ export interface Workflow {
 	id: number;
 	title: string;
 	description?: string | null;
-	bpmn_xml: string;
 	status: WorkflowStatus;
 	task_id?: number | null;
 	version: number;
