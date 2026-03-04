@@ -47,6 +47,9 @@ importers:
       '@vueuse/motion':
         specifier: ^3.0.3
         version: 3.0.3(magicast@0.5.1)(vue@3.5.25(typescript@5.9.3))
+      bpmn-auto-layout:
+        specifier: ^1.2.0
+        version: 1.2.0
       bpmn-js:
         specifier: 18.12.1
         version: 18.12.1
@@ -3341,6 +3344,10 @@ packages:
 
   boolbase@1.0.0:
     resolution: {integrity: sha512-JZOSA7Mo9sNGB8+UjSgzdLtokWAky1zbztM3WRLCbZ70/3cTANmQmOdR7y2g+J0e2WXywy1yS468tY+IruqEww==}
+
+  bpmn-auto-layout@1.2.0:
+    resolution: {integrity: sha512-JoLZCR20E4Gxz68GFSGbfLPcVR6m9yYJuf4+GhWGTCYgFzMPoEiGUPJt6c/9i4VAlZVFeZC8UqKljREt+YG+mQ==}
+    engines: {node: '>= 18'}
 
   bpmn-js@18.12.1:
     resolution: {integrity: sha512-rjs0zriX0Gf+0wBTX93bBOb8oBbiSwqhwPy835ElEFBIBS/5hRtLct7BLQsDSoeLZ1C8oOlzdh+xC2yl4Nxuvg==}
@@ -11030,6 +11037,11 @@ snapshots:
     optional: true
 
   boolbase@1.0.0: {}
+
+  bpmn-auto-layout@1.2.0:
+    dependencies:
+      bpmn-moddle: 10.0.0
+      min-dash: 5.0.0
 
   bpmn-js@18.12.1:
     dependencies:
