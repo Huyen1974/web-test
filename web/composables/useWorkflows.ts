@@ -1,9 +1,10 @@
 /**
  * Composable for managing workflows (M-002 WorkflowModule)
- * Provides data access layer for workflow operations via Directus SDK
+ * Provides runtime BPMN access plus direct Directus reads for workflow metadata.
  */
 
-import { readItems, updateItem } from '@directus/sdk';
+import { readItem, readItems, updateItem } from '@directus/sdk';
+import type { WorkflowStep, WorkflowStepRelation } from '~/types/workflow-dsl';
 import type { Workflow } from '~/types/workflows';
 
 /**
@@ -18,11 +19,81 @@ export interface WorkflowRuntimeDetail {
 	relationCount: number;
 }
 
+export interface WorkflowMatrixDetail {
+	workflow: Workflow;
+	steps: WorkflowStep[];
+	relations: WorkflowStepRelation[];
+}
+
 /**
  * Fetch workflow detail + renderable BPMN XML
  */
 export async function useWorkflowDetail(id: number | string) {
 	return await $fetch<WorkflowRuntimeDetail>(`/api/workflows/${id}/diagram`);
+}
+
+export async function useWorkflowMatrix(id: number | string) {
+	const [workflow, steps, relations] = await Promise.all([
+		useDirectus<Workflow>(
+			readItem('workflows', id, {
+				fields: [
+					'id',
+					'title',
+					'description',
+					'status',
+					'task_id',
+					'version',
+					'process_code',
+					'sort',
+					'parent_workflow_id',
+					'level',
+					'date_updated',
+				],
+			}),
+		),
+		useDirectus<WorkflowStep[]>(
+			readItems('workflow_steps', {
+				filter: { workflow_id: { _eq: id } },
+				fields: [
+					'id',
+					'workflow_id',
+					'step_key',
+					'step_type',
+					'title',
+					'description',
+					'actor_type',
+					'config',
+					'position_x',
+					'position_y',
+					'block_id',
+					'sort_order',
+					'trigger_in_text',
+					'trigger_out_text',
+				],
+				sort: ['sort_order', 'id'],
+				limit: -1,
+			}),
+		),
+		useDirectus<WorkflowStepRelation[]>(
+			readItems('workflow_step_relations', {
+				filter: { workflow_id: { _eq: id } },
+				fields: [
+					'id',
+					'workflow_id',
+					'from_step_id',
+					'to_step_id',
+					'relation_type',
+					'condition_expression',
+					'label',
+					'sort_order',
+				],
+				sort: ['sort_order', 'id'],
+				limit: -1,
+			}),
+		),
+	]);
+
+	return { workflow, steps, relations };
 }
 
 /**
@@ -36,8 +107,20 @@ export async function useWorkflowsList(taskId?: number | string) {
 	}
 
 	const params: Record<string, any> = {
-		fields: ['id', 'title', 'status', 'task_id', 'version', 'date_updated'],
-		sort: ['-date_updated'],
+		fields: [
+			'id',
+			'title',
+			'description',
+			'status',
+			'task_id',
+			'version',
+			'process_code',
+			'sort',
+			'parent_workflow_id',
+			'level',
+			'date_updated',
+		],
+		sort: ['sort', 'title', 'id'],
 		limit: 50,
 	};
 

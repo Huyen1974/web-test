@@ -45,6 +45,34 @@ const {
 		transform: (data) => data,
 	},
 );
+
+const workflowNavItem = {
+	id: 'workflow-nav-static',
+	has_children: false,
+	icon: 'account_tree',
+	label: null,
+	type: 'url',
+	url: '/knowledge/workflows',
+	title: 'Workflows',
+};
+
+const navigationItems = computed(() => {
+	const items = [...(navigation.value?.items || [])];
+	const alreadyPresent = items.some((item: any) => item?.url === workflowNavItem.url || item?.title === workflowNavItem.title);
+
+	if (alreadyPresent) return items;
+
+	return [...items, workflowNavItem];
+});
+
+const navigationWithWorkflows = computed(() => {
+	if (!navigation.value) return null;
+
+	return {
+		...navigation.value,
+		items: navigationItems.value,
+	};
+});
 </script>
 <template>
 	<header class="relative w-full mx-auto space-y-4 md:flex md:items-center md:space-y-0 md:gap-x-4">
@@ -54,7 +82,7 @@ const {
 				<span v-if="globals?.title" class="sr-only">{{ globals.title }}</span>
 			</NuxtLink>
 			<nav class="hidden md:flex md:space-x-4 lg:space-x-6" aria-label="Global">
-				<NavigationMenuItem v-for="item in navigation?.items" :key="item.id" :item="item" />
+				<NavigationMenuItem v-for="item in navigationItems" :key="item.id" :item="item" />
 			</nav>
 			<div class="flex items-center justify-end flex-shrink-0 space-x-2">
 				<DarkModeToggle class="hidden text-gray-200 md:block hover:text-gray-400" bg="dark" />
@@ -65,6 +93,6 @@ const {
 			<UButton to="/contact-us" color="primary" size="xl">Let's Talk</UButton>
 			<UButton to="/auth/signin" color="primary" variant="ghost" size="xl">Login</UButton>
 		</div>
-		<NavigationMobileMenu v-if="navigation" :navigation="navigation" />
+		<NavigationMobileMenu v-if="navigationWithWorkflows" :navigation="navigationWithWorkflows" />
 	</header>
 </template>
