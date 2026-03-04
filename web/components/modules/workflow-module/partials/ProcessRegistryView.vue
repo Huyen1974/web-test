@@ -84,15 +84,24 @@ const {
 		const limit = props.pageSize + 1;
 		const offset = (props.page - 1) * props.pageSize;
 
+		const params: Record<string, any> = {
+			fields: ['id', 'process_code', 'title', 'description', 'sort', 'level', 'status', 'parent_workflow_id'],
+			sort: ['sort', 'title', 'id'],
+			limit,
+			offset,
+		};
+
+		if (Object.keys(filter).length) {
+			params.filter = filter;
+		}
+
+		const trimmedSearch = props.searchQuery?.trim();
+		if (trimmedSearch) {
+			params.search = trimmedSearch;
+		}
+
 		const workflows = await useDirectus<Workflow[]>(
-			readItems('workflows', {
-				fields: ['id', 'process_code', 'title', 'description', 'sort', 'level', 'status', 'parent_workflow_id'],
-				filter: Object.keys(filter).length ? filter : undefined,
-				search: props.searchQuery?.trim() || undefined,
-				sort: ['sort', 'title', 'id'],
-				limit,
-				offset,
-			}),
+			readItems('workflows', params),
 		);
 
 		const hasNextPage = workflows.length > props.pageSize;
@@ -182,15 +191,15 @@ const canGoNext = computed(() => Boolean(data.value?.hasNextPage));
 
 const levelMeta: Record<number, { label: string; badge: string }> = {
 	1: {
-		label: 'Cu',
+		label: 'Cấp 1',
 		badge: 'bg-slate-100 text-slate-700 dark:bg-slate-700/50 dark:text-slate-200',
 	},
 	2: {
-		label: 'Ba',
+		label: 'Cấp 2',
 		badge: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
 	},
 	3: {
-		label: 'Me',
+		label: 'Cấp 3',
 		badge: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
 	},
 };
@@ -202,12 +211,12 @@ const statusMeta: Record<WorkflowStatus, string> = {
 };
 
 function truncateDescription(value?: string | null) {
-	if (!value) return 'Khong co mo ta';
+	if (!value) return 'Không có mô tả';
 	return value.length > 100 ? `${value.slice(0, 100).trim()}...` : value;
 }
 
 function levelLabel(level?: number | null) {
-	return levelMeta[level || 1]?.label || `T${level || 1}`;
+	return levelMeta[level || 1]?.label || `Cấp ${level || 1}`;
 }
 
 function levelBadge(level?: number | null) {
@@ -233,40 +242,40 @@ function changePage(nextPage: number) {
 		<div class="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
 			<div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_140px]">
 				<div>
-					<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Tim quy trinh</label>
+					<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Tìm quy trình</label>
 					<input
 						v-model="searchDraft"
 						type="text"
-						placeholder="Tim theo ten hoac ma quy trinh..."
+						placeholder="Tìm theo tên hoặc mã quy trình..."
 						class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-primary-400 dark:focus:ring-primary-900"
 					>
 				</div>
 
 				<div>
-					<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Trang thai</label>
+					<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Trạng thái</label>
 					<select
 						:value="filterStatus || ''"
 						class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-primary-400 dark:focus:ring-primary-900"
 						@change="emit('update:filterStatus', ($event.target as HTMLSelectElement).value as WorkflowStatus | '')"
 					>
-						<option value="">Tat ca</option>
-						<option value="active">active</option>
-						<option value="draft">draft</option>
-						<option value="archived">archived</option>
+						<option value="">Tất cả</option>
+						<option value="active">Hoạt động</option>
+						<option value="draft">Nháp</option>
+						<option value="archived">Lưu trữ</option>
 					</select>
 				</div>
 
 				<div>
-					<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Tang</label>
+					<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Cấp</label>
 					<select
 						:value="filterLevel ?? ''"
 						class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-primary-400 dark:focus:ring-primary-900"
 						@change="emit('update:filterLevel', ($event.target as HTMLSelectElement).value ? Number(($event.target as HTMLSelectElement).value) as WorkflowLevel : '')"
 					>
-						<option value="">Tat ca</option>
-						<option value="1">Cu</option>
-						<option value="2">Ba</option>
-						<option value="3">Me</option>
+						<option value="">Tất cả</option>
+						<option value="1">Cấp 1</option>
+						<option value="2">Cấp 2</option>
+						<option value="3">Cấp 3</option>
 					</select>
 				</div>
 			</div>
@@ -278,39 +287,39 @@ function changePage(nextPage: number) {
 					<thead class="bg-gray-50 dark:bg-gray-900/40">
 						<tr>
 							<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">STT</th>
-							<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Ma QT</th>
-							<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Ten</th>
-							<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Mo ta</th>
-							<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Tang</th>
-							<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">So buoc</th>
-							<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Trang thai</th>
+							<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Mã QT</th>
+							<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Tên</th>
+							<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Mô tả</th>
+							<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Cấp</th>
+							<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Số bước</th>
+							<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Trạng thái</th>
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-gray-200 dark:divide-gray-700">
 						<tr v-if="pending">
 							<td colspan="7" class="px-4 py-12 text-center">
 								<div class="inline-block h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
-								<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Dang tai quy trinh...</p>
+								<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Đang tải quy trình...</p>
 							</td>
 						</tr>
 
 						<tr v-else-if="error">
 							<td colspan="7" class="px-4 py-8 text-center">
 								<p class="text-sm text-red-600 dark:text-red-400">
-									Khong tai duoc danh sach quy trinh: {{ error.message }}
+									Không tải được danh sách quy trình: {{ error.message }}
 								</p>
 								<button
 									class="mt-3 inline-flex items-center rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700"
 									@click="refresh"
 								>
-									Thu lai
+									Thử lại
 								</button>
 							</td>
 						</tr>
 
 						<tr v-else-if="!displayItems.length">
 							<td colspan="7" class="px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
-								Chua co quy trinh nao
+								Chưa có quy trình nào
 							</td>
 						</tr>
 
@@ -355,7 +364,7 @@ function changePage(nextPage: number) {
 
 			<div class="flex items-center justify-between border-t border-gray-200 px-4 py-3 dark:border-gray-700">
 				<p class="text-sm text-gray-500 dark:text-gray-400">
-					Trang {{ page }} · {{ displayItems.length }} ban ghi
+					Trang {{ page }} · {{ displayItems.length }} bản ghi
 				</p>
 				<div class="flex items-center gap-2">
 					<button
@@ -363,7 +372,7 @@ function changePage(nextPage: number) {
 						:disabled="!canGoPrev || pending"
 						@click="changePage(page - 1)"
 					>
-						Truoc
+						Trước
 					</button>
 					<button
 						class="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"

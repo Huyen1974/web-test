@@ -89,21 +89,26 @@ export async function useContentRequestsList(filters?: ContentRequestFilters) {
 		directusFilter._or = [{ title: { _contains: filters.search } }, { requirements: { _contains: filters.search } }];
 	}
 
+	const params: Record<string, any> = {
+		fields: [
+			'*',
+			'translations.*',
+			{
+				user_created: ['id', 'first_name', 'last_name', 'email'],
+				user_updated: ['id', 'first_name', 'last_name', 'email'],
+				knowledge_document: ['id', 'title', 'slug', 'status'],
+			},
+		],
+		sort: ['-date_updated'],
+		limit: 100,
+	};
+
+	if (Object.keys(directusFilter).length > 0) {
+		params.filter = directusFilter;
+	}
+
 	const items = await useDirectus<ContentRequestView[]>(
-		readItems('content_requests', {
-			fields: [
-				'*',
-				'translations.*',
-				{
-					user_created: ['id', 'first_name', 'last_name', 'email'],
-					user_updated: ['id', 'first_name', 'last_name', 'email'],
-					knowledge_document: ['id', 'title', 'slug', 'status'],
-				},
-			],
-			filter: Object.keys(directusFilter).length > 0 ? directusFilter : undefined,
-			sort: ['-date_updated'],
-			limit: 100,
-		}),
+		readItems('content_requests', params),
 	);
 
 	return items.map((item) => normalizeContentRequest(item));
