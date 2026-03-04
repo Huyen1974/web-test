@@ -49,22 +49,11 @@ const {
 	},
 );
 
-const selectedWcr = computed(() => requests.value?.find((request) => request.id === selectedWcrId.value) || requests.value?.[0] || null);
+function toggleWcr(id: number) {
+	selectedWcrId.value = selectedWcrId.value === id ? null : id;
+}
 
-watch(
-	requests,
-	(value) => {
-		if (!value?.length) {
-			selectedWcrId.value = null;
-			return;
-		}
-
-		if (!selectedWcrId.value || !value.some((item) => item.id === selectedWcrId.value)) {
-			selectedWcrId.value = value[0].id;
-		}
-	},
-	{ immediate: true },
-);
+const selectedWcr = computed(() => requests.value?.find((request) => request.id === selectedWcrId.value) || null);
 
 const statusBadge: Record<string, string> = {
 	draft: 'bg-slate-100 text-slate-700 dark:bg-slate-700/50 dark:text-slate-200',
@@ -196,34 +185,45 @@ async function submitRequest() {
 				Chưa có đề xuất nào
 			</div>
 
-			<div v-else class="grid divide-y divide-gray-200 dark:divide-gray-700">
-				<button
-					v-for="request in requests"
-					:key="request.id"
-					type="button"
-					class="w-full px-4 py-3 text-left transition hover:bg-gray-50 dark:hover:bg-gray-700/40"
-					:class="request.id === selectedWcr?.id ? 'bg-gray-50 dark:bg-gray-700/40' : ''"
-					@click="selectedWcrId = request.id"
-				>
-					<div class="flex items-start justify-between gap-3">
-						<div class="min-w-0">
-							<p class="truncate text-sm font-medium text-gray-900 dark:text-white">{{ request.title }}</p>
-							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ request.change_type }}</p>
+			<div v-else class="divide-y divide-gray-200 dark:divide-gray-700">
+				<div v-for="request in requests" :key="request.id">
+					<button
+						type="button"
+						class="w-full px-4 py-3 text-left transition hover:bg-gray-50 dark:hover:bg-gray-700/40"
+						:class="request.id === selectedWcrId ? 'bg-gray-50 dark:bg-gray-700/40' : ''"
+						@click="toggleWcr(request.id)"
+					>
+						<div class="flex items-start justify-between gap-3">
+							<div class="min-w-0 flex items-center gap-2">
+								<svg
+									class="h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200"
+									:class="request.id === selectedWcrId ? 'rotate-90' : ''"
+									fill="none" viewBox="0 0 24 24" stroke="currentColor"
+								>
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+								</svg>
+								<div class="min-w-0">
+									<p class="truncate text-sm font-medium text-gray-900 dark:text-white">{{ request.title }}</p>
+									<p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{{ request.change_type }}</p>
+								</div>
+							</div>
+							<span class="inline-flex shrink-0 rounded-full px-2.5 py-1 text-xs font-medium" :class="statusBadge[request.status]">
+								{{ request.status }}
+							</span>
 						</div>
-						<span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium" :class="statusBadge[request.status]">
-							{{ request.status }}
-						</span>
+					</button>
+					<!-- Accordion detail -->
+					<div
+						v-if="request.id === selectedWcrId"
+						class="border-t border-gray-100 bg-gray-50/50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50"
+					>
+						<p class="text-sm text-gray-700 dark:text-gray-300">{{ request.description || 'Không có mô tả.' }}</p>
+						<div class="mt-2 flex flex-wrap gap-3 text-xs text-gray-500 dark:text-gray-400">
+							<span>ID #{{ request.id }}</span>
+							<span v-if="request.position_context">Vị trí: {{ request.position_context }}</span>
+							<span>{{ request.date_created ? new Date(request.date_created).toLocaleString() : '—' }}</span>
+						</div>
 					</div>
-				</button>
-			</div>
-
-			<div v-if="selectedWcr" class="border-t border-gray-200 px-4 py-4 dark:border-gray-700">
-				<h4 class="text-sm font-semibold text-gray-900 dark:text-white">{{ selectedWcr.title }}</h4>
-				<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">{{ selectedWcr.description || 'Không có mô tả.' }}</p>
-				<div class="mt-3 flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
-					<span>ID #{{ selectedWcr.id }}</span>
-					<span v-if="selectedWcr.position_context">Vị trí: {{ selectedWcr.position_context }}</span>
-					<span>{{ selectedWcr.date_created ? new Date(selectedWcr.date_created).toLocaleString() : 'Chưa có ngày tạo' }}</span>
 				</div>
 			</div>
 		</div>
