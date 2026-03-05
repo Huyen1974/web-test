@@ -64,3 +64,6 @@ After any CRUD operation, verify the result:
 - **DOT tools**: `dot/bin/` — operational automation scripts
 - **Commit style**: `feat:`, `fix:`, `docs:` prefix + ticket number e.g. `(WEB-87)`
 - **Subdomain routing**: `vps.incomexsaigoncorp.vn` (Nuxt + Agent Data), `directus.incomexsaigoncorp.vn` (Directus)
+
+## Skills
+Đọc .claude/skills/incomex-rules.md TRƯỚC MỌI tác vụ. Đặc biệt: Assembly Gate 5 câu + Quy trình 2 mũ.
