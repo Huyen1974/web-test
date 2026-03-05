@@ -42,7 +42,7 @@ const workflowFields: FieldConfig[] = [
 			</p>
 		</div>
 
-		<SharedDirectusDataTable
+		<SharedDirectusTable
 			collection="workflows"
 			:fields="workflowFields"
 			:default-sort="['sort', 'title']"
@@ -61,6 +61,6 @@ const workflowFields: FieldConfig[] = [
 					{{ value }}
 				</span>
 			</template>
-		</SharedDirectusDataTable>
+		</SharedDirectusTable>
 	</div>
 </template>
