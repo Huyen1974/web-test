@@ -7,6 +7,7 @@ import { readItems, aggregate } from '@directus/sdk';
 export interface FieldConfig {
 	key: string;
 	label: string;
+	description?: string;
 	width?: string;
 	sortable?: boolean;
 	filterable?: boolean;
