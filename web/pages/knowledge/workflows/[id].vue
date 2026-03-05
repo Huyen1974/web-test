@@ -515,6 +515,7 @@ const categoryBreadcrumb = computed(() => {
 							class="scrollbar-thin min-h-0 flex-1 overflow-y-auto"
 							style="max-height: calc(100vh - 280px);"
 						>
+							<!-- TABLE-EXCEPTION: UTable v2 lacks per-row class API needed for done/current/pending row coloring -->
 							<table class="min-w-full">
 								<thead class="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900/60">
 									<tr>

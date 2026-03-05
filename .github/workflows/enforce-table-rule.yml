@@ -1,0 +1,40 @@
+name: Enforce Table Rule
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'web/**/*.vue'
+
+jobs:
+  check-custom-tables:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Block custom HTML tables without exception comment
+        run: |
+          FAILED=0
+
+          # Find all .vue files with <table> tags
+          FILES=$(grep -rl '<table' web/ --include='*.vue' || true)
+
+          for FILE in $FILES; do
+            # Check if file has TABLE-EXCEPTION comment
+            if grep -q 'TABLE-EXCEPTION' "$FILE"; then
+              echo "::notice file=$FILE::Has TABLE-EXCEPTION — allowed"
+            else
+              echo "::error file=$FILE::Custom <table> found without TABLE-EXCEPTION comment. Use UTable or SharedDirectusTable instead."
+              FAILED=1
+            fi
+          done
+
+          if [ "$FAILED" -eq 1 ]; then
+            echo ""
+            echo "::error::Custom HTML tables are not allowed. Use Nuxt UI UTable or SharedDirectusTable."
+            echo "::error::If a custom table is truly necessary, add a <!-- TABLE-EXCEPTION: reason --> comment."
+            exit 1
+          fi
+
+          echo "All table usages are compliant."
