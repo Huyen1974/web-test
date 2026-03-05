@@ -234,6 +234,49 @@ async function handleWcrCreated() {
 	await refreshPendingWcrs();
 }
 
+// Diagram tab: UTable columns + rows with interleaved insert marks
+const diagramColumns = [
+	{ key: 'checkbox', label: '', class: 'w-8' },
+	{ key: 'stt', label: 'STT', class: 'w-12' },
+	{ key: 'title', label: 'Tên bước' },
+	{ key: 'actor', label: 'Tác nhân', class: 'w-24' },
+];
+
+const diagramRows = computed(() => {
+	const rows: any[] = [];
+	for (const [index, step] of timelineSteps.value.entries()) {
+		rows.push({
+			id: step.id,
+			_type: 'step',
+			_index: index,
+			_step: step,
+			checkbox: '',
+			stt: index + 1,
+			title: step.title,
+			actor: step.actorType || '—',
+			class: step.status === 'done'
+				? 'bg-emerald-50/60 dark:bg-emerald-900/10 transition-colors duration-150'
+				: step.status === 'current'
+					? 'bg-amber-50/60 dark:bg-amber-900/10 transition-colors duration-150'
+					: 'hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors duration-150',
+		});
+		if (index < timelineSteps.value.length - 1) {
+			rows.push({
+				id: `mark-${index}`,
+				_type: 'mark',
+				_stepId: step.id,
+				_index: index,
+				checkbox: '',
+				stt: '',
+				title: '',
+				actor: '',
+				class: 'group !border-none',
+			});
+		}
+	}
+	return rows;
+});
+
 // [3] Auto-position: scroll to current step at position 3 from top
 const tableScrollRef = ref<HTMLElement | null>(null);
 const timelineScrollRef = ref<HTMLElement | null>(null);
@@ -515,81 +558,66 @@ const categoryBreadcrumb = computed(() => {
 							class="scrollbar-thin min-h-0 flex-1 overflow-y-auto"
 							style="max-height: calc(100vh - 280px);"
 						>
-							<!-- TABLE-EXCEPTION: UTable v2 lacks per-row class API needed for done/current/pending row coloring -->
-							<table class="min-w-full">
-								<thead class="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900/60">
-									<tr>
-										<th v-if="true" class="w-8 px-2 py-2"></th>
-										<th class="w-12 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">STT</th>
-										<th class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Tên bước</th>
-										<th class="w-24 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Tác nhân</th>
-									</tr>
-								</thead>
-								<tbody class="divide-y divide-gray-100 dark:divide-gray-700/50">
-									<tr v-if="!timelineSteps.length">
-										<td colspan="4" class="px-3 py-8 text-center text-sm text-gray-400 dark:text-gray-500">
-											Chưa có bước nào
-										</td>
-									</tr>
-									<template v-for="(step, index) in timelineSteps" v-else :key="step.id">
-										<tr
-											:data-table-row-index="index"
-											class="transition-colors duration-150"
-											:class="{
-												'bg-emerald-50/60 dark:bg-emerald-900/10': step.status === 'done',
-												'bg-amber-50/60 dark:bg-amber-900/10': step.status === 'current',
-												'hover:bg-gray-50 dark:hover:bg-gray-700/30': step.status === 'pending',
-											}"
-										>
-											<!-- Checkbox column -->
-											<td class="px-2 py-2">
-												<UCheckbox
-													:model-value="step.checkpointStatus === 'passed'"
-													color="emerald"
-													@change="handleToggleStepComplete(step.id, step.checkpointStatus || null)"
-												/>
-											</td>
-											<td
-												class="whitespace-nowrap px-3 py-2 text-xs tabular-nums"
-												:class="{
-													'font-semibold text-emerald-600 dark:text-emerald-400': step.status === 'done',
-													'font-bold text-amber-600 dark:text-amber-400': step.status === 'current',
-													'text-gray-400 dark:text-gray-500': step.status === 'pending',
-												}"
-											>{{ index + 1 }}</td>
-											<td
-												class="px-3 py-2 text-sm"
-												:class="{
-													'text-emerald-700 dark:text-emerald-300': step.status === 'done',
-													'font-medium text-amber-700 dark:text-amber-300': step.status === 'current',
-													'text-gray-700 dark:text-gray-300': step.status === 'pending',
-												}"
-											>{{ step.title }}</td>
-											<td class="whitespace-nowrap px-3 py-2 text-xs text-gray-400 dark:text-gray-500">{{ step.actorType || '—' }}</td>
-										</tr>
-										<!-- Insert mark in compact table -->
-										<tr
-											v-if="index < timelineSteps.length - 1"
-											class="group"
-										>
-											<td colspan="4" class="px-2 py-0">
-												<div class="flex h-5 items-center">
-													<button
-														type="button"
-														class="flex h-4 w-4 items-center justify-center rounded-full border border-dashed border-gray-300 bg-white text-gray-400 opacity-0 transition-all duration-200 hover:border-amber-400 hover:bg-amber-50 hover:text-amber-600 group-hover:opacity-100 dark:border-gray-600 dark:bg-gray-800 dark:hover:border-amber-500 dark:hover:bg-amber-900/30 dark:hover:text-amber-400"
-														title="Thêm đề xuất tại đây"
-														@click="handleInsertAt(step.id, index)"
-													>
-														<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-															<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-														</svg>
-													</button>
-												</div>
-											</td>
-										</tr>
+							<UTable
+								:rows="diagramRows"
+								:columns="diagramColumns"
+								:empty-state="{ icon: '', label: 'Chưa có bước nào' }"
+								:ui="{
+									thead: 'sticky top-0 z-10 bg-gray-50 dark:bg-gray-900/60',
+									divide: 'divide-y divide-gray-100 dark:divide-gray-700/50',
+									th: { padding: 'px-3 py-2', font: 'text-xs font-semibold uppercase tracking-wide', color: 'text-gray-400 dark:text-gray-500' },
+									td: { padding: 'px-3 py-2' },
+								}"
+							>
+								<template #checkbox-data="{ row }">
+									<template v-if="row._type === 'step'">
+										<UCheckbox
+											:model-value="row._step.checkpointStatus === 'passed'"
+											color="emerald"
+											@change="handleToggleStepComplete(row._step.id, row._step.checkpointStatus || null)"
+										/>
 									</template>
-								</tbody>
-							</table>
+									<template v-else>
+										<div class="flex h-5 items-center">
+											<button
+												type="button"
+												class="flex h-4 w-4 items-center justify-center rounded-full border border-dashed border-gray-300 bg-white text-gray-400 opacity-0 transition-all duration-200 hover:border-amber-400 hover:bg-amber-50 hover:text-amber-600 group-hover:opacity-100 dark:border-gray-600 dark:bg-gray-800 dark:hover:border-amber-500 dark:hover:bg-amber-900/30 dark:hover:text-amber-400"
+												title="Thêm đề xuất tại đây"
+												@click="handleInsertAt(row._stepId, row._index)"
+											>
+												<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+													<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+												</svg>
+											</button>
+										</div>
+									</template>
+								</template>
+								<template #stt-data="{ row }">
+									<span
+										v-if="row._type === 'step'"
+										class="whitespace-nowrap text-xs tabular-nums"
+										:class="{
+											'font-semibold text-emerald-600 dark:text-emerald-400': row._step.status === 'done',
+											'font-bold text-amber-600 dark:text-amber-400': row._step.status === 'current',
+											'text-gray-400 dark:text-gray-500': row._step.status === 'pending',
+										}"
+									>{{ row.stt }}</span>
+								</template>
+								<template #title-data="{ row }">
+									<span
+										v-if="row._type === 'step'"
+										class="text-sm"
+										:class="{
+											'text-emerald-700 dark:text-emerald-300': row._step.status === 'done',
+											'font-medium text-amber-700 dark:text-amber-300': row._step.status === 'current',
+											'text-gray-700 dark:text-gray-300': row._step.status === 'pending',
+										}"
+									>{{ row.title }}</span>
+								</template>
+								<template #actor-data="{ row }">
+									<span v-if="row._type === 'step'" class="whitespace-nowrap text-xs text-gray-400 dark:text-gray-500">{{ row.actor }}</span>
+								</template>
+							</UTable>
 						</div>
 					</div>
 
