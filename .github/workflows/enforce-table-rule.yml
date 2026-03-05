@@ -17,8 +17,8 @@ jobs:
         run: |
           FAILED=0
 
-          # Find all .vue files with <table> tags
-          FILES=$(grep -rl '<table' web/ --include='*.vue' || true)
+          # Find all .vue files with actual HTML <table> tags (not component names like UTable/DirectusTable)
+          FILES=$(grep -Prl '<table[\s>]' web/ --include='*.vue' || true)
 
           for FILE in $FILES; do
             # Check if file has TABLE-EXCEPTION comment
