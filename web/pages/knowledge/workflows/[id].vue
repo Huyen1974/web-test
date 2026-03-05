@@ -100,7 +100,7 @@ useSeoMeta({
 	description: () => workflow.value?.description || 'Xem chi tiết quy trình',
 });
 
-// Matrix table fields — used by DirectusDataTable in matrix + WCR tabs
+// Matrix table fields — used by DirectusTable in matrix + WCR tabs
 const matrixFields: FieldConfig[] = [
 	{ key: 'step_key', label: 'Mã bước', sortable: true },
 	{ key: 'title', label: 'Tên bước', sortable: true },
@@ -479,9 +479,9 @@ const categoryBreadcrumb = computed(() => {
 				/>
 			</div>
 
-			<!-- Matrix tab: DirectusDataTable (replaces WorkflowMatrixView) -->
+			<!-- Matrix tab: DirectusTable (UTable wrapper) -->
 			<div v-if="activeTab === 'matrix'">
-				<SharedDirectusDataTable
+				<SharedDirectusTable
 					collection="workflow_steps"
 					:fields="matrixFields"
 					:filters="{ workflow_id: { _eq: workflowId } }"
@@ -498,7 +498,7 @@ const categoryBreadcrumb = computed(() => {
 							{{ value || '—' }}
 						</span>
 					</template>
-				</SharedDirectusDataTable>
+				</SharedDirectusTable>
 			</div>
 
 			<!-- [1][2][3][4][6] Diagram tab: Golden ratio layout with scrollable containers -->
@@ -639,7 +639,7 @@ const categoryBreadcrumb = computed(() => {
 				/>
 
 				<!-- Steps table below WCR for reference — with insert marks -->
-				<SharedDirectusDataTable
+				<SharedDirectusTable
 					collection="workflow_steps"
 					:fields="matrixFields"
 					:filters="{ workflow_id: { _eq: workflowId } }"
@@ -656,7 +656,7 @@ const categoryBreadcrumb = computed(() => {
 							{{ value || '—' }}
 						</span>
 					</template>
-				</SharedDirectusDataTable>
+				</SharedDirectusTable>
 			</template>
 
 			<!-- Compact Approval Widget (replaces global CommentModule) -->
