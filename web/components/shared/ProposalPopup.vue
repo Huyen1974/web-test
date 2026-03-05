@@ -77,6 +77,7 @@ async function submit() {
 		description.value = '';
 		emit('proposal-created', created);
 		emit('close');
+		useToast().add({ title: 'Đề xuất đã gửi', color: 'green', icon: 'i-heroicons-check-circle' });
 	} catch (err: any) {
 		submitError.value = err?.data?.statusMessage || err?.message || 'Không tạo được đề xuất.';
 	} finally {

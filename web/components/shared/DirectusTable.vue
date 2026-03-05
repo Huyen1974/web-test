@@ -201,8 +201,8 @@ const proposalStatusClass: Record<string, string> = {
 	approved: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
 };
 
-const MARK_TOOLTIP_ROW = 'Đề xuất thêm hàng tại vị trí này';
-const MARK_TOOLTIP_COL = 'Đề xuất thêm cột tại vị trí này';
+const MARK_TOOLTIP_ROW = 'Đề xuất thêm hàng tại vị trí này với mô tả yêu cầu bằng ngôn ngữ tự nhiên';
+const MARK_TOOLTIP_COL = 'Đề xuất thêm cột tại vị trí này với mô tả yêu cầu bằng ngôn ngữ tự nhiên';
 </script>
 
 <template>

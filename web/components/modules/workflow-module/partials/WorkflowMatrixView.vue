@@ -158,7 +158,8 @@ const wcrStatusBadge: Record<string, string> = {
 		</div>
 
 		<div class="overflow-x-auto">
-			<table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+			<!-- TABLE-EXCEPTION: Dead code — not referenced, pending deletion -->
+		<table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
 				<thead class="bg-gray-50 dark:bg-gray-900/40">
 					<tr>
 						<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">STT</th>
