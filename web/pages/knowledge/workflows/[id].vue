@@ -100,14 +100,27 @@ useSeoMeta({
 	description: () => workflow.value?.description || 'Xem chi tiết quy trình',
 });
 
-// Steps table config — reused across tabs
-const stepFields: FieldConfig[] = [
+// Matrix table fields — used by DirectusDataTable in matrix + WCR tabs
+const matrixFields: FieldConfig[] = [
 	{ key: 'step_key', label: 'Mã bước', sortable: true },
 	{ key: 'title', label: 'Tên bước', sortable: true },
-	{ key: 'description', label: 'Mô tả', sortable: false, render: (v: string) => v || '—' },
+	{ key: 'trigger_in_text', label: 'Trigger vào', sortable: false, render: (v: string) => v || '—' },
+	{ key: 'trigger_out_text', label: 'Trigger ra', sortable: false, render: (v: string) => v || '—' },
+	{ key: 'description', label: 'Mô tả nhiệm vụ', sortable: false, render: (v: string) => v || '—' },
 	{ key: 'step_type', label: 'Loại bước', sortable: true },
 	{ key: 'actor_type', label: 'Tác nhân', sortable: true, render: (v: string) => v || '—' },
 ];
+
+// Step type badge classes for custom cell rendering
+const stepTypeBadgeClass: Record<string, string> = {
+	action: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+	condition: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+	agent_call: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
+	human_checkpoint: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
+	wait_for_event: 'bg-slate-100 text-slate-700 dark:bg-slate-700/50 dark:text-slate-200',
+	loop: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300',
+	parallel: 'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/40 dark:text-fuchsia-300',
+};
 
 // Fetch steps for timeline — includes detail fields for accordion expansion
 const { data: stepsRaw } = await useAsyncData(
@@ -466,26 +479,26 @@ const categoryBreadcrumb = computed(() => {
 				/>
 			</div>
 
-			<!-- Matrix tab: WorkflowMatrixView [B1] -->
-			<div v-if="activeTab === 'matrix'" class="relative">
-				<ModulesWorkflowModulePartialsWorkflowMatrixView
-					:workflow-id="workflowId"
-					show-insert-marks
-					:pending-wcrs="pendingWcrs || []"
-					@insert-at="handleInsertAt"
-				/>
-
-				<!-- Inline WCR popup -->
-				<ModulesWorkflowModulePartialsInlineWcrPopup
-					v-if="workflow"
-					:workflow-id="workflow.id"
-					:after-step-id="wcrInsertAfterStepId"
-					:after-step-title="wcrInsertAfterTitle"
-					:visible="showWcrPopup"
-					style="top: 50%; left: 50%; transform: translate(-50%, -50%);"
-					@close="showWcrPopup = false"
-					@wcr-created="handleWcrCreated"
-				/>
+			<!-- Matrix tab: DirectusDataTable (replaces WorkflowMatrixView) -->
+			<div v-if="activeTab === 'matrix'">
+				<SharedDirectusDataTable
+					collection="workflow_steps"
+					:fields="matrixFields"
+					:filters="{ workflow_id: { _eq: workflowId } }"
+					:default-sort="['sort_order']"
+					:page-size="50"
+					:searchable="false"
+					title="Bảng bước"
+				>
+					<template #cell-step_type="{ value }">
+						<span
+							class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
+							:class="stepTypeBadgeClass[value] || 'bg-gray-100 text-gray-700 dark:bg-gray-700/50 dark:text-gray-300'"
+						>
+							{{ value || '—' }}
+						</span>
+					</template>
+				</SharedDirectusDataTable>
 			</div>
 
 			<!-- [1][2][3][4][6] Diagram tab: Golden ratio layout with scrollable containers -->
@@ -626,25 +639,24 @@ const categoryBreadcrumb = computed(() => {
 				/>
 
 				<!-- Steps table below WCR for reference — with insert marks -->
-				<div class="relative">
-					<ModulesWorkflowModulePartialsWorkflowMatrixView
-						:workflow-id="workflowId"
-						show-insert-marks
-						:pending-wcrs="pendingWcrs || []"
-						@insert-at="handleInsertAt"
-					/>
-
-					<ModulesWorkflowModulePartialsInlineWcrPopup
-						v-if="workflow"
-						:workflow-id="workflow.id"
-						:after-step-id="wcrInsertAfterStepId"
-						:after-step-title="wcrInsertAfterTitle"
-						:visible="showWcrPopup"
-						style="top: 50%; left: 50%; transform: translate(-50%, -50%);"
-						@close="showWcrPopup = false"
-						@wcr-created="handleWcrCreated"
-					/>
-				</div>
+				<SharedDirectusDataTable
+					collection="workflow_steps"
+					:fields="matrixFields"
+					:filters="{ workflow_id: { _eq: workflowId } }"
+					:default-sort="['sort_order']"
+					:page-size="50"
+					:searchable="false"
+					title="Bảng bước (tham khảo)"
+				>
+					<template #cell-step_type="{ value }">
+						<span
+							class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
+							:class="stepTypeBadgeClass[value] || 'bg-gray-100 text-gray-700 dark:bg-gray-700/50 dark:text-gray-300'"
+						>
+							{{ value || '—' }}
+						</span>
+					</template>
+				</SharedDirectusDataTable>
 			</template>
 
 			<!-- Compact Approval Widget (replaces global CommentModule) -->
