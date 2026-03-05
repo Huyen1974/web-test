@@ -204,6 +204,30 @@ const levelMeta: Record<number, { label: string; badge: string }> = {
 	},
 };
 
+const statusFilterOptions = [
+	{ label: 'Tất cả', value: '' },
+	{ label: 'Hoạt động', value: 'active' },
+	{ label: 'Nháp', value: 'draft' },
+	{ label: 'Lưu trữ', value: 'archived' },
+];
+
+const levelFilterOptions = [
+	{ label: 'Tất cả', value: '' },
+	{ label: 'Cấp 1', value: 1 },
+	{ label: 'Cấp 2', value: 2 },
+	{ label: 'Cấp 3', value: 3 },
+];
+
+const utColumns = [
+	{ key: 'sort', label: 'STT', sortable: false },
+	{ key: 'process_code', label: 'Mã QT', sortable: false },
+	{ key: 'title', label: 'Tên', sortable: false },
+	{ key: 'description', label: 'Mô tả', sortable: false },
+	{ key: 'level', label: 'Cấp', sortable: false },
+	{ key: 'stepCount', label: 'Số bước', sortable: false },
+	{ key: 'status', label: 'Trạng thái', sortable: false },
+];
+
 const statusMeta: Record<WorkflowStatus, string> = {
 	draft: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
 	active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
@@ -227,8 +251,8 @@ function statusBadge(status: WorkflowStatus) {
 	return statusMeta[status] || 'bg-gray-100 text-gray-700 dark:bg-gray-700/50 dark:text-gray-300';
 }
 
-function handleSelect(id: number) {
-	emit('workflow-selected', id);
+function handleSelect(row: any) {
+	emit('workflow-selected', row.id);
 }
 
 function changePage(nextPage: number) {
@@ -243,144 +267,101 @@ function changePage(nextPage: number) {
 			<div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_140px]">
 				<div>
 					<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Tìm quy trình</label>
-					<input
+					<UInput
 						v-model="searchDraft"
-						type="text"
 						placeholder="Tìm theo tên hoặc mã quy trình..."
-						class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-primary-400 dark:focus:ring-primary-900"
-					>
+						icon="i-heroicons-magnifying-glass"
+					/>
 				</div>
 
 				<div>
 					<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Trạng thái</label>
-					<select
-						:value="filterStatus || ''"
-						class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-primary-400 dark:focus:ring-primary-900"
-						@change="emit('update:filterStatus', ($event.target as HTMLSelectElement).value as WorkflowStatus | '')"
-					>
-						<option value="">Tất cả</option>
-						<option value="active">Hoạt động</option>
-						<option value="draft">Nháp</option>
-						<option value="archived">Lưu trữ</option>
-					</select>
+					<USelect
+						:model-value="filterStatus || ''"
+						:options="statusFilterOptions"
+						@change="emit('update:filterStatus', $event as WorkflowStatus | '')"
+					/>
 				</div>
 
 				<div>
 					<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Cấp</label>
-					<select
-						:value="filterLevel ?? ''"
-						class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-primary-400 dark:focus:ring-primary-900"
-						@change="emit('update:filterLevel', ($event.target as HTMLSelectElement).value ? Number(($event.target as HTMLSelectElement).value) as WorkflowLevel : '')"
-					>
-						<option value="">Tất cả</option>
-						<option value="1">Cấp 1</option>
-						<option value="2">Cấp 2</option>
-						<option value="3">Cấp 3</option>
-					</select>
+					<USelect
+						:model-value="filterLevel ?? ''"
+						:options="levelFilterOptions"
+						@change="emit('update:filterLevel', $event ? Number($event) as WorkflowLevel : '')"
+					/>
 				</div>
 			</div>
 		</div>
 
 		<div class="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
-			<div class="overflow-x-auto">
-				<table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-					<thead class="bg-gray-50 dark:bg-gray-900/40">
-						<tr>
-							<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">STT</th>
-							<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Mã QT</th>
-							<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Tên</th>
-							<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Mô tả</th>
-							<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Cấp</th>
-							<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Số bước</th>
-							<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Trạng thái</th>
-						</tr>
-					</thead>
-					<tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-						<tr v-if="pending">
-							<td colspan="7" class="px-4 py-12 text-center">
-								<div class="inline-block h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
-								<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Đang tải quy trình...</p>
-							</td>
-						</tr>
-
-						<tr v-else-if="error">
-							<td colspan="7" class="px-4 py-8 text-center">
-								<p class="text-sm text-red-600 dark:text-red-400">
-									Không tải được danh sách quy trình: {{ error.message }}
-								</p>
-								<button
-									class="mt-3 inline-flex items-center rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700"
-									@click="refresh"
-								>
-									Thử lại
-								</button>
-							</td>
-						</tr>
-
-						<tr v-else-if="!displayItems.length">
-							<td colspan="7" class="px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
-								Chưa có quy trình nào
-							</td>
-						</tr>
-
-						<tr
-							v-for="workflow in displayItems"
-							v-else
-							:key="workflow.id"
-							class="cursor-pointer transition hover:bg-gray-50 dark:hover:bg-gray-700/40"
-							@click="handleSelect(workflow.id)"
-						>
-							<td class="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
-								{{ workflow.sort ?? '—' }}
-							</td>
-							<td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
-								{{ workflow.process_code || '—' }}
-							</td>
-							<td class="px-4 py-3 text-sm text-gray-900 dark:text-white">
-								<div :style="{ paddingLeft: `${Math.max(0, (workflow.level || 1) - 1) * 18}px` }">
-									{{ workflow.title }}
-								</div>
-							</td>
-							<td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-								{{ truncateDescription(workflow.description) }}
-							</td>
-							<td class="whitespace-nowrap px-4 py-3 text-sm">
-								<span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium" :class="levelBadge(workflow.level)">
-									{{ levelLabel(workflow.level) }}
-								</span>
-							</td>
-							<td class="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
-								{{ workflow.stepCount }}
-							</td>
-							<td class="whitespace-nowrap px-4 py-3 text-sm">
-								<span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium capitalize" :class="statusBadge(workflow.status)">
-									{{ workflow.status }}
-								</span>
-							</td>
-						</tr>
-					</tbody>
-				</table>
+			<!-- Loading -->
+			<div v-if="pending" class="px-4 py-12 text-center">
+				<div class="inline-block h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
+				<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Đang tải quy trình...</p>
 			</div>
+
+			<!-- Error -->
+			<div v-else-if="error" class="px-4 py-8 text-center">
+				<p class="text-sm text-red-600 dark:text-red-400">
+					Không tải được danh sách quy trình: {{ error.message }}
+				</p>
+				<UButton class="mt-3" @click="refresh">Thử lại</UButton>
+			</div>
+
+			<!-- UTable -->
+			<UTable
+				v-else
+				:rows="displayItems"
+				:columns="utColumns"
+				:ui="{
+					tr: { active: 'cursor-pointer transition hover:bg-gray-50 dark:hover:bg-gray-700/40' },
+				}"
+				:empty-state="{ icon: 'material-symbols:database-outline', label: 'Chưa có quy trình nào' }"
+				@select="handleSelect"
+			>
+				<template #sort-data="{ row }">
+					<span class="text-sm text-gray-700 dark:text-gray-300">{{ row.sort ?? '—' }}</span>
+				</template>
+
+				<template #process_code-data="{ row }">
+					<span class="text-sm font-medium text-gray-900 dark:text-white">{{ row.process_code || '—' }}</span>
+				</template>
+
+				<template #title-data="{ row }">
+					<div :style="{ paddingLeft: `${Math.max(0, (row.level || 1) - 1) * 18}px` }">
+						<span class="text-sm text-gray-900 dark:text-white">{{ row.title }}</span>
+					</div>
+				</template>
+
+				<template #description-data="{ row }">
+					<span class="text-sm text-gray-600 dark:text-gray-400">{{ truncateDescription(row.description) }}</span>
+				</template>
+
+				<template #level-data="{ row }">
+					<span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium" :class="levelBadge(row.level)">
+						{{ levelLabel(row.level) }}
+					</span>
+				</template>
+
+				<template #stepCount-data="{ row }">
+					<span class="text-sm text-gray-700 dark:text-gray-300">{{ row.stepCount }}</span>
+				</template>
+
+				<template #status-data="{ row }">
+					<span class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium capitalize" :class="statusBadge(row.status)">
+						{{ row.status }}
+					</span>
+				</template>
+			</UTable>
 
 			<div class="flex items-center justify-between border-t border-gray-200 px-4 py-3 dark:border-gray-700">
 				<p class="text-sm text-gray-500 dark:text-gray-400">
 					Trang {{ page }} · {{ displayItems.length }} bản ghi
 				</p>
 				<div class="flex items-center gap-2">
-					<button
-						class="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-						:disabled="!canGoPrev || pending"
-						@click="changePage(page - 1)"
-					>
-						Trước
-					</button>
-					<button
-						class="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-						:disabled="!canGoNext || pending"
-						@click="changePage(page + 1)"
-					>
-						Sau
-					</button>
+					<UButton variant="outline" size="sm" :disabled="!canGoPrev || pending" @click="changePage(page - 1)">Trước</UButton>
+					<UButton variant="outline" size="sm" :disabled="!canGoNext || pending" @click="changePage(page + 1)">Sau</UButton>
 				</div>
 			</div>
 		</div>

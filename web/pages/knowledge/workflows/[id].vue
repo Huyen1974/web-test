@@ -542,10 +542,9 @@ const categoryBreadcrumb = computed(() => {
 										>
 											<!-- Checkbox column -->
 											<td class="px-2 py-2">
-												<input
-													type="checkbox"
-													:checked="step.checkpointStatus === 'passed'"
-													class="h-4 w-4 cursor-pointer rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 dark:border-gray-600 dark:bg-gray-800"
+												<UCheckbox
+													:model-value="step.checkpointStatus === 'passed'"
+													color="emerald"
 													@change="handleToggleStepComplete(step.id, step.checkpointStatus || null)"
 												/>
 											</td>
@@ -626,7 +625,6 @@ const categoryBreadcrumb = computed(() => {
 					:after-step-id="wcrInsertAfterStepId"
 					:after-step-title="wcrInsertAfterTitle"
 					:visible="showWcrPopup"
-					style="top: 50%; left: 50%; transform: translate(-50%, -50%);"
 					@close="showWcrPopup = false"
 					@wcr-created="handleWcrCreated"
 				/>
