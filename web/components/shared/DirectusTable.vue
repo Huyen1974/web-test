@@ -3,6 +3,9 @@
  * DirectusTable — UTable-based schema-driven table (ASSEMBLY-STEP3)
  * Thin wrapper around Nuxt UI UTable with: data fetch, pagination, sort,
  * search, filters, insert marks, column descriptions, proposal system.
+ *
+ * Nuxt UI components used: UTable, UInput, USelect, UPopover, UTooltip,
+ * UPagination, UButton, USkeleton (via UTable :loading).
  */
 import { useDebounceFn } from '@vueuse/shared';
 import { readItems } from '@directus/sdk';
@@ -54,6 +57,7 @@ const {
 	setFilter,
 	setSearch,
 	goToPage,
+	activeFilters,
 } = useDirectusTable({
 	collection: props.collection,
 	fields: props.fields,
@@ -134,12 +138,6 @@ function handleRowClick(row: any) {
 	}
 }
 
-// === Column description popover ===
-const activeDescField = ref<string | null>(null);
-function toggleDescription(fieldKey: string) {
-	activeDescField.value = activeDescField.value === fieldKey ? null : fieldKey;
-}
-
 // === Proposal system ===
 const showProposal = ref(false);
 const proposalPositionType = ref<'row' | 'column'>('row');
@@ -203,8 +201,8 @@ const proposalStatusClass: Record<string, string> = {
 	approved: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
 };
 
-const MARK_TOOLTIP_ROW = 'Đề xuất thêm hàng tại vị trí này với mô tả yêu cầu bằng ngôn ngữ tự nhiên';
-const MARK_TOOLTIP_COL = 'Đề xuất thêm cột tại vị trí này với mô tả yêu cầu bằng ngôn ngữ tự nhiên';
+const MARK_TOOLTIP_ROW = 'Đề xuất thêm hàng tại vị trí này';
+const MARK_TOOLTIP_COL = 'Đề xuất thêm cột tại vị trí này';
 </script>
 
 <template>
@@ -220,28 +218,15 @@ const MARK_TOOLTIP_COL = 'Đề xuất thêm cột tại vị trí này với m�
 			>
 				<div v-if="searchable">
 					<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Tìm kiếm</label>
-					<input
-						v-model="searchDraft"
-						type="text"
-						placeholder="Tìm kiếm..."
-						class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-primary-400 dark:focus:ring-primary-900"
-					>
+					<UInput v-model="searchDraft" placeholder="Tìm kiếm..." icon="i-heroicons-magnifying-glass" />
 				</div>
 				<div v-for="ff in filterableFields" :key="ff.key">
 					<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">{{ ff.label }}</label>
-					<select
-						class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:focus:border-primary-400 dark:focus:ring-primary-900"
-						@change="setFilter(ff.key, ($event.target as HTMLSelectElement).value)"
-					>
-						<option value="">Tất cả</option>
-						<option
-							v-for="opt in ff.filterOptions"
-							:key="String(opt.value)"
-							:value="opt.value"
-						>
-							{{ opt.label }}
-						</option>
-					</select>
+					<USelect
+						:model-value="activeFilters[ff.key] ?? ''"
+						:options="[{ label: 'Tất cả', value: '' }, ...(ff.filterOptions || [])]"
+						@change="setFilter(ff.key, $event)"
+					/>
 				</div>
 			</div>
 		</div>
@@ -252,26 +237,16 @@ const MARK_TOOLTIP_COL = 'Đề xuất thêm cột tại vị trí này với m�
 			<div v-if="title" class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
 				<div class="flex items-center justify-between gap-3">
 					<h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ title }}</h3>
-					<button
-						class="inline-flex items-center rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-						@click="refresh"
-					>
-						Làm mới
-					</button>
+					<UButton variant="outline" size="sm" @click="refresh">Làm mới</UButton>
 				</div>
 			</div>
 
-			<!-- Error state (UTable has no error slot) -->
+			<!-- Error state -->
 			<div v-if="error" class="px-4 py-8 text-center">
 				<p class="text-sm text-red-600 dark:text-red-400">
 					Không tải được dữ liệu: {{ error.message }}
 				</p>
-				<button
-					class="mt-3 inline-flex items-center rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700"
-					@click="refresh"
-				>
-					Thử lại
-				</button>
+				<UButton class="mt-3" @click="refresh">Thử lại</UButton>
 			</div>
 
 			<!-- UTable -->
@@ -287,30 +262,22 @@ const MARK_TOOLTIP_COL = 'Đề xuất thêm cột tại vị trí này với m�
 				@update:sort="onSortUpdate"
 				@select="handleRowClick"
 			>
-				<!-- STT column data: numbering + row marks -->
+				<!-- STT column data: numbering + row insert marks with UTooltip -->
 				<template #_stt-data="{ row }">
 					<span class="text-gray-700 dark:text-gray-300">{{ row._stt }}</span>
-					<button
-						v-if="showInsertMarks"
-						type="button"
-						class="dt-row-mark"
-						:title="MARK_TOOLTIP_ROW"
-						@click.stop="openRowProposal(row._idx + 1)"
-					>
-						<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
-					</button>
-					<button
-						v-if="showInsertMarks && row._idx === 0"
-						type="button"
-						class="dt-row-mark dt-row-mark-top"
-						:title="MARK_TOOLTIP_ROW"
-						@click.stop="openRowProposal(0)"
-					>
-						<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
-					</button>
+					<UTooltip v-if="showInsertMarks" :text="MARK_TOOLTIP_ROW" class="dt-row-mark">
+						<button type="button" class="dt-mark-icon" @click.stop="openRowProposal(row._idx + 1)">
+							<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
+						</button>
+					</UTooltip>
+					<UTooltip v-if="showInsertMarks && row._idx === 0" :text="MARK_TOOLTIP_ROW" class="dt-row-mark dt-row-mark-top">
+						<button type="button" class="dt-mark-icon" @click.stop="openRowProposal(0)">
+							<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
+						</button>
+					</UTooltip>
 				</template>
 
-				<!-- Dynamic header slots: label + sort + description + column marks -->
+				<!-- Dynamic header slots: label + sort + UPopover description + column marks -->
 				<template v-for="(field, fi) in fields" :key="`h-${field.key}`" #[`${field.key}-header`]="{ column, sort, onSort }">
 					<span
 						class="inline-flex items-center gap-1"
@@ -321,44 +288,32 @@ const MARK_TOOLTIP_COL = 'Đề xuất thêm cột tại vị trí này với m�
 						<template v-if="sort?.column === column.key">
 							{{ sort.direction === 'asc' ? ' ↑' : ' ↓' }}
 						</template>
-						<button
-							v-if="field.description"
-							type="button"
-							class="inline-flex h-4 w-4 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-200 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
-							:title="field.description"
-							@click.stop="toggleDescription(field.key)"
-						>
-							<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-						</button>
+						<UPopover v-if="field.description" @click.stop>
+							<button
+								type="button"
+								class="inline-flex h-4 w-4 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-200 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+							>
+								<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+							</button>
+							<template #panel>
+								<div class="w-64 p-3 text-xs font-normal normal-case tracking-normal text-gray-700 dark:text-gray-300">
+									{{ field.description }}
+								</div>
+							</template>
+						</UPopover>
 					</span>
-					<!-- Description popover -->
-					<div
-						v-if="field.description && activeDescField === field.key"
-						class="absolute left-0 top-full z-30 mt-1 w-64 rounded-lg border border-gray-200 bg-white p-3 text-xs font-normal normal-case tracking-normal text-gray-700 shadow-lg dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
-						@click.stop
-					>
-						{{ field.description }}
-					</div>
 					<!-- Column mark at left edge -->
-					<button
-						v-if="showColumnMarks"
-						type="button"
-						class="dt-col-mark"
-						:title="MARK_TOOLTIP_COL"
-						@click.stop="openColumnProposal(fi)"
-					>
-						<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
-					</button>
+					<UTooltip v-if="showColumnMarks" :text="MARK_TOOLTIP_COL" class="dt-col-mark">
+						<button type="button" class="dt-mark-icon" @click.stop="openColumnProposal(fi)">
+							<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
+						</button>
+					</UTooltip>
 					<!-- Mark after last column -->
-					<button
-						v-if="showColumnMarks && fi === fields.length - 1"
-						type="button"
-						class="dt-col-mark dt-col-mark-end"
-						:title="MARK_TOOLTIP_COL"
-						@click.stop="openColumnProposal(fi + 1)"
-					>
-						<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
-					</button>
+					<UTooltip v-if="showColumnMarks && fi === fields.length - 1" :text="MARK_TOOLTIP_COL" class="dt-col-mark dt-col-mark-end">
+						<button type="button" class="dt-mark-icon" @click.stop="openColumnProposal(fi + 1)">
+							<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
+						</button>
+					</UTooltip>
 				</template>
 
 				<!-- Dynamic data slots: forward parent's #cell-{key} slots -->
@@ -371,15 +326,15 @@ const MARK_TOOLTIP_COL = 'Đề xuất thêm cột tại vị trí này với m�
 				<!-- Empty state -->
 				<template #empty-state>
 					<div class="flex flex-col items-center py-8">
-						<button
-							v-if="showInsertMarks"
-							type="button"
-							class="dt-mark-btn mb-4"
-							:title="MARK_TOOLTIP_ROW"
-							@click.stop="openRowProposal(0)"
-						>
-							<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
-						</button>
+						<UTooltip v-if="showInsertMarks" :text="MARK_TOOLTIP_ROW">
+							<button
+								type="button"
+								class="dt-mark-btn mb-4"
+								@click.stop="openRowProposal(0)"
+							>
+								<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
+							</button>
+						</UTooltip>
 						<p class="text-sm text-gray-500 dark:text-gray-400">Không có dữ liệu</p>
 					</div>
 				</template>
@@ -393,12 +348,11 @@ const MARK_TOOLTIP_COL = 'Đề xuất thêm cột tại vị trí này với m�
 					:key="`p-${proposal.id}`"
 					class="mb-1 flex items-center gap-2 rounded border-l-4 border-l-amber-400 bg-white px-3 py-1.5 text-sm dark:border-l-amber-600 dark:bg-gray-800"
 				>
-					<span
-						class="inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-medium"
+					<UBadge
+						:label="proposal.proposal_type"
 						:class="proposalStatusClass[proposal.status] || ''"
-					>
-						{{ proposal.proposal_type }}
-					</span>
+						size="xs"
+					/>
 					<span class="shrink-0 text-xs text-amber-600 dark:text-amber-400">
 						{{ proposal.position_context }}
 					</span>
@@ -411,29 +365,22 @@ const MARK_TOOLTIP_COL = 'Đề xuất thêm cột tại vị trí này với m�
 			<!-- Pagination -->
 			<div class="flex items-center justify-between border-t border-gray-200 px-4 py-3 dark:border-gray-700">
 				<p class="text-sm text-gray-500 dark:text-gray-400">
-					Trang {{ currentPage }}
-					<template v-if="totalPages"> / {{ totalPages }}</template>
-					<template v-if="totalCount !== null"> — {{ totalCount }} bản ghi</template>
+					<template v-if="totalCount !== null">{{ totalCount }} bản ghi</template>
 				</p>
-				<div class="flex items-center gap-2">
-					<button
-						class="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-						:disabled="currentPage <= 1 || loading"
-						@click="goToPage(currentPage - 1)"
-					>
-						Trước
-					</button>
-					<button
-						class="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-						:disabled="!hasNextPage || loading"
-						@click="goToPage(currentPage + 1)"
-					>
-						Tiếp
-					</button>
+				<UPagination
+					v-if="totalCount"
+					:model-value="currentPage"
+					:page-count="pageSize"
+					:total="totalCount"
+					@update:model-value="goToPage"
+				/>
+				<div v-else class="flex items-center gap-2">
+					<UButton variant="outline" size="sm" :disabled="currentPage <= 1 || loading" @click="goToPage(currentPage - 1)">Trước</UButton>
+					<UButton variant="outline" size="sm" :disabled="!hasNextPage || loading" @click="goToPage(currentPage + 1)">Tiếp</UButton>
 				</div>
 			</div>
 
-			<!-- Proposal popup -->
+			<!-- Proposal popup (UModal-based) -->
 			<SharedProposalPopup
 				:source-collection="collection"
 				:position-type="proposalPositionType"
@@ -448,35 +395,22 @@ const MARK_TOOLTIP_COL = 'Đề xuất thêm cột tại vị trí này với m�
 </template>
 
 <style scoped>
-/* Row insert marks — positioned at row edges inside STT cell */
+/* Row insert marks — UTooltip wrapper with positioning */
 .dt-row-mark {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 1rem;
-	height: 1rem;
-	border-radius: 9999px;
-	border: 1px dashed #9ca3af;
-	background: white;
-	color: #9ca3af;
-	opacity: 0;
-	transition: all 0.2s;
-	cursor: pointer;
 	position: absolute;
 	bottom: -8px;
 	left: 4px;
 	z-index: 10;
+	opacity: 0.3;
+	transition: opacity 0.2s;
 }
 
 tr:hover .dt-row-mark {
-	opacity: 0.5;
+	opacity: 0.6;
 }
 
 .dt-row-mark:hover {
 	opacity: 1 !important;
-	border-color: #f59e0b;
-	background: #fffbeb;
-	color: #d97706;
 }
 
 .dt-row-mark-top {
@@ -484,20 +418,32 @@ tr:hover .dt-row-mark {
 	top: -8px;
 }
 
-:root.dark .dt-row-mark {
-	background: #1f2937;
-	border-color: #4b5563;
-	color: #6b7280;
-}
-
-:root.dark .dt-row-mark:hover {
-	border-color: #f59e0b;
-	background: rgba(120, 53, 15, 0.3);
-	color: #fbbf24;
-}
-
-/* Column insert marks — positioned at header cell edges */
+/* Column insert marks — UTooltip wrapper with positioning */
 .dt-col-mark {
+	position: absolute;
+	left: -0.5rem;
+	top: 50%;
+	transform: translateY(-50%);
+	z-index: 15;
+	opacity: 0.3;
+	transition: opacity 0.2s;
+}
+
+th:hover .dt-col-mark {
+	opacity: 0.6;
+}
+
+.dt-col-mark:hover {
+	opacity: 1 !important;
+}
+
+.dt-col-mark-end {
+	left: auto;
+	right: -0.5rem;
+}
+
+/* Mark icon button (inside UTooltip) */
+.dt-mark-icon {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -507,39 +453,23 @@ tr:hover .dt-row-mark {
 	border: 1px dashed #9ca3af;
 	background: white;
 	color: #9ca3af;
-	opacity: 0;
-	transition: all 0.2s;
 	cursor: pointer;
-	position: absolute;
-	left: -0.5rem;
-	top: 50%;
-	transform: translateY(-50%);
-	z-index: 15;
+	transition: all 0.2s;
 }
 
-th:hover .dt-col-mark {
-	opacity: 0.5;
-}
-
-.dt-col-mark:hover {
-	opacity: 1 !important;
+.dt-mark-icon:hover {
 	border-color: #f59e0b;
 	background: #fffbeb;
 	color: #d97706;
 }
 
-.dt-col-mark-end {
-	left: auto;
-	right: -0.5rem;
-}
-
-:root.dark .dt-col-mark {
+:root.dark .dt-mark-icon {
 	background: #1f2937;
 	border-color: #4b5563;
 	color: #6b7280;
 }
 
-:root.dark .dt-col-mark:hover {
+:root.dark .dt-mark-icon:hover {
 	border-color: #f59e0b;
 	background: rgba(120, 53, 15, 0.3);
 	color: #fbbf24;

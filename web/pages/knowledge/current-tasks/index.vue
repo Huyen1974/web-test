@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { Task, TaskStatus, TaskPriority } from '~/types/tasks';
+import type { FieldConfig } from '~/composables/useDirectusTable';
+import type { TaskStatus, TaskPriority } from '~/types/tasks';
 import { TASK_STATUS_META, TASK_PRIORITY_META } from '~/types/tasks';
 
 definePageMeta({
@@ -7,47 +8,26 @@ definePageMeta({
 	description: 'Super Session task management',
 });
 
-const {
-	data: tasks,
-	error,
-	pending,
-	refresh,
-} = await useAsyncData(
-	'tasks-list',
-	async () => {
-		return await useTasksList();
+const taskFields: FieldConfig[] = [
+	{ key: 'name', label: 'Name', sortable: true },
+	{
+		key: 'status',
+		label: 'Status',
+		sortable: true,
+		filterable: true,
+		filterOptions: [
+			{ label: 'Draft', value: 'draft' },
+			{ label: 'Active', value: 'active' },
+			{ label: 'In Review', value: 'in_review' },
+			{ label: 'Completed', value: 'completed' },
+			{ label: 'Archived', value: 'archived' },
+		],
 	},
-	{ watch: [] },
-);
-
-// Status filter
-const selectedStatus = ref<TaskStatus | ''>('');
-
-const statusOptions = [
-	{ value: '', label: 'All Statuses' },
-	{ value: 'draft', label: 'Draft' },
-	{ value: 'active', label: 'Active' },
-	{ value: 'in_review', label: 'In Review' },
-	{ value: 'completed', label: 'Completed' },
-	{ value: 'archived', label: 'Archived' },
+	{ key: 'priority', label: 'Priority', sortable: true },
+	{ key: 'assigned_to', label: 'Assigned To', sortable: false, render: (v: string) => v || 'Unassigned' },
+	{ key: 'deadline', label: 'Deadline', sortable: true, render: (v: string) => v ? new Date(v).toLocaleDateString() : '-' },
+	{ key: 'date_updated', label: 'Updated', sortable: true, render: (v: string) => formatDate(v) },
 ];
-
-const filteredTasks = computed(() => {
-	if (!tasks.value) return [];
-	if (!selectedStatus.value) return tasks.value;
-	return tasks.value.filter((t) => t.status === selectedStatus.value);
-});
-
-// Stats
-const stats = computed(() => {
-	if (!tasks.value) return { total: 0, active: 0, in_review: 0, completed: 0 };
-	return {
-		total: tasks.value.length,
-		active: tasks.value.filter((t) => t.status === 'active').length,
-		in_review: tasks.value.filter((t) => t.status === 'in_review').length,
-		completed: tasks.value.filter((t) => t.status === 'completed').length,
-	};
-});
 
 function statusMeta(status: string) {
 	return TASK_STATUS_META[status as TaskStatus] || { label: status, color: 'gray', icon: '' };
@@ -80,137 +60,33 @@ function formatDate(dateStr?: string): string {
 			<p class="mt-2 text-gray-600 dark:text-gray-400">Super Session collaborative task management</p>
 		</div>
 
-		<!-- Stats Cards -->
-		<div class="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-			<div class="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
-				<p class="text-sm font-medium text-gray-500 dark:text-gray-400">Total</p>
-				<p class="text-2xl font-bold text-gray-900 dark:text-white">{{ stats.total }}</p>
-			</div>
-			<div class="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
-				<p class="text-sm font-medium text-blue-500">Active</p>
-				<p class="text-2xl font-bold text-gray-900 dark:text-white">{{ stats.active }}</p>
-			</div>
-			<div class="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
-				<p class="text-sm font-medium text-yellow-500">In Review</p>
-				<p class="text-2xl font-bold text-gray-900 dark:text-white">{{ stats.in_review }}</p>
-			</div>
-			<div class="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
-				<p class="text-sm font-medium text-green-500">Completed</p>
-				<p class="text-2xl font-bold text-gray-900 dark:text-white">{{ stats.completed }}</p>
-			</div>
-		</div>
-
-		<!-- Filter -->
-		<div class="mb-6 flex items-center gap-4">
-			<select
-				v-model="selectedStatus"
-				class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-			>
-				<option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-			</select>
-			<button
-				class="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-				@click="refresh()"
-			>
-				Refresh
-			</button>
-		</div>
-
-		<!-- Loading -->
-		<div v-if="pending" class="py-12 text-center">
-			<div class="inline-block h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600"></div>
-			<p class="mt-2 text-gray-600 dark:text-gray-400">Loading tasks...</p>
-		</div>
-
-		<!-- Error -->
-		<div
-			v-else-if="error"
-			class="rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20"
+		<SharedDirectusTable
+			collection="tasks"
+			:fields="taskFields"
+			:default-sort="['-date_updated']"
+			:page-size="25"
+			:row-link="(item: any) => `/knowledge/current-tasks/${item.id}`"
+			:show-insert-marks="false"
+			:show-column-marks="false"
 		>
-			<p class="text-red-800 dark:text-red-200">Error loading tasks: {{ error.message }}</p>
-		</div>
-
-		<!-- Empty -->
-		<div v-else-if="!filteredTasks.length" class="py-12 text-center">
-			<h3 class="text-lg font-medium text-gray-900 dark:text-white">No tasks found</h3>
-			<p class="mt-1 text-gray-500 dark:text-gray-400">No tasks match the current filter.</p>
-		</div>
-
-		<!-- Table -->
-		<div v-else class="overflow-hidden rounded-lg bg-white shadow-md dark:bg-gray-800">
-			<table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-				<thead class="bg-gray-50 dark:bg-gray-900">
-					<tr>
-						<th
-							class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
-						>
-							Name
-						</th>
-						<th
-							class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
-						>
-							Status
-						</th>
-						<th
-							class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
-						>
-							Priority
-						</th>
-						<th
-							class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
-						>
-							Assigned To
-						</th>
-						<th
-							class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
-						>
-							Deadline
-						</th>
-						<th
-							class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
-						>
-							Updated
-						</th>
-					</tr>
-				</thead>
-				<tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
-					<tr
-						v-for="task in filteredTasks"
-						:key="task.id"
-						class="cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-700"
-						@click="navigateTo(`/knowledge/current-tasks/${task.id}`)"
-					>
-						<td class="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
-							{{ task.name }}
-						</td>
-						<td class="px-6 py-4 whitespace-nowrap">
-							<span
-								:class="`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-${statusMeta(task.status).color}-100 text-${statusMeta(task.status).color}-800 dark:bg-${statusMeta(task.status).color}-900/30 dark:text-${statusMeta(task.status).color}-400`"
-							>
-								{{ statusMeta(task.status).label }}
-							</span>
-						</td>
-						<td class="px-6 py-4 whitespace-nowrap">
-							<span
-								v-if="task.priority"
-								:class="`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-${priorityMeta(task.priority!).color}-100 text-${priorityMeta(task.priority!).color}-800 dark:bg-${priorityMeta(task.priority!).color}-900/30 dark:text-${priorityMeta(task.priority!).color}-400`"
-							>
-								{{ priorityMeta(task.priority!).label }}
-							</span>
-							<span v-else class="text-sm text-gray-400">-</span>
-						</td>
-						<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-							{{ task.assigned_to || 'Unassigned' }}
-						</td>
-						<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-							{{ task.deadline ? new Date(task.deadline).toLocaleDateString() : '-' }}
-						</td>
-						<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-							{{ formatDate(task.date_updated) }}
-						</td>
-					</tr>
-				</tbody>
-			</table>
-		</div>
+			<template #cell-status="{ value }">
+				<UBadge
+					:label="statusMeta(value).label"
+					:color="statusMeta(value).color"
+					variant="subtle"
+					size="xs"
+				/>
+			</template>
+			<template #cell-priority="{ value }">
+				<UBadge
+					v-if="value"
+					:label="priorityMeta(value).label"
+					:color="priorityMeta(value).color"
+					variant="subtle"
+					size="xs"
+				/>
+				<span v-else class="text-sm text-gray-400">-</span>
+			</template>
+		</SharedDirectusTable>
 	</div>
 </template>
