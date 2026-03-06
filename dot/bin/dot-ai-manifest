@@ -86,11 +86,11 @@ main() {
     cat << EOF
 {
   "version": "${VERSION}",
-  "openapi_spec_url": "https://ai.incomexsaigoncorp.vn/agent_data_openapi.yaml",
-  "llms_txt_url": "https://ai.incomexsaigoncorp.vn/llms.txt",
+  "openapi_spec_url": "https://vps.incomexsaigoncorp.vn/agent_data_openapi.yaml",
+  "llms_txt_url": "https://vps.incomexsaigoncorp.vn/llms.txt",
   "endpoints": {
     "nuxt_proxy": {
-      "base_url": "https://ai.incomexsaigoncorp.vn",
+      "base_url": "https://vps.incomexsaigoncorp.vn",
       "info": "/api/ai/info",
       "search": "/api/ai/search",
       "auth_type": "Bearer",
@@ -126,7 +126,7 @@ HEADER
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1. OpenAPI Spec URL (import this):
-   https://ai.incomexsaigoncorp.vn/agent_data_openapi.yaml
+   https://vps.incomexsaigoncorp.vn/agent_data_openapi.yaml
 
 2. Authentication Type: Bearer Token
 
@@ -172,7 +172,7 @@ Guidelines:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 # Test Vector Search (via Nuxt proxy)
-curl -X POST https://ai.incomexsaigoncorp.vn/api/ai/search \\
+curl -X POST https://vps.incomexsaigoncorp.vn/api/ai/search \\
   -H "Authorization: Bearer ${ai_gateway_token}" \\
   -H "Content-Type: application/json" \\
   -d '{"query": "Hien phap he thong la gi?", "top_k": 3}'

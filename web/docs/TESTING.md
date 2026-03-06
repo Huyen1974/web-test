@@ -27,5 +27,5 @@ npm run dot:cost
 ```
 
 ## Notes
-- The E2E production tests run against https://ai.incomexsaigoncorp.vn.
+- The E2E production tests run against https://vps.incomexsaigoncorp.vn.
 - Use production credentials only when required by the test.

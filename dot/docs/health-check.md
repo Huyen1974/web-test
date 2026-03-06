@@ -8,7 +8,7 @@ Requirements
 - Network access to the target URL
 
 Environment
-- BASE_URL (optional, default: https://ai.incomexsaigoncorp.vn)
+- BASE_URL (optional, default: https://vps.incomexsaigoncorp.vn)
 - NUXT_PUBLIC_SITE_URL (optional fallback)
 - DIRECTUS_ADMIN_EMAIL, DIRECTUS_ADMIN_PASSWORD (optional for auth layer)
 - DIRECTUS_LOGIN_PATH (optional, default: /api/directus/auth/login)

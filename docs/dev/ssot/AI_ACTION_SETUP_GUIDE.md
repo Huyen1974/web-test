@@ -8,7 +8,7 @@ This guide explains how to configure AI Actions (Gemini Gems, ChatGPT GPTs, Clau
 |----------|-----|
 | OpenAPI Spec | `https://raw.githubusercontent.com/Huyen1974/agent-data-test/main/specs/agent-data-openapi.yaml` |
 | API Base URL | `https://agent-data-test-pfne2mqwja-as.a.run.app` |
-| Web Console | `https://ai.incomexsaigoncorp.vn/admin/super-session` |
+| Web Console | `https://vps.incomexsaigoncorp.vn/admin/super-session` |
 
 ---
 
@@ -210,7 +210,7 @@ curl -X POST https://agent-data-test-pfne2mqwja-as.a.run.app/documents \
 
 ## DOT Console Commands
 
-The web console at `https://ai.incomexsaigoncorp.vn/admin/super-session` supports DOT commands:
+The web console at `https://vps.incomexsaigoncorp.vn/admin/super-session` supports DOT commands:
 
 | Command | Description |
 |---------|-------------|
@@ -224,4 +224,4 @@ The web console at `https://ai.incomexsaigoncorp.vn/admin/super-session` support
 ## Support
 
 - **Issues**: https://github.com/Huyen1974/agent-data-test/issues
-- **Web Console**: https://ai.incomexsaigoncorp.vn/admin/super-session
+- **Web Console**: https://vps.incomexsaigoncorp.vn/admin/super-session

@@ -24,7 +24,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 CLOUD_DIRECTUS_URL="https://directus.incomexsaigoncorp.vn"
-CLOUD_NUXT_URL="https://ai.incomexsaigoncorp.vn"
+CLOUD_NUXT_URL="https://vps.incomexsaigoncorp.vn"
 LOCAL_DIRECTUS_URL="http://localhost:8055"
 LOCAL_NUXT_URL="http://localhost:3000"
 

@@ -140,7 +140,7 @@ const ENV = detectEnvironment()
 
 // Configure URLs based on environment
 const LOCAL_NUXT_URL = 'http://localhost:3000'
-const CLOUD_NUXT_URL = 'https://ai.incomexsaigoncorp.vn'
+const CLOUD_NUXT_URL = 'https://vps.incomexsaigoncorp.vn'
 
 const BASE_URL =
   process.env.NUXT_URL ||

@@ -362,7 +362,7 @@ resource "google_cloud_run_v2_service" "nuxt_ssr" {
 
       env {
         name  = "NUXT_PUBLIC_SITE_URL"
-        value = "https://ai.incomexsaigoncorp.vn"
+        value = "https://vps.incomexsaigoncorp.vn"
       }
 
       env {

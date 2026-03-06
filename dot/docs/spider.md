@@ -44,7 +44,7 @@ Format:
   "profiles": [
     {
       "name": "production-admin",
-      "domain": "https://ai.incomexsaigoncorp.vn",
+      "domain": "https://vps.incomexsaigoncorp.vn",
       "username": "admin@example.com",
       "password": "your-password"
     }
@@ -58,7 +58,7 @@ Format:
 ```bash
 export DIRECTUS_ADMIN_EMAIL=admin@example.com
 export DIRECTUS_ADMIN_PASSWORD=your-password
-export SPIDER_DOMAIN=https://ai.incomexsaigoncorp.vn
+export SPIDER_DOMAIN=https://vps.incomexsaigoncorp.vn
 ```
 
 ## Usage
@@ -86,7 +86,7 @@ export SPIDER_DOMAIN=https://ai.incomexsaigoncorp.vn
 ## Output
 
 ```
-🕷️ DOT SPIDER - https://ai.incomexsaigoncorp.vn
+🕷️ DOT SPIDER - https://vps.incomexsaigoncorp.vn
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 [LOGIN] Authenticating as admin@example.com...

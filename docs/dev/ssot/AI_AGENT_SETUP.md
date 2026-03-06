@@ -205,7 +205,7 @@ Toggle the flow to **Active** status.
 ### 5.1 Test System Info (No Auth)
 
 ```bash
-curl -s https://ai.incomexsaigoncorp.vn/api/ai/info | jq .
+curl -s https://vps.incomexsaigoncorp.vn/api/ai/info | jq .
 ```
 
 Expected response:
@@ -220,7 +220,7 @@ Expected response:
 ### 5.2 Test Search (With Token)
 
 ```bash
-curl -X POST https://ai.incomexsaigoncorp.vn/api/ai/search \
+curl -X POST https://vps.incomexsaigoncorp.vn/api/ai/search \
   -H "Authorization: Bearer YOUR_AI_GATEWAY_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"query": "Hien phap he thong la gi?", "top_k": 5}' | jq .
@@ -251,7 +251,7 @@ curl -X POST https://directus-test-pfne2mqwja-as.a.run.app/items/feedbacks \
 ```bash
 # Should return 401
 curl -s -o /dev/null -w "%{http_code}" \
-  -X POST https://ai.incomexsaigoncorp.vn/api/ai/search \
+  -X POST https://vps.incomexsaigoncorp.vn/api/ai/search \
   -H "Content-Type: application/json" \
   -d '{"query": "test"}'
 ```
@@ -263,7 +263,7 @@ curl -s -o /dev/null -w "%{http_code}" \
 1. Go to **GPT Builder** in ChatGPT
 2. Click **Configure** > **Actions**
 3. Click **Import from URL**
-4. Enter: `https://ai.incomexsaigoncorp.vn/agent_data_openapi.yaml`
+4. Enter: `https://vps.incomexsaigoncorp.vn/agent_data_openapi.yaml`
 
 ### 6.2 Configure Authentication
 
@@ -293,7 +293,7 @@ Use GPT to:
 2. Navigate to **Extensions**
 3. Click **Create Extension**
 4. Select **OpenAPI**
-5. Upload or link: `https://ai.incomexsaigoncorp.vn/agent_data_openapi.yaml`
+5. Upload or link: `https://vps.incomexsaigoncorp.vn/agent_data_openapi.yaml`
 
 ### 7.2 Configure Auth
 

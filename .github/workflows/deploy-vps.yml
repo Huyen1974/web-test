@@ -67,7 +67,7 @@ jobs:
         env:
           NITRO_PRESET: node-server
           NODE_ENV: production
-          NUXT_PUBLIC_SITE_URL: "https://ai.incomexsaigoncorp.vn"
+          NUXT_PUBLIC_SITE_URL: "https://vps.incomexsaigoncorp.vn"
           NUXT_PUBLIC_DIRECTUS_URL: "https://directus.incomexsaigoncorp.vn"
         run: pnpm run build
 

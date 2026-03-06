@@ -18,7 +18,7 @@ export default defineNuxtPlugin((nuxtApp) => {
 		'https://directus.incomexsaigoncorp.vn';
 
 	// Client uses absolute proxy URL (SDK needs absolute URL for `new URL()`)
-	// window.location.origin provides the current domain (e.g., https://ai.incomexsaigoncorp.vn)
+	// window.location.origin provides the current domain (e.g., https://vps.incomexsaigoncorp.vn)
 	const clientDirectusUrl = import.meta.client
 		? window.location.origin + '/api/directus'
 		: '/api/directus';

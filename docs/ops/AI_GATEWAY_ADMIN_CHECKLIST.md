@@ -41,7 +41,7 @@ gcloud secrets versions access latest --secret=AI_GATEWAY_TOKEN
 
 ```bash
 TOKEN=$(gcloud secrets versions access latest --secret=AI_GATEWAY_TOKEN)
-curl -X POST https://ai.incomexsaigoncorp.vn/api/ai/search \
+curl -X POST https://vps.incomexsaigoncorp.vn/api/ai/search \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"query": "test", "limit": 1}'
@@ -55,11 +55,11 @@ curl -X POST https://ai.incomexsaigoncorp.vn/api/ai/search \
 
 ```bash
 # Check Nuxt info endpoint
-curl -s https://ai.incomexsaigoncorp.vn/api/ai/info | jq .
+curl -s https://vps.incomexsaigoncorp.vn/api/ai/info | jq .
 
 # Check static files
-curl -s -o /dev/null -w "%{http_code}" https://ai.incomexsaigoncorp.vn/llms.txt
-curl -s -o /dev/null -w "%{http_code}" https://ai.incomexsaigoncorp.vn/agent_data_openapi.yaml
+curl -s -o /dev/null -w "%{http_code}" https://vps.incomexsaigoncorp.vn/llms.txt
+curl -s -o /dev/null -w "%{http_code}" https://vps.incomexsaigoncorp.vn/agent_data_openapi.yaml
 
 # Full E2E test
 ./dot/bin/dot-e2e-test

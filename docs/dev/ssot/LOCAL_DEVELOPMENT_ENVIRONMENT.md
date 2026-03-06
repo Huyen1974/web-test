@@ -153,6 +153,6 @@ Local kết nối **trực tiếp Cloud SQL** (không phải DB nháp).
 | Môi trường | CORS_ORIGIN |
 |------------|-------------|
 | Local | `http://localhost:3000` |
-| Cloud | `https://ai.incomexsaigoncorp.vn` |
+| Cloud | `https://vps.incomexsaigoncorp.vn` |
 
 Đảm bảo Cloud Run đã set đúng domain thật.

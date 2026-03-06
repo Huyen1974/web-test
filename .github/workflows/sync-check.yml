@@ -12,7 +12,7 @@ permissions:
 env:
   VPS_DIRECTUS_URL: "https://directus.incomexsaigoncorp.vn"
   VPS_AGENT_DATA_URL: "https://vps.incomexsaigoncorp.vn/api"
-  WEBSITE_URL: "https://ai.incomexsaigoncorp.vn"
+  WEBSITE_URL: "https://vps.incomexsaigoncorp.vn"
 
 jobs:
   health-check:
