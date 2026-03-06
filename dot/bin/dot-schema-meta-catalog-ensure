@@ -1,0 +1,485 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-schema-meta-catalog-ensure - Ensure meta_catalog collection in Directus
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-schema-*ensure — no meta_catalog tool]
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-03-06): LIVE-CATALOG mission — meta_catalog collection
+#     - 15 fields: code, name, name_en, entity_type, source_model, source_location,
+#       registry_collection, sync_script, sync_frequency, record_count, ui_page,
+#       status, description, layer
+#     - Idempotent, based on dot-schema-table-registry-ensure pattern
+#     - Seeds 11 initial catalog entries including CAT-000 self-reference
+#     - Sets AI Agent CRUD + public READ permissions
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOT_AUTH="${SCRIPT_DIR}/dot-auth"
+
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+COLLECTION="meta_catalog"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_skip() { echo "[SKIP] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+require_cmds() {
+  for cmd in curl jq; do
+    command -v "$cmd" >/dev/null 2>&1 || { log_err "Missing: $cmd"; exit 1; }
+  done
+}
+
+api_request() {
+  local method="$1" url="$2" data="${3-}"
+  if [[ -n "${data-}" ]]; then
+    curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "$data" -w "\n%{http_code}"
+  else
+    curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -w "\n%{http_code}"
+  fi
+}
+
+REQUIRED_FIELDS=(code name name_en entity_type source_model source_location registry_collection sync_script sync_frequency record_count ui_page status description layer)
+
+field_payload() {
+  case "$1" in
+    code)
+      cat <<'JSON'
+{"field":"code","type":"string","meta":{"required":true,"interface":"input","width":"half","note":"Unique catalog code (e.g. CAT-001)"},"schema":{"is_nullable":false,"is_unique":true}}
+JSON
+      ;;
+    name)
+      cat <<'JSON'
+{"field":"name","type":"string","meta":{"required":true,"interface":"input","width":"half","note":"Vietnamese name"},"schema":{"is_nullable":false}}
+JSON
+      ;;
+    name_en)
+      cat <<'JSON'
+{"field":"name_en","type":"string","meta":{"required":false,"interface":"input","width":"half","note":"English name"},"schema":{"is_nullable":true}}
+JSON
+      ;;
+    entity_type)
+      cat <<'JSON'
+{"field":"entity_type","type":"string","meta":{"required":true,"interface":"select-dropdown","options":{"choices":[{"text":"Catalog","value":"catalog"},{"text":"Table","value":"table"},{"text":"Module","value":"module"},{"text":"Workflow","value":"workflow"},{"text":"Workflow Step","value":"workflow_step"},{"text":"WCR","value":"wcr"},{"text":"DOT Tool","value":"dot_tool"},{"text":"Page","value":"page"},{"text":"Collection","value":"collection"},{"text":"Task","value":"task"},{"text":"Agent","value":"agent"},{"text":"Field","value":"field"}]},"width":"half","note":"Entity type this catalog tracks"},"schema":{"is_nullable":false}}
+JSON
+      ;;
+    source_model)
+      cat <<'JSON'
+{"field":"source_model","type":"string","meta":{"required":true,"interface":"select-dropdown","options":{"choices":[{"text":"A — Directus IS source","value":"A"},{"text":"B — Auto-sync from file","value":"B"}]},"width":"half","note":"A = Directus SSOT, B = file-scanned"},"schema":{"is_nullable":false,"default_value":"A"}}
+JSON
+      ;;
+    source_location)
+      cat <<'JSON'
+{"field":"source_location","type":"string","meta":{"required":false,"interface":"input","width":"full","note":"Source: Directus:collection_name or File:path/"},"schema":{"is_nullable":true}}
+JSON
+      ;;
+    registry_collection)
+      cat <<'JSON'
+{"field":"registry_collection","type":"string","meta":{"required":false,"interface":"input","width":"half","note":"Directus collection name for detail registry (null if Model B without collection)"},"schema":{"is_nullable":true}}
+JSON
+      ;;
+    sync_script)
+      cat <<'JSON'
+{"field":"sync_script","type":"string","meta":{"required":false,"interface":"input","width":"half","note":"DOT sync script name (null if Model A)"},"schema":{"is_nullable":true}}
+JSON
+      ;;
+    sync_frequency)
+      cat <<'JSON'
+{"field":"sync_frequency","type":"string","meta":{"required":false,"interface":"select-dropdown","options":{"choices":[{"text":"Realtime","value":"realtime"},{"text":"On Deploy","value":"on-deploy"},{"text":"30 minutes","value":"30min"},{"text":"Manual","value":"manual"}]},"width":"half","note":"How often sync runs"},"schema":{"is_nullable":true,"default_value":"realtime"}}
+JSON
+      ;;
+    record_count)
+      cat <<'JSON'
+{"field":"record_count","type":"integer","meta":{"required":false,"interface":"input","width":"half","note":"Current number of records (auto-updated)"},"schema":{"is_nullable":true,"default_value":0}}
+JSON
+      ;;
+    ui_page)
+      cat <<'JSON'
+{"field":"ui_page","type":"string","meta":{"required":false,"interface":"input","width":"half","note":"URL of the UI page for this catalog"},"schema":{"is_nullable":true}}
+JSON
+      ;;
+    status)
+      cat <<'JSON'
+{"field":"status","type":"string","meta":{"required":true,"interface":"select-dropdown","options":{"choices":[{"text":"Active","value":"active"},{"text":"Planned","value":"planned"},{"text":"Deprecated","value":"deprecated"}]},"width":"half","note":"Catalog entry status"},"schema":{"is_nullable":false,"default_value":"active"}}
+JSON
+      ;;
+    description)
+      cat <<'JSON'
+{"field":"description","type":"text","meta":{"required":false,"interface":"input-multiline","width":"full","note":"Purpose description"},"schema":{"is_nullable":true}}
+JSON
+      ;;
+    layer)
+      cat <<'JSON'
+{"field":"layer","type":"integer","meta":{"required":false,"interface":"select-dropdown","options":{"choices":[{"text":"1 — Infrastructure","value":1},{"text":"2 — Data/Schema","value":2},{"text":"3 — Logic/Workflow","value":3},{"text":"4 — UI/Pages","value":4},{"text":"5 — Automation/Tools","value":5}]},"width":"half","note":"Architecture layer"},"schema":{"is_nullable":true}}
+JSON
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+collection_exists() {
+  local resp body code
+  resp=$(api_request GET "${BASE_URL}/collections/${COLLECTION}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+  [[ "$code" == "200" ]]
+}
+
+field_exists() {
+  local field_name="$1"
+  local resp body code
+  resp=$(api_request GET "${BASE_URL}/fields/${COLLECTION}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+  if [[ "$code" == "200" ]]; then
+    echo "$body" | jq -e --arg field "$field_name" '.data[]? | select(.field == $field)' >/dev/null 2>&1
+    return $?
+  fi
+  return 1
+}
+
+create_collection() {
+  local payload
+  payload=$(jq -nc \
+    --arg collection "$COLLECTION" \
+    '{
+      collection: $collection,
+      schema: {},
+      meta: {
+        collection: $collection,
+        icon: "library_books",
+        note: "Live Catalog — 3-tier registry system. Self-registering. Created by DOT v1.0.0",
+        display_template: "{{code}} — {{name}} [{{status}}]",
+        sort_field: "code"
+      }
+    }')
+
+  log_info "Creating collection ${COLLECTION}"
+  local resp body code
+  resp=$(api_request POST "${BASE_URL}/collections" "$payload")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to create collection ${COLLECTION} (HTTP $code)"
+    echo "$body" | head -c 300 >&2
+    exit 1
+  fi
+  log_ok "Collection ${COLLECTION} created"
+}
+
+create_field() {
+  local field_name="$1"
+  local payload resp body code
+  payload=$(field_payload "$field_name")
+
+  log_info "Creating field ${COLLECTION}.${field_name}"
+  resp=$(api_request POST "${BASE_URL}/fields/${COLLECTION}" "$payload")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to create field ${COLLECTION}.${field_name} (HTTP $code)"
+    echo "$body" | head -c 200 >&2
+    return 1
+  fi
+  log_ok "Field ${COLLECTION}.${field_name} created"
+}
+
+setup_permissions() {
+  log_info "Setting up permissions..."
+
+  # AI Agent CRUD
+  local AI_POLICY="e81a70bc-21d3-4f30-856e-686608a2023b"
+  for action in create read update delete; do
+    local payload
+    payload=$(jq -nc \
+      --arg policy "$AI_POLICY" \
+      --arg collection "$COLLECTION" \
+      --arg action "$action" \
+      '{
+        policy: $policy,
+        collection: $collection,
+        action: $action,
+        fields: ["*"],
+        permissions: {},
+        validation: {}
+      }')
+
+    local resp code
+    resp=$(api_request POST "${BASE_URL}/permissions" "$payload")
+    code="${resp##*$'\n'}"
+
+    if [[ "$code" == "200" ]]; then
+      log_ok "AI Agent ${action} permission created"
+    elif [[ "$code" == "400" ]]; then
+      log_skip "AI Agent ${action} permission already exists"
+    else
+      log_warn "Could not create AI Agent ${action} (HTTP $code)"
+    fi
+  done
+
+  # Public read
+  local public_read
+  public_read=$(jq -nc \
+    --arg collection "$COLLECTION" \
+    '{
+      role: null,
+      collection: $collection,
+      action: "read",
+      fields: ["*"],
+      permissions: {},
+      validation: {}
+    }')
+
+  local resp code
+  resp=$(api_request POST "${BASE_URL}/permissions" "$public_read")
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" == "200" ]]; then
+    log_ok "Public READ permission created"
+  elif [[ "$code" == "400" ]]; then
+    log_skip "Public READ permission already exists"
+  else
+    log_warn "Could not create public READ (HTTP $code)"
+  fi
+}
+
+seed_data() {
+  log_info "Seeding initial catalog entries..."
+
+  local seeds='[
+    {"code":"CAT-000","name":"Meta-Catalog","name_en":"Meta-Catalog","entity_type":"catalog","source_model":"A","source_location":"Directus:meta_catalog","registry_collection":"meta_catalog","sync_script":null,"sync_frequency":"realtime","record_count":11,"ui_page":"/knowledge/registries","status":"active","description":"Danh muc cua danh muc — self-reference","layer":2},
+    {"code":"CAT-001","name":"Bang UI","name_en":"UI Tables","entity_type":"table","source_model":"A","source_location":"Directus:table_registry","registry_collection":"table_registry","sync_script":null,"sync_frequency":"realtime","record_count":0,"ui_page":"/knowledge/registries","status":"active","description":"Cau hinh moi bang UI trong he thong","layer":4},
+    {"code":"CAT-002","name":"Modules","name_en":"Modules","entity_type":"module","source_model":"A","source_location":"Directus:modules","registry_collection":"modules","sync_script":null,"sync_frequency":"realtime","record_count":0,"ui_page":"/knowledge/modules","status":"planned","description":"Danh sach modules he thong. Collection chua ton tai.","layer":3},
+    {"code":"CAT-003","name":"Quy trinh","name_en":"Workflows","entity_type":"workflow","source_model":"A","source_location":"Directus:workflows","registry_collection":"workflows","sync_script":null,"sync_frequency":"realtime","record_count":0,"ui_page":"/knowledge/workflows","status":"active","description":"Quy trinh BPMN 2.0 trong he thong","layer":3},
+    {"code":"CAT-004","name":"Buoc quy trinh","name_en":"Workflow Steps","entity_type":"workflow_step","source_model":"A","source_location":"Directus:workflow_steps","registry_collection":"workflow_steps","sync_script":null,"sync_frequency":"realtime","record_count":0,"ui_page":"/knowledge/workflows","status":"active","description":"Cac buoc DSL trong moi quy trinh","layer":3},
+    {"code":"CAT-005","name":"De xuat thay doi","name_en":"Change Requests","entity_type":"wcr","source_model":"A","source_location":"Directus:workflow_change_requests","registry_collection":"workflow_change_requests","sync_script":null,"sync_frequency":"realtime","record_count":0,"ui_page":"/knowledge/workflows","status":"active","description":"De xuat thay doi quy trinh co kiem soat","layer":3},
+    {"code":"CAT-006","name":"DOT Tools","name_en":"DOT Tools","entity_type":"dot_tool","source_model":"B","source_location":"File:dot/bin/","registry_collection":null,"sync_script":"dot-catalog-sync","sync_frequency":"on-deploy","record_count":0,"ui_page":"/knowledge/registries","status":"planned","description":"Cong cu tu dong hoa DOT — scan tu filesystem","layer":5},
+    {"code":"CAT-007","name":"Pages/Routes","name_en":"Pages","entity_type":"page","source_model":"B","source_location":"File:web/pages/","registry_collection":null,"sync_script":"dot-catalog-sync","sync_frequency":"on-deploy","record_count":0,"ui_page":"/knowledge/registries","status":"planned","description":"Trang Vue — scan tu filesystem","layer":4},
+    {"code":"CAT-008","name":"Collections","name_en":"Collections","entity_type":"collection","source_model":"A","source_location":"Directus:directus_collections","registry_collection":null,"sync_script":"dot-catalog-sync","sync_frequency":"30min","record_count":0,"ui_page":"/knowledge/registries","status":"planned","description":"Directus collections — doc tu system API","layer":2},
+    {"code":"CAT-009","name":"Tasks","name_en":"Tasks","entity_type":"task","source_model":"A","source_location":"Directus:tasks","registry_collection":"tasks","sync_script":null,"sync_frequency":"realtime","record_count":0,"ui_page":"/knowledge/current-tasks","status":"active","description":"Cong viec quan ly boi Super Session","layer":3},
+    {"code":"CAT-010","name":"Agents","name_en":"Agents","entity_type":"agent","source_model":"B","source_location":"Agent Data:knowledge/agents","registry_collection":null,"sync_script":"dot-catalog-sync","sync_frequency":"manual","record_count":0,"ui_page":"/knowledge/registries","status":"planned","description":"Danh sach AI agents trong he thong","layer":3}
+  ]'
+
+  local count
+  count=$(echo "$seeds" | jq 'length')
+
+  for i in $(seq 0 $((count - 1))); do
+    local item code_val
+    item=$(echo "$seeds" | jq -c ".[$i]")
+    code_val=$(echo "$item" | jq -r '.code')
+
+    # Check if already exists
+    local check_resp check_body check_code
+    check_resp=$(api_request GET "${BASE_URL}/items/${COLLECTION}?filter[code][_eq]=${code_val}&fields=id,code")
+    check_body="${check_resp%$'\n'*}"
+    check_code="${check_resp##*$'\n'}"
+
+    if [[ "$check_code" == "200" ]]; then
+      local existing
+      existing=$(echo "$check_body" | jq '.data | length')
+      if [[ "$existing" -gt 0 ]]; then
+        log_skip "Seed ${code_val} already exists"
+        continue
+      fi
+    fi
+
+    local resp code_http
+    resp=$(api_request POST "${BASE_URL}/items/${COLLECTION}" "$item")
+    code_http="${resp##*$'\n'}"
+
+    if [[ "$code_http" == "200" || "$code_http" == "204" ]]; then
+      log_ok "Seeded ${code_val}"
+    else
+      log_warn "Failed to seed ${code_val} (HTTP $code_http)"
+    fi
+  done
+}
+
+register_in_table_registry() {
+  log_info "Registering meta_catalog in table_registry..."
+
+  local TABLE_ID="tbl_meta_catalog"
+
+  # Check if already registered
+  local check_resp check_body check_code
+  check_resp=$(api_request GET "${BASE_URL}/items/table_registry?filter[table_id][_eq]=${TABLE_ID}&fields=id")
+  check_body="${check_resp%$'\n'*}"
+  check_code="${check_resp##*$'\n'}"
+
+  if [[ "$check_code" == "200" ]]; then
+    local existing
+    existing=$(echo "$check_body" | jq '.data | length')
+    if [[ "$existing" -gt 0 ]]; then
+      log_skip "table_registry entry ${TABLE_ID} already exists"
+      return
+    fi
+  fi
+
+  local payload
+  payload=$(cat <<'JSON'
+{
+  "table_id": "tbl_meta_catalog",
+  "name": "Meta-Catalog",
+  "collection": "meta_catalog",
+  "fields": [
+    {"key": "code", "label": "Ma", "sortable": true},
+    {"key": "name", "label": "Ten", "sortable": true},
+    {"key": "entity_type", "label": "Loai", "sortable": true},
+    {"key": "source_model", "label": "Mo hinh", "sortable": true},
+    {"key": "record_count", "label": "So luong", "sortable": true},
+    {"key": "status", "label": "Trang thai", "sortable": true},
+    {"key": "layer", "label": "Tang", "sortable": true}
+  ],
+  "default_sort": "code",
+  "default_filter": null,
+  "page_url": "/knowledge/registries",
+  "enable_insert_marks": false,
+  "enable_proposals": false,
+  "enable_search": true,
+  "enable_pagination": true,
+  "rows_per_page": 50,
+  "status": "active",
+  "module": null,
+  "description": "Danh muc tong 3 tang — Live Catalog he thong"
+}
+JSON
+  )
+
+  local resp code_http
+  resp=$(api_request POST "${BASE_URL}/items/table_registry" "$payload")
+  code_http="${resp##*$'\n'}"
+
+  if [[ "$code_http" == "200" || "$code_http" == "204" ]]; then
+    log_ok "Registered tbl_meta_catalog in table_registry"
+  else
+    log_warn "Failed to register in table_registry (HTTP $code_http)"
+  fi
+}
+
+show_help() {
+  cat << EOF
+dot-schema-meta-catalog-ensure v${VERSION} - Ensure meta_catalog collection + seed data
+
+Usage:
+  dot-schema-meta-catalog-ensure [options]
+
+Options:
+  --local       Use local development environment
+  --cloud       Use cloud/production environment
+  --dry-run     Show what would be done
+  --skip-seed   Skip seeding initial data
+  --help, -h    Show this help
+
+EOF
+  show_environment_help
+}
+
+main() {
+  local DRY_RUN=false SKIP_SEED=false
+
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h) show_help; exit 0 ;;
+      --dry-run) DRY_RUN=true ;;
+      --skip-seed) SKIP_SEED=true ;;
+    esac
+  done
+
+  require_cmds
+  init_environment "$@"
+  BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: Schema Meta-Catalog Ensure v${VERSION}"
+  echo "========================================="
+  print_environment_banner "$@"
+
+  # Authentication
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    if [[ -f "$DOT_AUTH" ]]; then
+      source "$DOT_AUTH" "$@"
+    else
+      log_err "dot-auth not found and DOT_TOKEN not set"
+      exit 1
+    fi
+  fi
+
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "Authentication failed"
+    exit 1
+  fi
+
+  # === COLLECTION ===
+  echo ""
+  echo "--- Collection: ${COLLECTION} ---"
+
+  if collection_exists; then
+    log_skip "Collection '${COLLECTION}' already exists"
+  else
+    if [[ "$DRY_RUN" == "true" ]]; then
+      log_info "Would create collection '${COLLECTION}'"
+    else
+      create_collection
+    fi
+  fi
+
+  # === FIELDS ===
+  log_info "Ensuring required fields..."
+  for field in "${REQUIRED_FIELDS[@]}"; do
+    if field_exists "$field"; then
+      log_skip "Field ${COLLECTION}.${field} already exists"
+    else
+      if [[ "$DRY_RUN" == "true" ]]; then
+        log_info "Would create field ${COLLECTION}.${field}"
+      else
+        create_field "$field"
+      fi
+    fi
+  done
+
+  # === PERMISSIONS ===
+  echo ""
+  if [[ "$DRY_RUN" != "true" ]]; then
+    setup_permissions
+  else
+    log_info "Would create permissions"
+  fi
+
+  # === SEED DATA ===
+  echo ""
+  if [[ "$SKIP_SEED" == "false" && "$DRY_RUN" != "true" ]]; then
+    seed_data
+  elif [[ "$DRY_RUN" == "true" ]]; then
+    log_info "Would seed 11 catalog entries"
+  fi
+
+  # === REGISTER IN TABLE_REGISTRY ===
+  echo ""
+  if [[ "$DRY_RUN" != "true" ]]; then
+    register_in_table_registry
+  else
+    log_info "Would register tbl_meta_catalog in table_registry"
+  fi
+
+  echo ""
+  log_ok "Collection meta_catalog ready"
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Schema Meta-Catalog Ensure - COMPLETE"
+  echo "========================================="
+}
+
+main "$@"

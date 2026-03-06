@@ -1,0 +1,608 @@
+#!/usr/bin/env bash
+
+# dot-flow-setup-registry-sync: Configure Directus Flows for registry collections -> Agent Data sync
+# Usage: ./dot/bin/dot-flow-setup-registry-sync [--local|--cloud]
+#
+# Creates Directus Flows via API (idempotent -- safe to run multiple times):
+#   For each registry collection: Create, Update, Delete -> Agent Data
+#
+# Registry collections synced:
+#   1. table_registry        -> registries/table_registry/{table_id}
+#   2. workflows             -> registries/workflows/wf-{id}
+#   3. workflow_steps         -> registries/workflow_steps/ws-{id}
+#   4. workflow_change_requests -> registries/workflow_change_requests/wcr-{id}
+#   5. workflow_categories    -> registries/workflow_categories/wcat-{id}
+#   6. workflow_step_relations -> registries/workflow_step_relations/wsr-{id}
+#   7. meta_catalog          -> registries/meta_catalog/{code}
+#
+# Anti-loop safety: Documents use registries/* prefix.
+# Agent Data's directus_sync_listener only syncs knowledge/* prefix back,
+# so registries/* documents will NEVER fire reverse sync.
+#
+# Uses 'log' type as first operation because isolated-vm is NOT installed.
+# Split create/update: $trigger.key (create) vs $trigger.keys[0] (update).
+#
+# Prerequisites:
+#   FLOWS_ENV_ALLOW_LIST must include: AGENT_DATA_URL,AGENT_DATA_API_KEY
+#
+# Options:
+#   --local     Use local development environment
+#   --cloud     Use cloud/production environment
+#   --dry-run   Show what would be created without making changes
+#   --help, -h  Show this help
+
+set -euo pipefail
+
+# Determine script directory
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+elif [[ -n "${0:-}" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+else
+  SCRIPT_DIR="$(pwd)/dot/bin"
+fi
+
+# Source central environment config
+source "$SCRIPT_DIR/../config/environment.sh"
+
+# Parse arguments
+ENV_FLAG=""
+DRY_RUN=""
+
+for arg in "$@"; do
+  case "$arg" in
+    --local)  ENV_FLAG="--local" ;;
+    --cloud)  ENV_FLAG="--cloud" ;;
+    --dry-run) DRY_RUN="yes" ;;
+    --help|-h)
+      head -32 "$0" | tail -30
+      exit 0
+      ;;
+  esac
+done
+
+# Initialize environment
+init_environment "$ENV_FLAG"
+print_environment_banner "$ENV_FLAG"
+
+TOKEN="${DIRECTUS_TOKEN:-}"
+if [[ -z "$TOKEN" ]]; then
+  echo -e "${RED}[ERROR]${NC} Failed to authenticate with Directus" >&2
+  exit 1
+fi
+
+echo "============================================================"
+echo "  Directus Flow Setup: Registry Collections -> Agent Data"
+echo "  (log-first, split create/update, registries/* prefix)"
+echo "============================================================"
+echo ""
+
+# Track results
+TOTAL_FLOWS=0
+FAILED_FLOWS=0
+
+# ---------------------------------------------------------------
+# Helper Functions (same pattern as dot-flow-setup-tasks-sync)
+# ---------------------------------------------------------------
+
+cleanup_existing_flows() {
+  local name="$1"
+  python3 -c "
+import urllib.request, json, sys, ssl
+url = '${DIRECTUS_URL}'
+token = '${TOKEN}'
+name = '''$name'''
+headers = {'Authorization': f'Bearer {token}'}
+
+ctx = ssl.create_default_context()
+if url.startswith('https'):
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
+encoded = urllib.parse.quote(name, safe='')
+req = urllib.request.Request(f'{url}/flows?filter[name][_eq]={encoded}&fields=id', headers=headers)
+try:
+    resp = urllib.request.urlopen(req, context=ctx)
+    flows = json.loads(resp.read())['data']
+except Exception as e:
+    print(f'  Warning: Could not list flows: {e}', file=sys.stderr)
+    sys.exit(0)
+
+for f in flows:
+    fid = f['id']
+    print(f'  Removing existing flow {fid}...')
+    req = urllib.request.Request(f'{url}/flows/{fid}', headers=headers, method='DELETE')
+    try:
+        urllib.request.urlopen(req, context=ctx)
+    except Exception as e:
+        print(f'  Warning: Could not delete flow {fid}: {e}', file=sys.stderr)
+" 2>&1
+}
+
+create_flow() {
+  local payload="$1"
+  local response
+  response=$(curl -sf --max-time 15 -X POST \
+    "${DIRECTUS_URL}/flows" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "$payload" 2>/dev/null || echo "")
+
+  if [[ -z "$response" ]]; then
+    echo -e "${RED}[ERROR]${NC} Failed to create flow" >&2
+    return 1
+  fi
+
+  local flow_id
+  flow_id=$(echo "$response" | jq -r '.data.id // empty')
+  if [[ -z "$flow_id" || "$flow_id" == "null" ]]; then
+    echo -e "${RED}[ERROR]${NC} No flow ID returned" >&2
+    echo "$response" | jq . 2>/dev/null >&2 || echo "$response" >&2
+    return 1
+  fi
+
+  echo "$flow_id"
+}
+
+create_operation() {
+  local payload="$1"
+  local response
+  response=$(curl -sf --max-time 15 -X POST \
+    "${DIRECTUS_URL}/operations" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "$payload" 2>/dev/null || echo "")
+
+  if [[ -z "$response" ]]; then
+    echo -e "${RED}[ERROR]${NC} Failed to create operation" >&2
+    return 1
+  fi
+
+  local op_id
+  op_id=$(echo "$response" | jq -r '.data.id // empty')
+  if [[ -z "$op_id" || "$op_id" == "null" ]]; then
+    echo -e "${RED}[ERROR]${NC} No operation ID returned" >&2
+    echo "$response" | jq . 2>/dev/null >&2 || echo "$response" >&2
+    return 1
+  fi
+
+  echo "$op_id"
+}
+
+patch_resource() {
+  local resource="$1" id="$2" payload="$3"
+  curl -sf --max-time 15 -X PATCH \
+    "${DIRECTUS_URL}/${resource}/${id}" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "$payload" >/dev/null 2>&1
+}
+
+# ---------------------------------------------------------------
+# Generic sync flow builder (create or update)
+# Args: flow_name icon color scope collection trigger_key_expr
+#       read_collection doc_id_template body_template metadata_template
+# ---------------------------------------------------------------
+
+setup_sync_flow() {
+  local flow_name="$1" icon="$2" color="$3" scope="$4" collection="$5"
+  local trigger_key="$6" read_collection="$7" doc_id_template="$8"
+  local body_template="$9" metadata_template="${10}"
+
+  echo -e "${BOLD}${flow_name}${NC}"
+
+  if [[ -z "$DRY_RUN" ]]; then
+    cleanup_existing_flows "$flow_name"
+  fi
+
+  if [[ -n "$DRY_RUN" ]]; then
+    echo -e "  ${YELLOW}[DRY RUN]${NC} Would create flow with 3 operations"
+    return
+  fi
+
+  local flow_id
+  flow_id=$(create_flow "$(jq -n \
+    --arg name "$flow_name" \
+    --arg icon "$icon" \
+    --arg color "$color" \
+    --arg collection "$collection" \
+    --argjson scope "$scope" \
+    '{
+      name: $name,
+      icon: $icon,
+      color: $color,
+      status: "active",
+      trigger: "event",
+      accountability: "all",
+      options: {
+        type: "action",
+        scope: $scope,
+        collections: [$collection]
+      }
+    }')")
+
+  if [[ -z "$flow_id" ]]; then
+    echo -e "  ${RED}FAILED${NC}"
+    FAILED_FLOWS=$((FAILED_FLOWS + 1))
+    return
+  fi
+  echo -e "  Flow: ${GREEN}${flow_id}${NC}"
+
+  # Op0: Log gate
+  local gate_id
+  gate_id=$(create_operation "$(jq -n --arg flow "$flow_id" '{
+    flow: $flow,
+    name: "Gate",
+    key: "gate",
+    type: "log",
+    position_x: 10,
+    position_y: 1,
+    options: { message: "[DOT-REG] Flow triggered: {{$trigger.event}} on {{$trigger.collection}}" }
+  }')")
+
+  # Op1: Item-read
+  local read_id
+  read_id=$(create_operation "$(jq -n \
+    --arg flow "$flow_id" \
+    --arg coll "$read_collection" \
+    --arg key "$trigger_key" \
+    '{
+      flow: $flow,
+      name: "Read Item",
+      key: "read_item",
+      type: "item-read",
+      position_x: 25,
+      position_y: 1,
+      options: { collection: $coll, key: $key }
+    }')")
+
+  # Op2: Request to Agent Data (via Python for proper JSON body)
+  local send_id
+  send_id=$(python3 -c "
+import urllib.request, json, sys, ssl
+url = '${DIRECTUS_URL}'
+token = '${TOKEN}'
+flow_id = '$flow_id'
+doc_id = r'''$doc_id_template'''
+body_str = r'''$body_template'''
+meta_str = r'''$metadata_template'''
+
+ctx = ssl.create_default_context()
+if url.startswith('https'):
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
+body_val = json.loads(body_str)
+meta_val = json.loads(meta_str)
+
+payload = {
+    'flow': flow_id,
+    'name': 'Send to Agent Data',
+    'key': 'send_to_ad',
+    'type': 'request',
+    'position_x': 40,
+    'position_y': 1,
+    'options': {
+        'method': 'POST',
+        'url': '{{' + '\$env.AGENT_DATA_URL}}/documents?upsert=true',
+        'headers': [
+            {'header': 'Content-Type', 'value': 'application/json'},
+            {'header': 'X-API-Key', 'value': '{{' + '\$env.AGENT_DATA_API_KEY}}'}
+        ],
+        'body': {
+            'document_id': doc_id,
+            'parent_id': 'root',
+            'content': {'mime_type': 'text/markdown', 'body': body_val},
+            'metadata': meta_val,
+            'is_human_readable': True
+        }
+    }
+}
+
+data = json.dumps(payload).encode()
+headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+req = urllib.request.Request(f'{url}/operations', data=data, headers=headers)
+try:
+    resp = urllib.request.urlopen(req, context=ctx)
+    result = json.loads(resp.read())
+    op_id = result.get('data', {}).get('id', '')
+    if op_id:
+        print(op_id, end='')
+    else:
+        print('ERROR: No operation ID returned', file=sys.stderr)
+        sys.exit(1)
+except Exception as e:
+    print(f'ERROR: {e}', file=sys.stderr)
+    sys.exit(1)
+")
+
+  # Chain: gate -> read_item -> send_to_ad
+  patch_resource "operations" "$gate_id" "$(jq -n --arg r "$read_id" '{resolve: $r}')"
+  patch_resource "operations" "$read_id" "$(jq -n --arg r "$send_id" '{resolve: $r}')"
+  patch_resource "flows" "$flow_id" "$(jq -n --arg op "$gate_id" '{operation: $op}')"
+  echo -e "  Chain: gate -> read -> send ${GREEN}OK${NC}"
+  TOTAL_FLOWS=$((TOTAL_FLOWS + 1))
+}
+
+# ---------------------------------------------------------------
+# Generic delete flow builder
+# Args: flow_name icon color collection url_template
+# ---------------------------------------------------------------
+
+setup_delete_flow() {
+  local flow_name="$1" icon="$2" color="$3" collection="$4" url_template="$5"
+
+  echo -e "${BOLD}${flow_name}${NC}"
+
+  if [[ -z "$DRY_RUN" ]]; then
+    cleanup_existing_flows "$flow_name"
+  fi
+
+  if [[ -n "$DRY_RUN" ]]; then
+    echo -e "  ${YELLOW}[DRY RUN]${NC} Would create delete flow with 2 operations"
+    return
+  fi
+
+  local flow_id
+  flow_id=$(create_flow "$(jq -n \
+    --arg name "$flow_name" \
+    --arg icon "$icon" \
+    --arg color "$color" \
+    --arg collection "$collection" \
+    '{
+      name: $name,
+      icon: $icon,
+      color: $color,
+      status: "active",
+      trigger: "event",
+      accountability: "all",
+      options: {
+        type: "action",
+        scope: ["items.delete"],
+        collections: [$collection]
+      }
+    }')")
+
+  if [[ -z "$flow_id" ]]; then
+    echo -e "  ${RED}FAILED${NC}"
+    FAILED_FLOWS=$((FAILED_FLOWS + 1))
+    return
+  fi
+  echo -e "  Flow: ${GREEN}${flow_id}${NC}"
+
+  # Op0: Log gate
+  local gate_id
+  gate_id=$(create_operation "$(jq -n --arg flow "$flow_id" '{
+    flow: $flow,
+    name: "Gate",
+    key: "gate",
+    type: "log",
+    position_x: 10,
+    position_y: 1,
+    options: { message: "[DOT-REG] Delete triggered: {{$trigger.event}} on {{$trigger.collection}}" }
+  }')")
+
+  # Op1: DELETE request
+  local del_id
+  del_id=$(create_operation "$(jq -n \
+    --arg flow "$flow_id" \
+    --arg url "$url_template" \
+    '{
+      flow: $flow,
+      name: "Delete from Agent Data",
+      key: "delete_from_ad",
+      type: "request",
+      position_x: 25,
+      position_y: 1,
+      options: {
+        method: "DELETE",
+        url: $url,
+        headers: [
+          { header: "X-API-Key", value: "{{$env.AGENT_DATA_API_KEY}}" }
+        ]
+      }
+    }')")
+
+  # Chain: gate -> delete_from_ad
+  patch_resource "operations" "$gate_id" "$(jq -n --arg r "$del_id" '{resolve: $r}')"
+  patch_resource "flows" "$flow_id" "$(jq -n --arg op "$gate_id" '{operation: $op}')"
+  echo -e "  Chain: gate -> delete ${GREEN}OK${NC}"
+  TOTAL_FLOWS=$((TOTAL_FLOWS + 1))
+}
+
+# ===============================================================
+# REGISTRY COLLECTION DEFINITIONS
+# ===============================================================
+
+# --- 1. table_registry ---
+TR_BODY='"# {{read_item.name}}\n\n**Table ID:** {{read_item.table_id}}\n**Collection:** {{read_item.collection}}\n**Module:** {{read_item.module}}\n**Status:** {{read_item.status}}\n**Page URL:** {{read_item.page_url}}\n\n## Description\n{{read_item.description}}\n\n## Fields Config\n{{read_item.fields}}\n\n## Settings\n- Rows per page: {{read_item.rows_per_page}}\n- Pagination: {{read_item.enable_pagination}}\n- Search: {{read_item.enable_search}}\n- Insert marks: {{read_item.enable_insert_marks}}\n- Proposals: {{read_item.enable_proposals}}\n- Default sort: {{read_item.default_sort}}\n- Default filter: {{read_item.default_filter}}"'
+TR_META='{"title":"{{read_item.name}}","table_id":"{{read_item.table_id}}","collection":"{{read_item.collection}}","module":"{{read_item.module}}","status":"{{read_item.status}}","page_url":"{{read_item.page_url}}","source":"directus","sync_collection":"table_registry"}'
+
+echo "--- 1/6: table_registry ---"
+setup_sync_flow \
+  "[DOT-REG] Table Registry Create -> AD" "table_chart" "#059669" '["items.create"]' "table_registry" \
+  '{{$trigger.key}}' "table_registry" \
+  'registries/table_registry/{{read_item.table_id}}' \
+  "$TR_BODY" "$TR_META"
+echo ""
+
+setup_sync_flow \
+  "[DOT-REG] Table Registry Update -> AD" "table_chart" "#047857" '["items.update"]' "table_registry" \
+  '{{$trigger.keys[0]}}' "table_registry" \
+  'registries/table_registry/{{read_item.table_id}}' \
+  "$TR_BODY" "$TR_META"
+echo ""
+
+setup_delete_flow \
+  "[DOT-REG] Table Registry Delete -> AD" "table_chart" "#DC2626" "table_registry" \
+  '{{$env.AGENT_DATA_URL}}/documents/registries/table_registry/tbl-{{$trigger.keys[0]}}'
+echo ""
+
+# --- 2. workflows ---
+WF_BODY='"# {{read_item.title}}\n\n**Process Code:** {{read_item.process_code}}\n**Status:** {{read_item.status}}\n**Version:** {{read_item.version}}\n**Level:** {{read_item.level}}\n\n## Description\n{{read_item.description}}\n\n## Narrative\n{{read_item.narrative}}\n\n## BPMN XML\n```xml\n{{read_item.bpmn_xml}}\n```"'
+WF_META='{"title":"{{read_item.title}}","process_code":"{{read_item.process_code}}","status":"{{read_item.status}}","version":"{{read_item.version}}","level":"{{read_item.level}}","source":"directus","sync_collection":"workflows"}'
+
+echo "--- 2/6: workflows ---"
+setup_sync_flow \
+  "[DOT-REG] Workflows Create -> AD" "account_tree" "#7C3AED" '["items.create"]' "workflows" \
+  '{{$trigger.key}}' "workflows" \
+  'registries/workflows/wf-{{read_item.id}}' \
+  "$WF_BODY" "$WF_META"
+echo ""
+
+setup_sync_flow \
+  "[DOT-REG] Workflows Update -> AD" "account_tree" "#6D28D9" '["items.update"]' "workflows" \
+  '{{$trigger.keys[0]}}' "workflows" \
+  'registries/workflows/wf-{{read_item.id}}' \
+  "$WF_BODY" "$WF_META"
+echo ""
+
+setup_delete_flow \
+  "[DOT-REG] Workflows Delete -> AD" "account_tree" "#DC2626" "workflows" \
+  '{{$env.AGENT_DATA_URL}}/documents/registries/workflows/wf-{{$trigger.keys[0]}}'
+echo ""
+
+# --- 3. workflow_steps ---
+WS_BODY='"# {{read_item.title}}\n\n**Step Key:** {{read_item.step_key}}\n**Step Type:** {{read_item.step_type}}\n**Actor:** {{read_item.actor_type}}\n**Workflow ID:** {{read_item.workflow_id}}\n**Sort Order:** {{read_item.sort_order}}\n\n## Description\n{{read_item.description}}\n\n## Trigger In\n{{read_item.trigger_in_text}}\n\n## Trigger Out\n{{read_item.trigger_out_text}}\n\n## Config\n{{read_item.config}}"'
+WS_META='{"title":"{{read_item.title}}","step_key":"{{read_item.step_key}}","step_type":"{{read_item.step_type}}","actor_type":"{{read_item.actor_type}}","workflow_id":"{{read_item.workflow_id}}","sort_order":"{{read_item.sort_order}}","source":"directus","sync_collection":"workflow_steps"}'
+
+echo "--- 3/6: workflow_steps ---"
+setup_sync_flow \
+  "[DOT-REG] Workflow Steps Create -> AD" "route" "#2563EB" '["items.create"]' "workflow_steps" \
+  '{{$trigger.key}}' "workflow_steps" \
+  'registries/workflow_steps/ws-{{read_item.id}}' \
+  "$WS_BODY" "$WS_META"
+echo ""
+
+setup_sync_flow \
+  "[DOT-REG] Workflow Steps Update -> AD" "route" "#1D4ED8" '["items.update"]' "workflow_steps" \
+  '{{$trigger.keys[0]}}' "workflow_steps" \
+  'registries/workflow_steps/ws-{{read_item.id}}' \
+  "$WS_BODY" "$WS_META"
+echo ""
+
+setup_delete_flow \
+  "[DOT-REG] Workflow Steps Delete -> AD" "route" "#DC2626" "workflow_steps" \
+  '{{$env.AGENT_DATA_URL}}/documents/registries/workflow_steps/ws-{{$trigger.keys[0]}}'
+echo ""
+
+# --- 4. workflow_change_requests ---
+WCR_BODY='"# {{read_item.title}}\n\n**Change Type:** {{read_item.change_type}}\n**Status:** {{read_item.status}}\n**Workflow ID:** {{read_item.workflow_id}}\n**Task ID:** {{read_item.task_id}}\n\n## Description\n{{read_item.description}}\n\n## Position Context\n{{read_item.position_context}}\n\n## DSL Diff\n{{read_item.dsl_diff}}\n\n## Schema Warnings\n{{read_item.schema_warnings}}\n\n## Approval\n- Approved by: {{read_item.approved_by}}\n- Applied at: {{read_item.applied_at}}"'
+WCR_META='{"title":"{{read_item.title}}","change_type":"{{read_item.change_type}}","status":"{{read_item.status}}","workflow_id":"{{read_item.workflow_id}}","task_id":"{{read_item.task_id}}","source":"directus","sync_collection":"workflow_change_requests"}'
+
+echo "--- 4/6: workflow_change_requests ---"
+setup_sync_flow \
+  "[DOT-REG] WCR Create -> AD" "gavel" "#D97706" '["items.create"]' "workflow_change_requests" \
+  '{{$trigger.key}}' "workflow_change_requests" \
+  'registries/workflow_change_requests/wcr-{{read_item.id}}' \
+  "$WCR_BODY" "$WCR_META"
+echo ""
+
+setup_sync_flow \
+  "[DOT-REG] WCR Update -> AD" "gavel" "#B45309" '["items.update"]' "workflow_change_requests" \
+  '{{$trigger.keys[0]}}' "workflow_change_requests" \
+  'registries/workflow_change_requests/wcr-{{read_item.id}}' \
+  "$WCR_BODY" "$WCR_META"
+echo ""
+
+setup_delete_flow \
+  "[DOT-REG] WCR Delete -> AD" "gavel" "#DC2626" "workflow_change_requests" \
+  '{{$env.AGENT_DATA_URL}}/documents/registries/workflow_change_requests/wcr-{{$trigger.keys[0]}}'
+echo ""
+
+# --- 5. workflow_categories ---
+WCAT_BODY='"# {{read_item.name}}\n\n**Code:** {{read_item.code}}\n**Level:** {{read_item.level}}\n**Status:** {{read_item.status}}\n**Parent ID:** {{read_item.parent_id}}\n\n## Description\n{{read_item.description}}"'
+WCAT_META='{"title":"{{read_item.name}}","code":"{{read_item.code}}","level":"{{read_item.level}}","status":"{{read_item.status}}","parent_id":"{{read_item.parent_id}}","source":"directus","sync_collection":"workflow_categories"}'
+
+echo "--- 5/6: workflow_categories ---"
+setup_sync_flow \
+  "[DOT-REG] Workflow Categories Create -> AD" "category" "#0891B2" '["items.create"]' "workflow_categories" \
+  '{{$trigger.key}}' "workflow_categories" \
+  'registries/workflow_categories/wcat-{{read_item.id}}' \
+  "$WCAT_BODY" "$WCAT_META"
+echo ""
+
+setup_sync_flow \
+  "[DOT-REG] Workflow Categories Update -> AD" "category" "#0E7490" '["items.update"]' "workflow_categories" \
+  '{{$trigger.keys[0]}}' "workflow_categories" \
+  'registries/workflow_categories/wcat-{{read_item.id}}' \
+  "$WCAT_BODY" "$WCAT_META"
+echo ""
+
+setup_delete_flow \
+  "[DOT-REG] Workflow Categories Delete -> AD" "category" "#DC2626" "workflow_categories" \
+  '{{$env.AGENT_DATA_URL}}/documents/registries/workflow_categories/wcat-{{$trigger.keys[0]}}'
+echo ""
+
+# --- 6. workflow_step_relations ---
+WSR_BODY='"# Relation: {{read_item.from_step_id}} -> {{read_item.to_step_id}}\n\n**Type:** {{read_item.relation_type}}\n**Workflow ID:** {{read_item.workflow_id}}\n**Label:** {{read_item.label}}\n**Sort Order:** {{read_item.sort_order}}\n\n## Condition\n{{read_item.condition_expression}}"'
+WSR_META='{"title":"Relation {{read_item.id}}","from_step_id":"{{read_item.from_step_id}}","to_step_id":"{{read_item.to_step_id}}","relation_type":"{{read_item.relation_type}}","workflow_id":"{{read_item.workflow_id}}","source":"directus","sync_collection":"workflow_step_relations"}'
+
+echo "--- 6/6: workflow_step_relations ---"
+setup_sync_flow \
+  "[DOT-REG] Step Relations Create -> AD" "link" "#4F46E5" '["items.create"]' "workflow_step_relations" \
+  '{{$trigger.key}}' "workflow_step_relations" \
+  'registries/workflow_step_relations/wsr-{{read_item.id}}' \
+  "$WSR_BODY" "$WSR_META"
+echo ""
+
+setup_sync_flow \
+  "[DOT-REG] Step Relations Update -> AD" "link" "#4338CA" '["items.update"]' "workflow_step_relations" \
+  '{{$trigger.keys[0]}}' "workflow_step_relations" \
+  'registries/workflow_step_relations/wsr-{{read_item.id}}' \
+  "$WSR_BODY" "$WSR_META"
+echo ""
+
+setup_delete_flow \
+  "[DOT-REG] Step Relations Delete -> AD" "link" "#DC2626" "workflow_step_relations" \
+  '{{$env.AGENT_DATA_URL}}/documents/registries/workflow_step_relations/wsr-{{$trigger.keys[0]}}'
+echo ""
+
+# --- 7. meta_catalog ---
+MC_BODY='"# {{read_item.name}}\n\n**Code:** {{read_item.code}}\n**Entity Type:** {{read_item.entity_type}}\n**Source Model:** {{read_item.source_model}}\n**Layer:** {{read_item.layer}}\n**Status:** {{read_item.status}}\n\n## Location\n- Source: {{read_item.source_location}}\n- Registry Collection: {{read_item.registry_collection}}\n- UI Page: {{read_item.ui_page}}\n- Sync Script: {{read_item.sync_script}}\n- Sync Frequency: {{read_item.sync_frequency}}\n\n## Description\n{{read_item.description}}\n\n**Record Count:** {{read_item.record_count}}"'
+MC_META='{"title":"{{read_item.name}}","code":"{{read_item.code}}","entity_type":"{{read_item.entity_type}}","source_model":"{{read_item.source_model}}","layer":"{{read_item.layer}}","status":"{{read_item.status}}","record_count":"{{read_item.record_count}}","source":"directus","sync_collection":"meta_catalog"}'
+
+echo "--- 7/7: meta_catalog ---"
+setup_sync_flow \
+  "[DOT-REG] Meta Catalog Create -> AD" "inventory_2" "#7C3AED" '["items.create"]' "meta_catalog" \
+  '{{$trigger.key}}' "meta_catalog" \
+  'registries/meta_catalog/{{read_item.code}}' \
+  "$MC_BODY" "$MC_META"
+echo ""
+
+setup_sync_flow \
+  "[DOT-REG] Meta Catalog Update -> AD" "inventory_2" "#6D28D9" '["items.update"]' "meta_catalog" \
+  '{{$trigger.keys[0]}}' "meta_catalog" \
+  'registries/meta_catalog/{{read_item.code}}' \
+  "$MC_BODY" "$MC_META"
+echo ""
+
+setup_delete_flow \
+  "[DOT-REG] Meta Catalog Delete -> AD" "inventory_2" "#DC2626" "meta_catalog" \
+  '{{$env.AGENT_DATA_URL}}/documents/registries/meta_catalog/cat-{{$trigger.keys[0]}}'
+echo ""
+
+# ===============================================================
+# Summary
+# ===============================================================
+echo "============================================================"
+if [[ $FAILED_FLOWS -eq 0 ]]; then
+  echo -e "${GREEN}[SUCCESS]${NC} Registry sync flows configured: ${TOTAL_FLOWS} flows"
+else
+  echo -e "${YELLOW}[PARTIAL]${NC} Created ${TOTAL_FLOWS} flows, ${FAILED_FLOWS} failed"
+fi
+echo "============================================================"
+echo ""
+echo "Collections synced (7):"
+echo "  1. table_registry         -> registries/table_registry/{table_id}"
+echo "  2. workflows              -> registries/workflows/wf-{id}"
+echo "  3. workflow_steps          -> registries/workflow_steps/ws-{id}"
+echo "  4. workflow_change_requests -> registries/workflow_change_requests/wcr-{id}"
+echo "  5. workflow_categories     -> registries/workflow_categories/wcat-{id}"
+echo "  6. workflow_step_relations -> registries/workflow_step_relations/wsr-{id}"
+echo "  7. meta_catalog           -> registries/meta_catalog/{code}"
+echo ""
+echo "Flows per collection: 3 (create + update + delete) = 21 total"
+echo "Anti-loop: registries/* prefix NOT in directus_sync._SYNC_PREFIXES"
+echo ""
+echo "Verify flows: ${DIRECTUS_URL}/admin/settings/flows"

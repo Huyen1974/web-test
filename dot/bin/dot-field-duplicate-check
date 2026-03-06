@@ -1,0 +1,275 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-field-duplicate-check — Scan all collections for duplicate/orphan fields
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-field* — no existing tool]
+# VERSION: 1.0.0
+#
+# Scans ALL Directus user collections and reports:
+#   1. Exact name duplicates across collections (same field name, different type)
+#   2. Semantic duplicates (fields with similar purpose based on naming patterns)
+#   3. Summary statistics
+#
+# Usage:
+#   dot-field-duplicate-check [--cloud] [--output=FILE]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+OUTPUT_FILE=""
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+api_request() {
+  local method="$1" url="$2"
+  curl -sS --globoff -X "$method" "$url" \
+    -H "Authorization: Bearer $DOT_TOKEN" \
+    -w "\n%{http_code}"
+}
+
+show_help() {
+  cat << EOF
+dot-field-duplicate-check v${VERSION} — Field duplicate detection
+
+Usage:
+  dot-field-duplicate-check [--cloud] [--output=FILE]
+
+Options:
+  --local        Use local Directus
+  --cloud        Use cloud Directus (default)
+  --output=FILE  Write report to file (default: stdout + Agent Data upload)
+  --help, -h     Show help
+
+EOF
+  show_environment_help
+}
+
+main() {
+  for arg in "$@"; do
+    case "$arg" in
+      --output=*) OUTPUT_FILE="${arg#--output=}" ;;
+      --help|-h) show_help; exit 0 ;;
+    esac
+  done
+
+  init_environment "$@"
+  BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: Field Duplicate Check v${VERSION}"
+  echo "========================================="
+  print_environment_banner "$@"
+
+  # Auth
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    local dot_auth="${SCRIPT_DIR}/dot-auth"
+    if [[ -f "$dot_auth" ]]; then
+      source "$dot_auth" "$@"
+    fi
+  fi
+
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "Authentication failed"
+    exit 1
+  fi
+
+  # Fetch all collections
+  log_info "Fetching collections..."
+  local coll_resp coll_body coll_code
+  coll_resp=$(api_request GET "${BASE_URL}/collections?limit=-1")
+  coll_body="${coll_resp%$'\n'*}"
+  coll_code="${coll_resp##*$'\n'}"
+
+  if [[ "$coll_code" != "200" ]]; then
+    log_err "Failed to fetch collections (HTTP $coll_code)"
+    exit 1
+  fi
+
+  local collections
+  collections=$(echo "$coll_body" | jq -r '.data[] | select(.collection | startswith("directus_") | not) | .collection' | sort)
+  local coll_count
+  coll_count=$(echo "$collections" | wc -l | tr -d ' ')
+  log_info "Found ${coll_count} user collections"
+
+  # Fetch all fields to temp file (response too large for shell variables)
+  log_info "Fetching fields for all collections..."
+  local tmp_fields
+  tmp_fields=$(mktemp)
+  trap "rm -f '$tmp_fields'" EXIT
+
+  local fields_code
+  fields_code=$(curl -sS --globoff -X GET "${BASE_URL}/fields?limit=-1" \
+    -H "Authorization: Bearer $DOT_TOKEN" \
+    -o "$tmp_fields" -w "%{http_code}")
+
+  if [[ "$fields_code" != "200" ]]; then
+    log_err "Failed to fetch fields (HTTP $fields_code)"
+    exit 1
+  fi
+
+  # Analyze fields with Python
+  local report_md
+  report_md=$(FIELDS_FILE="$tmp_fields" python3 << 'PYEOF'
+import json, sys, os
+from collections import defaultdict
+
+with open(os.environ['FIELDS_FILE']) as f:
+    data = json.load(f)
+
+fields = data.get('data', [])
+
+# Build field map: field_name -> [(collection, type, note)]
+field_map = defaultdict(list)
+total_fields = 0
+
+for f in fields:
+    coll = f.get('collection', '')
+    if coll.startswith('directus_'):
+        continue
+    name = f.get('field', '')
+    if name in ('id', 'sort', 'user_created', 'user_updated', 'date_created', 'date_updated'):
+        continue
+    ftype = f.get('type', 'unknown')
+    note = (f.get('meta') or {}).get('note', '') or ''
+    field_map[name].append((coll, ftype, note))
+    total_fields += 1
+
+# Find exact duplicates (same name in 2+ collections)
+exact_dupes = {k: v for k, v in field_map.items() if len(v) >= 2}
+
+# Find type mismatches among exact dupes
+type_mismatches = {}
+for name, entries in exact_dupes.items():
+    types = set(e[1] for e in entries)
+    if len(types) > 1:
+        type_mismatches[name] = entries
+
+# Semantic duplicate patterns
+semantic_groups = defaultdict(list)
+semantic_patterns = {
+    'assignee': ['assigned_to', 'assigned_agent', 'assignee', 'owner', 'responsible'],
+    'title_name': ['title', 'name', 'label', 'heading'],
+    'description': ['description', 'summary', 'content', 'body', 'narrative', 'note'],
+    'code_id': ['code', 'process_code', 'table_id', 'step_key'],
+}
+
+for pattern_name, keywords in semantic_patterns.items():
+    matched = []
+    for name, entries in field_map.items():
+        if name in keywords:
+            for coll, ftype, note in entries:
+                matched.append(f'{coll}.{name} ({ftype})')
+    if len(matched) >= 2:
+        semantic_groups[pattern_name] = matched
+
+# Generate report
+lines = []
+lines.append('# Field Duplicate Check Report')
+lines.append('')
+lines.append(f'**Date:** 2026-03-06')
+lines.append(f'**Total user fields:** {total_fields}')
+lines.append(f'**Collections scanned:** {len(set(e[0] for entries in field_map.values() for e in entries))}')
+lines.append(f'**Shared field names:** {len(exact_dupes)}')
+lines.append(f'**Type mismatches:** {len(type_mismatches)}')
+lines.append('')
+
+lines.append('## Type Mismatches (same name, different type)')
+lines.append('')
+if type_mismatches:
+    for name, entries in sorted(type_mismatches.items()):
+        lines.append(f'### `{name}`')
+        for coll, ftype, note in entries:
+            lines.append(f'- {coll}.{name}: **{ftype}** — {note[:80]}')
+        lines.append('')
+else:
+    lines.append('None found.')
+    lines.append('')
+
+lines.append('## Semantic Duplicates (similar purpose)')
+lines.append('')
+if semantic_groups:
+    for pattern, matched in sorted(semantic_groups.items()):
+        lines.append(f'### Concept: `{pattern}`')
+        for m in matched:
+            lines.append(f'- {m}')
+        lines.append('')
+else:
+    lines.append('None found.')
+    lines.append('')
+
+lines.append('## Shared Field Names (2+ collections)')
+lines.append('')
+lines.append('| Field | Collections | Types |')
+lines.append('|-------|-------------|-------|')
+for name, entries in sorted(exact_dupes.items())[:50]:
+    colls = ', '.join(sorted(set(e[0] for e in entries)))
+    types = ', '.join(sorted(set(e[1] for e in entries)))
+    lines.append(f'| {name} | {colls[:80]} | {types} |')
+
+print('\n'.join(lines))
+PYEOF
+)
+
+  echo ""
+  echo "$report_md"
+
+  if [[ -n "$OUTPUT_FILE" ]]; then
+    echo "$report_md" > "$OUTPUT_FILE"
+    log_ok "Report written to ${OUTPUT_FILE}"
+  fi
+
+  # Upload to Agent Data
+  local AD_URL AD_KEY
+  AD_URL=$(ssh -i ~/.ssh/contabo_vps root@38.242.240.89 "grep '^AGENT_DATA_URL=' /opt/incomex/docker/.env 2>/dev/null | cut -d= -f2-" 2>/dev/null || echo "")
+  AD_KEY=$(ssh -i ~/.ssh/contabo_vps root@38.242.240.89 "grep '^AGENT_DATA_API_KEY=' /opt/incomex/docker/.env 2>/dev/null | cut -d= -f2-" 2>/dev/null || echo "")
+
+  if [[ -n "$AD_KEY" ]]; then
+    log_info "Uploading report to Agent Data..."
+    local tmp_report
+    tmp_report=$(mktemp)
+    echo "$report_md" > "$tmp_report"
+    AD_KEY="$AD_KEY" REPORT_FILE="$tmp_report" python3 << 'UPLOAD_PY'
+import json, urllib.request, ssl, os
+
+with open(os.environ['REPORT_FILE']) as f:
+    body = f.read()
+
+payload = json.dumps({
+    'document_id': 'knowledge/current-state/reports/duplicate-fields-report',
+    'parent_id': 'root',
+    'content': {'mime_type': 'text/markdown', 'body': body},
+    'metadata': {'title': 'Field Duplicate Check Report', 'status': 'published', 'tags': ['fields', 'duplicates', 'report']},
+    'is_human_readable': True
+}).encode()
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+req = urllib.request.Request(
+    'https://vps.incomexsaigoncorp.vn/api/documents?upsert=true',
+    data=payload,
+    headers={'X-API-Key': os.environ['AD_KEY'], 'Content-Type': 'application/json'}
+)
+try:
+    resp = urllib.request.urlopen(req, context=ctx)
+    print(f'[OK]   Uploaded to Agent Data: {json.loads(resp.read())}')
+except Exception as e:
+    print(f'[WARN] Upload failed: {e}')
+UPLOAD_PY
+    rm -f "$tmp_report"
+  fi
+
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Field Duplicate Check - COMPLETE"
+  echo "========================================="
+}
+
+main "$@"
