@@ -1,9 +1,9 @@
 name: E2E Tests
 
 on:
-  # Run after Firebase Deploy completes
+  # Run after VPS Deploy completes
   workflow_run:
-    workflows: ["Firebase Deploy"]
+    workflows: ["Deploy to VPS"]
     types:
       - completed
     branches: [main]
@@ -13,7 +13,7 @@ on:
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    # Only run if Firebase Deploy was successful
+    # Only run if VPS Deploy was successful
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:

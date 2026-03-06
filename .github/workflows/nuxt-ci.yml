@@ -38,5 +38,5 @@ jobs:
 
       - name: Build project
         env:
-          NUXT_PUBLIC_DIRECTUS_URL: "https://directus-test-812872501910.asia-southeast1.run.app"
+          NUXT_PUBLIC_DIRECTUS_URL: "https://directus.incomexsaigoncorp.vn"
         run: pnpm run build
