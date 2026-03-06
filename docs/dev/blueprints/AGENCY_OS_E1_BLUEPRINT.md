@@ -272,7 +272,7 @@ Agent Data → Directus (anchor) → Nuxt (read-only)
 | **A2** Directus Version | **11.2.2** | Cursor verify (Cloud Run image) | 2025-12-29 |
 | **A3** Agency OS Repo | `https://github.com/directus-labs/agency-os` | Cursor verify | 2025-12-29 |
 | **A4** Starter Kit Blocks | **16 blocks** (vượt 13 yêu cầu) | Cursor verify | 2025-12-29 |
-| **A5** Production Domain | `https://ai.incomexsaigoncorp.vn/` | Cursor verify (HTTP/2 200) | 2025-12-29 |
+| **A5** Production Domain | `https://vps.incomexsaigoncorp.vn/` | Cursor verify (HTTP/2 200) | 2025-12-29 |
 | **A6** Hosting Provider | **Firebase Hosting** | User chốt | 2025-12-29 |
 | **A7** FIREBASE_SERVICE_ACCOUNT | **chatgpt-deployer** JSON | ❌ Cần export | 2025-12-30 |
 | **A8** FIREBASE_PROJECT_ID | `web-test-pfne2mqwja` | ✅ Đã có | 2025-12-30 |
@@ -315,7 +315,7 @@ Agent Data → Directus (anchor) → Nuxt (read-only)
 
 | Component | Service | URL | Ghi chú |
 |-----------|---------|-----|---------|
-| CDN/Hosting | Firebase Hosting | `ai.incomexsaigoncorp.vn` | Cache vĩnh viễn |
+| CDN/Hosting | Firebase Hosting | `vps.incomexsaigoncorp.vn` | Cache vĩnh viễn |
 | Nuxt SSR | Cloud Run | `nuxt-ssr-pfne2mqwja` | **Cần tạo trong Prerequisites** |
 | CMS | Cloud Run | `directus-test-pfne2mqwja` | Đã có |
 
@@ -334,7 +334,7 @@ Agent Data → Directus (anchor) → Nuxt (read-only)
       ↓
 2. Directus Flow (Async) tự động trigger
       ↓
-3. Flow gọi: GET https://ai.incomexsaigoncorp.vn/{{permalink}}
+3. Flow gọi: GET https://vps.incomexsaigoncorp.vn/{{permalink}}
       ↓
 4. Cloud Run render trang mới → Trả về HTML
       ↓
@@ -384,7 +384,7 @@ Agent Data → Directus (anchor) → Nuxt (read-only)
 
 **Trả lời (CHỐT CỨNG):**
 
-1. **Flow gửi GET request** đến URL công khai (vd: `https://ai.incomexsaigoncorp.vn/bai-viet`)
+1. **Flow gửi GET request** đến URL công khai (vd: `https://vps.incomexsaigoncorp.vn/bai-viet`)
 
 2. **Firebase Hosting nhận request:**
    - Kiểm tra cache
@@ -501,7 +501,7 @@ Request → Firebase Hosting → Cloud Run (Nuxt SSR)
 **KIỂM TRA CONFLICT:**
 ```bash
 # Sau khi deploy, verify headers thực tế
-curl -sI https://ai.incomexsaigoncorp.vn/ | grep -i "cache-control"
+curl -sI https://vps.incomexsaigoncorp.vn/ | grep -i "cache-control"
 
 # Expected output:
 # cache-control: public, max-age=0, s-maxage=3600, stale-while-revalidate=86400
@@ -2900,7 +2900,7 @@ gcloud run services describe directus-test-pfne2mqwja \
 ```
 
 **Gate Check Rule:**
-- [ ] WEB_URL = `https://ai.incomexsaigoncorp.vn` (không trailing slash)
+- [ ] WEB_URL = `https://vps.incomexsaigoncorp.vn` (không trailing slash)
 - [ ] AGENT_DATA_URL = `https://agent-data-test-pfne2mqwja-as.a.run.app/api`
 - [ ] AGENT_DATA_API_KEY = (có giá trị, không rỗng)
 
@@ -3076,7 +3076,7 @@ Phải dùng giao diện Condition Builder → Group → chọn OR logic.
 
 | Biến | Mô tả | Ví dụ | Nơi dùng |
 |------|-------|-------|----------|
-| `WEB_URL` | Domain chính của web | `https://ai.incomexsaigoncorp.vn` | Cache Warmer Flow |
+| `WEB_URL` | Domain chính của web | `https://vps.incomexsaigoncorp.vn` | Cache Warmer Flow |
 | `AGENT_DATA_URL` | URL của Agent Data API | `https://agent-data-test-...` | Sync Flow |
 | `AGENT_DATA_API_KEY` | API Key cho Agent Data | `***` | Sync Flow Auth |
 | `GITHUB_TOKEN` | Token cho webhook (nếu dùng) | `***` | Webhook Flow |
@@ -3088,7 +3088,7 @@ Phải dùng giao diện Condition Builder → Group → chọn OR logic.
 # LỆNH ĐẦY ĐỦ - COPY NGUYÊN KHỐI
 gcloud run services update directus-test-pfne2mqwja \
   --region=asia-southeast1 \
-  --set-env-vars="WEB_URL=https://ai.incomexsaigoncorp.vn,AGENT_DATA_URL=https://agent-data-test-pfne2mqwja-as.a.run.app/api,AGENT_DATA_API_KEY=YOUR_API_KEY_HERE"
+  --set-env-vars="WEB_URL=https://vps.incomexsaigoncorp.vn,AGENT_DATA_URL=https://agent-data-test-pfne2mqwja-as.a.run.app/api,AGENT_DATA_API_KEY=YOUR_API_KEY_HERE"
 
 # ⚠️ THAY YOUR_API_KEY_HERE bằng giá trị thật từ Secret Manager
 # ⚠️ KHÔNG commit API key vào repo
@@ -3554,14 +3554,14 @@ Triggers: update on pages/globals with filter status == "published".
 
 **CÁC SEED ĐÚNG:**
 ```json
-{ "domain": "ai.incomexsaigoncorp.vn" }     ✅
+{ "domain": "vps.incomexsaigoncorp.vn" }     ✅
 { "domain": "hr.example.com" }               ✅
 ```
 
 **CÁC SEED SAI:**
 ```json
-{ "domain": "https://ai.incomexsaigoncorp.vn" }   ❌ Có protocol
-{ "domain": "ai.incomexsaigoncorp.vn/" }          ❌ Có trailing slash
+{ "domain": "https://vps.incomexsaigoncorp.vn" }   ❌ Có protocol
+{ "domain": "vps.incomexsaigoncorp.vn/" }          ❌ Có trailing slash
 { "domain": "localhost:3000" }                     ❌ Không phải domain thật
 ```
 
@@ -3615,7 +3615,7 @@ Khi Agent cần tạo block:
    - Fields:
      - `code` (string, unique, required) - vd: `main`, `hr_brand_a`, `hr_brand_b`
      - `name` (string, required) - vd: "Agency OS Main", "Tuyển dụng ABC"
-     - `domain` (string) - vd: `ai.incomexsaigoncorp.vn`
+     - `domain` (string) - vd: `vps.incomexsaigoncorp.vn`
      - `description` (text) - Mô tả ngắn
      - **is_active** (boolean) - default: true (**MỚI:** Cho phép tạm dừng site)
    - Seed: 
@@ -3623,7 +3623,7 @@ Khi Agent cần tạo block:
      {
        "code": "main",
        "name": "Agency OS Main",
-       "domain": "ai.incomexsaigoncorp.vn",
+       "domain": "vps.incomexsaigoncorp.vn",
        "description": "Website chính",
        "is_active": true
      }
@@ -3992,7 +3992,7 @@ Operation 3: Loop qua domains
 ❌ SAI:  Hardcode domain string trong Flow definition
 
 VÍ DỤ SAI (CẤM):
-  URL: "https://ai.incomexsaigoncorp.vn/{{permalink}}"
+  URL: "https://vps.incomexsaigoncorp.vn/{{permalink}}"
 
 VÍ DỤ ĐÚNG:
   URL: "https://{{site_item.domain}}/{{read_full_page.permalink}}"
@@ -4583,17 +4583,17 @@ echo "=== E1 FINAL VERIFICATION ==="
 
 # 1. Web Public (Cache)
 echo "1. Web public access..."
-HTTP_WEB=$(curl -s -o /dev/null -w "%{http_code}" https://ai.incomexsaigoncorp.vn/)
+HTTP_WEB=$(curl -s -o /dev/null -w "%{http_code}" https://vps.incomexsaigoncorp.vn/)
 [ "$HTTP_WEB" == "200" ] && echo "✅ Pass: $HTTP_WEB" || echo "❌ Fail: $HTTP_WEB"
 
 # 2. Cache Headers
 echo "2. Cache headers..."
-CACHE=$(curl -sI https://ai.incomexsaigoncorp.vn/ | grep -i "cache-control")
+CACHE=$(curl -sI https://vps.incomexsaigoncorp.vn/ | grep -i "cache-control")
 echo "ℹ️ $CACHE"
 
 # 2b. Verify Cloud Run Cache Headers (CRITICAL - MANDATORY)
 echo "2b. Verifying Cache-Control headers from Cloud Run..."
-HEADERS=$(curl -sI https://ai.incomexsaigoncorp.vn/ | grep -i "cache-control")
+HEADERS=$(curl -sI https://vps.incomexsaigoncorp.vn/ | grep -i "cache-control")
 
 if [[ "$HEADERS" == *"s-maxage"* ]] || [[ "$HEADERS" == *"max-age=31536000"* ]]; then
   echo "✅ Cache Headers OK: $HEADERS"
@@ -4637,7 +4637,7 @@ fi
 # 6. Cache Warmer Logic Test (Manual Trigger Simulation)
 echo "6. Cache Warmer Logic (Simulation)..."
 # Giả lập call URL giống Flow
-WARM_HTTP=$(curl -s -o /dev/null -w "%{http_code}" https://ai.incomexsaigoncorp.vn/)
+WARM_HTTP=$(curl -s -o /dev/null -w "%{http_code}" https://vps.incomexsaigoncorp.vn/)
 [ "$WARM_HTTP" == "200" ] && echo "✅ Pass: Warm Request OK" || echo "❌ Fail: Warm Request Error"
 
 echo "=== VERIFICATION COMPLETE ==="
@@ -4854,7 +4854,7 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 | I1 | **Directus URL** | `https://directus-test-pfne2mqwja-as.a.run.app` | ✅ VERIFIED (Live 200 OK) | DevOps | Nuxt currently points to this live URL (working). |
 | I1a | **Directus Resources** | 2048Mi | ✅ VERIFIED (Hotfix Active) | DevOps | Upgraded via Terraform to support Cold Start |
 | I2 | **Directus Version** | 11.14.0 | ✅ VERIFIED (Phase 5) | - | Cloud Run image |
-| I3 | **Production Domain** | `https://ai.incomexsaigoncorp.vn/` | ✅ VERIFIED | - | HTTP/2 200 OK |
+| I3 | **Production Domain** | `https://vps.incomexsaigoncorp.vn/` | ✅ VERIFIED | - | HTTP/2 200 OK |
 | I4 | **Firebase Hosting** | Project: `web-test-pfne2mqwja` | ✅ VERIFIED | - | |
 | I5 | **Cloud Run Nuxt SSR** | `https://nuxt-ssr-pfne2mqwja-pfne2mqwja-as.a.run.app` | ✅ VERIFIED (Auto-discovered) | DevOps | Dockerized (node-server preset). Proxied via Firebase. |
 | I6 | **Agent Data Base URL** | `https://agent-data-test-pfne2mqwja-as.a.run.app` | ✅ VERIFIED | - | **NO SUFFIX** (V12 RAG Structure) |
@@ -4917,7 +4917,7 @@ Nếu phát hiện Default Value của status KHÔNG phải "draft":
 
 | ID | Biến | Giá trị | Trạng thái | Ghi chú |
 |----|------|---------|------------|---------|
-| E1 | WEB_URL | `https://ai.incomexsaigoncorp.vn` | ❌ DEFERRED (E2 / Hardening Phase – No Terraform Apply in E1) | We are not injecting/rotating/changing env vars in this phase unless a new decision explicitly authorizes it. |
+| E1 | WEB_URL | `https://vps.incomexsaigoncorp.vn` | ❌ DEFERRED (E2 / Hardening Phase – No Terraform Apply in E1) | We are not injecting/rotating/changing env vars in this phase unless a new decision explicitly authorizes it. |
 | E2 | AGENT_DATA_URL | `https://agent-data-test-pfne2mqwja-as.a.run.app/api` | ❌ DEFERRED (E2 / Hardening Phase – No Terraform Apply in E1) | We are not injecting/rotating/changing env vars in this phase unless a new decision explicitly authorizes it. |
 | E3 | AGENT_DATA_API_KEY | *(Secret)* | ❌ DEFERRED (E2 / Hardening Phase – No Terraform Apply in E1) | We are not injecting/rotating/changing env vars in this phase unless a new decision explicitly authorizes it. |
 | E4 | FLOWS_ENV_ALLOW_LIST | `WEB_URL,AGENT_DATA_URL,AGENT_DATA_API_KEY,GITHUB_TOKEN` | ❌ DEFERRED (E2 / Hardening Phase – No Terraform Apply in E1) | We are not injecting/rotating/changing env vars in this phase unless a new decision explicitly authorizes it. |

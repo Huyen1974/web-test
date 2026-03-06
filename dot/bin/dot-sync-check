@@ -16,7 +16,7 @@ NC='\033[0m'
 # URLs — single VPS endpoints
 VPS_DIRECTUS_URL="${VPS_DIRECTUS_URL:-https://directus.incomexsaigoncorp.vn}"
 VPS_AGENT_DATA_URL="${VPS_AGENT_DATA_URL:-https://vps.incomexsaigoncorp.vn/api}"
-WEBSITE_URL="${WEBSITE_URL:-https://ai.incomexsaigoncorp.vn}"
+WEBSITE_URL="${WEBSITE_URL:-https://vps.incomexsaigoncorp.vn}"
 
 # Optional auth token (nice-to-have for field count check)
 STATIC_TOKEN="${DIRECTUS_STATIC_TOKEN:-}"
@@ -38,7 +38,7 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
     echo "Environment:"
     echo "  VPS_DIRECTUS_URL        VPS Directus URL (default: https://directus.incomexsaigoncorp.vn)"
     echo "  VPS_AGENT_DATA_URL      VPS Agent Data URL (default: https://vps.incomexsaigoncorp.vn/api)"
-    echo "  WEBSITE_URL             Website URL (default: https://ai.incomexsaigoncorp.vn)"
+    echo "  WEBSITE_URL             Website URL (default: https://vps.incomexsaigoncorp.vn)"
     echo "  DIRECTUS_STATIC_TOKEN   Optional auth token for schema checks"
     echo ""
     echo "Checks:"

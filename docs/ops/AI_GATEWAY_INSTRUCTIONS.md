@@ -13,7 +13,7 @@ This guide explains how to set up and use the Business OS AI Gateway with ChatGP
    - **Description:** "Search and interact with company knowledge base"
 4. In "Actions" section:
    - Click "Create new action"
-   - Import OpenAPI: `https://ai.incomexsaigoncorp.vn/agent_data_openapi.yaml`
+   - Import OpenAPI: `https://vps.incomexsaigoncorp.vn/agent_data_openapi.yaml`
    - Authentication: **API Key** (Bearer Token)
    - Header: `Authorization`
    - Token: Get from admin (AI_GATEWAY_TOKEN)
@@ -22,7 +22,7 @@ This guide explains how to set up and use the Business OS AI Gateway with ChatGP
 
 1. Go to Gemini Extensions settings
 2. Add custom extension
-3. OpenAPI URL: `https://ai.incomexsaigoncorp.vn/agent_data_openapi.yaml`
+3. OpenAPI URL: `https://vps.incomexsaigoncorp.vn/agent_data_openapi.yaml`
 4. Configure Bearer Token authentication
 
 ---
@@ -215,6 +215,6 @@ gcloud secrets versions access latest \
 ## Support
 
 For issues with the AI Gateway:
-1. Check service status: https://ai.incomexsaigoncorp.vn/api/ai/info
+1. Check service status: https://vps.incomexsaigoncorp.vn/api/ai/info
 2. Run E2E tests: `./dot/bin/dot-e2e-test`
 3. Check reports in `reports/` directory

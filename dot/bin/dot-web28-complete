@@ -256,7 +256,7 @@ main() {
     echo "       --update-secrets=AI_GATEWAY_TOKEN=AI_GATEWAY_TOKEN:latest"
     echo ""
     echo "  3. Test the AI Gateway:"
-    echo "     curl https://ai.incomexsaigoncorp.vn/api/ai/info"
+    echo "     curl https://vps.incomexsaigoncorp.vn/api/ai/info"
     echo ""
   fi
 }

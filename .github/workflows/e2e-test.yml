@@ -25,7 +25,7 @@ jobs:
 
       - name: Verify Super Session accessible
         run: |
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://ai.incomexsaigoncorp.vn/admin/super-session")
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://vps.incomexsaigoncorp.vn/admin/super-session")
           echo "Super Session HTTP Code: $HTTP_CODE"
           if [ "$HTTP_CODE" != "200" ]; then
             echo "Warning: Super Session returned $HTTP_CODE (may require auth)"

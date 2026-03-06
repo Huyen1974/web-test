@@ -28,18 +28,18 @@ documentation, policies, processes, and guidelines.
 ## API QUICK START
 
 ### Step 0: Get KB Structure First (RECOMMENDED - Saves Tokens!)
-GET https://ai.incomexsaigoncorp.vn/api/docs/context
+GET https://vps.incomexsaigoncorp.vn/api/docs/context
 Returns: Total documents, zones/categories, recent updates, key topics
 Purpose: Understand KB structure before searching - reduces token usage
 
 ### Step 1: Check System Status (No Auth)
-GET https://ai.incomexsaigoncorp.vn/api/ai/info
+GET https://vps.incomexsaigoncorp.vn/api/ai/info
 
 ### Step 2: Read Documents (No Auth)
 GET https://directus.incomexsaigoncorp.vn/items/agent_views?limit=100
 
 ### Step 3: Semantic Search (Requires Token)
-POST https://ai.incomexsaigoncorp.vn/api/ai/search
+POST https://vps.incomexsaigoncorp.vn/api/ai/search
 Authorization: Bearer <AI_GATEWAY_TOKEN>
 Content-Type: application/json
 {"query": "Your question here", "top_k": 5}
@@ -58,7 +58,7 @@ Content-Type: application/json
 ## ENDPOINT REFERENCE
 
 ### AI Gateway (Production - Recommended)
-Base: https://ai.incomexsaigoncorp.vn
+Base: https://vps.incomexsaigoncorp.vn
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
@@ -75,7 +75,7 @@ Base: https://directus.incomexsaigoncorp.vn
 | /items/feedbacks | POST | Bearer | Create feedback with threading |
 
 ### Production Website
-Base: https://ai.incomexsaigoncorp.vn
+Base: https://vps.incomexsaigoncorp.vn
 
 | Path | Description |
 |------|-------------|
@@ -114,7 +114,7 @@ The feedback system supports conversation threads:
 5. Include author_name to identify your AI model
 
 ## OPENAPI SPECIFICATION
-Full API specification: https://ai.incomexsaigoncorp.vn/agent_data_openapi.yaml
+Full API specification: https://vps.incomexsaigoncorp.vn/agent_data_openapi.yaml
 Import this into GPT Actions or Gemini Extensions for structured API access.
 
 ## DATA FRESHNESS
@@ -175,7 +175,7 @@ When a discussion enters "pending_human" status:
 - Human can intervene anytime by adding a comment
 
 ### Super Session Dashboard
-URL: https://ai.incomexsaigoncorp.vn/admin/super-session
+URL: https://vps.incomexsaigoncorp.vn/admin/super-session
 
 Features:
 - Tier 1: View all active discussions (cases)
@@ -186,7 +186,7 @@ Features:
 
 ### IMPORTANT FOR AI AGENTS
 After creating a discussion with status "pending_human":
-1. ALWAYS provide this link to the user: https://ai.incomexsaigoncorp.vn/admin/super-session
+1. ALWAYS provide this link to the user: https://vps.incomexsaigoncorp.vn/admin/super-session
 2. Inform user: "You have 5 minutes to review and respond before auto-approval"
 3. The discussion will auto-proceed if no human intervention
 

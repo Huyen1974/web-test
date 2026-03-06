@@ -38,7 +38,7 @@
 | I1 | **Directus URL** | `https://directus-test-pfne2mqwja-as.a.run.app` | ✅ VERIFIED (Live 200 OK) | DevOps | Nuxt currently points to this live URL (working). |
 | I1a | **Directus Resources** | 2048Mi | ✅ VERIFIED (Hotfix Active) | DevOps | Upgraded via Terraform to support Cold Start |
 | I2 | **Directus Version** | 11.14.0 | ✅ VERIFIED (Phase 5) | - | Cloud Run image |
-| I3 | **Production Domain** | `https://ai.incomexsaigoncorp.vn/` | ✅ VERIFIED | - | HTTP/2 200 OK |
+| I3 | **Production Domain** | `https://vps.incomexsaigoncorp.vn/` | ✅ VERIFIED | - | HTTP/2 200 OK |
 | I4 | **Firebase Hosting** | Project: `web-test-pfne2mqwja` | ✅ VERIFIED | - | |
 | I5 | **Cloud Run Nuxt SSR** | `https://nuxt-ssr-pfne2mqwja-pfne2mqwja-as.a.run.app` | ✅ VERIFIED (Auto-discovered) | DevOps | Dockerized (node-server preset). Proxied via Firebase. |
 | I6 | **Agent Data Base URL** | `https://agent-data-test-pfne2mqwja-as.a.run.app` | ✅ VERIFIED | - | **NO SUFFIX** (V12 RAG Structure) |
@@ -101,7 +101,7 @@
 
 | ID | Biến | Giá trị | Trạng thái | Ghi chú |
 |----|------|---------|------------|---------|
-| E1 | WEB_URL | `https://ai.incomexsaigoncorp.vn` | ✅ INJECTED (2026-01-27) | Injected via WEB18 override. |
+| E1 | WEB_URL | `https://vps.incomexsaigoncorp.vn` | ✅ INJECTED (2026-01-27) | Injected via WEB18 override. |
 | E2 | AGENT_DATA_URL | `https://agent-data-test-pfne2mqwja-as.a.run.app` | ✅ INJECTED (2026-01-27) | Injected via WEB18 override. |
 | E3 | AGENT_DATA_API_KEY | *(Secret)* | ❌ DEFERRED (E2 / Hardening Phase – No Terraform Apply in E1) | We are not injecting/rotating/changing env vars in this phase unless a new decision explicitly authorizes it. |
 | E4 | FLOWS_ENV_ALLOW_LIST | `WEB_URL,AGENT_DATA_URL,AGENT_DATA_API_KEY,GITHUB_TOKEN` | ❌ DEFERRED (E2 / Hardening Phase – No Terraform Apply in E1) | We are not injecting/rotating/changing env vars in this phase unless a new decision explicitly authorizes it. |

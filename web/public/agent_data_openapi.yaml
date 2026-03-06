@@ -27,7 +27,7 @@ info:
     email: admin@incomexsaigoncorp.vn
 
 servers:
-  - url: https://ai.incomexsaigoncorp.vn
+  - url: https://vps.incomexsaigoncorp.vn
     description: Production AI Gateway (Recommended)
   - url: https://directus.incomexsaigoncorp.vn
     description: Directus CMS (Public Read)
@@ -286,7 +286,7 @@ paths:
         **Public endpoint** - no authentication required.
         Cached for 30 seconds. Use this to check health before making search requests.
       servers:
-        - url: https://ai.incomexsaigoncorp.vn
+        - url: https://vps.incomexsaigoncorp.vn
       security: []
       responses:
         '200':
@@ -323,7 +323,7 @@ paths:
         This endpoint proxies to the internal Agent Data vector search service
         and adds authentication, rate limiting, and audit logging.
       servers:
-        - url: https://ai.incomexsaigoncorp.vn
+        - url: https://vps.incomexsaigoncorp.vn
       security:
         - AIGatewayAuth: []
       requestBody:
@@ -499,7 +499,7 @@ paths:
                   feedback_type: "suggestion"
                   priority: "normal"
                   linked_entity_ref: "agent_view:42"
-                  linked_entity_url: "https://ai.incomexsaigoncorp.vn/docs/processes/approval"
+                  linked_entity_url: "https://vps.incomexsaigoncorp.vn/docs/processes/approval"
                   context_snippet: "The approval process involves multiple stakeholders..."
                   author_type: "ai_agent"
                   author_name: "GPT-4"

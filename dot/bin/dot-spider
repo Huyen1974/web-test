@@ -117,7 +117,7 @@ function loadCredentials() {
     return {
       profiles: [{
         name: 'env',
-        domain: process.env.SPIDER_DOMAIN || 'https://ai.incomexsaigoncorp.vn',
+        domain: process.env.SPIDER_DOMAIN || 'https://vps.incomexsaigoncorp.vn',
         username: process.env.DIRECTUS_ADMIN_EMAIL,
         password: process.env.DIRECTUS_ADMIN_PASSWORD,
       }],

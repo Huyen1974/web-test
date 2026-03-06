@@ -9,7 +9,7 @@ This document lists all environment variables used by the Business OS services.
 | Variable | Value | Description |
 |----------|-------|-------------|
 | `NODE_ENV` | `production` | Node.js environment |
-| `NUXT_PUBLIC_SITE_URL` | `https://ai.incomexsaigoncorp.vn` | Public site URL |
+| `NUXT_PUBLIC_SITE_URL` | `https://vps.incomexsaigoncorp.vn` | Public site URL |
 | `NUXT_PUBLIC_DIRECTUS_URL` | `https://directus-test-pfne2mqwja-as.a.run.app` | Directus CMS URL |
 
 ### AI Gateway Configuration
