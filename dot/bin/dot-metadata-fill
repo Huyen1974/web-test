@@ -1,0 +1,604 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-metadata-fill — Bulk fill metadata (group, note) for collections and fields
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-metadata-fill — no existing tool]
+# VERSION: 1.0.0
+#
+# Fills:
+#   1. Collection meta.group for ungrouped collections
+#   2. Collection meta.note for collections without descriptions
+#   3. Field meta.note for fields without descriptions
+#
+# Uses Directus Admin API (PATCH /collections, PATCH /fields).
+# Idempotent: skips collections/fields that already have values.
+#
+# Usage:
+#   dot-metadata-fill [--cloud|--local] [--dry-run]
+#   dot-metadata-fill --fields-only --collection=NAME [--cloud]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+DRY_RUN=""
+FIELDS_ONLY=""
+SINGLE_COLLECTION=""
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-metadata-fill v${VERSION} — Bulk fill metadata
+
+Usage:
+  dot-metadata-fill [--cloud|--local] [--dry-run]
+  dot-metadata-fill --fields-only --collection=NAME [--cloud]
+
+Options:
+  --local              Use local Directus
+  --cloud              Use cloud Directus (default)
+  --dry-run            Show what would be done without making changes
+  --fields-only        Only fill field notes (skip collection group/note)
+  --collection=NAME    Only process this collection
+  --help, -h           Show help
+
+EOF
+  show_environment_help
+}
+
+main() {
+  for arg in "$@"; do
+    case "$arg" in
+      --dry-run) DRY_RUN="1" ;;
+      --fields-only) FIELDS_ONLY="1" ;;
+      --collection=*) SINGLE_COLLECTION="${arg#--collection=}" ;;
+      --help|-h) show_help; exit 0 ;;
+    esac
+  done
+
+  init_environment "$@"
+  local BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: Metadata Fill v${VERSION}"
+  echo "========================================="
+  print_environment_banner "$@"
+
+  # Auth
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    local dot_auth="${SCRIPT_DIR}/dot-auth"
+    if [[ -f "$dot_auth" ]]; then
+      source "$dot_auth" "$@"
+    fi
+  fi
+
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "Authentication failed"
+    exit 1
+  fi
+
+  # Fetch fields to temp file (needed for step 3)
+  local tmp_fields tmp_py
+  tmp_fields=$(mktemp)
+  tmp_py=$(mktemp /tmp/dot-metadata-fill-XXXXXX.py)
+  trap "rm -f '$tmp_fields' '$tmp_py'" EXIT
+
+  log_info "Fetching all fields..."
+  local fields_code
+  fields_code=$(curl -sS --globoff -X GET "${BASE_URL}/fields?limit=-1" \
+    -H "Authorization: Bearer $DOT_TOKEN" \
+    -o "$tmp_fields" -w "%{http_code}")
+
+  if [[ "$fields_code" != "200" ]]; then
+    log_err "Failed to fetch fields (HTTP $fields_code)"
+    exit 1
+  fi
+
+  # Write Python script to temp file (avoids bash 3.2 associative array limitation)
+  cat > "$tmp_py" << 'PYEOF'
+import json, os, sys, ssl, urllib.request
+
+base_url = os.environ['BASE_URL']
+token = os.environ['DOT_TOKEN']
+dry_run = os.environ.get('DRY_RUN', '')
+fields_only = os.environ.get('FIELDS_ONLY', '')
+single_coll = os.environ.get('SINGLE_COLLECTION', '')
+fields_file = os.environ['FIELDS_FILE']
+
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+def patch_api(url, data):
+    """PATCH Directus API. Returns True on success."""
+    try:
+        payload = json.dumps(data).encode()
+        req = urllib.request.Request(url, data=payload, method='PATCH',
+            headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'})
+        resp = urllib.request.urlopen(req, context=ctx)
+        return resp.status == 200
+    except Exception as e:
+        print(f'  [WARN] PATCH {url}: {e}')
+        return False
+
+# ============================================================
+# STEP 1: Fill collection groups
+# ============================================================
+GROUP_MAP = {
+    # AI / Agent system
+    'agent_views': 'ai_system',
+    'ai_discussion_comments': 'ai_system',
+    'ai_discussions': 'ai_system',
+    'ai_tasks': 'ai_system',
+    # Blocks
+    'block_button_groups': 'blocks',
+    'block_buttons': 'blocks',
+    'block_library': 'blocks',
+    # Checkpoints
+    'checkpoint_instances': 'tasks',
+    'checkpoint_rules': 'tasks',
+    'checkpoint_type_overrides': 'tasks',
+    'checkpoint_types': 'tasks',
+    # CRM / Sales
+    'billing': 'sales',
+    'contacts': 'sales',
+    'conversations': 'sales',
+    'inbox': 'sales',
+    'organizations': 'sales',
+    # Content / Website
+    'content_requests': 'website',
+    'help': 'website',
+    'languages': 'website',
+    'navigation_navigation_items': 'navigation',
+    'pages_blocks': 'pages',
+    'pages_translations': 'pages',
+    # Document review
+    'doc_reviews': 'knowledge_documents',
+    # Meta / Registry
+    'table_proposals': 'table_registry',
+    # OS modules
+    'os_projects': 'sales',
+    'os_tasks': 'os_projects',
+    # Tasks system
+    'task_checkpoints': 'tasks',
+    'task_comments': 'tasks',
+    # Workflows
+    'workflow_categories': 'workflows',
+    'workflow_change_requests': 'workflows',
+    'workflow_step_relations': 'workflows',
+    'workflow_steps': 'workflows',
+}
+
+if not fields_only:
+    print('')
+    print('=== STEP 1: Fill collection groups ===')
+    print('')
+    filled = 0
+    for coll, group in sorted(GROUP_MAP.items()):
+        url = f'{base_url}/collections/{coll}'
+        data = {'meta': {'group': group}}
+        if dry_run:
+            print(f'  [DRY] {coll} -> group={group}')
+            filled += 1
+        elif patch_api(url, data):
+            print(f'  [OK]   {coll} -> group={group}')
+            filled += 1
+        else:
+            print(f'  [FAIL] {coll}')
+    print(f'\n[INFO] Groups filled: {filled}/{len(GROUP_MAP)}')
+
+# ============================================================
+# STEP 2: Fill collection notes
+# ============================================================
+NOTE_MAP = {
+    'billing': 'Quan ly thanh toan va hoa don',
+    'block_button': 'Nut bam don le trong nhom nut',
+    'block_button_group': 'Nhom nut bam (CTA) tren trang',
+    'block_columns_rows': 'Dong noi dung trong block dang cot',
+    'block_gallery_files': 'Anh trong block gallery',
+    'block_logocloud_logos': 'Logo trong block logo cloud',
+    'block_step_items': 'Buoc don le trong block steps',
+    'block_testimonial_slider_items': 'Phan hoi khach hang trong slider',
+    'blocks': 'Block noi dung tren trang (M2A junction)',
+    'help': 'He thong tro giup — trang chu help center',
+    'help_articles': 'Bai viet huong dan trong help center',
+    'help_collections': 'Nhom bai viet trong help center',
+    'help_feedback': 'Phan hoi nguoi dung ve bai viet help',
+    'languages': 'Danh sach ngon ngu ho tro',
+    'organization_addresses': 'Dia chi cua to chuc/khach hang',
+    'organizations_contacts': 'Junction: to chuc <-> lien he',
+    'os_activity_contacts': 'Junction: hoat dong <-> lien he',
+    'os_deal_contacts': 'Junction: deal <-> lien he',
+    'os_deal_stages': 'Cac giai doan pipeline ban hang',
+    'os_email_templates': 'Mau email gui tu dong',
+    'os_expenses': 'Chi phi du an va hoat dong',
+    'os_invoice_items': 'Dong chi tiet trong hoa don',
+    'os_items': 'Danh muc san pham/dich vu ban',
+    'os_payment_terms': 'Dieu khoan thanh toan (NET 30, NET 60, etc.)',
+    'os_payments': 'Thanh toan da nhan tu khach hang',
+    'os_project_contacts': 'Junction: du an <-> lien he',
+    'os_project_templates': 'Mau du an (modules) voi tasks mac dinh',
+    'os_project_updates': 'Cap nhat tien do du an',
+    'os_proposal_approvals': 'Phe duyet bao gia tu khach hang',
+    'os_proposal_blocks': 'Block noi dung trong bao gia',
+    'os_proposal_contacts': 'Junction: bao gia <-> lien he',
+    'os_settings': 'Cau hinh he thong Agency OS',
+    'os_task_files': 'File dinh kem cua task du an',
+    'os_tax_rates': 'Thue suat ap dung cho hoa don',
+    'page_blocks': 'Junction: trang <-> blocks (M2A)',
+    'pages_translations': 'Ban dich noi dung trang web',
+    'post_gallery_items': 'Anh gallery trong bai blog',
+    'website': 'Cau hinh website chung',
+}
+
+# Vietnamese diacritics version (used for actual API calls)
+NOTE_MAP_VN = {
+    'billing': u'Qu\u1ea3n l\u00fd thanh to\u00e1n v\u00e0 h\u00f3a \u0111\u01a1n',
+    'block_button': u'N\u00fat b\u1ea5m \u0111\u01a1n l\u1ebb trong nh\u00f3m n\u00fat',
+    'block_button_group': u'Nh\u00f3m n\u00fat b\u1ea5m (CTA) tr\u00ean trang',
+    'block_columns_rows': u'D\u00f2ng n\u1ed9i dung trong block d\u1ea1ng c\u1ed9t',
+    'block_gallery_files': u'\u1ea2nh trong block gallery',
+    'block_logocloud_logos': u'Logo trong block logo cloud',
+    'block_step_items': u'B\u01b0\u1edbc \u0111\u01a1n l\u1ebb trong block steps',
+    'block_testimonial_slider_items': u'Ph\u1ea3n h\u1ed3i kh\u00e1ch h\u00e0ng trong slider',
+    'blocks': u'Block n\u1ed9i dung tr\u00ean trang (M2A junction)',
+    'help': u'H\u1ec7 th\u1ed1ng tr\u1ee3 gi\u00fap \u2014 trang ch\u1ee7 help center',
+    'help_articles': u'B\u00e0i vi\u1ebft h\u01b0\u1edbng d\u1eabn trong help center',
+    'help_collections': u'Nh\u00f3m b\u00e0i vi\u1ebft trong help center',
+    'help_feedback': u'Ph\u1ea3n h\u1ed3i ng\u01b0\u1eddi d\u00f9ng v\u1ec1 b\u00e0i vi\u1ebft help',
+    'languages': u'Danh s\u00e1ch ng\u00f4n ng\u1eef h\u1ed7 tr\u1ee3',
+    'organization_addresses': u'\u0110\u1ecba ch\u1ec9 c\u1ee7a t\u1ed5 ch\u1ee9c/kh\u00e1ch h\u00e0ng',
+    'organizations_contacts': u'Junction: t\u1ed5 ch\u1ee9c \u2194 li\u00ean h\u1ec7',
+    'os_activity_contacts': u'Junction: ho\u1ea1t \u0111\u1ed9ng \u2194 li\u00ean h\u1ec7',
+    'os_deal_contacts': u'Junction: deal \u2194 li\u00ean h\u1ec7',
+    'os_deal_stages': u'C\u00e1c giai \u0111o\u1ea1n pipeline b\u00e1n h\u00e0ng',
+    'os_email_templates': u'M\u1eabu email g\u1eedi t\u1ef1 \u0111\u1ed9ng',
+    'os_expenses': u'Chi ph\u00ed d\u1ef1 \u00e1n v\u00e0 ho\u1ea1t \u0111\u1ed9ng',
+    'os_invoice_items': u'D\u00f2ng chi ti\u1ebft trong h\u00f3a \u0111\u01a1n',
+    'os_items': u'Danh m\u1ee5c s\u1ea3n ph\u1ea9m/d\u1ecbch v\u1ee5 b\u00e1n',
+    'os_payment_terms': u'\u0110i\u1ec1u kho\u1ea3n thanh to\u00e1n (NET 30, NET 60, etc.)',
+    'os_payments': u'Thanh to\u00e1n \u0111\u00e3 nh\u1eadn t\u1eeb kh\u00e1ch h\u00e0ng',
+    'os_project_contacts': u'Junction: d\u1ef1 \u00e1n \u2194 li\u00ean h\u1ec7',
+    'os_project_templates': u'M\u1eabu d\u1ef1 \u00e1n (modules) v\u1edbi tasks m\u1eb7c \u0111\u1ecbnh',
+    'os_project_updates': u'C\u1eadp nh\u1eadt ti\u1ebfn \u0111\u1ed9 d\u1ef1 \u00e1n',
+    'os_proposal_approvals': u'Ph\u00ea duy\u1ec7t b\u00e1o gi\u00e1 t\u1eeb kh\u00e1ch h\u00e0ng',
+    'os_proposal_blocks': u'Block n\u1ed9i dung trong b\u00e1o gi\u00e1',
+    'os_proposal_contacts': u'Junction: b\u00e1o gi\u00e1 \u2194 li\u00ean h\u1ec7',
+    'os_settings': u'C\u1ea5u h\u00ecnh h\u1ec7 th\u1ed1ng Agency OS',
+    'os_task_files': u'File \u0111\u00ednh k\u00e8m c\u1ee7a task d\u1ef1 \u00e1n',
+    'os_tax_rates': u'Thu\u1ebf su\u1ea5t \u00e1p d\u1ee5ng cho h\u00f3a \u0111\u01a1n',
+    'page_blocks': u'Junction: trang \u2194 blocks (M2A)',
+    'pages_translations': u'B\u1ea3n d\u1ecbch n\u1ed9i dung trang web',
+    'post_gallery_items': u'\u1ea2nh gallery trong b\u00e0i blog',
+    'website': u'C\u1ea5u h\u00ecnh website chung',
+}
+
+if not fields_only:
+    print('')
+    print('=== STEP 2: Fill collection notes ===')
+    print('')
+    filled = 0
+    for coll, note in sorted(NOTE_MAP_VN.items()):
+        url = f'{base_url}/collections/{coll}'
+        data = {'meta': {'note': note}}
+        if dry_run:
+            print(f'  [DRY] {coll}: {note[:50]}')
+            filled += 1
+        elif patch_api(url, data):
+            print(f'  [OK]   {coll}: note set')
+            filled += 1
+        else:
+            print(f'  [FAIL] {coll}')
+    print(f'\n[INFO] Collection notes filled: {filled}/{len(NOTE_MAP_VN)}')
+
+# ============================================================
+# STEP 3: Fill field notes
+# ============================================================
+print('')
+print('=== STEP 3: Fill field notes ===')
+print('')
+
+with open(fields_file) as f:
+    data = json.load(f)
+
+fields = data.get('data', [])
+
+# Skip system fields
+skip_fields = {'id', 'sort', 'user_created', 'user_updated', 'date_created', 'date_updated'}
+
+# Common field name -> note mapping (Vietnamese with diacritics via unicode escapes)
+common_notes = {
+    'name': u'T\u00ean hi\u1ec3n th\u1ecb',
+    'title': u'Ti\u00eau \u0111\u1ec1',
+    'description': u'M\u00f4 t\u1ea3 chi ti\u1ebft',
+    'content': u'N\u1ed9i dung ch\u00ednh',
+    'summary': u'T\u00f3m t\u1eaft ng\u1eafn',
+    'status': u'Tr\u1ea1ng th\u00e1i: draft/active/archived',
+    'email': u'\u0110\u1ecba ch\u1ec9 email',
+    'phone': u'S\u1ed1 \u0111i\u1ec7n tho\u1ea1i',
+    'address': u'\u0110\u1ecba ch\u1ec9',
+    'website': u'URL website',
+    'image': u'H\u00ecnh \u1ea3nh \u0111\u1ea1i di\u1ec7n',
+    'icon': u'Icon hi\u1ec3n th\u1ecb',
+    'color': u'M\u00e3 m\u00e0u hi\u1ec3n th\u1ecb',
+    'label': u'Nh\u00e3n hi\u1ec3n th\u1ecb',
+    'slug': u'URL slug (SEO-friendly)',
+    'permalink': u'\u0110\u01b0\u1eddng d\u1eabn c\u1ed1 \u0111\u1ecbnh',
+    'url': u'\u0110\u01b0\u1eddng d\u1eabn URL',
+    'type': u'Lo\u1ea1i/ph\u00e2n lo\u1ea1i',
+    'category': u'Danh m\u1ee5c ph\u00e2n lo\u1ea1i',
+    'tags': u'Th\u1ebb ph\u00e2n lo\u1ea1i',
+    'priority': u'M\u1ee9c \u0111\u1ed9 \u01b0u ti\u00ean',
+    'level': u'C\u1ea5p b\u1eadc trong h\u1ec7 th\u1ed1ng ph\u00e2n c\u1ea5p',
+    'code': u'M\u00e3 \u0111\u1ecbnh danh duy nh\u1ea5t',
+    'key': u'Kho\u00e1 duy nh\u1ea5t',
+    'value': u'Gi\u00e1 tr\u1ecb',
+    'note': u'Ghi ch\u00fa',
+    'notes': u'Ghi ch\u00fa b\u1ed5 sung',
+    'body': u'N\u1ed9i dung chi ti\u1ebft',
+    'headline': u'Ti\u00eau \u0111\u1ec1 ch\u00ednh (heading)',
+    'alignment': u'C\u0103n ch\u1ec9nh: left/center/right',
+    'amount': u'S\u1ed1 ti\u1ec1n',
+    'total': u'T\u1ed5ng c\u1ed9ng',
+    'total_amount': u'T\u1ed5ng gi\u00e1 tr\u1ecb',
+    'subtotal': u'T\u1ed5ng ph\u1ee5 (ch\u01b0a thu\u1ebf)',
+    'tax': u'Thu\u1ebf',
+    'tax_rate': u'Thu\u1ebf su\u1ea5t (%)',
+    'discount': u'Gi\u1ea3m gi\u00e1',
+    'quantity': u'S\u1ed1 l\u01b0\u1ee3ng',
+    'unit_price': u'\u0110\u01a1n gi\u00e1',
+    'currency': u'\u0110\u01a1n v\u1ecb ti\u1ec1n t\u1ec7',
+    'due_date': u'Ng\u00e0y \u0111\u1ebfn h\u1ea1n',
+    'start_date': u'Ng\u00e0y b\u1eaft \u0111\u1ea7u',
+    'end_date': u'Ng\u00e0y k\u1ebft th\u00fac',
+    'completed_at': u'Th\u1eddi \u0111i\u1ec3m ho\u00e0n th\u00e0nh',
+    'created_at': u'Th\u1eddi \u0111i\u1ec3m t\u1ea1o',
+    'updated_at': u'Th\u1eddi \u0111i\u1ec3m c\u1eadp nh\u1eadt',
+    'approved_at': u'Th\u1eddi \u0111i\u1ec3m ph\u00ea duy\u1ec7t',
+    'approved_by': u'Ng\u01b0\u1eddi ph\u00ea duy\u1ec7t',
+    'assigned_to': u'Ng\u01b0\u1eddi \u0111\u01b0\u1ee3c giao',
+    'owner': u'Ch\u1ee7 s\u1edf h\u1eefu/ng\u01b0\u1eddi ph\u1ee5 tr\u00e1ch',
+    'first_name': u'H\u1ecd',
+    'last_name': u'T\u00ean',
+    'job_title': u'Ch\u1ee9c danh',
+    'company': u'C\u00f4ng ty',
+    'is_active': u'\u0110ang ho\u1ea1t \u0111\u1ed9ng?',
+    'is_global': u'\u00c1p d\u1ee5ng to\u00e0n c\u1ee5c?',
+    'is_default': u'M\u1eb7c \u0111\u1ecbnh?',
+    'is_published': u'\u0110\u00e3 xu\u1ea5t b\u1ea3n?',
+    'is_current_version': u'Phi\u00ean b\u1ea3n hi\u1ec7n t\u1ea1i?',
+    'is_folder': u'L\u00e0 th\u01b0 m\u1ee5c?',
+    'is_blocking': u'Checkpoint ch\u1eb7n (blocking)?',
+    'hide_block': u'\u1ea8n block kh\u1ecfi trang',
+    'open_in_new_tab': u'M\u1edf trong tab m\u1edbi?',
+    'button_group': u'Nh\u00f3m n\u00fat b\u1ea5m li\u00ean k\u1ebft',
+    'image_position': u'V\u1ecb tr\u00ed h\u00ecnh \u1ea3nh: left/right/top',
+    'metadata': u'D\u1eef li\u1ec7u b\u1ed5 sung (JSON)',
+    'reviewers': u'Danh s\u00e1ch ng\u01b0\u1eddi review (JSON)',
+    'conditions': u'\u0110i\u1ec1u ki\u1ec7n hi\u1ec3n th\u1ecb (JSON)',
+    'options': u'Tu\u1ef3 ch\u1ecdn c\u1ea5u h\u00ecnh (JSON)',
+    'children': u'Danh s\u00e1ch con (O2M)',
+    'parent': u'Ph\u1ea7n t\u1eed cha',
+    'parent_id': u'ID ph\u1ea7n t\u1eed cha',
+    'file_path': u'\u0110\u01b0\u1eddng d\u1eabn file trong h\u1ec7 th\u1ed1ng',
+    'process_code': u'M\u00e3 quy tr\u00ecnh duy nh\u1ea5t',
+    'step_key': u'Kho\u00e1 b\u01b0\u1edbc duy nh\u1ea5t trong quy tr\u00ecnh',
+    'workflow_id': u'Quy tr\u00ecnh li\u00ean k\u1ebft (FK \u2192 workflows)',
+    'workflow_status': u'Tr\u1ea1ng th\u00e1i quy tr\u00ecnh duy\u1ec7t',
+    'task_id': u'Task li\u00ean k\u1ebft (FK \u2192 tasks)',
+    'change_type': u'Lo\u1ea1i thay \u0111\u1ed5i \u0111\u1ec1 xu\u1ea5t',
+    'entity_type': u'Lo\u1ea1i th\u1ef1c th\u1ec3',
+    'source_model': u'M\u00f4 h\u00ecnh ngu\u1ed3n: A (Directus) / B (File scan)',
+    'source_location': u'V\u1ecb tr\u00ed ngu\u1ed3n d\u1eef li\u1ec7u',
+    'registry_collection': u'Collection registry li\u00ean k\u1ebft',
+    'sync_script': u'Script \u0111\u1ed3ng b\u1ed9 d\u1eef li\u1ec7u',
+    'sync_frequency': u'T\u1ea7n su\u1ea5t \u0111\u1ed3ng b\u1ed9',
+    'record_count': u'S\u1ed1 l\u01b0\u1ee3ng b\u1ea3n ghi',
+    'ui_page': u'Trang UI hi\u1ec3n th\u1ecb',
+    'layer': u'T\u1ea7ng trong ki\u1ebfn tr\u00fac h\u1ec7 th\u1ed1ng',
+    'collection': u'Collection Directus li\u00ean k\u1ebft',
+    'table_id': u'ID b\u1ea3ng UI trong table_registry',
+    'page_url': u'URL trang hi\u1ec3n th\u1ecb',
+    'module': u'Module ch\u1ee9c n\u0103ng',
+    'enable_insert_marks': u'B\u1eadt \u0111\u00e1nh d\u1ea5u v\u1ecb tr\u00ed ch\u00e8n?',
+    'enable_proposals': u'B\u1eadt h\u1ec7 th\u1ed1ng \u0111\u1ec1 xu\u1ea5t?',
+    'enable_search': u'B\u1eadt t\u00ecm ki\u1ebfm?',
+    'enable_pagination': u'B\u1eadt ph\u00e2n trang?',
+    'rows_per_page': u'S\u1ed1 d\u00f2ng m\u1ed7i trang',
+    'default_sort': u'S\u1eafp x\u1ebfp m\u1eb7c \u0111\u1ecbnh',
+    'default_filter': u'B\u1ed9 l\u1ecdc m\u1eb7c \u0111\u1ecbnh (JSON)',
+    'fields': u'C\u1ea5u h\u00ecnh c\u1ed9t hi\u1ec3n th\u1ecb (JSON)',
+    'narrative': u'M\u00f4 t\u1ea3 quy tr\u00ecnh d\u1ea1ng v\u0103n xu\u00f4i',
+    'domain': u'L\u0129nh v\u1ef1c/domain \u00e1p d\u1ee5ng',
+    'round': u'V\u00f2ng th\u1ea3o lu\u1eadn hi\u1ec7n t\u1ea1i',
+    'max_rounds': u'S\u1ed1 v\u00f2ng th\u1ea3o lu\u1eadn t\u1ed1i \u0111a',
+    'locked_by_user': u'Ng\u01b0\u1eddi d\u00f9ng \u0111\u00e3 kho\u00e1 quy\u1ebft \u0111\u1ecbnh \u2014 AI kh\u00f4ng s\u1eeda',
+    'human_comment': u'Nh\u1eadn x\u00e9t t\u1eeb ng\u01b0\u1eddi d\u00f9ng',
+    'linked_feedback_id': u'Feedback li\u00ean k\u1ebft (FK \u2192 feedbacks)',
+    'approver_id': u'Ng\u01b0\u1eddi ph\u00ea duy\u1ec7t (FK \u2192 directus_users)',
+    'assigned_agent': u'Agent AI \u0111\u01b0\u1ee3c giao',
+    'agent_type': u'Lo\u1ea1i agent: claude/codex/gemini',
+    'action': u'H\u00e0nh \u0111\u1ed9ng: comment/approve/reject',
+    'doc_type': u'Lo\u1ea1i document: file/dir',
+    'contact': u'Li\u00ean h\u1ec7 li\u00ean k\u1ebft (FK \u2192 contacts)',
+    'organization': u'T\u1ed5 ch\u1ee9c li\u00ean k\u1ebft (FK \u2192 organizations)',
+    'deal': u'Deal li\u00ean k\u1ebft (FK \u2192 os_deals)',
+    'form': u'Form li\u00ean k\u1ebft (FK \u2192 forms)',
+    'invoice': u'Ho\u00e1 \u0111\u01a1n li\u00ean k\u1ebft (FK \u2192 os_invoices)',
+    'item': u'Item li\u00ean k\u1ebft (junction)',
+    'cost': u'Chi ph\u00ed',
+    'rate': u'T\u1ef7 l\u1ec7/\u0111\u01a1n gi\u00e1',
+    'billing': u'Thanh to\u00e1n li\u00ean k\u1ebft',
+    'activities': u'Ho\u1ea1t \u0111\u1ed9ng li\u00ean k\u1ebft (O2M)',
+    'activity': u'Ho\u1ea1t \u0111\u1ed9ng li\u00ean k\u1ebft',
+    'contacts_id': u'FK \u2192 contacts (junction)',
+    'directus_files_id': u'FK \u2192 directus_files (junction)',
+    'blocks': u'Blocks n\u1ed9i dung (O2M/M2A)',
+    'buttons': u'N\u00fat b\u1ea5m (O2M)',
+    'tasks': u'Tasks li\u00ean k\u1ebft (O2M)',
+    'has_children': u'C\u00f3 ph\u1ea7n t\u1eed con?',
+    'page': u'Trang li\u00ean k\u1ebft (FK \u2192 pages)',
+    'navigation': u'Menu navigation li\u00ean k\u1ebft',
+    'from_step_id': u'B\u01b0\u1edbc ngu\u1ed3n (FK \u2192 workflow_steps)',
+    'to_step_id': u'B\u01b0\u1edbc \u0111\u00edch (FK \u2192 workflow_steps)',
+    'relation_type': u'Lo\u1ea1i quan h\u1ec7: sequence/condition/parallel',
+    'condition_expression': u'Bi\u1ec3u th\u1ee9c \u0111i\u1ec1u ki\u1ec7n chuy\u1ec3n b\u01b0\u1edbc',
+    'sort_order': u'Th\u1ee9 t\u1ef1 s\u1eafp x\u1ebfp',
+    'address_country': u'Qu\u1ed1c gia',
+    'address_locality': u'Th\u00e0nh ph\u1ed1/Qu\u1eadn',
+    'address_region': u'T\u1ec9nh/V\u00f9ng',
+    'postal_code': u'M\u00e3 b\u01b0u ch\u00ednh',
+    'street_address': u'\u0110\u1ecba ch\u1ec9 \u0111\u01b0\u1eddng',
+    'last_synced': u'Th\u1eddi \u0111i\u1ec3m \u0111\u1ed3ng b\u1ed9 cu\u1ed1i',
+    'created_by': u'Ng\u01b0\u1eddi t\u1ea1o',
+    'version': u'Phi\u00ean b\u1ea3n',
+    'answer': u'C\u00e2u tr\u1ea3 l\u1eddi',
+    'question': u'C\u00e2u h\u1ecfi',
+    'response': u'Ph\u1ea3n h\u1ed3i',
+    'rating': u'\u0110\u00e1nh gi\u00e1 (1-5 sao)',
+    'subtitle': u'Ph\u1ee5 \u0111\u1ec1',
+    'logo': u'Logo',
+    'social_links': u'Li\u00ean k\u1ebft m\u1ea1ng x\u00e3 h\u1ed9i (JSON)',
+    'og_image': u'H\u00ecnh \u1ea3nh Open Graph (SEO)',
+    'meta_title': u'Ti\u00eau \u0111\u1ec1 SEO',
+    'meta_description': u'M\u00f4 t\u1ea3 SEO',
+    'no_index': u'Kh\u00f4ng index b\u1edfi search engine?',
+    'no_follow': u'Kh\u00f4ng follow links?',
+    'canonical_url': u'URL canonical (SEO)',
+    'sitemap_change_frequency': u'T\u1ea7n su\u1ea5t thay \u0111\u1ed5i sitemap',
+    'sitemap_priority': u'\u01afu ti\u00ean trong sitemap (0-1)',
+    'response_from': u'URL ngu\u1ed3n redirect',
+    'response_to': u'URL \u0111\u00edch redirect',
+    'response_code': u'HTTP response code (301/302)',
+    'name_en': u'T\u00ean ti\u1ebfng Anh',
+}
+
+# Context-specific overrides: (collection, field) -> note
+specific_notes = {
+    ('globals', 'social_links'): u'Li\u00ean k\u1ebft m\u1ea1ng x\u00e3 h\u1ed9i hi\u1ec3n th\u1ecb tr\u00ean website (JSON)',
+    ('globals', 'og_image'): u'H\u00ecnh \u1ea3nh Open Graph m\u1eb7c \u0111\u1ecbnh cho to\u00e0n website',
+    ('posts', 'cost'): u'M\u1ee9c chi ph\u00ed b\u00e0i vi\u1ebft (range text)',
+    ('tasks', 'name'): u'T\u00ean task hi\u1ec3n th\u1ecb',
+    ('tasks', 'assigned_to'): u'Ng\u01b0\u1eddi/agent \u0111\u01b0\u1ee3c giao task',
+    ('tasks', 'workflow_status'): u'Tr\u1ea1ng th\u00e1i duy\u1ec7t: draft \u2192 under_review \u2192 approved',
+    ('meta_catalog', 'name'): u'T\u00ean danh m\u1ee5c (ti\u1ebfng Vi\u1ec7t)',
+    ('meta_catalog', 'code'): u'M\u00e3 danh m\u1ee5c: CAT-NNN',
+    ('table_registry', 'table_id'): u'ID b\u1ea3ng UI duy nh\u1ea5t: tbl_*',
+    ('table_registry', 'name'): u'T\u00ean b\u1ea3ng hi\u1ec3n th\u1ecb',
+    ('workflows', 'title'): u'T\u00ean quy tr\u00ecnh',
+    ('workflows', 'process_code'): u'M\u00e3 quy tr\u00ecnh duy nh\u1ea5t',
+    ('workflow_steps', 'title'): u'T\u00ean b\u01b0\u1edbc trong quy tr\u00ecnh',
+    ('workflow_steps', 'step_key'): u'Kho\u00e1 b\u01b0\u1edbc duy nh\u1ea5t trong c\u00f9ng quy tr\u00ecnh',
+}
+
+filled = 0
+skipped = 0
+errors = 0
+
+for f in fields:
+    coll = f.get('collection', '')
+    field = f.get('field', '')
+
+    if coll.startswith('directus_'):
+        continue
+    if field in skip_fields:
+        continue
+    if single_coll and coll != single_coll:
+        continue
+
+    # Skip if already has note
+    meta = f.get('meta') or {}
+    existing_note = meta.get('note') or ''
+    if existing_note.strip():
+        skipped += 1
+        continue
+
+    # Determine note
+    note = specific_notes.get((coll, field))
+    if not note:
+        note = common_notes.get(field)
+    if not note:
+        # Try to infer from field name
+        fname = field.lower()
+        if fname.endswith('_id') and fname != 'table_id':
+            target = fname[:-3]
+            note = f'FK \u2192 {target}'
+        elif fname.endswith('_at'):
+            note = f'Th\u1eddi \u0111i\u1ec3m {fname[:-3].replace("_", " ")}'
+        elif fname.startswith('is_'):
+            note = f'{fname[3:].replace("_", " ").capitalize()}?'
+        elif fname.startswith('has_'):
+            note = f'C\u00f3 {fname[4:].replace("_", " ")}?'
+        elif fname.startswith('enable_'):
+            note = f'B\u1eadt {fname[7:].replace("_", " ")}?'
+        elif fname.startswith('total_'):
+            note = f'T\u1ed5ng {fname[6:].replace("_", " ")}'
+        elif fname.startswith('date_'):
+            note = f'Ng\u00e0y {fname[5:].replace("_", " ")}'
+
+    if not note:
+        # Generic fallback based on type
+        ftype = f.get('type', '')
+        if ftype == 'alias':
+            note = u'Quan h\u1ec7 li\u00ean k\u1ebft (alias)'
+        elif ftype == 'json':
+            note = u'D\u1eef li\u1ec7u c\u1ea5u tr\u00fac (JSON)'
+        elif ftype == 'boolean':
+            note = u'C\u1edd boolean'
+        elif ftype == 'text':
+            note = u'N\u1ed9i dung v\u0103n b\u1ea3n'
+        elif ftype in ('uuid', 'string') and meta.get('special') and 'm2o' in (meta.get('special') or []):
+            note = u'FK li\u00ean k\u1ebft (M2O)'
+        else:
+            note = f'Tr\u01b0\u1eddng {field}'
+
+    if dry_run:
+        print(f'  [DRY] {coll}.{field}: {note[:60]}')
+        filled += 1
+        continue
+
+    # Apply note via API
+    try:
+        payload = json.dumps({'meta': {'note': note}}).encode()
+        url = f'{base_url}/fields/{coll}/{field}'
+        req = urllib.request.Request(url, data=payload, method='PATCH',
+            headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'})
+        resp = urllib.request.urlopen(req, context=ctx)
+        if resp.status == 200:
+            filled += 1
+        else:
+            errors += 1
+    except Exception as e:
+        errors += 1
+        if filled < 3:
+            print(f'  [ERR] {coll}.{field}: {e}', file=sys.stderr)
+
+    # Progress every 50
+    if (filled + errors) % 50 == 0:
+        print(f'  ... processed {filled + errors} fields ({filled} filled, {errors} errors)')
+
+print(f'\nField notes: filled={filled}, skipped_existing={skipped}, errors={errors}')
+PYEOF
+
+  local result
+  result=$(FIELDS_FILE="$tmp_fields" BASE_URL="$BASE_URL" DOT_TOKEN="$DOT_TOKEN" \
+    DRY_RUN="${DRY_RUN}" FIELDS_ONLY="${FIELDS_ONLY}" SINGLE_COLLECTION="${SINGLE_COLLECTION}" \
+    python3 "$tmp_py" < /dev/null)
+
+  echo "$result"
+  rm -f "$tmp_py"
+
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Metadata Fill - COMPLETE"
+  echo "========================================="
+}
+
+main "$@"
