@@ -170,12 +170,12 @@ update_model_a_counts() {
     collection=$(echo "$entries" | jq -r ".[$i].collection")
 
     local resp body code count
-    resp=$(api_request GET "${BASE_URL}/items/${collection}?aggregate[count]=*&limit=0")
+    resp=$(api_request GET "${BASE_URL}/items/${collection}?aggregate[countDistinct]=id")
     body="${resp%$'\n'*}"
     code="${resp##*$'\n'}"
 
     if [[ "$code" == "200" ]]; then
-      count=$(echo "$body" | jq -r '.data[0].count // 0')
+      count=$(echo "$body" | jq -r '.data[0].countDistinct.id // 0')
       update_record_count "$cat_code" "$count"
     else
       log_warn "Could not count ${collection} (HTTP $code)"
