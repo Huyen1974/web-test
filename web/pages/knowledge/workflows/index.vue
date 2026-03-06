@@ -1,30 +1,8 @@
 <script setup lang="ts">
-import type { FieldConfig } from '~/composables/useDirectusTable';
-
 definePageMeta({
 	title: 'Quy trình',
 	description: 'Danh sách quy trình cho quản lý viên',
 });
-
-const workflowFields: FieldConfig[] = [
-	{ key: 'process_code', label: 'Mã QT', sortable: true },
-	{ key: 'title', label: 'Tên', sortable: true },
-	{ key: 'description', label: 'Mô tả', sortable: false, render: (v: string) => v ? (v.length > 80 ? `${v.slice(0, 80)}...` : v) : '—' },
-	{ key: 'category_id.parent_id.parent_id.name', label: 'Cấp 1', sortable: false },
-	{ key: 'category_id.parent_id.name', label: 'Cấp 2', sortable: false },
-	{ key: 'category_id.name', label: 'Cấp 3', sortable: false },
-	{
-		key: 'status',
-		label: 'Trạng thái',
-		sortable: true,
-		filterable: true,
-		filterOptions: [
-			{ label: 'Hoạt động', value: 'active' },
-			{ label: 'Nháp', value: 'draft' },
-			{ label: 'Lưu trữ', value: 'archived' },
-		],
-	},
-];
 </script>
 
 <template>
@@ -43,10 +21,7 @@ const workflowFields: FieldConfig[] = [
 		</div>
 
 		<SharedDirectusTable
-			collection="workflows"
-			:fields="workflowFields"
-			:default-sort="['sort', 'title']"
-			:page-size="25"
+			table-id="tbl_workflow_list"
 			:row-link="(item: any) => `/knowledge/workflows/${item.id}`"
 		>
 			<template #cell-status="{ value }">
@@ -60,6 +35,9 @@ const workflowFields: FieldConfig[] = [
 				>
 					{{ value }}
 				</span>
+			</template>
+			<template #cell-description="{ value }">
+				{{ value ? (value.length > 80 ? `${value.slice(0, 80)}...` : value) : '—' }}
 			</template>
 		</SharedDirectusTable>
 	</div>

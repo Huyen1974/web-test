@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import type { FieldConfig } from '~/composables/useDirectusTable';
 import { readItems, updateItem, createItem } from '@directus/sdk';
 import type { TimelineStep } from '~/components/modules/workflow-module/partials/StepsTimeline.vue';
 import type { WorkflowChangeRequest } from '~/types/workflow-dsl';
@@ -100,16 +99,10 @@ useSeoMeta({
 	description: () => workflow.value?.description || 'Xem chi tiết quy trình',
 });
 
-// Matrix table fields — used by DirectusTable in matrix + WCR tabs
-const matrixFields: FieldConfig[] = [
-	{ key: 'step_key', label: 'Mã bước', sortable: true },
-	{ key: 'title', label: 'Tên bước', sortable: true },
-	{ key: 'trigger_in_text', label: 'Trigger vào', sortable: false, render: (v: string) => v || '—' },
-	{ key: 'trigger_out_text', label: 'Trigger ra', sortable: false, render: (v: string) => v || '—' },
-	{ key: 'description', label: 'Mô tả nhiệm vụ', sortable: false, render: (v: string) => v || '—' },
-	{ key: 'step_type', label: 'Loại bước', sortable: true },
-	{ key: 'actor_type', label: 'Tác nhân', sortable: true, render: (v: string) => v || '—' },
-];
+// Dynamic filter for workflow-scoped tables (matrix, WCR, timeline)
+const workflowDynamicFilter = computed(() => ({
+	workflow_id: { _eq: workflowId.value },
+}));
 
 // Step type badge classes for custom cell rendering
 const stepTypeBadgeClass: Record<string, string> = {
@@ -525,13 +518,9 @@ const categoryBreadcrumb = computed(() => {
 			<!-- Matrix tab: DirectusTable (UTable wrapper) -->
 			<div v-if="activeTab === 'matrix'">
 				<SharedDirectusTable
-					collection="workflow_steps"
-					:fields="matrixFields"
-					:filters="{ workflow_id: { _eq: workflowId } }"
-					:default-sort="['sort_order']"
-					:page-size="50"
+					table-id="tbl_workflow_steps"
+					:dynamic-filter="workflowDynamicFilter"
 					:searchable="false"
-					title="Bảng bước"
 				>
 					<template #cell-step_type="{ value }">
 						<span
@@ -667,11 +656,8 @@ const categoryBreadcrumb = computed(() => {
 
 				<!-- Steps table below WCR for reference — with insert marks -->
 				<SharedDirectusTable
-					collection="workflow_steps"
-					:fields="matrixFields"
-					:filters="{ workflow_id: { _eq: workflowId } }"
-					:default-sort="['sort_order']"
-					:page-size="50"
+					table-id="tbl_workflow_steps"
+					:dynamic-filter="workflowDynamicFilter"
 					:searchable="false"
 					title="Bảng bước (tham khảo)"
 				>

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import type { FieldConfig } from '~/composables/useDirectusTable';
 import type { TaskStatus, TaskPriority } from '~/types/tasks';
 import { TASK_STATUS_META, TASK_PRIORITY_META } from '~/types/tasks';
 
@@ -7,27 +6,6 @@ definePageMeta({
 	title: 'Task Manager',
 	description: 'Super Session task management',
 });
-
-const taskFields: FieldConfig[] = [
-	{ key: 'name', label: 'Name', sortable: true },
-	{
-		key: 'status',
-		label: 'Status',
-		sortable: true,
-		filterable: true,
-		filterOptions: [
-			{ label: 'Draft', value: 'draft' },
-			{ label: 'Active', value: 'active' },
-			{ label: 'In Review', value: 'in_review' },
-			{ label: 'Completed', value: 'completed' },
-			{ label: 'Archived', value: 'archived' },
-		],
-	},
-	{ key: 'priority', label: 'Priority', sortable: true },
-	{ key: 'assigned_to', label: 'Assigned To', sortable: false, render: (v: string) => v || 'Unassigned' },
-	{ key: 'deadline', label: 'Deadline', sortable: true, render: (v: string) => v ? new Date(v).toLocaleDateString() : '-' },
-	{ key: 'date_updated', label: 'Updated', sortable: true, render: (v: string) => formatDate(v) },
-];
 
 function statusMeta(status: string) {
 	return TASK_STATUS_META[status as TaskStatus] || { label: status, color: 'gray', icon: '' };
@@ -61,13 +39,8 @@ function formatDate(dateStr?: string): string {
 		</div>
 
 		<SharedDirectusTable
-			collection="tasks"
-			:fields="taskFields"
-			:default-sort="['-date_updated']"
-			:page-size="25"
+			table-id="tbl_tasks_list"
 			:row-link="(item: any) => `/knowledge/current-tasks/${item.id}`"
-			:show-insert-marks="false"
-			:show-column-marks="false"
 		>
 			<template #cell-status="{ value }">
 				<UBadge
@@ -86,6 +59,15 @@ function formatDate(dateStr?: string): string {
 					size="xs"
 				/>
 				<span v-else class="text-sm text-gray-400">-</span>
+			</template>
+			<template #cell-assigned_to="{ value }">
+				{{ value || 'Unassigned' }}
+			</template>
+			<template #cell-deadline="{ value }">
+				{{ value ? new Date(value).toLocaleDateString() : '-' }}
+			</template>
+			<template #cell-date_updated="{ value }">
+				{{ formatDate(value) }}
 			</template>
 		</SharedDirectusTable>
 	</div>

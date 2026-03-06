@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import type { FieldConfig } from '~/composables/useDirectusTable';
 import type { TaskStatus } from '~/types/tasks';
 import { TASK_STATUS_META } from '~/types/tasks';
 
@@ -7,23 +6,6 @@ definePageMeta({
 	title: 'Modules',
 	description: 'Module showcase and testing',
 });
-
-const moduleFields: FieldConfig[] = [
-	{ key: 'name', label: 'Tên Module', sortable: true },
-	{ key: 'description', label: 'Mô tả', sortable: false, render: (v: string) => v ? (v.length > 120 ? `${v.slice(0, 120)}...` : v) : '—' },
-	{
-		key: 'status',
-		label: 'Trạng thái',
-		sortable: true,
-		filterable: true,
-		filterOptions: [
-			{ label: 'Active', value: 'active' },
-			{ label: 'Draft', value: 'draft' },
-			{ label: 'Completed', value: 'completed' },
-		],
-	},
-	{ key: 'lead_ai', label: 'Lead', sortable: false },
-];
 
 function statusMeta(status: string) {
 	return TASK_STATUS_META[status as TaskStatus] || { label: status, color: 'gray', icon: '' };
@@ -46,14 +28,8 @@ function statusMeta(status: string) {
 		</div>
 
 		<SharedDirectusTable
-			collection="tasks"
-			:fields="moduleFields"
-			:filters="{ task_type: { _eq: 'module' } }"
-			:default-sort="['sort', '-date_updated']"
-			:page-size="25"
+			table-id="tbl_modules_list"
 			:row-link="(item: any) => `/knowledge/modules/${item.id}`"
-			:show-insert-marks="false"
-			:show-column-marks="false"
 		>
 			<template #cell-status="{ value }">
 				<UBadge
@@ -62,6 +38,9 @@ function statusMeta(status: string) {
 					variant="subtle"
 					size="xs"
 				/>
+			</template>
+			<template #cell-description="{ value }">
+				{{ value ? (value.length > 120 ? `${value.slice(0, 120)}...` : value) : '—' }}
 			</template>
 		</SharedDirectusTable>
 	</div>

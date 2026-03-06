@@ -12,10 +12,33 @@ import { readItems } from '@directus/sdk';
 import { useDirectusTable, type FieldConfig } from '~/composables/useDirectusTable';
 import type { TableProposal } from '~/types/table-proposals';
 
+interface TableRegistryConfig {
+	table_id: string;
+	name: string;
+	collection: string;
+	fields: FieldConfig[];
+	default_sort: string | null;
+	default_filter: Record<string, any> | null;
+	page_url: string;
+	enable_insert_marks: boolean;
+	enable_proposals: boolean;
+	enable_search: boolean;
+	enable_pagination: boolean;
+	rows_per_page: number;
+	status: string;
+	module: string | null;
+	description: string | null;
+}
+
 const props = withDefaults(
 	defineProps<{
-		collection: string;
-		fields: FieldConfig[];
+		/** Registry-driven mode: fetch config from table_registry by this ID */
+		tableId?: string;
+		/** Runtime filter values to replace {{DYNAMIC}} placeholders or merge into default_filter */
+		dynamicFilter?: Record<string, any>;
+		/** Direct-prop mode (backward compat): collection name */
+		collection?: string;
+		fields?: FieldConfig[];
 		defaultSort?: string[];
 		pageSize?: number;
 		searchable?: boolean;
@@ -42,6 +65,55 @@ const emit = defineEmits<{
 
 const router = useRouter();
 
+// === Registry config fetch (when tableId is provided) ===
+const registryConfig = ref<TableRegistryConfig | null>(null);
+const registryLoading = ref(false);
+const registryError = ref<string | null>(null);
+
+if (props.tableId) {
+	registryLoading.value = true;
+	try {
+		const items = await useDirectus<TableRegistryConfig[]>(
+			readItems('table_registry', {
+				filter: { table_id: { _eq: props.tableId }, status: { _neq: 'archived' } },
+				limit: 1,
+			}),
+		);
+		if (items?.[0]) {
+			registryConfig.value = items[0];
+		} else {
+			registryError.value = `Table registry entry "${props.tableId}" not found`;
+		}
+	} catch (err: any) {
+		registryError.value = err?.message || 'Failed to load table registry config';
+	} finally {
+		registryLoading.value = false;
+	}
+}
+
+// === Resolved config (registry overrides direct props) ===
+const rc = registryConfig.value;
+const resolvedCollection = computed(() => rc?.collection || props.collection || '');
+const resolvedFields = computed<FieldConfig[]>(() => rc?.fields || props.fields || []);
+const resolvedDefaultSort = computed(() => {
+	if (rc?.default_sort) return rc.default_sort.split(',');
+	return props.defaultSort;
+});
+const resolvedPageSize = computed(() => rc?.rows_per_page || props.pageSize);
+const resolvedSearchable = computed(() => rc ? rc.enable_search : props.searchable);
+const resolvedShowInsertMarks = computed(() => rc ? rc.enable_insert_marks : props.showInsertMarks);
+const resolvedShowColumnMarks = computed(() => rc ? rc.enable_insert_marks : props.showColumnMarks);
+const resolvedTitle = computed(() => rc?.name || props.title);
+
+// Merge static filter from registry + dynamicFilter prop
+const resolvedFilters = computed(() => {
+	const base: Record<string, any> = {};
+	if (rc?.default_filter) Object.assign(base, rc.default_filter);
+	if (props.filters) Object.assign(base, props.filters);
+	if (props.dynamicFilter) Object.assign(base, props.dynamicFilter);
+	return Object.keys(base).length > 0 ? base : undefined;
+});
+
 const {
 	items,
 	loading,
@@ -59,12 +131,12 @@ const {
 	goToPage,
 	activeFilters,
 } = useDirectusTable({
-	collection: props.collection,
-	fields: props.fields,
-	defaultSort: props.defaultSort,
-	pageSize: props.pageSize,
-	searchable: props.searchable,
-	filters: props.filters,
+	collection: resolvedCollection.value,
+	fields: resolvedFields.value,
+	defaultSort: resolvedDefaultSort.value,
+	pageSize: resolvedPageSize.value,
+	searchable: resolvedSearchable.value,
+	filters: resolvedFilters.value,
 	stt: props.stt,
 });
 
@@ -74,7 +146,7 @@ const utColumns = computed(() => {
 	if (props.stt) {
 		cols.push({ key: '_stt', label: 'STT', sortable: false });
 	}
-	for (const f of props.fields) {
+	for (const f of resolvedFields.value) {
 		cols.push({ key: f.key, label: f.label, sortable: f.sortable !== false });
 	}
 	return cols;
@@ -120,7 +192,7 @@ function getNestedValue(item: any, key: string): any {
 }
 
 const filterableFields = computed(() =>
-	props.fields.filter((f) => f.filterable && f.filterOptions?.length),
+	resolvedFields.value.filter((f: FieldConfig) => f.filterable && f.filterOptions?.length),
 );
 
 const searchDraft = ref('');
@@ -157,22 +229,23 @@ function openRowProposal(index: number) {
 function openColumnProposal(index: number) {
 	proposalPositionType.value = 'column';
 	proposalPositionIndex.value = index;
+	const rf = resolvedFields.value;
 	proposalPositionContext.value = index === 0
 		? 'Trước cột đầu tiên'
-		: index >= props.fields.length
+		: index >= rf.length
 			? 'Sau cột cuối cùng'
-			: `Giữa cột "${props.fields[index - 1]?.label}" và "${props.fields[index]?.label}"`;
+			: `Giữa cột "${rf[index - 1]?.label}" và "${rf[index]?.label}"`;
 	showProposal.value = true;
 }
 
 const { data: pendingProposals, refresh: refreshProposals } = useAsyncData(
-	() => `table-proposals:${props.collection}`,
+	() => `table-proposals:${resolvedCollection.value}`,
 	async () => {
 		try {
 			return await useDirectus<TableProposal[]>(
 				readItems('table_proposals', {
 					filter: {
-						source_collection: { _eq: props.collection },
+						source_collection: { _eq: resolvedCollection.value },
 						status: { _in: ['draft', 'reviewing', 'approved'] },
 					},
 					fields: ['id', 'proposal_type', 'position_type', 'position_index', 'position_context', 'description', 'status', 'date_created'],
@@ -184,7 +257,7 @@ const { data: pendingProposals, refresh: refreshProposals } = useAsyncData(
 			return [];
 		}
 	},
-	{ watch: [() => props.collection] },
+	{ watch: [resolvedCollection] },
 );
 
 const rowProposals = computed(() =>
@@ -207,16 +280,25 @@ const MARK_TOOLTIP_COL = 'Đề xuất thêm cột tại vị trí này với m�
 
 <template>
 	<div class="space-y-4">
+		<!-- Registry loading/error state -->
+		<div v-if="registryLoading" class="px-4 py-8 text-center">
+			<div class="inline-block h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600"></div>
+			<p class="mt-2 text-sm text-gray-500">Đang tải cấu hình bảng...</p>
+		</div>
+		<div v-else-if="registryError" class="rounded-lg bg-red-50 px-4 py-4 dark:bg-red-900/20">
+			<p class="text-sm text-red-600 dark:text-red-400">{{ registryError }}</p>
+		</div>
+		<template v-else>
 		<!-- Search + Filters bar -->
 		<div
-			v-if="searchable || filterableFields.length"
+			v-if="resolvedSearchable || filterableFields.length"
 			class="rounded-lg bg-white p-4 shadow dark:bg-gray-800"
 		>
 			<div
 				class="grid gap-3"
 				:class="filterableFields.length ? `md:grid-cols-[minmax(0,1fr)_${filterableFields.map(() => '180px').join('_')}]` : ''"
 			>
-				<div v-if="searchable">
+				<div v-if="resolvedSearchable">
 					<label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Tìm kiếm</label>
 					<UInput v-model="searchDraft" placeholder="Tìm kiếm..." icon="i-heroicons-magnifying-glass" />
 				</div>
@@ -234,9 +316,9 @@ const MARK_TOOLTIP_COL = 'Đề xuất thêm cột tại vị trí này với m�
 		<!-- Table container -->
 		<div class="relative rounded-lg bg-white shadow dark:bg-gray-800">
 			<!-- Title bar -->
-			<div v-if="title" class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+			<div v-if="resolvedTitle" class="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
 				<div class="flex items-center justify-between gap-3">
-					<h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ title }}</h3>
+					<h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ resolvedTitle }}</h3>
 					<UButton variant="outline" size="sm" @click="refresh">Làm mới</UButton>
 				</div>
 			</div>
@@ -265,7 +347,7 @@ const MARK_TOOLTIP_COL = 'Đề xuất thêm cột tại vị trí này với m�
 				<!-- STT column data: numbering + row insert marks with UTooltip -->
 				<template #_stt-data="{ row }">
 					<span class="text-gray-700 dark:text-gray-300">{{ row._stt }}</span>
-					<UTooltip v-if="showInsertMarks" :text="MARK_TOOLTIP_ROW" class="dt-row-mark">
+					<UTooltip v-if="resolvedShowInsertMarks" :text="MARK_TOOLTIP_ROW" class="dt-row-mark">
 						<button type="button" class="dt-mark-icon" @click.stop="openRowProposal(row._idx + 1)">
 							<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
 						</button>
@@ -278,7 +360,7 @@ const MARK_TOOLTIP_COL = 'Đề xuất thêm cột tại vị trí này với m�
 				</template>
 
 				<!-- Dynamic header slots: label + sort + UPopover description + column marks -->
-				<template v-for="(field, fi) in fields" :key="`h-${field.key}`" #[`${field.key}-header`]="{ column, sort, onSort }">
+				<template v-for="(field, fi) in resolvedFields" :key="`h-${field.key}`" #[`${field.key}-header`]="{ column, sort, onSort }">
 					<span
 						class="inline-flex items-center gap-1"
 						:class="field.sortable !== false ? 'cursor-pointer select-none' : ''"
@@ -303,13 +385,13 @@ const MARK_TOOLTIP_COL = 'Đề xuất thêm cột tại vị trí này với m�
 						</UPopover>
 					</span>
 					<!-- Column mark at left edge -->
-					<UTooltip v-if="showColumnMarks" :text="MARK_TOOLTIP_COL" class="dt-col-mark">
+					<UTooltip v-if="resolvedShowColumnMarks" :text="MARK_TOOLTIP_COL" class="dt-col-mark">
 						<button type="button" class="dt-mark-icon" @click.stop="openColumnProposal(fi)">
 							<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
 						</button>
 					</UTooltip>
 					<!-- Mark after last column -->
-					<UTooltip v-if="showColumnMarks && fi === fields.length - 1" :text="MARK_TOOLTIP_COL" class="dt-col-mark dt-col-mark-end">
+					<UTooltip v-if="showColumnMarks && fi === resolvedFields.length - 1" :text="MARK_TOOLTIP_COL" class="dt-col-mark dt-col-mark-end">
 						<button type="button" class="dt-mark-icon" @click.stop="openColumnProposal(fi + 1)">
 							<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
 						</button>
@@ -317,7 +399,7 @@ const MARK_TOOLTIP_COL = 'Đề xuất thêm cột tại vị trí này với m�
 				</template>
 
 				<!-- Dynamic data slots: forward parent's #cell-{key} slots -->
-				<template v-for="field in fields" :key="`d-${field.key}`" #[`${field.key}-data`]="{ row }">
+				<template v-for="field in resolvedFields" :key="`d-${field.key}`" #[`${field.key}-data`]="{ row }">
 					<slot :name="`cell-${field.key}`" :item="row" :value="getNestedValue(row, field.key)">
 						{{ field.render ? field.render(getNestedValue(row, field.key), row) : (getNestedValue(row, field.key) ?? '—') }}
 					</slot>
@@ -326,7 +408,7 @@ const MARK_TOOLTIP_COL = 'Đề xuất thêm cột tại vị trí này với m�
 				<!-- Empty state -->
 				<template #empty-state>
 					<div class="flex flex-col items-center py-8">
-						<UTooltip v-if="showInsertMarks" :text="MARK_TOOLTIP_ROW">
+						<UTooltip v-if="resolvedShowInsertMarks" :text="MARK_TOOLTIP_ROW">
 							<button
 								type="button"
 								class="dt-mark-btn mb-4"
@@ -382,7 +464,7 @@ const MARK_TOOLTIP_COL = 'Đề xuất thêm cột tại vị trí này với m�
 
 			<!-- Proposal popup (UModal-based) -->
 			<SharedProposalPopup
-				:source-collection="collection"
+				:source-collection="resolvedCollection"
 				:position-type="proposalPositionType"
 				:position-index="proposalPositionIndex"
 				:position-context="proposalPositionContext"
@@ -391,6 +473,7 @@ const MARK_TOOLTIP_COL = 'Đề xuất thêm cột tại vị trí này với m�
 				@proposal-created="handleProposalCreated"
 			/>
 		</div>
+		</template>
 	</div>
 </template>
 
