@@ -13,6 +13,7 @@
 #   4. workflow_change_requests -> registries/workflow_change_requests/wcr-{id}
 #   5. workflow_categories    -> registries/workflow_categories/wcat-{id}
 #   6. workflow_step_relations -> registries/workflow_step_relations/wsr-{id}
+#   7. meta_catalog          -> registries/meta_catalog/{code}
 #
 # Anti-loop safety: Documents use registries/* prefix.
 # Agent Data's directus_sync_listener only syncs knowledge/* prefix back,
@@ -557,6 +558,30 @@ setup_delete_flow \
   '{{$env.AGENT_DATA_URL}}/documents/registries/workflow_step_relations/wsr-{{$trigger.keys[0]}}'
 echo ""
 
+# --- 7. meta_catalog ---
+MC_BODY='"# {{read_item.name}}\n\n**Code:** {{read_item.code}}\n**Entity Type:** {{read_item.entity_type}}\n**Source Model:** {{read_item.source_model}}\n**Layer:** {{read_item.layer}}\n**Status:** {{read_item.status}}\n\n## Location\n- Source: {{read_item.source_location}}\n- Registry Collection: {{read_item.registry_collection}}\n- UI Page: {{read_item.ui_page}}\n- Sync Script: {{read_item.sync_script}}\n- Sync Frequency: {{read_item.sync_frequency}}\n\n## Description\n{{read_item.description}}\n\n**Record Count:** {{read_item.record_count}}"'
+MC_META='{"title":"{{read_item.name}}","code":"{{read_item.code}}","entity_type":"{{read_item.entity_type}}","source_model":"{{read_item.source_model}}","layer":"{{read_item.layer}}","status":"{{read_item.status}}","record_count":"{{read_item.record_count}}","source":"directus","sync_collection":"meta_catalog"}'
+
+echo "--- 7/7: meta_catalog ---"
+setup_sync_flow \
+  "[DOT-REG] Meta Catalog Create -> AD" "inventory_2" "#7C3AED" '["items.create"]' "meta_catalog" \
+  '{{$trigger.key}}' "meta_catalog" \
+  'registries/meta_catalog/{{read_item.code}}' \
+  "$MC_BODY" "$MC_META"
+echo ""
+
+setup_sync_flow \
+  "[DOT-REG] Meta Catalog Update -> AD" "inventory_2" "#6D28D9" '["items.update"]' "meta_catalog" \
+  '{{$trigger.keys[0]}}' "meta_catalog" \
+  'registries/meta_catalog/{{read_item.code}}' \
+  "$MC_BODY" "$MC_META"
+echo ""
+
+setup_delete_flow \
+  "[DOT-REG] Meta Catalog Delete -> AD" "inventory_2" "#DC2626" "meta_catalog" \
+  '{{$env.AGENT_DATA_URL}}/documents/registries/meta_catalog/cat-{{$trigger.keys[0]}}'
+echo ""
+
 # ===============================================================
 # Summary
 # ===============================================================
@@ -568,15 +593,16 @@ else
 fi
 echo "============================================================"
 echo ""
-echo "Collections synced (6):"
+echo "Collections synced (7):"
 echo "  1. table_registry         -> registries/table_registry/{table_id}"
 echo "  2. workflows              -> registries/workflows/wf-{id}"
 echo "  3. workflow_steps          -> registries/workflow_steps/ws-{id}"
 echo "  4. workflow_change_requests -> registries/workflow_change_requests/wcr-{id}"
 echo "  5. workflow_categories     -> registries/workflow_categories/wcat-{id}"
 echo "  6. workflow_step_relations -> registries/workflow_step_relations/wsr-{id}"
+echo "  7. meta_catalog           -> registries/meta_catalog/{code}"
 echo ""
-echo "Flows per collection: 3 (create + update + delete) = 18 total"
+echo "Flows per collection: 3 (create + update + delete) = 21 total"
 echo "Anti-loop: registries/* prefix NOT in directus_sync._SYNC_PREFIXES"
 echo ""
 echo "Verify flows: ${DIRECTUS_URL}/admin/settings/flows"

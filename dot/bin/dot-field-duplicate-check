@@ -99,37 +99,30 @@ main() {
   coll_count=$(echo "$collections" | wc -l | tr -d ' ')
   log_info "Found ${coll_count} user collections"
 
-  # Fetch all fields
+  # Fetch all fields to temp file (response too large for shell variables)
   log_info "Fetching fields for all collections..."
-  local fields_resp fields_body fields_code
-  fields_resp=$(api_request GET "${BASE_URL}/fields?limit=-1")
-  fields_body="${fields_resp%$'\n'*}"
-  fields_code="${fields_resp##*$'\n'}"
+  local tmp_fields
+  tmp_fields=$(mktemp)
+  trap "rm -f '$tmp_fields'" EXIT
+
+  local fields_code
+  fields_code=$(curl -sS --globoff -X GET "${BASE_URL}/fields?limit=-1" \
+    -H "Authorization: Bearer $DOT_TOKEN" \
+    -o "$tmp_fields" -w "%{http_code}")
 
   if [[ "$fields_code" != "200" ]]; then
     log_err "Failed to fetch fields (HTTP $fields_code)"
     exit 1
   fi
 
-  # Generate report using Python for complex analysis
-  local report
-  report=$(python3 -c "
-import json, sys
-from collections import defaultdict
-
-data = json.loads('''${fields_body}'''.replace(\"'''\", ''))
-# Actually need to read from stdin for large data
-" 2>/dev/null || true)
-
-  # Simpler approach: use jq for field analysis
+  # Analyze fields with Python
   local report_md
-  report_md=$(python3 << 'PYEOF'
-import json, sys
+  report_md=$(FIELDS_FILE="$tmp_fields" python3 << 'PYEOF'
+import json, sys, os
 from collections import defaultdict
 
-# Read fields data from file
-fields_json = sys.stdin.read()
-data = json.loads(fields_json)
+with open(os.environ['FIELDS_FILE']) as f:
+    data = json.load(f)
 
 fields = data.get('data', [])
 
@@ -223,7 +216,7 @@ for name, entries in sorted(exact_dupes.items())[:50]:
 
 print('\n'.join(lines))
 PYEOF
-  < <(echo "$fields_body"))
+)
 
   echo ""
   echo "$report_md"
@@ -240,9 +233,15 @@ PYEOF
 
   if [[ -n "$AD_KEY" ]]; then
     log_info "Uploading report to Agent Data..."
-    python3 -c "
-import json, urllib.request, ssl
-body = '''${report_md}'''
+    local tmp_report
+    tmp_report=$(mktemp)
+    echo "$report_md" > "$tmp_report"
+    AD_KEY="$AD_KEY" REPORT_FILE="$tmp_report" python3 << 'UPLOAD_PY'
+import json, urllib.request, ssl, os
+
+with open(os.environ['REPORT_FILE']) as f:
+    body = f.read()
+
 payload = json.dumps({
     'document_id': 'knowledge/current-state/reports/duplicate-fields-report',
     'parent_id': 'root',
@@ -256,14 +255,15 @@ ctx.verify_mode = ssl.CERT_NONE
 req = urllib.request.Request(
     'https://vps.incomexsaigoncorp.vn/api/documents?upsert=true',
     data=payload,
-    headers={'X-API-Key': '${AD_KEY}', 'Content-Type': 'application/json'}
+    headers={'X-API-Key': os.environ['AD_KEY'], 'Content-Type': 'application/json'}
 )
 try:
     resp = urllib.request.urlopen(req, context=ctx)
     print(f'[OK]   Uploaded to Agent Data: {json.loads(resp.read())}')
 except Exception as e:
     print(f'[WARN] Upload failed: {e}')
-" 2>&1
+UPLOAD_PY
+    rm -f "$tmp_report"
   fi
 
   echo ""

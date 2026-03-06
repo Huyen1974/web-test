@@ -80,8 +80,8 @@ scan_dot_tools() {
 
   local tools=()
   while IFS= read -r f; do
-    tools+=("$(basename "$f")")
-  done < <(find "${DOT_ROOT}/bin" -name "dot-*" -type f -executable 2>/dev/null | sort)
+    [[ -n "$f" ]] && tools+=("$(basename "$f")")
+  done < <(find "${DOT_ROOT}/bin" -name "dot-*" -type f -perm +111 2>/dev/null | sort)
 
   local count=${#tools[@]}
   log_info "Found ${count} DOT tools in dot/bin/"
@@ -90,9 +90,11 @@ scan_dot_tools() {
 
   echo ""
   echo "DOT Tools (${count}):"
-  for t in "${tools[@]}"; do
-    echo "  - ${t}"
-  done
+  if [[ $count -gt 0 ]]; then
+    for t in "${tools[@]}"; do
+      echo "  - ${t}"
+    done
+  fi
 }
 
 scan_pages() {
@@ -101,6 +103,7 @@ scan_pages() {
 
   local pages=()
   while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
     local rel
     rel="${f#${PROJECT_ROOT}/web/pages/}"
     pages+=("$rel")
@@ -113,9 +116,11 @@ scan_pages() {
 
   echo ""
   echo "Pages (${count}):"
-  for p in "${pages[@]}"; do
-    echo "  - ${p}"
-  done
+  if [[ $count -gt 0 ]]; then
+    for p in "${pages[@]}"; do
+      echo "  - ${p}"
+    done
+  fi
 }
 
 scan_collections() {
