@@ -1,9 +1,9 @@
 name: Deploy to VPS
 
 on:
-  # Run AFTER Firebase Deploy completes
+  # Run after Nuxt CI passes on main
   workflow_run:
-    workflows: ["Firebase Deploy"]
+    workflows: ["Nuxt 3 CI"]
     types: [completed]
     branches: [main]
   workflow_dispatch:
@@ -38,7 +38,7 @@ jobs:
     if: >-
       vars.DEPLOY_MODE == 'direct' && (
         github.event_name == 'workflow_dispatch' ||
-        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
       )
 
     defaults:
@@ -190,7 +190,7 @@ jobs:
     if: >-
       vars.DEPLOY_MODE != 'direct' && (
         github.event_name == 'workflow_dispatch' ||
-        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
       )
 
     steps:
