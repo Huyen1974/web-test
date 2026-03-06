@@ -56,13 +56,29 @@ const workflowNavItem = {
 	title: 'Workflows',
 };
 
+const registriesNavItem = {
+	id: 'registries-nav-static',
+	has_children: false,
+	icon: 'inventory_2',
+	label: null,
+	type: 'url',
+	url: '/knowledge/registries',
+	title: 'Registries',
+};
+
+const staticNavItems = [workflowNavItem, registriesNavItem];
+
 const navigationItems = computed(() => {
 	const items = [...(navigation.value?.items || [])];
-	const alreadyPresent = items.some((item: any) => item?.url === workflowNavItem.url || item?.title === workflowNavItem.title);
 
-	if (alreadyPresent) return items;
+	for (const navItem of staticNavItems) {
+		const alreadyPresent = items.some((item: any) => item?.url === navItem.url || item?.title === navItem.title);
+		if (!alreadyPresent) {
+			items.push(navItem);
+		}
+	}
 
-	return [...items, workflowNavItem];
+	return items;
 });
 
 const navigationWithWorkflows = computed(() => {

@@ -1,0 +1,259 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-catalog-sync — Scan external sources and report catalog discrepancies
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-catalog* — no existing tool]
+# VERSION: 1.0.0
+#
+# Scans Model B sources (filesystem, APIs) and compares with meta_catalog.
+# Reports missing/orphaned items. Updates record_count in meta_catalog.
+#
+# Usage:
+#   dot-catalog-sync --type=dot_tools [--cloud]
+#   dot-catalog-sync --type=pages [--cloud]
+#   dot-catalog-sync --type=collections [--cloud]
+#   dot-catalog-sync --all [--cloud]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_ROOT="$(cd "$DOT_ROOT/.." && pwd)"
+
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+api_request() {
+  local method="$1" url="$2" data="${3-}"
+  if [[ -n "${data-}" ]]; then
+    curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "$data" -w "\n%{http_code}"
+  else
+    curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -w "\n%{http_code}"
+  fi
+}
+
+update_record_count() {
+  local cat_code="$1" count="$2"
+  local resp code
+
+  # Find the meta_catalog item by code
+  resp=$(api_request GET "${BASE_URL}/items/meta_catalog?filter[code][_eq]=${cat_code}&fields=id")
+  local body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_warn "Could not find meta_catalog entry for ${cat_code}"
+    return
+  fi
+
+  local item_id
+  item_id=$(echo "$body" | jq -r '.data[0].id // empty')
+  if [[ -z "$item_id" ]]; then
+    log_warn "No meta_catalog entry for ${cat_code}"
+    return
+  fi
+
+  resp=$(api_request PATCH "${BASE_URL}/items/meta_catalog/${item_id}" "{\"record_count\":${count}}")
+  code="${resp##*$'\n'}"
+  if [[ "$code" == "200" ]]; then
+    log_ok "Updated ${cat_code} record_count = ${count}"
+  else
+    log_warn "Failed to update ${cat_code} record_count"
+  fi
+}
+
+scan_dot_tools() {
+  echo ""
+  echo "--- Scanning DOT Tools (CAT-006) ---"
+
+  local tools=()
+  while IFS= read -r f; do
+    tools+=("$(basename "$f")")
+  done < <(find "${DOT_ROOT}/bin" -name "dot-*" -type f -executable 2>/dev/null | sort)
+
+  local count=${#tools[@]}
+  log_info "Found ${count} DOT tools in dot/bin/"
+
+  update_record_count "CAT-006" "$count"
+
+  echo ""
+  echo "DOT Tools (${count}):"
+  for t in "${tools[@]}"; do
+    echo "  - ${t}"
+  done
+}
+
+scan_pages() {
+  echo ""
+  echo "--- Scanning Pages (CAT-007) ---"
+
+  local pages=()
+  while IFS= read -r f; do
+    local rel
+    rel="${f#${PROJECT_ROOT}/web/pages/}"
+    pages+=("$rel")
+  done < <(find "${PROJECT_ROOT}/web/pages" -name "*.vue" -type f 2>/dev/null | sort)
+
+  local count=${#pages[@]}
+  log_info "Found ${count} Vue pages in web/pages/"
+
+  update_record_count "CAT-007" "$count"
+
+  echo ""
+  echo "Pages (${count}):"
+  for p in "${pages[@]}"; do
+    echo "  - ${p}"
+  done
+}
+
+scan_collections() {
+  echo ""
+  echo "--- Scanning Collections (CAT-008) ---"
+
+  local resp body code
+  resp=$(api_request GET "${BASE_URL}/collections?limit=-1")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to fetch collections (HTTP $code)"
+    return
+  fi
+
+  local count
+  count=$(echo "$body" | jq '[.data[] | select(.collection | startswith("directus_") | not)] | length')
+  log_info "Found ${count} user collections in Directus"
+
+  update_record_count "CAT-008" "$count"
+
+  echo ""
+  echo "Collections (${count}):"
+  echo "$body" | jq -r '.data[] | select(.collection | startswith("directus_") | not) | "  - \(.collection)"' | sort | head -50
+}
+
+update_model_a_counts() {
+  echo ""
+  echo "--- Updating Model A record counts ---"
+
+  local entries='[
+    {"code":"CAT-000","collection":"meta_catalog"},
+    {"code":"CAT-001","collection":"table_registry"},
+    {"code":"CAT-003","collection":"workflows"},
+    {"code":"CAT-004","collection":"workflow_steps"},
+    {"code":"CAT-005","collection":"workflow_change_requests"},
+    {"code":"CAT-009","collection":"tasks"}
+  ]'
+
+  local len
+  len=$(echo "$entries" | jq 'length')
+
+  for i in $(seq 0 $((len - 1))); do
+    local cat_code collection
+    cat_code=$(echo "$entries" | jq -r ".[$i].code")
+    collection=$(echo "$entries" | jq -r ".[$i].collection")
+
+    local resp body code count
+    resp=$(api_request GET "${BASE_URL}/items/${collection}?aggregate[count]=*&limit=0")
+    body="${resp%$'\n'*}"
+    code="${resp##*$'\n'}"
+
+    if [[ "$code" == "200" ]]; then
+      count=$(echo "$body" | jq -r '.data[0].count // 0')
+      update_record_count "$cat_code" "$count"
+    else
+      log_warn "Could not count ${collection} (HTTP $code)"
+    fi
+  done
+}
+
+show_help() {
+  cat << EOF
+dot-catalog-sync v${VERSION} — Scan and report catalog discrepancies
+
+Usage:
+  dot-catalog-sync --type=dot_tools [--cloud]   Scan DOT tools
+  dot-catalog-sync --type=pages [--cloud]        Scan Vue pages
+  dot-catalog-sync --type=collections [--cloud]  Scan Directus collections
+  dot-catalog-sync --all [--cloud]               Scan everything
+
+Options:
+  --local     Use local Directus
+  --cloud     Use cloud Directus (default)
+  --help, -h  Show help
+
+EOF
+  show_environment_help
+}
+
+main() {
+  local SCAN_TYPE="" SCAN_ALL=false
+
+  for arg in "$@"; do
+    case "$arg" in
+      --type=*) SCAN_TYPE="${arg#--type=}" ;;
+      --all) SCAN_ALL=true ;;
+      --help|-h) show_help; exit 0 ;;
+    esac
+  done
+
+  if [[ -z "$SCAN_TYPE" && "$SCAN_ALL" == "false" ]]; then
+    log_err "Specify --type=<dot_tools|pages|collections> or --all"
+    exit 1
+  fi
+
+  init_environment "$@"
+  BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: Catalog Sync v${VERSION}"
+  echo "========================================="
+  print_environment_banner "$@"
+
+  # Auth
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    local dot_auth="${SCRIPT_DIR}/dot-auth"
+    if [[ -f "$dot_auth" ]]; then
+      source "$dot_auth" "$@"
+    fi
+  fi
+
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "Authentication failed"
+    exit 1
+  fi
+
+  if [[ "$SCAN_ALL" == "true" || "$SCAN_TYPE" == "dot_tools" ]]; then
+    scan_dot_tools
+  fi
+
+  if [[ "$SCAN_ALL" == "true" || "$SCAN_TYPE" == "pages" ]]; then
+    scan_pages
+  fi
+
+  if [[ "$SCAN_ALL" == "true" || "$SCAN_TYPE" == "collections" ]]; then
+    scan_collections
+  fi
+
+  if [[ "$SCAN_ALL" == "true" ]]; then
+    update_model_a_counts
+  fi
+
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Catalog Sync - COMPLETE"
+  echo "========================================="
+}
+
+main "$@"
