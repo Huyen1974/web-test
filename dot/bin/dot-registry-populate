@@ -1,0 +1,450 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-registry-populate — Populate all registry collections with existing data
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-registry* — none found]
+# VERSION: 1.0.0
+#
+# Scans actual sources and creates records in registry collections:
+#   - dot_tools: scan dot/bin/dot-* files
+#   - ui_pages: scan web/pages/**/*.vue files
+#   - collection_registry: read schema snapshot
+#   - agents: manual 6 agents
+#   - modules: manual 4 modules
+#
+# Usage:
+#   dot-registry-populate [--cloud|--local] [--dry-run] [--collection=NAME]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+DRY_RUN=""
+SINGLE_COLLECTION=""
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-registry-populate v${VERSION} — Populate registry collections
+
+Usage:
+  dot-registry-populate [--cloud|--local] [--dry-run] [--collection=NAME]
+
+Options:
+  --cloud              Use cloud Directus (default)
+  --local              Use local Directus
+  --dry-run            Show what would be done
+  --collection=NAME    Only populate this collection
+  --help, -h           Show help
+
+EOF
+  show_environment_help
+}
+
+main() {
+  for arg in "$@"; do
+    case "$arg" in
+      --dry-run) DRY_RUN="1" ;;
+      --collection=*) SINGLE_COLLECTION="${arg#--collection=}" ;;
+      --help|-h) show_help; exit 0 ;;
+    esac
+  done
+
+  init_environment "$@"
+  local BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: Registry Populate v${VERSION}"
+  echo "========================================="
+  print_environment_banner "$@"
+
+  # Auth
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    source "${SCRIPT_DIR}/dot-auth" "$@"
+  fi
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "Authentication failed"; exit 1
+  fi
+
+  # Gather source data
+  local tmp_tools tmp_pages tmp_snapshot tmp_py
+  tmp_tools=$(mktemp)
+  tmp_pages=$(mktemp)
+  tmp_snapshot=$(mktemp)
+  tmp_py=$(mktemp /tmp/dot-registry-pop-XXXXXX.py)
+  trap "rm -f '$tmp_tools' '$tmp_pages' '$tmp_snapshot' '$tmp_py'" EXIT
+
+  # Scan DOT tools
+  log_info "Scanning DOT tools..."
+  ls -1 "${SCRIPT_DIR}"/dot-* 2>/dev/null | while read -r f; do
+    basename "$f"
+  done > "$tmp_tools"
+  log_info "Found $(wc -l < "$tmp_tools" | tr -d ' ') DOT tools"
+
+  # Scan pages
+  log_info "Scanning pages..."
+  find "$(dirname "$SCRIPT_DIR")/../web/pages" -name "*.vue" -type f 2>/dev/null | sort > "$tmp_pages"
+  log_info "Found $(wc -l < "$tmp_pages" | tr -d ' ') page files"
+
+  # Get latest schema snapshot
+  local latest_snap
+  latest_snap=$(ls -t "$(dirname "$SCRIPT_DIR")/snapshots"/schema-*.json 2>/dev/null | head -1)
+  if [[ -n "$latest_snap" ]]; then
+    cp "$latest_snap" "$tmp_snapshot"
+    log_info "Using snapshot: $(basename "$latest_snap")"
+  else
+    log_info "No snapshot found, fetching from API..."
+    curl -sS --globoff "${BASE_URL}/schema/snapshot" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -o "$tmp_snapshot"
+  fi
+
+  cat > "$tmp_py" << 'PYEOF'
+import json, os, sys, ssl, urllib.request, re
+from pathlib import Path
+
+base_url = os.environ['BASE_URL']
+token = os.environ['DOT_TOKEN']
+dry_run = os.environ.get('DRY_RUN', '')
+single_coll = os.environ.get('SINGLE_COLLECTION', '')
+tools_file = os.environ['TOOLS_FILE']
+pages_file = os.environ['PAGES_FILE']
+snapshot_file = os.environ['SNAPSHOT_FILE']
+script_dir = os.environ['SCRIPT_DIR']
+
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+def api(method, path, data=None):
+    url = f'{base_url}{path}'
+    payload = json.dumps(data).encode() if data else None
+    req = urllib.request.Request(url, data=payload, method=method,
+        headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'})
+    try:
+        resp = urllib.request.urlopen(req, context=ctx)
+        return resp.status, json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        try:
+            return e.code, json.loads(body)
+        except:
+            return e.code, {'error': body[:200]}
+
+def get_existing_codes(collection):
+    """Get set of existing codes in a collection."""
+    code, resp = api('GET', f'/items/{collection}?fields=code,name&limit=-1')
+    if code == 200:
+        return {item.get('code'): item for item in resp.get('data', []) if item.get('code')}
+    return {}
+
+def create_item(collection, data):
+    if dry_run:
+        print(f'  [DRY] {collection}: {data.get("code","?")} — {data.get("name","")[:40]}')
+        return True
+    code, resp = api('POST', f'/items/{collection}', data)
+    if code == 200:
+        return True
+    elif code == 400 and 'unique' in json.dumps(resp).lower():
+        return True  # already exists
+    else:
+        print(f'  [ERR] {collection} create failed: HTTP {code} — {json.dumps(resp)[:150]}')
+        return False
+
+def categorize_tool(name):
+    if 'schema' in name: return 'schema'
+    if 'flow' in name: return 'flow'
+    if 'metadata' in name: return 'metadata'
+    if 'catalog' in name: return 'catalog'
+    if 'permission' in name: return 'permission'
+    if 'registry' in name: return 'registry'
+    if 'auth' in name: return 'auth'
+    return 'other'
+
+def infer_token_type(name):
+    # Most DOT tools use admin token
+    if name in ('dot-auth',): return 'none'
+    return 'admin'
+
+# ============================================================
+# 1. DOT Tools
+# ============================================================
+if not single_coll or single_coll == 'dot_tools':
+    print()
+    print('=== Populating dot_tools ===')
+    print()
+
+    existing = get_existing_codes('dot_tools')
+    with open(tools_file) as f:
+        tools = [line.strip() for line in f if line.strip()]
+
+    created = 0
+    skipped = 0
+    for i, tool_name in enumerate(sorted(tools), 1):
+        code = f'DOT-{i:03d}'
+        if code in existing or tool_name in [v.get('name') for v in existing.values()]:
+            skipped += 1
+            continue
+        item = {
+            'code': code,
+            'name': tool_name,
+            'name_en': tool_name,
+            'script_path': f'dot/bin/{tool_name}',
+            'category': categorize_tool(tool_name),
+            'token_type': infer_token_type(tool_name),
+            'status': 'active',
+            'owner': 'system',
+            'classification': categorize_tool(tool_name),
+        }
+        if create_item('dot_tools', item):
+            created += 1
+    print(f'  [INFO] dot_tools: created={created}, skipped={skipped}, total={len(tools)}')
+
+# ============================================================
+# 2. UI Pages
+# ============================================================
+if not single_coll or single_coll == 'ui_pages':
+    print()
+    print('=== Populating ui_pages ===')
+    print()
+
+    existing = get_existing_codes('ui_pages')
+    with open(pages_file) as f:
+        page_files = [line.strip() for line in f if line.strip()]
+
+    # Convert file paths to routes
+    pages = []
+    web_pages_dir = None
+    for pf in page_files:
+        # Find the web/pages/ prefix
+        idx = pf.find('web/pages/')
+        if idx == -1:
+            continue
+        rel = pf[idx + len('web/pages/'):]
+        # Convert to route: remove .vue, handle index, handle [param]
+        route = '/' + rel.replace('.vue', '').replace('/index', '').replace('index', '')
+        if not route or route == '/':
+            route = '/'
+        # Clean up
+        route = route.replace('//', '/')
+
+        # Determine module from first path segment
+        parts = rel.split('/')
+        module = parts[0] if parts else 'root'
+
+        # Page name from route
+        name = route.rstrip('/').split('/')[-1] or 'home'
+        if name.startswith('['):
+            name = f'{parts[-2] if len(parts) > 1 else "detail"} (dynamic)'
+
+        pages.append({
+            'route': route,
+            'file': f'web/pages/{rel}',
+            'module': module,
+            'name': name,
+        })
+
+    created = 0
+    skipped = 0
+    for i, page in enumerate(sorted(pages, key=lambda p: p['route']), 1):
+        code = f'PG-{i:03d}'
+        if code in existing:
+            skipped += 1
+            continue
+        item = {
+            'code': code,
+            'name': page['name'],
+            'route_path': page['route'],
+            'page_file': page['file'],
+            'module': page['module'],
+            'has_auth': False,
+            'status': 'active',
+            'owner': 'system',
+        }
+        if create_item('ui_pages', item):
+            created += 1
+    print(f'  [INFO] ui_pages: created={created}, skipped={skipped}, total={len(pages)}')
+
+# ============================================================
+# 3. Collection Registry
+# ============================================================
+if not single_coll or single_coll == 'collection_registry':
+    print()
+    print('=== Populating collection_registry ===')
+    print()
+
+    existing = get_existing_codes('collection_registry')
+
+    with open(snapshot_file) as f:
+        snap = json.load(f)
+
+    collections = snap.get('data', snap).get('collections', [])
+    # Filter out directus_ system collections
+    user_colls = [c for c in collections if not c.get('collection', '').startswith('directus_')]
+
+    created = 0
+    skipped = 0
+    for i, coll in enumerate(sorted(user_colls, key=lambda c: c.get('collection', '')), 1):
+        code = f'COL-{i:03d}'
+        coll_name = coll.get('collection', '')
+        if code in existing or coll_name in [v.get('name') for v in existing.values()]:
+            skipped += 1
+            continue
+
+        meta = coll.get('meta') or {}
+        # Count fields for this collection from snapshot
+        all_fields = snap.get('data', snap).get('fields', [])
+        field_count = len([f for f in all_fields if f.get('collection') == coll_name and not f.get('field', '').startswith('directus_')])
+
+        item = {
+            'code': code,
+            'name': coll_name,
+            'collection_name': coll_name,
+            'group': meta.get('group') or '',
+            'icon': meta.get('icon') or '',
+            'field_count': field_count,
+            'has_note': bool(meta.get('note')),
+            'purpose': (meta.get('note') or '')[:200],
+            'status': 'active',
+            'owner': 'system',
+        }
+        if create_item('collection_registry', item):
+            created += 1
+    print(f'  [INFO] collection_registry: created={created}, skipped={skipped}, total={len(user_colls)}')
+
+# ============================================================
+# 4. Agents
+# ============================================================
+if not single_coll or single_coll == 'agents':
+    print()
+    print('=== Populating agents ===')
+    print()
+
+    existing = get_existing_codes('agents')
+
+    agents_data = [
+        {
+            'code': 'AGT-001', 'name': 'Claude Desktop', 'name_en': 'Claude Desktop',
+            'transport': 'stdio', 'status': 'active', 'owner': 'anthropic',
+            'capabilities': u'Tr\u1ea3 l\u1eddi c\u00e2u h\u1ecfi, ph\u00e2n t\u00edch d\u1eef li\u1ec7u, MCP tools',
+            'restrictions': u'Kh\u00f4ng truy c\u1eadp terminal tr\u1ef1c ti\u1ebfp',
+            'config_path': '~/Library/Application Support/Claude/claude_desktop_config.json',
+            'classification': 'primary',
+        },
+        {
+            'code': 'AGT-002', 'name': 'Claude Code CLI', 'name_en': 'Claude Code CLI',
+            'transport': 'stdio', 'status': 'active', 'owner': 'anthropic',
+            'capabilities': u'Code, deploy, fix CI, ch\u1ea1y DOT tools, Git workflow 2 m\u0169',
+            'restrictions': u'C\u1ea7n user approve cho destructive actions',
+            'config_path': '.mcp.json',
+            'classification': 'primary',
+        },
+        {
+            'code': 'AGT-003', 'name': 'Codex CLI', 'name_en': 'OpenAI Codex CLI',
+            'transport': 'stdio', 'status': 'active', 'owner': 'openai',
+            'capabilities': u'Code, deploy, quick-task protocol',
+            'restrictions': u'OPS Proxy cho Directus, kh\u00f4ng SSH tr\u1ef1c ti\u1ebfp',
+            'config_path': '.codex/config.toml',
+            'classification': 'secondary',
+        },
+        {
+            'code': 'AGT-004', 'name': 'GPT', 'name_en': 'GPT (ChatGPT)',
+            'transport': 'api', 'status': 'active', 'owner': 'openai',
+            'capabilities': u'Tr\u1ea3 l\u1eddi c\u00e2u h\u1ecfi, review code',
+            'restrictions': u'Kh\u00f4ng truy c\u1eadp tr\u1ef1c ti\u1ebfp h\u1ec7 th\u1ed1ng',
+            'config_path': '',
+            'classification': 'advisory',
+        },
+        {
+            'code': 'AGT-005', 'name': 'Gemini CLI', 'name_en': 'Google Gemini CLI',
+            'transport': 'stdio', 'status': 'planned', 'owner': 'google',
+            'capabilities': u'Code, research',
+            'restrictions': u'Ch\u01b0a t\u00edch h\u1ee3p MCP',
+            'config_path': '',
+            'classification': 'secondary',
+        },
+        {
+            'code': 'AGT-006', 'name': 'Orchestrator', 'name_en': 'Agent Orchestrator',
+            'transport': 'http', 'status': 'planned', 'owner': 'system',
+            'capabilities': u'\u0110i\u1ec1u ph\u1ed1i nhi\u1ec1u agents, ph\u00e2n c\u00f4ng nhi\u1ec7m v\u1ee5',
+            'restrictions': u'Ch\u01b0a tri\u1ec3n khai',
+            'config_path': '',
+            'classification': 'orchestrator',
+        },
+    ]
+
+    created = 0
+    for agent in agents_data:
+        if agent['code'] in existing:
+            print(f'  [SKIP] {agent["code"]} already exists')
+            continue
+        if create_item('agents', agent):
+            created += 1
+    print(f'  [INFO] agents: created={created}, total={len(agents_data)}')
+
+# ============================================================
+# 5. Modules
+# ============================================================
+if not single_coll or single_coll == 'modules':
+    print()
+    print('=== Populating modules ===')
+    print()
+
+    existing = get_existing_codes('modules')
+
+    modules_data = [
+        {
+            'code': 'MOD-001', 'name': 'Comment System', 'name_en': 'Comment System',
+            'description': u'H\u1ec7 th\u1ed1ng b\u00ecnh lu\u1eadn tr\u00ean tasks v\u00e0 workflows',
+            'status': 'active', 'owner': 'system', 'classification': 'core',
+        },
+        {
+            'code': 'MOD-002', 'name': 'Workflow Engine', 'name_en': 'Workflow Engine',
+            'description': u'H\u1ec7 th\u1ed1ng qu\u1ea3n l\u00fd quy tr\u00ecnh v\u00e0 b\u01b0\u1edbc duy\u1ec7t',
+            'status': 'active', 'owner': 'system', 'classification': 'core',
+        },
+        {
+            'code': 'MOD-003', 'name': 'Table Registry', 'name_en': 'Dynamic Table System',
+            'description': u'H\u1ec7 th\u1ed1ng b\u1ea3ng \u0111\u1ed9ng (DirectusTable) v\u1edbi c\u1ea5u h\u00ecnh t\u1eeb Directus',
+            'status': 'active', 'owner': 'system', 'classification': 'core',
+        },
+        {
+            'code': 'MOD-004', 'name': 'Tester', 'name_en': 'QA Tester Module',
+            'description': u'Module ki\u1ec3m th\u1eed t\u1ef1 \u0111\u1ed9ng v\u00e0 ki\u1ec3m tra ch\u1ea5t l\u01b0\u1ee3ng',
+            'status': 'planned', 'owner': 'system', 'classification': 'support',
+        },
+    ]
+
+    created = 0
+    for mod in modules_data:
+        if mod['code'] in existing:
+            print(f'  [SKIP] {mod["code"]} already exists')
+            continue
+        if create_item('modules', mod):
+            created += 1
+    print(f'  [INFO] modules: created={created}, total={len(modules_data)}')
+
+print()
+print('=== POPULATE COMPLETE ===')
+PYEOF
+
+  TOOLS_FILE="$tmp_tools" PAGES_FILE="$tmp_pages" SNAPSHOT_FILE="$tmp_snapshot" \
+    SCRIPT_DIR="$SCRIPT_DIR" BASE_URL="$BASE_URL" DOT_TOKEN="$DOT_TOKEN" \
+    DRY_RUN="${DRY_RUN}" SINGLE_COLLECTION="${SINGLE_COLLECTION}" \
+    python3 "$tmp_py" < /dev/null
+
+  rm -f "$tmp_py"
+
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Registry Populate - COMPLETE"
+  echo "========================================="
+}
+
+main "$@"

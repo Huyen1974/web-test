@@ -1,0 +1,385 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-schema-registry-collections-ensure — Create 4 registry collections
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-schema-*registry* — none found]
+# VERSION: 1.0.0
+#
+# Creates: dot_tools, ui_pages, collection_registry, agents
+# Each collection has ISO 11179 standard fields + specific fields.
+# Also fixes modules collection (permissions + missing fields).
+# Idempotent: skips existing collections/fields.
+#
+# Usage:
+#   dot-schema-registry-collections-ensure [--cloud|--local] [--dry-run]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+DRY_RUN=""
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-schema-registry-collections-ensure v${VERSION}
+
+Creates 4 registry collections: dot_tools, ui_pages, collection_registry, agents.
+Fixes modules collection permissions.
+
+Usage:
+  dot-schema-registry-collections-ensure [--cloud|--local] [--dry-run]
+
+EOF
+  show_environment_help
+}
+
+main() {
+  for arg in "$@"; do
+    case "$arg" in
+      --dry-run) DRY_RUN="1" ;;
+      --help|-h) show_help; exit 0 ;;
+    esac
+  done
+
+  init_environment "$@"
+  local BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: Registry Collections Ensure v${VERSION}"
+  echo "========================================="
+  print_environment_banner "$@"
+
+  # Auth
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    source "${SCRIPT_DIR}/dot-auth" "$@"
+  fi
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "Authentication failed"; exit 1
+  fi
+
+  local tmp_py
+  tmp_py=$(mktemp /tmp/dot-registry-cols-XXXXXX.py)
+  trap "rm -f '$tmp_py'" EXIT
+
+  cat > "$tmp_py" << 'PYEOF'
+import json, os, sys, ssl, urllib.request
+
+base_url = os.environ['BASE_URL']
+token = os.environ['DOT_TOKEN']
+dry_run = os.environ.get('DRY_RUN', '')
+
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+def api(method, path, data=None):
+    url = f'{base_url}{path}'
+    payload = json.dumps(data).encode() if data else None
+    req = urllib.request.Request(url, data=payload, method=method,
+        headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'})
+    try:
+        resp = urllib.request.urlopen(req, context=ctx)
+        return resp.status, json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        try:
+            return e.code, json.loads(body)
+        except:
+            return e.code, {'error': body[:200]}
+
+def collection_exists(name):
+    code, data = api('GET', f'/collections/{name}')
+    return code == 200
+
+def field_exists(coll, field):
+    code, data = api('GET', f'/fields/{coll}/{field}')
+    return code == 200
+
+def create_collection(name, note, group=None, fields=None):
+    if collection_exists(name):
+        print(f'  [SKIP] Collection {name} already exists')
+        return True
+    if dry_run:
+        print(f'  [DRY] Would create collection {name}')
+        return True
+    payload = {
+        'collection': name,
+        'schema': {},
+        'meta': {'note': note, 'icon': 'inventory_2', 'sort': None}
+    }
+    if group:
+        payload['meta']['group'] = group
+    if fields:
+        payload['fields'] = fields
+    code, resp = api('POST', '/collections', payload)
+    if code == 200:
+        print(f'  [OK]   Created collection {name}')
+        return True
+    else:
+        print(f'  [ERR]  Failed to create {name}: HTTP {code} — {json.dumps(resp)[:200]}')
+        return False
+
+def ensure_field(coll, field_name, field_type, meta_extra=None, schema_extra=None):
+    if field_exists(coll, field_name):
+        print(f'  [SKIP] {coll}.{field_name} exists')
+        return True
+    if dry_run:
+        print(f'  [DRY] Would create {coll}.{field_name} ({field_type})')
+        return True
+    payload = {
+        'field': field_name,
+        'type': field_type,
+        'meta': {'required': False},
+        'schema': {'is_nullable': True}
+    }
+    if meta_extra:
+        payload['meta'].update(meta_extra)
+    if schema_extra:
+        payload['schema'].update(schema_extra)
+    code, resp = api('POST', f'/fields/{coll}', payload)
+    if code == 200:
+        print(f'  [OK]   Created {coll}.{field_name}')
+        return True
+    else:
+        print(f'  [ERR]  Failed {coll}.{field_name}: HTTP {code} — {json.dumps(resp)[:150]}')
+        return False
+
+def ensure_permissions(coll, policy_id, actions):
+    """Ensure permissions for a policy on a collection."""
+    for action in actions:
+        if dry_run:
+            print(f'  [DRY] Would set permission {coll}/{action} for policy {policy_id[:8]}')
+            continue
+        payload = {
+            'collection': coll,
+            'action': action,
+            'policy': policy_id,
+            'fields': ['*'],
+            'permissions': {},
+            'validation': {}
+        }
+        code, resp = api('POST', '/permissions', payload)
+        if code == 200:
+            print(f'  [OK]   Permission {coll}/{action} for {policy_id[:8]}')
+        elif code == 400 and 'already' in json.dumps(resp).lower():
+            print(f'  [SKIP] Permission {coll}/{action} already exists')
+        else:
+            # Try to find existing
+            print(f'  [WARN] Permission {coll}/{action}: HTTP {code}')
+
+# Policy IDs
+PUBLIC_POLICY = 'abf8a154-7b43-4fde-b39b-bbb07a7b327e'
+AI_AGENT_POLICY = 'e81a70bc-f397-46a6-93a6-1bb498ca0a00'
+
+# Standard ISO 11179 fields for ALL registry collections
+STANDARD_FIELDS = [
+    ('code', 'string', {'required': True, 'note': u'M\u00e3 \u0111\u1ecbnh danh duy nh\u1ea5t (PREFIX-NNN)'}, {'is_unique': True, 'is_nullable': False}),
+    ('name', 'string', {'required': True, 'note': u'T\u00ean hi\u1ec3n th\u1ecb'}, {'is_nullable': False}),
+    ('name_en', 'string', {'note': u'T\u00ean ti\u1ebfng Anh'}),
+    ('description', 'text', {'note': u'M\u00f4 t\u1ea3 chi ti\u1ebft'}),
+    ('classification', 'string', {'note': u'Ph\u00e2n lo\u1ea1i'}),
+    ('status', 'string', {'note': u'Tr\u1ea1ng th\u00e1i: draft/active/deprecated/retired', 'options': {'choices': [{'text': 'Draft', 'value': 'draft'}, {'text': 'Active', 'value': 'active'}, {'text': 'Deprecated', 'value': 'deprecated'}, {'text': 'Retired', 'value': 'retired'}]}, 'interface': 'select-dropdown', 'display': 'labels'}, {'default_value': 'active'}),
+    ('owner', 'string', {'note': u'Ch\u1ee7 s\u1edf h\u1eefu/ng\u01b0\u1eddi ph\u1ee5 tr\u00e1ch'}),
+]
+
+# ============================================================
+# COLLECTIONS TO CREATE
+# ============================================================
+COLLECTIONS = {
+    'dot_tools': {
+        'note': u'Registry c\u00e1c DOT tools trong h\u1ec7 th\u1ed1ng',
+        'group': None,  # top-level
+        'specific_fields': [
+            ('script_path', 'string', {'note': u'\u0110\u01b0\u1eddng d\u1eabn script (dot/bin/dot-*)'}),
+            ('token_type', 'string', {'note': u'Lo\u1ea1i token: admin/ai/none', 'interface': 'select-dropdown', 'options': {'choices': [{'text': 'Admin', 'value': 'admin'}, {'text': 'AI Agent', 'value': 'ai'}, {'text': 'None', 'value': 'none'}]}}),
+            ('category', 'string', {'note': u'Danh m\u1ee5c: schema/flow/metadata/catalog/permission/other'}),
+            ('usage_count', 'integer', {'note': u'S\u1ed1 l\u1ea7n s\u1eed d\u1ee5ng'}),
+        ]
+    },
+    'ui_pages': {
+        'note': u'Registry c\u00e1c trang UI trong \u1ee9ng d\u1ee5ng web',
+        'group': None,
+        'specific_fields': [
+            ('route_path', 'string', {'note': u'\u0110\u01b0\u1eddng d\u1eabn route (v\u00ed d\u1ee5: /knowledge/registries)'}),
+            ('page_file', 'string', {'note': u'File .vue t\u01b0\u01a1ng \u1ee9ng (web/pages/...)'}),
+            ('has_auth', 'boolean', {'note': u'Y\u00eau c\u1ea7u \u0111\u0103ng nh\u1eadp?'}),
+            ('module', 'string', {'note': u'Module ch\u1ee9c n\u0103ng'}),
+        ]
+    },
+    'collection_registry': {
+        'note': u'Registry c\u00e1c Directus collections trong h\u1ec7 th\u1ed1ng',
+        'group': None,
+        'specific_fields': [
+            ('collection_name', 'string', {'note': u'T\u00ean collection trong Directus', 'required': True}, {'is_nullable': False}),
+            ('group', 'string', {'note': u'Nh\u00f3m (meta.group)'}),
+            ('icon', 'string', {'note': u'Icon hi\u1ec3n th\u1ecb'}),
+            ('field_count', 'integer', {'note': u'S\u1ed1 l\u01b0\u1ee3ng fields'}),
+            ('has_note', 'boolean', {'note': u'C\u00f3 meta.note?'}),
+            ('purpose', 'string', {'note': u'M\u1ee5c \u0111\u00edch s\u1eed d\u1ee5ng'}),
+        ]
+    },
+    'agents': {
+        'note': u'Registry c\u00e1c AI agents trong h\u1ec7 th\u1ed1ng',
+        'group': None,
+        'specific_fields': [
+            ('transport', 'string', {'note': u'Lo\u1ea1i k\u1ebft n\u1ed1i: stdio/http/api'}),
+            ('capabilities', 'text', {'note': u'Kh\u1ea3 n\u0103ng c\u1ee7a agent'}),
+            ('restrictions', 'text', {'note': u'Gi\u1edbi h\u1ea1n c\u1ee7a agent'}),
+            ('config_path', 'string', {'note': u'\u0110\u01b0\u1eddng d\u1eabn file c\u1ea5u h\u00ecnh'}),
+        ]
+    }
+}
+
+# Additional fields needed for modules (already exists but may need extending)
+MODULES_EXTRA_FIELDS = [
+    ('code', 'string', {'required': True, 'note': u'M\u00e3 module: MOD-NNN'}, {'is_unique': True, 'is_nullable': False}),
+    ('name_en', 'string', {'note': u'T\u00ean ti\u1ebfng Anh'}),
+    ('classification', 'string', {'note': u'Ph\u00e2n lo\u1ea1i'}),
+    ('owner', 'string', {'note': u'Ch\u1ee7 s\u1edf h\u1eefu'}),
+]
+
+print('=' * 50)
+print('STEP 1: Create 4 registry collections')
+print('=' * 50)
+print()
+
+for coll_name, config in COLLECTIONS.items():
+    print(f'--- {coll_name} ---')
+    # Initial fields for collection creation (id auto + sort + status + timestamps)
+    init_fields = [
+        {'field': 'id', 'type': 'integer', 'meta': {'hidden': True, 'interface': 'input', 'readonly': True}, 'schema': {'is_primary_key': True, 'has_auto_increment': True}},
+        {'field': 'status', 'type': 'string', 'meta': {'width': 'full', 'options': {'choices': [{'text': 'Draft', 'value': 'draft'}, {'text': 'Active', 'value': 'active'}, {'text': 'Deprecated', 'value': 'deprecated'}, {'text': 'Retired', 'value': 'retired'}]}, 'interface': 'select-dropdown', 'display': 'labels', 'note': u'Tr\u1ea1ng th\u00e1i: draft/active/deprecated/retired'}, 'schema': {'default_value': 'active', 'is_nullable': True}},
+        {'field': 'sort', 'type': 'integer', 'meta': {'hidden': True}, 'schema': {}},
+        {'field': 'user_created', 'type': 'uuid', 'meta': {'special': ['user-created'], 'interface': 'select-dropdown-m2o', 'display': 'user', 'readonly': True, 'hidden': True, 'width': 'half'}, 'schema': {}},
+        {'field': 'date_created', 'type': 'timestamp', 'meta': {'special': ['date-created'], 'interface': 'datetime', 'display': 'datetime', 'readonly': True, 'hidden': True, 'width': 'half'}, 'schema': {}},
+        {'field': 'user_updated', 'type': 'uuid', 'meta': {'special': ['user-updated'], 'interface': 'select-dropdown-m2o', 'display': 'user', 'readonly': True, 'hidden': True, 'width': 'half'}, 'schema': {}},
+        {'field': 'date_updated', 'type': 'timestamp', 'meta': {'special': ['date-updated'], 'interface': 'datetime', 'display': 'datetime', 'readonly': True, 'hidden': True, 'width': 'half'}, 'schema': {}},
+    ]
+
+    ok = create_collection(coll_name, config['note'], config.get('group'), init_fields)
+    if not ok:
+        continue
+
+    # Add standard ISO 11179 fields
+    for f in STANDARD_FIELDS:
+        fname, ftype = f[0], f[1]
+        meta_extra = f[2] if len(f) > 2 else None
+        schema_extra = f[3] if len(f) > 3 else None
+        # Skip status — already in init_fields
+        if fname == 'status':
+            continue
+        ensure_field(coll_name, fname, ftype, meta_extra, schema_extra)
+
+    # Add specific fields
+    for f in config['specific_fields']:
+        fname, ftype = f[0], f[1]
+        meta_extra = f[2] if len(f) > 2 else None
+        schema_extra = f[3] if len(f) > 3 else None
+        ensure_field(coll_name, fname, ftype, meta_extra, schema_extra)
+
+    print()
+
+print('=' * 50)
+print('STEP 2: Fix modules collection')
+print('=' * 50)
+print()
+
+# Check if modules exists
+if collection_exists('modules'):
+    print('  [OK]   modules collection exists')
+    for f in MODULES_EXTRA_FIELDS:
+        fname, ftype = f[0], f[1]
+        meta_extra = f[2] if len(f) > 2 else None
+        schema_extra = f[3] if len(f) > 3 else None
+        ensure_field('modules', fname, ftype, meta_extra, schema_extra)
+else:
+    print('  [WARN] modules collection does not exist — creating')
+    init_fields = [
+        {'field': 'id', 'type': 'integer', 'meta': {'hidden': True, 'interface': 'input', 'readonly': True}, 'schema': {'is_primary_key': True, 'has_auto_increment': True}},
+        {'field': 'status', 'type': 'string', 'meta': {'width': 'full', 'options': {'choices': [{'text': 'Draft', 'value': 'draft'}, {'text': 'Active', 'value': 'active'}]}, 'interface': 'select-dropdown', 'display': 'labels'}, 'schema': {'default_value': 'active'}},
+        {'field': 'sort', 'type': 'integer', 'meta': {'hidden': True}, 'schema': {}},
+        {'field': 'user_created', 'type': 'uuid', 'meta': {'special': ['user-created'], 'readonly': True, 'hidden': True}, 'schema': {}},
+        {'field': 'date_created', 'type': 'timestamp', 'meta': {'special': ['date-created'], 'readonly': True, 'hidden': True}, 'schema': {}},
+        {'field': 'user_updated', 'type': 'uuid', 'meta': {'special': ['user-updated'], 'readonly': True, 'hidden': True}, 'schema': {}},
+        {'field': 'date_updated', 'type': 'timestamp', 'meta': {'special': ['date-updated'], 'readonly': True, 'hidden': True}, 'schema': {}},
+    ]
+    create_collection('modules', u'Modules ch\u1ee9c n\u0103ng c\u1ee7a h\u1ec7 th\u1ed1ng', None, init_fields)
+    for f in STANDARD_FIELDS:
+        fname, ftype = f[0], f[1]
+        meta_extra = f[2] if len(f) > 2 else None
+        schema_extra = f[3] if len(f) > 3 else None
+        if fname == 'status':
+            continue
+        ensure_field('modules', fname, ftype, meta_extra, schema_extra)
+
+print()
+
+print('=' * 50)
+print('STEP 3: Set permissions')
+print('=' * 50)
+print()
+
+all_collections = ['dot_tools', 'ui_pages', 'collection_registry', 'agents', 'modules']
+for coll in all_collections:
+    print(f'--- {coll} ---')
+    ensure_permissions(coll, PUBLIC_POLICY, ['read'])
+    ensure_permissions(coll, AI_AGENT_POLICY, ['create', 'read', 'update', 'delete'])
+    print()
+
+print('=' * 50)
+print('STEP 4: Update meta_catalog registry_collection links')
+print('=' * 50)
+print()
+
+updates = {
+    'CAT-006': ('dot_tools', 'active'),
+    'CAT-007': ('ui_pages', 'active'),
+    'CAT-008': ('collection_registry', 'active'),
+    'CAT-010': ('agents', 'active'),
+    'CAT-002': ('modules', 'active'),
+}
+
+for cat_code, (reg_coll, new_status) in updates.items():
+    if dry_run:
+        print(f'  [DRY] {cat_code} -> registry_collection={reg_coll}, status={new_status}')
+        continue
+    # Find the meta_catalog item by code
+    code, resp = api('GET', f'/items/meta_catalog?filter[code][_eq]={cat_code}&fields=id')
+    items = resp.get('data', [])
+    if not items:
+        print(f'  [WARN] {cat_code} not found in meta_catalog')
+        continue
+    item_id = items[0]['id']
+    code2, _ = api('PATCH', f'/items/meta_catalog/{item_id}', {
+        'registry_collection': reg_coll,
+        'status': new_status
+    })
+    if code2 == 200:
+        print(f'  [OK]   {cat_code} -> {reg_coll} (status={new_status})')
+    else:
+        print(f'  [ERR]  {cat_code} update failed: HTTP {code2}')
+
+print()
+print('DONE — Registry collections ensure complete')
+PYEOF
+
+  BASE_URL="$BASE_URL" DOT_TOKEN="$DOT_TOKEN" DRY_RUN="${DRY_RUN}" \
+    python3 "$tmp_py" < /dev/null
+
+  rm -f "$tmp_py"
+
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Registry Collections Ensure - COMPLETE"
+  echo "========================================="
+}
+
+main "$@"
