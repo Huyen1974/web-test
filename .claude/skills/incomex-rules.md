@@ -135,3 +135,29 @@ Nội dung bắt buộc: Assembly Gate answers + changes + verify results (PASS/
 [ ] Báo cáo đã upload Agent Data?
 [ ] Tech debt đã cập nhật (nếu có)?
 ```
+
+## HIẾN PHÁP KIẾN TRÚC — CHECKLIST BẮT BUỘC
+
+Trước MỌI tác vụ, verify:
+- [ ] Mọi thực thể TẠO MỚI phải có ID (PREFIX-NNN) + nằm trong registry (Điều 2)
+- [ ] Mọi thực thể phải có metadata (name, description, classification, owner) (Điều 3)
+- [ ] TẠO qua DOT/script. KHÔNG code trực tiếp. KHÔNG tạo ngoài quy trình (Điều 4)
+- [ ] KHÔNG xây tầng trên khi tầng dưới chưa vững (Điều 5)
+- [ ] Khi thấy bất đồng bộ → tư duy kiến trúc, KHÔNG chỉ fix 1 chỗ (Điều 6)
+- [ ] Khai thác Directus/Nuxt UI có sẵn TRƯỚC. Code mới = lựa chọn CUỐI CÙNG (Điều 7)
+- [ ] Script PHẢI idempotent + verify step cuối (Điều 11)
+- [ ] Lifecycle đầy đủ: sinh + sửa + xoá (Điều 12)
+- [ ] Tạo = tự xuất hiện trong danh mục. Xoá = tự biến mất (Điều 13)
+- [ ] KHÔNG 2 thực thể cùng bản chất (Điều 14)
+
+Chi tiết: search_knowledge("hiến pháp kiến trúc")
+
+## BẢNG MÃ PREFIX
+
+```
+COL=Collection  FLD=Field       TBL=Bảng UI     MOD=Module
+WF=Workflow     WCR=Đề xuất     SCR=Schema      TP=Table proposal
+DOT=DOT tool    PG=Page         API=API endpoint CMP=Component
+EVT=Event       DEP=Dependency  AGT=Agent       CAT=Catalog entry
+Format: PREFIX-NNN (3+ số tự tăng)
+```

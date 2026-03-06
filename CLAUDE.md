@@ -1,5 +1,6 @@
 # CLAUDE.md — Web Test (web-test)
 
+> **⛔ ĐỌC `.claude/skills/incomex-rules.md` TRƯỚC MỌI TÁC VỤ — chứa Hiến pháp Kiến trúc + Operating Rules.**
 > **⛔ FIRST: `search_knowledge('operating rules SSOT')` before any work.**
 
 ## Rules
@@ -65,5 +66,14 @@ After any CRUD operation, verify the result:
 - **Commit style**: `feat:`, `fix:`, `docs:` prefix + ticket number e.g. `(WEB-87)`
 - **Subdomain routing**: `vps.incomexsaigoncorp.vn` (Nuxt + Agent Data), `directus.incomexsaigoncorp.vn` (Directus)
 
+## Hiến pháp Kiến trúc
+
+- Mọi thực thể phải có ID (PREFIX-NNN) + registry + metadata (Điều 2, 3)
+- TẠO qua DOT/script, KHÔNG code trực tiếp (Điều 4)
+- Khai thác có sẵn TRƯỚC, code mới = cuối cùng (Điều 7)
+- Script idempotent + verify cuối (Điều 11)
+- KHÔNG 2 thực thể cùng bản chất (Điều 14)
+- Chi tiết: `search_knowledge("hiến pháp kiến trúc")`
+
 ## Skills
-Đọc .claude/skills/incomex-rules.md TRƯỚC MỌI tác vụ. Đặc biệt: Assembly Gate 5 câu + Quy trình 2 mũ.
+Đọc .claude/skills/incomex-rules.md TRƯỚC MỌI tác vụ. Đặc biệt: Assembly Gate 5 câu + Quy trình 2 mũ + Hiến pháp checklist.

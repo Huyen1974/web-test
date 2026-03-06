@@ -1,0 +1,260 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-metadata-audit — Audit metadata coverage across Directus collections
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-metadata* — no existing tool]
+# VERSION: 1.0.0
+#
+# Queries Directus /fields and /collections APIs to measure:
+#   - Fields with meta.note (description) vs total
+#   - Collections with meta.note and meta.group vs total
+#   - Top collections with most undocumented fields
+#
+# Usage:
+#   dot-metadata-audit [--cloud|--local] [--output=FILE]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+OUTPUT_FILE=""
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-metadata-audit v${VERSION} — Audit metadata coverage
+
+Usage:
+  dot-metadata-audit [--cloud|--local] [--output=FILE]
+
+Options:
+  --local        Use local Directus
+  --cloud        Use cloud Directus (default)
+  --output=FILE  Write report to file (default: stdout)
+  --help, -h     Show help
+
+EOF
+  show_environment_help
+}
+
+main() {
+  for arg in "$@"; do
+    case "$arg" in
+      --output=*) OUTPUT_FILE="${arg#--output=}" ;;
+      --help|-h) show_help; exit 0 ;;
+    esac
+  done
+
+  init_environment "$@"
+  local BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: Metadata Audit v${VERSION}"
+  echo "========================================="
+  print_environment_banner "$@"
+
+  # Auth
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    local dot_auth="${SCRIPT_DIR}/dot-auth"
+    if [[ -f "$dot_auth" ]]; then
+      source "$dot_auth" "$@"
+    fi
+  fi
+
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "Authentication failed"
+    exit 1
+  fi
+
+  # Fetch collections and fields to temp files
+  local tmp_colls tmp_fields
+  tmp_colls=$(mktemp)
+  tmp_fields=$(mktemp)
+  trap "rm -f '$tmp_colls' '$tmp_fields'" EXIT
+
+  log_info "Fetching collections..."
+  local coll_code
+  coll_code=$(curl -sS --globoff -X GET "${BASE_URL}/collections?limit=-1" \
+    -H "Authorization: Bearer $DOT_TOKEN" \
+    -o "$tmp_colls" -w "%{http_code}")
+
+  if [[ "$coll_code" != "200" ]]; then
+    log_err "Failed to fetch collections (HTTP $coll_code)"
+    exit 1
+  fi
+
+  log_info "Fetching fields..."
+  local fields_code
+  fields_code=$(curl -sS --globoff -X GET "${BASE_URL}/fields?limit=-1" \
+    -H "Authorization: Bearer $DOT_TOKEN" \
+    -o "$tmp_fields" -w "%{http_code}")
+
+  if [[ "$fields_code" != "200" ]]; then
+    log_err "Failed to fetch fields (HTTP $fields_code)"
+    exit 1
+  fi
+
+  log_info "Analyzing metadata coverage..."
+
+  local report_md
+  report_md=$(COLLS_FILE="$tmp_colls" FIELDS_FILE="$tmp_fields" python3 << 'PYEOF'
+import json, os
+from collections import defaultdict
+from datetime import date
+
+with open(os.environ['COLLS_FILE']) as f:
+    colls_data = json.load(f)
+with open(os.environ['FIELDS_FILE']) as f:
+    fields_data = json.load(f)
+
+collections = [c for c in colls_data.get('data', [])
+               if not c['collection'].startswith('directus_')]
+fields = [f for f in fields_data.get('data', [])
+          if not f.get('collection', '').startswith('directus_')]
+
+# --- Collection analysis ---
+total_colls = len(collections)
+colls_with_note = sum(1 for c in collections
+                      if (c.get('meta') or {}).get('note'))
+colls_with_group = sum(1 for c in collections
+                       if (c.get('meta') or {}).get('group'))
+colls_no_note = [c['collection'] for c in collections
+                 if not (c.get('meta') or {}).get('note')]
+colls_no_group = [c['collection'] for c in collections
+                  if not (c.get('meta') or {}).get('group')]
+
+# --- Field analysis ---
+# Skip system fields
+skip_fields = {'id', 'sort', 'user_created', 'user_updated', 'date_created', 'date_updated', 'status'}
+user_fields = [f for f in fields if f.get('field', '') not in skip_fields]
+
+total_fields = len(user_fields)
+fields_with_note = sum(1 for f in user_fields
+                       if (f.get('meta') or {}).get('note'))
+fields_no_note = total_fields - fields_with_note
+
+# Per-collection breakdown
+coll_field_stats = defaultdict(lambda: {'total': 0, 'missing': 0})
+for f in user_fields:
+    coll = f.get('collection', '')
+    coll_field_stats[coll]['total'] += 1
+    if not (f.get('meta') or {}).get('note'):
+        coll_field_stats[coll]['missing'] += 1
+
+# Top 15 collections with most missing notes
+top_missing = sorted(coll_field_stats.items(),
+                     key=lambda x: x[1]['missing'], reverse=True)[:15]
+
+# --- Generate report ---
+lines = []
+lines.append('# Metadata Audit Report')
+lines.append('')
+lines.append(f'**Date:** {date.today().isoformat()}')
+lines.append(f'**Environment:** Cloud (Directus)')
+lines.append('')
+
+lines.append('## Summary')
+lines.append('')
+coll_pct = round(colls_with_note / total_colls * 100, 1) if total_colls else 0
+field_pct = round(fields_with_note / total_fields * 100, 1) if total_fields else 0
+group_pct = round(colls_with_group / total_colls * 100, 1) if total_colls else 0
+
+lines.append(f'| Metric | Total | Has Note | Missing | Coverage |')
+lines.append(f'|--------|-------|----------|---------|----------|')
+lines.append(f'| Collections | {total_colls} | {colls_with_note} | {total_colls - colls_with_note} | {coll_pct}% |')
+lines.append(f'| Collections (group) | {total_colls} | {colls_with_group} | {total_colls - colls_with_group} | {group_pct}% |')
+lines.append(f'| Fields (excl system) | {total_fields} | {fields_with_note} | {fields_no_note} | {field_pct}% |')
+lines.append('')
+
+lines.append('## Top 15 Collections — Most Fields Missing Notes')
+lines.append('')
+lines.append('| Collection | Total Fields | Missing Notes | Coverage |')
+lines.append('|------------|-------------|---------------|----------|')
+for coll, stats in top_missing:
+    pct = round((stats['total'] - stats['missing']) / stats['total'] * 100, 1) if stats['total'] else 0
+    lines.append(f'| {coll} | {stats["total"]} | {stats["missing"]} | {pct}% |')
+lines.append('')
+
+lines.append('## Collections Without Note')
+lines.append('')
+if colls_no_note:
+    for c in sorted(colls_no_note):
+        lines.append(f'- {c}')
+else:
+    lines.append('All collections have notes.')
+lines.append('')
+
+lines.append('## Collections Without Group')
+lines.append('')
+if colls_no_group:
+    for c in sorted(colls_no_group):
+        lines.append(f'- {c}')
+else:
+    lines.append('All collections have groups.')
+lines.append('')
+
+print('\n'.join(lines))
+PYEOF
+)
+
+  echo ""
+  echo "$report_md"
+
+  if [[ -n "$OUTPUT_FILE" ]]; then
+    echo "$report_md" > "$OUTPUT_FILE"
+    log_ok "Report written to ${OUTPUT_FILE}"
+  fi
+
+  # Upload to Agent Data
+  local AD_KEY
+  AD_KEY=$(ssh -i ~/.ssh/contabo_vps root@38.242.240.89 "grep '^AGENT_DATA_API_KEY=' /opt/incomex/docker/.env 2>/dev/null | cut -d= -f2-" 2>/dev/null || echo "")
+
+  if [[ -n "$AD_KEY" ]]; then
+    log_info "Uploading report to Agent Data..."
+    local tmp_report
+    tmp_report=$(mktemp)
+    echo "$report_md" > "$tmp_report"
+    AD_KEY="$AD_KEY" REPORT_FILE="$tmp_report" python3 << 'UPLOAD_PY'
+import json, urllib.request, ssl, os
+
+with open(os.environ['REPORT_FILE']) as f:
+    body = f.read()
+
+payload = json.dumps({
+    'document_id': 'knowledge/current-state/reports/metadata-audit-report',
+    'parent_id': 'root',
+    'content': {'mime_type': 'text/markdown', 'body': body},
+    'metadata': {'title': 'Metadata Audit Report', 'status': 'published', 'tags': ['metadata', 'audit', 'report']},
+    'is_human_readable': True
+}).encode()
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+req = urllib.request.Request(
+    'https://vps.incomexsaigoncorp.vn/api/documents?upsert=true',
+    data=payload,
+    headers={'X-API-Key': os.environ['AD_KEY'], 'Content-Type': 'application/json'}
+)
+try:
+    resp = urllib.request.urlopen(req, context=ctx)
+    print(f'[OK]   Uploaded to Agent Data: {json.loads(resp.read())}')
+except Exception as e:
+    print(f'[WARN] Upload failed: {e}')
+UPLOAD_PY
+    rm -f "$tmp_report"
+  fi
+
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Metadata Audit - COMPLETE"
+  echo "========================================="
+}
+
+main "$@"
