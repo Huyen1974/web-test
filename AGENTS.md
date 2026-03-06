@@ -16,6 +16,18 @@ Three AI agents share the same MCP server for knowledge-base CRUD. This file def
 
 All agents connect to the **same MCP server** (`../agent-data-test/mcp_server/stdio_server.py`) which proxies to VPS Agent Data API.
 
+### Agent Profiles
+
+**Claude Code** — Primary development agent
+- Vai trò: Code + deploy + fix CI. Chạy DOT tools. Git workflow 2 mũ.
+- MCP: HTTP (Agent Data) + STDIO (stdio_server.py). Directus MCP cho data CRUD.
+- Báo cáo: upload Agent Data sau mỗi mission.
+
+**OpenAI Codex** — Secondary development agent
+- Vai trò: Code + deploy. Quick-task protocol cho tác vụ nhỏ.
+- MCP: OPS Proxy HTTP cho Directus. Agent Data qua MCP tools.
+- Báo cáo: upload Agent Data sau mỗi mission.
+
 ## MCP Server
 
 - **Entry point**: `../agent-data-test/mcp_server/stdio_server.py` (shared from agent-data-test repo)
