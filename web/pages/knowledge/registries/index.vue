@@ -3,6 +3,11 @@ definePageMeta({
 	title: 'Danh mục hệ thống',
 	description: 'Meta-Catalog — Danh mục sống 3 tầng',
 });
+
+function getRegistryLink(item: any) {
+	if (!item?.entity_type) return '/knowledge/registries';
+	return `/knowledge/registries/${item.entity_type}`;
+}
 </script>
 
 <template>
@@ -16,14 +21,24 @@ definePageMeta({
 			</NuxtLink>
 			<h1 class="text-3xl font-bold text-gray-900 dark:text-white">Danh mục hệ thống</h1>
 			<p class="mt-2 text-gray-600 dark:text-gray-400">
-				Meta-Catalog — Danh mục sống 3 tầng. Mô hình A: Directus là SSOT. Mô hình B: tự động scan từ filesystem.
+				Meta-Catalog — Danh mục sống 3 tầng. Click vào số lượng hoặc tên để xem chi tiết.
 			</p>
 		</div>
 
 		<SharedDirectusTable
 			table-id="tbl_meta_catalog"
-			:row-link="(item: any) => item.ui_page || '/knowledge/registries'"
+			:row-link="(item: any) => getRegistryLink(item)"
 		>
+			<template #cell-record_count="{ value, item }">
+				<NuxtLink
+					:to="getRegistryLink(item)"
+					class="inline-flex items-center gap-1 font-semibold text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
+					@click.stop
+				>
+					{{ value ?? 0 }}
+					<UIcon name="i-heroicons-arrow-right-20-solid" class="h-3.5 w-3.5" />
+				</NuxtLink>
+			</template>
 			<template #cell-source_model="{ value }">
 				<span
 					class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"

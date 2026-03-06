@@ -1,0 +1,299 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-registry-diff — Detect mismatches between actual state and registries
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-registry-* — only dot-registry-populate]
+# VERSION: 1.0.0
+#
+# Compares actual counts/items vs registered counts/items for each category.
+# Reports: MISSING (exists but unregistered), ORPHAN (registered but gone),
+#          COUNT MISMATCH (meta_catalog.record_count != actual)
+#
+# Usage:
+#   dot-registry-diff [--cloud|--local] [--upload]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+UPLOAD=""
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-registry-diff v${VERSION} — Detect registry mismatches
+
+Usage:
+  dot-registry-diff [--cloud|--local] [--upload]
+
+Options:
+  --cloud      Use cloud Directus (default)
+  --local      Use local Directus
+  --upload     Upload report to Agent Data
+  --help, -h   Show help
+
+EOF
+  show_environment_help
+}
+
+main() {
+  for arg in "$@"; do
+    case "$arg" in
+      --upload) UPLOAD="1" ;;
+      --help|-h) show_help; exit 0 ;;
+    esac
+  done
+
+  init_environment "$@"
+  local BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: Registry Diff v${VERSION}"
+  echo "========================================="
+  print_environment_banner "$@"
+
+  # Auth
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    source "${SCRIPT_DIR}/dot-auth" "$@"
+  fi
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "Authentication failed"; exit 1
+  fi
+
+  # Gather actual DOT tools count
+  local actual_tools
+  actual_tools=$(ls -1 "${SCRIPT_DIR}"/dot-* 2>/dev/null | wc -l | tr -d ' ')
+
+  # Gather actual pages count
+  local actual_pages
+  actual_pages=$(find "$(dirname "$SCRIPT_DIR")/../web/pages" -name "*.vue" -type f 2>/dev/null | wc -l | tr -d ' ')
+
+  # Get latest schema snapshot for collection count
+  local latest_snap actual_collections
+  latest_snap=$(ls -t "$(dirname "$SCRIPT_DIR")/snapshots"/schema-*.json 2>/dev/null | head -1)
+  if [[ -n "$latest_snap" ]]; then
+    actual_collections=$(python3 -c "import json; d=json.load(open('$latest_snap')); colls=[c for c in d.get('data',d).get('collections',[]) if not c.get('collection','').startswith('directus_')]; print(len(colls))")
+  else
+    actual_collections="?"
+  fi
+
+  local tmp_py tmp_report
+  tmp_py=$(mktemp /tmp/dot-diff-XXXXXX.py)
+  tmp_report=$(mktemp)
+  trap "rm -f '$tmp_py' '$tmp_report'" EXIT
+
+  cat > "$tmp_py" << 'PYEOF'
+import json, os, sys, ssl, urllib.request
+from datetime import date
+
+base_url = os.environ['BASE_URL']
+token = os.environ['DOT_TOKEN']
+actual_tools = int(os.environ.get('ACTUAL_TOOLS', '0'))
+actual_pages = int(os.environ.get('ACTUAL_PAGES', '0'))
+actual_collections = os.environ.get('ACTUAL_COLLECTIONS', '?')
+script_dir = os.environ['SCRIPT_DIR']
+
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+def api_get(path):
+    url = base_url + path
+    req = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + token})
+    try:
+        resp = urllib.request.urlopen(req, context=ctx)
+        return json.loads(resp.read())
+    except:
+        return {'data': []}
+
+def count_items(collection):
+    resp = api_get('/items/' + collection + '?aggregate[countDistinct]=id')
+    data = resp.get('data', [])
+    if data and data[0].get('countDistinct', {}).get('id'):
+        return int(data[0]['countDistinct']['id'])
+    return 0
+
+# Get meta_catalog
+catalog = api_get('/items/meta_catalog?fields=*&sort=code&limit=-1').get('data', [])
+
+lines = []
+lines.append('# Registry Diff Report')
+lines.append('')
+lines.append('**Date:** ' + date.today().isoformat())
+lines.append('')
+lines.append('## Count Comparison')
+lines.append('')
+lines.append('| Category | Code | Registered | Actual | Status |')
+lines.append('|----------|------|-----------|--------|--------|')
+
+issues = []
+total_ok = 0
+total_mismatch = 0
+
+for cat in catalog:
+    code = cat.get('code', '')
+    name = cat.get('name', '')
+    reg_count = cat.get('record_count', 0) or 0
+    reg_coll = cat.get('registry_collection')
+    entity_type = cat.get('entity_type', '')
+
+    # Determine actual count
+    if entity_type == 'dot_tool':
+        actual = actual_tools
+    elif entity_type == 'page':
+        actual = actual_pages
+    elif entity_type == 'collection':
+        actual = int(actual_collections) if actual_collections != '?' else -1
+    elif reg_coll:
+        actual = count_items(reg_coll)
+    else:
+        actual = -1
+
+    if actual == -1:
+        status = '? unknown'
+    elif actual == reg_count:
+        status = 'OK'
+        total_ok += 1
+    else:
+        diff = actual - reg_count
+        sign = '+' if diff > 0 else ''
+        status = sign + str(diff) + ' MISMATCH'
+        total_mismatch += 1
+        issues.append((code, name, reg_count, actual, diff))
+
+    lines.append('| ' + name + ' | ' + code + ' | ' + str(reg_count) + ' | ' + str(actual) + ' | ' + status + ' |')
+
+lines.append('')
+lines.append('**Summary:** ' + str(total_ok) + ' OK, ' + str(total_mismatch) + ' mismatches')
+lines.append('')
+
+# Detail: check DOT tools — which ones are missing from registry?
+if actual_tools > 0:
+    lines.append('## DOT Tools — Detail Check')
+    lines.append('')
+    registered_tools = api_get('/items/dot_tools?fields=name&limit=-1').get('data', [])
+    registered_names = set(t.get('name', '') for t in registered_tools)
+
+    import os as _os
+    actual_tool_names = set()
+    for f in sorted(_os.listdir(script_dir)):
+        if f.startswith('dot-'):
+            actual_tool_names.add(f)
+
+    missing = sorted(actual_tool_names - registered_names)
+    orphan = sorted(registered_names - actual_tool_names)
+
+    if missing:
+        lines.append('**MISSING (unregistered):**')
+        for m in missing:
+            lines.append('- ' + m)
+        lines.append('')
+    if orphan:
+        lines.append('**ORPHAN (registered but not found):**')
+        for o in orphan:
+            lines.append('- ' + o)
+        lines.append('')
+    if not missing and not orphan:
+        lines.append('All DOT tools registered. No orphans.')
+        lines.append('')
+
+# Check pages
+if actual_pages > 0:
+    lines.append('## Pages — Detail Check')
+    lines.append('')
+    registered_pages = api_get('/items/ui_pages?fields=page_file&limit=-1').get('data', [])
+    registered_files = set(p.get('page_file', '') for p in registered_pages)
+
+    import subprocess
+    result = subprocess.run(['find', script_dir + '/../../web/pages', '-name', '*.vue', '-type', 'f'],
+                          capture_output=True, text=True)
+    actual_files = set()
+    for line in result.stdout.strip().split('\n'):
+        if not line:
+            continue
+        idx = line.find('web/pages/')
+        if idx >= 0:
+            actual_files.add(line[idx:])
+
+    missing_pages = sorted(actual_files - registered_files)
+    orphan_pages = sorted(registered_files - actual_files)
+
+    if missing_pages:
+        lines.append('**MISSING pages:**')
+        for m in missing_pages:
+            lines.append('- ' + m)
+        lines.append('')
+    if orphan_pages:
+        lines.append('**ORPHAN pages:**')
+        for o in orphan_pages:
+            lines.append('- ' + o)
+        lines.append('')
+    if not missing_pages and not orphan_pages:
+        lines.append('All pages registered. No orphans.')
+        lines.append('')
+
+report = '\n'.join(lines)
+print(report)
+
+# Write to file for upload
+with open(os.environ.get('REPORT_FILE', '/dev/null'), 'w') as f:
+    f.write(report)
+PYEOF
+
+  local result
+  result=$(ACTUAL_TOOLS="$actual_tools" ACTUAL_PAGES="$actual_pages" \
+    ACTUAL_COLLECTIONS="$actual_collections" SCRIPT_DIR="$SCRIPT_DIR" \
+    BASE_URL="$BASE_URL" DOT_TOKEN="$DOT_TOKEN" REPORT_FILE="$tmp_report" \
+    python3 "$tmp_py" < /dev/null)
+
+  echo ""
+  echo "$result"
+
+  # Upload if requested
+  if [[ -n "$UPLOAD" ]]; then
+    local AD_KEY
+    AD_KEY=$(ssh -i ~/.ssh/contabo_vps root@38.242.240.89 "grep '^AGENT_DATA_API_KEY=' /opt/incomex/docker/.env 2>/dev/null | cut -d= -f2-" 2>/dev/null || echo "")
+    if [[ -n "$AD_KEY" ]]; then
+      log_info "Uploading report to Agent Data..."
+      AD_KEY="$AD_KEY" REPORT_FILE="$tmp_report" python3 << 'UPLOAD_PY'
+import json, urllib.request, ssl, os
+with open(os.environ['REPORT_FILE']) as f:
+    body = f.read()
+payload = json.dumps({
+    'document_id': 'knowledge/current-state/reports/registry-diff-report',
+    'parent_id': 'root',
+    'content': {'mime_type': 'text/markdown', 'body': body},
+    'metadata': {'title': 'Registry Diff Report', 'status': 'published', 'tags': ['registry', 'diff', 'report']},
+    'is_human_readable': True
+}).encode()
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+req = urllib.request.Request(
+    'https://vps.incomexsaigoncorp.vn/api/documents?upsert=true',
+    data=payload,
+    headers={'X-API-Key': os.environ['AD_KEY'], 'Content-Type': 'application/json'})
+try:
+    resp = urllib.request.urlopen(req, context=ctx)
+    print('[OK]   Uploaded to Agent Data')
+except Exception as e:
+    print('[WARN] Upload failed: ' + str(e))
+UPLOAD_PY
+    fi
+  fi
+
+  rm -f "$tmp_py"
+
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Registry Diff - COMPLETE"
+  echo "========================================="
+}
+
+main "$@"

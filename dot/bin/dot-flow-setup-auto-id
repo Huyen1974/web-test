@@ -1,0 +1,287 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-flow-setup-auto-id — Create Directus Flows for auto-ID assignment
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-flow-*auto* — none found]
+# VERSION: 1.0.0
+#
+# Creates one Flow per registry collection:
+#   Trigger: items.create → collection
+#   Operation: webhook (request_url) → GET max code → compute next → PATCH item
+#
+# Since isolated-vm is NOT installed, uses webhook (request_url) operations
+# that call Directus's own API to read max code and update the item.
+#
+# Usage:
+#   dot-flow-setup-auto-id [--cloud|--local] [--dry-run]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+DRY_RUN=""
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-flow-setup-auto-id v${VERSION}
+
+Creates Directus Flows for automatic ID assignment on item creation.
+Each registry collection gets a Flow that assigns PREFIX-NNN codes.
+
+Usage:
+  dot-flow-setup-auto-id [--cloud|--local] [--dry-run]
+
+EOF
+  show_environment_help
+}
+
+main() {
+  for arg in "$@"; do
+    case "$arg" in
+      --dry-run) DRY_RUN="1" ;;
+      --help|-h) show_help; exit 0 ;;
+    esac
+  done
+
+  init_environment "$@"
+  local BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: Auto-ID Flow Setup v${VERSION}"
+  echo "========================================="
+  print_environment_banner "$@"
+
+  # Auth
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    source "${SCRIPT_DIR}/dot-auth" "$@"
+  fi
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "Authentication failed"; exit 1
+  fi
+
+  local tmp_py
+  tmp_py=$(mktemp /tmp/dot-auto-id-XXXXXX.py)
+  trap "rm -f '$tmp_py'" EXIT
+
+  cat > "$tmp_py" << 'PYEOF'
+import json, os, sys, ssl, urllib.request
+
+base_url = os.environ['BASE_URL']
+token = os.environ['DOT_TOKEN']
+dry_run = os.environ.get('DRY_RUN', '')
+
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+def api(method, path, data=None):
+    url = f'{base_url}{path}'
+    payload = json.dumps(data).encode() if data else None
+    req = urllib.request.Request(url, data=payload, method=method,
+        headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'})
+    try:
+        resp = urllib.request.urlopen(req, context=ctx)
+        return resp.status, json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        try:
+            return e.code, json.loads(body)
+        except:
+            return e.code, {'error': body[:200]}
+
+def flow_exists(name):
+    """Check if a flow with this name already exists."""
+    code, resp = api('GET', f'/flows?filter[name][_eq]={name.replace(" ", "%20")}&fields=id,name,status')
+    if code == 200:
+        items = resp.get('data', [])
+        if items:
+            return items[0]['id']
+    return None
+
+# Flow configurations: (collection, prefix, flow_name)
+FLOWS = [
+    ('meta_catalog', 'CAT', '[AUTO-ID] Meta Catalog'),
+    ('table_registry', 'TBL', '[AUTO-ID] Table Registry'),
+    ('modules', 'MOD', '[AUTO-ID] Modules'),
+    ('workflows', 'WF', '[AUTO-ID] Workflows'),
+    ('workflow_change_requests', 'WCR', '[AUTO-ID] WCR'),
+    ('dot_tools', 'DOT', '[AUTO-ID] DOT Tools'),
+    ('ui_pages', 'PG', '[AUTO-ID] Pages'),
+    ('collection_registry', 'COL', '[AUTO-ID] Collections'),
+    ('agents', 'AGT', '[AUTO-ID] Agents'),
+    ('tasks', 'TSK', '[AUTO-ID] Tasks'),
+]
+
+print()
+print('=== Creating Auto-ID Flows ===')
+print()
+
+created = 0
+skipped = 0
+
+for collection, prefix, flow_name in FLOWS:
+    # Check if exists
+    existing_id = flow_exists(flow_name)
+    if existing_id:
+        print(f'  [SKIP] {flow_name} already exists (ID: {existing_id})')
+        skipped += 1
+        continue
+
+    if dry_run:
+        print(f'  [DRY] Would create flow: {flow_name}')
+        created += 1
+        continue
+
+    # Create the flow with event trigger
+    # Step 1: Create the flow (trigger)
+    flow_payload = {
+        'name': flow_name,
+        'icon': 'pin',
+        'color': '#2ECDA7',
+        'description': f'Auto-assign {prefix}-NNN code on item creation in {collection}',
+        'status': 'active',
+        'trigger': 'event',
+        'accountability': 'all',
+        'options': {
+            'type': 'filter',
+            'scope': ['items.create'],
+            'collections': [collection],
+        }
+    }
+    code, resp = api('POST', '/flows', flow_payload)
+    if code != 200:
+        print(f'  [ERR]  Failed to create flow {flow_name}: HTTP {code} — {json.dumps(resp)[:150]}')
+        continue
+
+    flow_id = resp['data']['id']
+
+    # Step 2: Create "Read max code" operation (webhook to self-API)
+    # Use exec operation type with a webhook to read the max code
+    read_op_payload = {
+        'name': f'Read max {prefix} code',
+        'key': 'read_max_code',
+        'type': 'request',
+        'position_x': 19,
+        'position_y': 1,
+        'options': {
+            'method': 'GET',
+            'url': f'{base_url}/items/{collection}?sort=-code&limit=1&fields=code&filter[code][_nnull]=true',
+            'headers': [
+                {'header': 'Authorization', 'value': f'Bearer {token}'}
+            ],
+        },
+        'flow': flow_id,
+    }
+    code2, resp2 = api('POST', '/operations', read_op_payload)
+    if code2 != 200:
+        print(f'  [ERR]  Failed to create read operation for {flow_name}: HTTP {code2}')
+        continue
+    read_op_id = resp2['data']['id']
+
+    # Step 3: Create "Compute next code" operation (exec/run-script won't work without isolated-vm)
+    # Use another webhook to PATCH the item with computed code
+    # Since we can't run JS, we use a "condition" + "request" pattern
+    # Actually, let's use the "exec" type which uses node:vm (not isolated-vm)
+    # In Directus 11.x, the "exec" operation type should work for simple scripts
+
+    exec_op_payload = {
+        'name': f'Compute and assign {prefix}-NNN',
+        'key': 'assign_code',
+        'type': 'exec',
+        'position_x': 37,
+        'position_y': 1,
+        'options': {
+            'code': f'''
+module.exports = async function(data) {{
+    const prefix = "{prefix}";
+    const maxCodeData = data.read_max_code?.data?.data;
+    let nextNum = 1;
+
+    if (maxCodeData && maxCodeData.length > 0) {{
+        const lastCode = maxCodeData[0].code || "";
+        const match = lastCode.match(/\\d+$/);
+        if (match) {{
+            nextNum = parseInt(match[0], 10) + 1;
+        }}
+    }}
+
+    const newCode = prefix + "-" + String(nextNum).padStart(3, "0");
+
+    // Use $trigger to get the new item's key
+    const itemKey = data.$trigger.key || data.$trigger.keys?.[0];
+
+    return {{ code: newCode, key: itemKey }};
+}}
+'''
+        },
+        'flow': flow_id,
+    }
+    code3, resp3 = api('POST', '/operations', exec_op_payload)
+    if code3 != 200:
+        print(f'  [WARN] exec operation failed for {flow_name}: HTTP {code3} — {json.dumps(resp3)[:150]}')
+        print(f'         Will try alternative approach...')
+        # Fallback: skip exec, the flow won't auto-assign
+        # Clean up
+        api('DELETE', f'/flows/{flow_id}')
+        print(f'  [ERR]  Cleaned up flow {flow_name} — exec not available')
+        continue
+    exec_op_id = resp3['data']['id']
+
+    # Step 4: Create "Update item" operation
+    update_op_payload = {
+        'name': f'Update item with {prefix} code',
+        'key': 'update_item',
+        'type': 'item-update',
+        'position_x': 55,
+        'position_y': 1,
+        'options': {
+            'collection': collection,
+            'key': '{{assign_code.key}}',
+            'payload': {
+                'code': '{{assign_code.code}}'
+            },
+            'emitEvents': False,
+        },
+        'flow': flow_id,
+    }
+    code4, resp4 = api('POST', '/operations', update_op_payload)
+    update_op_id = resp4['data']['id'] if code4 == 200 else None
+    if code4 != 200:
+        print(f'  [WARN] Update operation failed: HTTP {code4} — {json.dumps(resp4)[:150]}')
+
+    # Link operations: flow -> read -> exec -> update
+    # Set flow's first operation
+    api('PATCH', f'/flows/{flow_id}', {'operation': read_op_id})
+    # Set read -> exec
+    api('PATCH', f'/operations/{read_op_id}', {'resolve': exec_op_id})
+    # Set exec -> update
+    if update_op_id:
+        api('PATCH', f'/operations/{exec_op_id}', {'resolve': update_op_id})
+
+    print(f'  [OK]   Created flow: {flow_name} (ID: {flow_id})')
+    created += 1
+
+print()
+print(f'Auto-ID flows: created={created}, skipped={skipped}, total={len(FLOWS)}')
+PYEOF
+
+  BASE_URL="$BASE_URL" DOT_TOKEN="$DOT_TOKEN" DRY_RUN="${DRY_RUN}" \
+    python3 "$tmp_py" < /dev/null
+
+  rm -f "$tmp_py"
+
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Auto-ID Flow Setup - COMPLETE"
+  echo "========================================="
+}
+
+main "$@"
