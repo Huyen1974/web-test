@@ -1,7 +1,7 @@
 <script setup lang="ts">
 definePageMeta({
-	title: 'Danh muc he thong',
-	description: 'Meta-Catalog — Danh muc song 3 tang',
+	title: 'Danh mục hệ thống',
+	description: 'Meta-Catalog — Danh mục sống 3 tầng',
 });
 </script>
 
@@ -12,11 +12,11 @@ definePageMeta({
 				to="/knowledge"
 				class="mb-4 inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
 			>
-				&larr; Trung tam tri thuc
+				&larr; Trung tâm tri thức
 			</NuxtLink>
-			<h1 class="text-3xl font-bold text-gray-900 dark:text-white">Danh muc he thong</h1>
+			<h1 class="text-3xl font-bold text-gray-900 dark:text-white">Danh mục hệ thống</h1>
 			<p class="mt-2 text-gray-600 dark:text-gray-400">
-				Meta-Catalog — Danh muc song 3 tang. Mo hinh A: Directus la SSOT. Mo hinh B: tu dong scan tu filesystem.
+				Meta-Catalog — Danh mục sống 3 tầng. Mô hình A: Directus là SSOT. Mô hình B: tự động scan từ filesystem.
 			</p>
 		</div>
 
