@@ -3,8 +3,11 @@
 # dot-schema-meta-catalog-ensure - Ensure meta_catalog collection in Directus
 # =============================================================================
 # CHECKED-NO-DUPLICATE: [searched dot/bin/dot-schema-*ensure — no meta_catalog tool]
-# VERSION: 1.0.0
+# VERSION: 1.1.0
 # CHANGELOG:
+#   v1.1.0 (2026-03-07): ORPHAN-SCAN mission — add 3 scan fields
+#     - actual_count, orphan_count, last_scan_date
+#     - Updated table_registry fields config
 #   v1.0.0 (2026-03-06): LIVE-CATALOG mission — meta_catalog collection
 #     - 15 fields: code, name, name_en, entity_type, source_model, source_location,
 #       registry_collection, sync_script, sync_frequency, record_count, ui_page,
@@ -50,7 +53,7 @@ api_request() {
   fi
 }
 
-REQUIRED_FIELDS=(code name name_en entity_type source_model source_location registry_collection sync_script sync_frequency record_count ui_page status description layer)
+REQUIRED_FIELDS=(code name name_en entity_type source_model source_location registry_collection sync_script sync_frequency record_count actual_count orphan_count last_scan_date ui_page status description layer)
 
 field_payload() {
   case "$1" in
@@ -102,6 +105,21 @@ JSON
     record_count)
       cat <<'JSON'
 {"field":"record_count","type":"integer","meta":{"required":false,"interface":"input","width":"half","note":"Current number of records (auto-updated)"},"schema":{"is_nullable":true,"default_value":0}}
+JSON
+      ;;
+    actual_count)
+      cat <<'JSON'
+{"field":"actual_count","type":"integer","meta":{"required":false,"interface":"input","width":"half","note":"Actual count from orphan scan"},"schema":{"is_nullable":true,"default_value":0}}
+JSON
+      ;;
+    orphan_count)
+      cat <<'JSON'
+{"field":"orphan_count","type":"integer","meta":{"required":false,"interface":"input","width":"half","note":"Orphan count = actual - registered"},"schema":{"is_nullable":true,"default_value":0}}
+JSON
+      ;;
+    last_scan_date)
+      cat <<'JSON'
+{"field":"last_scan_date","type":"timestamp","meta":{"required":false,"interface":"datetime","width":"half","note":"Last orphan scan timestamp"},"schema":{"is_nullable":true}}
 JSON
       ;;
     ui_page)
@@ -340,6 +358,9 @@ register_in_table_registry() {
     {"key": "entity_type", "label": "Loai", "sortable": true},
     {"key": "source_model", "label": "Mo hinh", "sortable": true},
     {"key": "record_count", "label": "So luong", "sortable": true},
+    {"key": "actual_count", "label": "Thuc te", "sortable": true},
+    {"key": "orphan_count", "label": "Mo coi", "sortable": true},
+    {"key": "last_scan_date", "label": "Quet lan cuoi", "sortable": true},
     {"key": "status", "label": "Trang thai", "sortable": true},
     {"key": "layer", "label": "Tang", "sortable": true}
   ],
