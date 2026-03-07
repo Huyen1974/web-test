@@ -18,6 +18,8 @@ const collectionMap: Record<string, string> = {
 	collection: 'collection_registry',
 	task: 'tasks',
 	agent: 'agents',
+	checkpoint_type: 'checkpoint_types',
+	checkpoint_set: 'checkpoint_sets',
 };
 
 const collection = computed(() => collectionMap[entityType.value] || '');

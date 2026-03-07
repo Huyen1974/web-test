@@ -1,0 +1,767 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-schema-checkpoint-node-identity — Create checkpoint_sets, checkpoint_set_items,
+# standardize CP-NNN codes, add ND-NNNN to workflow_steps
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-schema-*checkpoint* — found
+#   dot-schema-checkpoints-ensure (task_checkpoints only, different scope)]
+# VERSION: 1.0.0
+#
+# Creates:
+#   1. checkpoint_sets collection (CPS-NNN)
+#   2. checkpoint_set_items collection (M2M junction)
+#   3. Adds legacy_code + updates code → CP-NNN in checkpoint_types
+#   4. Adds code field to workflow_steps + bulk assigns ND-0001..ND-0070
+#   5. Adds checkpoint_set_id FK to workflow_steps
+#   6. Registers in meta_catalog + table_registry
+#   7. Creates seed data (2 checkpoint sets)
+#
+# Idempotent: checks existence before create/update.
+#
+# Usage:
+#   dot-schema-checkpoint-node-identity [--cloud|--local] [--dry-run]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+DRY_RUN=""
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-schema-checkpoint-node-identity v${VERSION}
+
+Creates checkpoint_sets + checkpoint_set_items collections,
+standardizes checkpoint_types codes to CP-NNN,
+adds code ND-NNNN to workflow_steps.
+
+Usage:
+  dot-schema-checkpoint-node-identity [--cloud|--local] [--dry-run]
+
+EOF
+  show_environment_help
+}
+
+main() {
+  for arg in "$@"; do
+    case "$arg" in
+      --dry-run) DRY_RUN="1" ;;
+      --help|-h) show_help; exit 0 ;;
+    esac
+  done
+
+  init_environment "$@"
+  local BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: Checkpoint Node Identity v${VERSION}"
+  echo "========================================="
+  print_environment_banner "$@"
+
+  # Auth
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    source "${SCRIPT_DIR}/dot-auth" "$@"
+  fi
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "Authentication failed"; exit 1
+  fi
+
+  local tmp_py
+  tmp_py=$(mktemp /tmp/dot-cp-node-XXXXXX.py)
+  trap "rm -f '$tmp_py'" EXIT
+
+  cat > "$tmp_py" << 'PYEOF'
+import json, os, sys, ssl, urllib.request, urllib.parse, time
+
+base_url = os.environ['BASE_URL']
+token = os.environ['DOT_TOKEN']
+dry_run = os.environ.get('DRY_RUN', '')
+
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+def api(method, path, data=None):
+    url = f'{base_url}{path}'
+    payload = json.dumps(data).encode() if data else None
+    req = urllib.request.Request(url, data=payload, method=method,
+        headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'})
+    try:
+        resp = urllib.request.urlopen(req, context=ctx)
+        return resp.status, json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        try:
+            return e.code, json.loads(body)
+        except:
+            return e.code, {'error': body[:300]}
+
+def collection_exists(name):
+    code, _ = api('GET', f'/collections/{name}')
+    return code == 200
+
+def field_exists(coll, field):
+    code, _ = api('GET', f'/fields/{coll}/{field}')
+    return code == 200
+
+def ensure_field(coll, field_name, field_type, meta_extra=None, schema_extra=None):
+    if field_exists(coll, field_name):
+        print(f'  [SKIP] {coll}.{field_name} exists')
+        return True
+    if dry_run:
+        print(f'  [DRY] Would create {coll}.{field_name} ({field_type})')
+        return True
+    payload = {
+        'field': field_name,
+        'type': field_type,
+        'meta': {'required': False},
+        'schema': {'is_nullable': True}
+    }
+    if meta_extra:
+        payload['meta'].update(meta_extra)
+    if schema_extra:
+        payload['schema'].update(schema_extra)
+    code, resp = api('POST', f'/fields/{coll}', payload)
+    if code == 200:
+        print(f'  [OK]   Created {coll}.{field_name}')
+        return True
+    else:
+        print(f'  [ERR]  Failed {coll}.{field_name}: HTTP {code} -- {json.dumps(resp)[:150]}')
+        return False
+
+def create_collection(name, note, init_fields):
+    if collection_exists(name):
+        print(f'  [SKIP] Collection {name} already exists')
+        return True
+    if dry_run:
+        print(f'  [DRY] Would create collection {name}')
+        return True
+    payload = {
+        'collection': name,
+        'schema': {},
+        'meta': {'note': note, 'icon': 'verified', 'sort': None},
+        'fields': init_fields,
+    }
+    code, resp = api('POST', '/collections', payload)
+    if code == 200:
+        print(f'  [OK]   Created collection {name}')
+        return True
+    else:
+        print(f'  [ERR]  Failed to create {name}: HTTP {code} -- {json.dumps(resp)[:200]}')
+        return False
+
+def ensure_relation(coll, field, related_coll, on_delete='SET NULL'):
+    if dry_run:
+        print(f'  [DRY] Would create relation {coll}.{field} -> {related_coll}')
+        return True
+    payload = {
+        'collection': coll,
+        'field': field,
+        'related_collection': related_coll,
+        'meta': {'one_field': None, 'sort_field': None, 'one_deselect_action': 'nullify'},
+        'schema': {'on_delete': on_delete}
+    }
+    code, resp = api('POST', '/relations', payload)
+    if code == 200:
+        print(f'  [OK]   Relation {coll}.{field} -> {related_coll}')
+        return True
+    elif code == 400:
+        print(f'  [SKIP] Relation {coll}.{field} -> {related_coll} already exists')
+        return True
+    else:
+        print(f'  [WARN] Relation {coll}.{field}: HTTP {code}')
+        return False
+
+def ensure_permission(coll, policy_id, action):
+    if dry_run:
+        print(f'  [DRY] Would set permission {coll}/{action} for policy {policy_id[:8]}')
+        return
+    payload = {
+        'collection': coll, 'action': action, 'policy': policy_id,
+        'fields': ['*'], 'permissions': {}, 'validation': {}
+    }
+    code, resp = api('POST', '/permissions', payload)
+    if code == 200:
+        print(f'  [OK]   Permission {coll}/{action}')
+    else:
+        print(f'  [SKIP] Permission {coll}/{action}: HTTP {code}')
+
+PUBLIC_POLICY = 'abf8a154-7b43-4fde-b39b-bbb07a7b327e'
+AI_AGENT_POLICY = 'e81a70bc-f397-46a6-93a6-1bb498ca0a00'
+
+# Standard init fields
+INIT_FIELDS = [
+    {'field': 'id', 'type': 'integer', 'meta': {'hidden': True, 'interface': 'input', 'readonly': True}, 'schema': {'is_primary_key': True, 'has_auto_increment': True}},
+    {'field': 'status', 'type': 'string', 'meta': {'width': 'full', 'options': {'choices': [{'text': 'Draft', 'value': 'draft'}, {'text': 'Active', 'value': 'active'}, {'text': 'Deprecated', 'value': 'deprecated'}, {'text': 'Retired', 'value': 'retired'}]}, 'interface': 'select-dropdown', 'display': 'labels'}, 'schema': {'default_value': 'draft', 'is_nullable': True}},
+    {'field': 'sort', 'type': 'integer', 'meta': {'hidden': True}, 'schema': {}},
+    {'field': 'user_created', 'type': 'uuid', 'meta': {'special': ['user-created'], 'interface': 'select-dropdown-m2o', 'display': 'user', 'readonly': True, 'hidden': True, 'width': 'half'}, 'schema': {}},
+    {'field': 'date_created', 'type': 'timestamp', 'meta': {'special': ['date-created'], 'interface': 'datetime', 'display': 'datetime', 'readonly': True, 'hidden': True, 'width': 'half'}, 'schema': {}},
+    {'field': 'user_updated', 'type': 'uuid', 'meta': {'special': ['user-updated'], 'interface': 'select-dropdown-m2o', 'display': 'user', 'readonly': True, 'hidden': True, 'width': 'half'}, 'schema': {}},
+    {'field': 'date_updated', 'type': 'timestamp', 'meta': {'special': ['date-updated'], 'interface': 'datetime', 'display': 'datetime', 'readonly': True, 'hidden': True, 'width': 'half'}, 'schema': {}},
+]
+
+# ==============================================================
+# STEP 1: Create checkpoint_sets collection
+# ==============================================================
+print('=' * 50)
+print('STEP 1: Create checkpoint_sets collection')
+print('=' * 50)
+print()
+
+ok = create_collection('checkpoint_sets', 'Checkpoint Sets - grouping of checkpoint types', INIT_FIELDS)
+if ok:
+    ensure_field('checkpoint_sets', 'code', 'string', {'required': True, 'note': 'CPS-NNN'}, {'is_unique': True, 'is_nullable': False})
+    ensure_field('checkpoint_sets', 'name', 'string', {'required': True, 'note': 'Vietnamese name'}, {'is_nullable': False})
+    ensure_field('checkpoint_sets', 'name_en', 'string', {'note': 'English name'})
+    ensure_field('checkpoint_sets', 'description', 'text', {'note': 'Description', 'interface': 'input-multiline'})
+    ensure_field('checkpoint_sets', 'applicable_to', 'string', {
+        'note': 'process/state_machine/both',
+        'interface': 'select-dropdown',
+        'options': {'choices': [
+            {'text': 'Process', 'value': 'process'},
+            {'text': 'State Machine', 'value': 'state_machine'},
+            {'text': 'Both', 'value': 'both'},
+        ]}
+    }, {'default_value': 'both'})
+    ensure_field('checkpoint_sets', 'trigger_config', 'json', {'note': 'Trigger configuration', 'interface': 'input-code', 'options': {'language': 'json'}})
+print()
+
+# ==============================================================
+# STEP 2: Create checkpoint_set_items collection
+# ==============================================================
+print('=' * 50)
+print('STEP 2: Create checkpoint_set_items collection')
+print('=' * 50)
+print()
+
+ok = create_collection('checkpoint_set_items', 'Junction: checkpoint_sets <-> checkpoint_types', INIT_FIELDS)
+if ok:
+    ensure_field('checkpoint_set_items', 'set_id', 'integer', {
+        'required': True, 'interface': 'select-dropdown-m2o', 'special': ['m2o'],
+        'note': 'FK -> checkpoint_sets'
+    }, {'is_nullable': False})
+    ensure_field('checkpoint_set_items', 'type_id', 'integer', {
+        'required': True, 'interface': 'select-dropdown-m2o', 'special': ['m2o'],
+        'note': 'FK -> checkpoint_types'
+    }, {'is_nullable': False})
+    ensure_field('checkpoint_set_items', 'sort_order', 'integer', {'note': 'Order in set'})
+    ensure_field('checkpoint_set_items', 'is_required', 'boolean', {'note': 'Required?', 'interface': 'boolean'}, {'default_value': True})
+    ensure_field('checkpoint_set_items', 'trigger_on_complete', 'json', {'note': 'Action when CP passes', 'interface': 'input-code', 'options': {'language': 'json'}})
+    ensure_field('checkpoint_set_items', 'override_config', 'json', {'note': 'Override config for CP in set', 'interface': 'input-code', 'options': {'language': 'json'}})
+
+    # Relations
+    ensure_relation('checkpoint_set_items', 'set_id', 'checkpoint_sets', 'CASCADE')
+    ensure_relation('checkpoint_set_items', 'type_id', 'checkpoint_types', 'CASCADE')
+print()
+
+# ==============================================================
+# STEP 3: Permissions for new collections
+# ==============================================================
+print('=' * 50)
+print('STEP 3: Permissions')
+print('=' * 50)
+print()
+
+for coll in ['checkpoint_sets', 'checkpoint_set_items']:
+    ensure_permission(coll, PUBLIC_POLICY, 'read')
+    ensure_permission(coll, AI_AGENT_POLICY, 'create')
+    ensure_permission(coll, AI_AGENT_POLICY, 'read')
+    ensure_permission(coll, AI_AGENT_POLICY, 'update')
+    ensure_permission(coll, AI_AGENT_POLICY, 'delete')
+print()
+
+# ==============================================================
+# STEP 4: Standardize checkpoint_types.code -> CP-NNN
+# ==============================================================
+print('=' * 50)
+print('STEP 4: checkpoint_types.code -> CP-NNN')
+print('=' * 50)
+print()
+
+# First, add legacy_code field if not exists
+ensure_field('checkpoint_types', 'legacy_code', 'string', {'note': 'Original code before CP-NNN standardization'})
+
+# Get all checkpoint_types sorted by id
+code, resp = api('GET', '/items/checkpoint_types?fields=id,code,name&sort=id&limit=-1')
+if code == 200:
+    items = resp.get('data', [])
+    already_cp = all(i.get('code', '').startswith('CP-') for i in items if i.get('code'))
+    if already_cp and items:
+        print(f'  [SKIP] All {len(items)} checkpoint_types already have CP-NNN codes')
+    else:
+        for idx, item in enumerate(items, 1):
+            old_code = item.get('code', '')
+            new_code = f'CP-{idx:03d}'
+            if old_code == new_code:
+                print(f'  [SKIP] {item["id"]}: already {new_code}')
+                continue
+            if dry_run:
+                print(f'  [DRY] {item["id"]}: {old_code} -> {new_code}')
+                continue
+            patch_data = {'code': new_code}
+            if old_code and not old_code.startswith('CP-'):
+                patch_data['legacy_code'] = old_code
+            c, r = api('PATCH', f'/items/checkpoint_types/{item["id"]}', patch_data)
+            if c == 200:
+                print(f'  [OK]   {item["id"]}: {old_code} -> {new_code}')
+            else:
+                print(f'  [ERR]  {item["id"]}: HTTP {c}')
+    print(f'  Total: {len(items)} checkpoint_types')
+else:
+    print(f'  [ERR]  Could not read checkpoint_types: HTTP {code}')
+print()
+
+# ==============================================================
+# STEP 5: Add code field to workflow_steps + bulk assign ND-NNNN
+# ==============================================================
+print('=' * 50)
+print('STEP 5: workflow_steps.code -> ND-NNNN')
+print('=' * 50)
+print()
+
+ensure_field('workflow_steps', 'code', 'string', {
+    'note': 'Node ID: ND-NNNN (auto-assigned)',
+}, {'is_unique': True, 'is_nullable': True})
+
+# Get all workflow_steps
+code, resp = api('GET', '/items/workflow_steps?fields=id,step_key,code&sort=id&limit=-1')
+if code == 200:
+    steps = resp.get('data', [])
+    already_nd = all(s.get('code', '').startswith('ND-') for s in steps if s.get('code'))
+    unassigned = [s for s in steps if not s.get('code')]
+
+    if already_nd and not unassigned:
+        print(f'  [SKIP] All {len(steps)} workflow_steps already have ND-NNNN codes')
+    else:
+        for idx, step in enumerate(steps, 1):
+            if step.get('code') and step['code'].startswith('ND-'):
+                continue
+            new_code = f'ND-{idx:04d}'
+            if dry_run:
+                print(f'  [DRY] {step["id"]}: -> {new_code}')
+                continue
+            c, r = api('PATCH', f'/items/workflow_steps/{step["id"]}', {'code': new_code})
+            if c == 200:
+                print(f'  [OK]   {step["id"]}: -> {new_code}')
+            else:
+                print(f'  [ERR]  {step["id"]}: HTTP {c} -- {json.dumps(r)[:100]}')
+    print(f'  Total: {len(steps)} workflow_steps')
+else:
+    print(f'  [ERR]  Could not read workflow_steps: HTTP {code}')
+print()
+
+# ==============================================================
+# STEP 6: Add checkpoint_set_id FK to workflow_steps
+# ==============================================================
+print('=' * 50)
+print('STEP 6: workflow_steps.checkpoint_set_id FK')
+print('=' * 50)
+print()
+
+ensure_field('workflow_steps', 'checkpoint_set_id', 'integer', {
+    'interface': 'select-dropdown-m2o', 'special': ['m2o'],
+    'note': 'FK -> checkpoint_sets (optional)'
+}, {'is_nullable': True})
+ensure_relation('workflow_steps', 'checkpoint_set_id', 'checkpoint_sets', 'SET NULL')
+print()
+
+# ==============================================================
+# STEP 7: Register in meta_catalog
+# ==============================================================
+print('=' * 50)
+print('STEP 7: meta_catalog registration')
+print('=' * 50)
+print()
+
+catalog_entries = [
+    {
+        'code': 'CAT-011',
+        'name': 'Checkpoint Types',
+        'name_en': 'Checkpoint Types',
+        'entity_type': 'checkpoint_type',
+        'registry_collection': 'checkpoint_types',
+        'status': 'active',
+        'source_model': 'A',
+    },
+    {
+        'code': 'CAT-012',
+        'name': 'Checkpoint Sets',
+        'name_en': 'Checkpoint Sets',
+        'entity_type': 'checkpoint_set',
+        'registry_collection': 'checkpoint_sets',
+        'status': 'active',
+        'source_model': 'A',
+    },
+]
+
+for entry in catalog_entries:
+    # Check if already exists by code
+    c, r = api('GET', f'/items/meta_catalog?filter[code][_eq]={entry["code"]}&fields=id,code&limit=1')
+    if c == 200 and r.get('data'):
+        print(f'  [SKIP] {entry["code"]} already exists in meta_catalog')
+        continue
+    if dry_run:
+        print(f'  [DRY] Would create {entry["code"]}: {entry["name"]}')
+        continue
+    c, r = api('POST', '/items/meta_catalog', entry)
+    if c == 200:
+        print(f'  [OK]   Created {entry["code"]}: {entry["name"]}')
+    else:
+        print(f'  [ERR]  Failed {entry["code"]}: HTTP {c} -- {json.dumps(r)[:150]}')
+
+# Also update record_count for checkpoint_types and checkpoint_sets
+c, r = api('GET', '/items/meta_catalog?filter[entity_type][_eq]=checkpoint_type&fields=id&limit=1')
+if c == 200 and r.get('data'):
+    mc_id = r['data'][0]['id']
+    api('PATCH', f'/items/meta_catalog/{mc_id}', {'record_count': 31})
+    print(f'  [OK]   Updated checkpoint_type record_count=31')
+
+c, r = api('GET', '/items/meta_catalog?filter[entity_type][_eq]=checkpoint_set&fields=id&limit=1')
+if c == 200 and r.get('data'):
+    mc_id = r['data'][0]['id']
+    api('PATCH', f'/items/meta_catalog/{mc_id}', {'record_count': 0})
+    print(f'  [OK]   Updated checkpoint_set record_count=0')
+
+# Update workflow_step count
+c, r = api('GET', '/items/meta_catalog?filter[entity_type][_eq]=workflow_step&fields=id&limit=1')
+if c == 200 and r.get('data'):
+    mc_id = r['data'][0]['id']
+    api('PATCH', f'/items/meta_catalog/{mc_id}', {'record_count': 70})
+    print(f'  [OK]   Updated workflow_step record_count=70')
+print()
+
+# ==============================================================
+# STEP 8: Register in table_registry
+# ==============================================================
+print('=' * 50)
+print('STEP 8: table_registry registration')
+print('=' * 50)
+print()
+
+table_entries = [
+    {
+        'table_id': 'tbl_registry_checkpoint_types',
+        'name': 'Checkpoint Types Registry',
+        'collection': 'checkpoint_types',
+        'page_url': '/knowledge/registries/checkpoint_type',
+        'fields': json.dumps([
+            {"key": "code", "label": "Code", "sortable": True},
+            {"key": "legacy_code", "label": "Legacy Code", "sortable": True},
+            {"key": "name", "label": "Name", "sortable": True},
+            {"key": "layer", "label": "Layer", "sortable": True},
+            {"key": "domain", "label": "Domain", "sortable": True},
+            {"key": "category", "label": "Category", "sortable": True},
+            {"key": "status", "label": "Status", "sortable": True},
+        ]),
+        'default_sort': 'code',
+        'status': 'published',
+    },
+    {
+        'table_id': 'tbl_registry_checkpoint_sets',
+        'name': 'Checkpoint Sets Registry',
+        'collection': 'checkpoint_sets',
+        'page_url': '/knowledge/registries/checkpoint_set',
+        'fields': json.dumps([
+            {"key": "code", "label": "Code", "sortable": True},
+            {"key": "name", "label": "Name", "sortable": True},
+            {"key": "name_en", "label": "Name (EN)", "sortable": True},
+            {"key": "applicable_to", "label": "Applicable To", "sortable": True},
+            {"key": "status", "label": "Status", "sortable": True},
+        ]),
+        'default_sort': 'code',
+        'status': 'published',
+    },
+]
+
+for entry in table_entries:
+    # Check if exists
+    tid = entry['table_id']
+    c, r = api('GET', f'/items/table_registry?filter[table_id][_eq]={tid}&fields=id&limit=1')
+    if c == 200 and r.get('data'):
+        print(f'  [SKIP] {tid} already exists in table_registry')
+        continue
+    if dry_run:
+        print(f'  [DRY] Would create {tid}')
+        continue
+    c, r = api('POST', '/items/table_registry', entry)
+    if c == 200:
+        print(f'  [OK]   Created {tid}')
+    else:
+        print(f'  [ERR]  {tid}: HTTP {c} -- {json.dumps(r)[:200]}')
+print()
+
+# ==============================================================
+# STEP 9: Seed data — 2 checkpoint sets
+# ==============================================================
+print('=' * 50)
+print('STEP 9: Seed checkpoint sets')
+print('=' * 50)
+print()
+
+# Check if CPS-001 already exists
+c, r = api('GET', '/items/checkpoint_sets?filter[code][_eq]=CPS-001&fields=id&limit=1')
+if c == 200 and r.get('data'):
+    print('  [SKIP] CPS-001 already exists')
+else:
+    if dry_run:
+        print('  [DRY] Would create CPS-001 + CPS-002')
+    else:
+        # CPS-001: CI/CD Basic Set
+        c, r = api('POST', '/items/checkpoint_sets', {
+            'code': 'CPS-001',
+            'name': 'CI/CD co ban',
+            'name_en': 'Basic CI/CD Checklist',
+            'description': 'Layer 0 checkpoints for CI/CD pipeline',
+            'applicable_to': 'process',
+            'status': 'active',
+        })
+        if c == 200:
+            set1_id = r['data']['id']
+            print(f'  [OK]   Created CPS-001 (id={set1_id})')
+            # Add items: CP-003 (CI GREEN), CP-005 (Hat1 push), CP-008 (Deploy)
+            for sort_i, cp_id in enumerate([3, 5, 8], 1):
+                ci, ri = api('POST', '/items/checkpoint_set_items', {
+                    'set_id': set1_id,
+                    'type_id': cp_id,
+                    'sort_order': sort_i,
+                    'is_required': True,
+                })
+                status = 'OK' if ci == 200 else f'ERR {ci}'
+                print(f'    [OK]   Item: type_id={cp_id}, sort={sort_i} ({status})')
+        else:
+            print(f'  [ERR]  CPS-001: HTTP {c}')
+
+        # CPS-002: Code Review Set
+        c, r = api('POST', '/items/checkpoint_sets', {
+            'code': 'CPS-002',
+            'name': 'Review code',
+            'name_en': 'Code Review Checklist',
+            'description': 'Layer 1 checkpoints for code review',
+            'applicable_to': 'process',
+            'status': 'active',
+        })
+        if c == 200:
+            set2_id = r['data']['id']
+            print(f'  [OK]   Created CPS-002 (id={set2_id})')
+            # Add items: CP-012 (branch naming), CP-013 (scope), CP-014 (merge protocol)
+            for sort_i, cp_id in enumerate([12, 13, 14], 1):
+                ci, ri = api('POST', '/items/checkpoint_set_items', {
+                    'set_id': set2_id,
+                    'type_id': cp_id,
+                    'sort_order': sort_i,
+                    'is_required': True,
+                })
+                status = 'OK' if ci == 200 else f'ERR {ci}'
+                print(f'    [OK]   Item: type_id={cp_id}, sort={sort_i} ({status})')
+        else:
+            print(f'  [ERR]  CPS-002: HTTP {c}')
+
+# Update record_count for checkpoint_sets
+c, r = api('GET', '/items/meta_catalog?filter[entity_type][_eq]=checkpoint_set&fields=id&limit=1')
+if c == 200 and r.get('data'):
+    mc_id = r['data'][0]['id']
+    # Count actual
+    c2, r2 = api('GET', '/items/checkpoint_sets?aggregate[count]=id')
+    if c2 == 200:
+        cnt = r2.get('data', [{}])[0].get('count', {}).get('id', 0)
+        api('PATCH', f'/items/meta_catalog/{mc_id}', {'record_count': int(cnt)})
+        print(f'  [OK]   Updated checkpoint_set record_count={cnt}')
+print()
+
+# ==============================================================
+# STEP 10: Create Auto-ID Flows
+# ==============================================================
+print('=' * 50)
+print('STEP 10: Auto-ID Flows')
+print('=' * 50)
+print()
+
+NEW_FLOWS = [
+    ('checkpoint_types', 'CP', '[AUTO-ID] Checkpoint Types', 3),
+    ('checkpoint_sets', 'CPS', '[AUTO-ID] Checkpoint Sets', 3),
+    ('workflow_steps', 'ND', '[AUTO-ID] Workflow Steps', 4),
+]
+
+for collection, prefix, flow_name, pad_len in NEW_FLOWS:
+    # Check if exists
+    encoded_name = urllib.parse.quote(flow_name)
+    c, r = api('GET', f'/flows?filter[name][_eq]={encoded_name}&fields=id,name,status')
+    if c == 200 and r.get('data'):
+        print(f'  [SKIP] {flow_name} already exists')
+        continue
+    if dry_run:
+        print(f'  [DRY] Would create {flow_name}')
+        continue
+
+    # Create flow
+    flow_payload = {
+        'name': flow_name,
+        'icon': 'pin',
+        'color': '#2ECDA7',
+        'description': f'Auto-assign {prefix}-{"N"*pad_len} code on item creation in {collection}',
+        'status': 'active',
+        'trigger': 'event',
+        'accountability': 'all',
+        'options': {
+            'type': 'filter',
+            'scope': ['items.create'],
+            'collections': [collection],
+        }
+    }
+    c, r = api('POST', '/flows', flow_payload)
+    if c != 200:
+        print(f'  [ERR]  Flow {flow_name}: HTTP {c}')
+        continue
+    flow_id = r['data']['id']
+
+    # Read max code operation
+    read_op = {
+        'name': f'Read max {prefix} code',
+        'key': 'read_max_code',
+        'type': 'request',
+        'position_x': 19, 'position_y': 1,
+        'options': {
+            'method': 'GET',
+            'url': f'{base_url}/items/{collection}?sort=-code&limit=1&fields=code&filter[code][_nnull]=true',
+            'headers': [{'header': 'Authorization', 'value': f'Bearer {token}'}],
+        },
+        'flow': flow_id,
+    }
+    c2, r2 = api('POST', '/operations', read_op)
+    if c2 != 200:
+        print(f'  [ERR]  Read op for {flow_name}: HTTP {c2}')
+        api('DELETE', f'/flows/{flow_id}')
+        continue
+    read_op_id = r2['data']['id']
+
+    # Exec operation
+    exec_code = f'''
+module.exports = async function(data) {{
+    const prefix = "{prefix}";
+    const padLen = {pad_len};
+    const maxCodeData = data.read_max_code?.data?.data;
+    let nextNum = 1;
+    if (maxCodeData && maxCodeData.length > 0) {{
+        const lastCode = maxCodeData[0].code || "";
+        const match = lastCode.match(/\\d+$/);
+        if (match) nextNum = parseInt(match[0], 10) + 1;
+    }}
+    const newCode = prefix + "-" + String(nextNum).padStart(padLen, "0");
+    const itemKey = data.$trigger.key || data.$trigger.keys?.[0];
+    return {{ code: newCode, key: itemKey }};
+}}
+'''
+    exec_op = {
+        'name': f'Compute {prefix} code',
+        'key': 'assign_code',
+        'type': 'exec',
+        'position_x': 37, 'position_y': 1,
+        'options': {'code': exec_code},
+        'flow': flow_id,
+    }
+    c3, r3 = api('POST', '/operations', exec_op)
+    if c3 != 200:
+        print(f'  [ERR]  Exec op for {flow_name}: HTTP {c3}')
+        api('DELETE', f'/flows/{flow_id}')
+        continue
+    exec_op_id = r3['data']['id']
+
+    # Update item operation
+    update_op = {
+        'name': f'Update {prefix} code',
+        'key': 'update_item',
+        'type': 'item-update',
+        'position_x': 55, 'position_y': 1,
+        'options': {
+            'collection': collection,
+            'key': '{{assign_code.key}}',
+            'payload': {'code': '{{assign_code.code}}'},
+            'emitEvents': False,
+        },
+        'flow': flow_id,
+    }
+    c4, r4 = api('POST', '/operations', update_op)
+    update_op_id = r4['data']['id'] if c4 == 200 else None
+
+    # Link: flow -> read -> exec -> update
+    api('PATCH', f'/flows/{flow_id}', {'operation': read_op_id})
+    api('PATCH', f'/operations/{read_op_id}', {'resolve': exec_op_id})
+    if update_op_id:
+        api('PATCH', f'/operations/{exec_op_id}', {'resolve': update_op_id})
+
+    print(f'  [OK]   Created {flow_name} (flow_id={flow_id})')
+
+print()
+
+# ==============================================================
+# VERIFY
+# ==============================================================
+print('=' * 50)
+print('VERIFICATION')
+print('=' * 50)
+print()
+
+checks = [
+    ('checkpoint_sets exists', lambda: collection_exists('checkpoint_sets')),
+    ('checkpoint_set_items exists', lambda: collection_exists('checkpoint_set_items')),
+    ('checkpoint_types.legacy_code exists', lambda: field_exists('checkpoint_types', 'legacy_code')),
+    ('workflow_steps.code exists', lambda: field_exists('workflow_steps', 'code')),
+    ('workflow_steps.checkpoint_set_id exists', lambda: field_exists('workflow_steps', 'checkpoint_set_id')),
+]
+
+all_pass = True
+for desc, check in checks:
+    result = check()
+    status = 'PASS' if result else 'FAIL'
+    if not result:
+        all_pass = False
+    print(f'  [{status}] {desc}')
+
+# Check CP-NNN codes
+c, r = api('GET', '/items/checkpoint_types?fields=code&limit=5&sort=code')
+if c == 200:
+    codes = [i.get('code', '') for i in r.get('data', [])]
+    cp_ok = all(c.startswith('CP-') for c in codes if c)
+    print(f'  [{"PASS" if cp_ok else "FAIL"}] checkpoint_types codes start with CP- (sample: {codes[:3]})')
+    if not cp_ok:
+        all_pass = False
+
+# Check ND-NNNN codes
+c, r = api('GET', '/items/workflow_steps?fields=code&limit=5&sort=code')
+if c == 200:
+    codes = [i.get('code', '') for i in r.get('data', [])]
+    nd_ok = all(c.startswith('ND-') for c in codes if c)
+    print(f'  [{"PASS" if nd_ok else "FAIL"}] workflow_steps codes start with ND- (sample: {codes[:3]})')
+    if not nd_ok:
+        all_pass = False
+
+print()
+if all_pass:
+    print('ALL CHECKS PASSED')
+else:
+    print('SOME CHECKS FAILED — review output above')
+
+print()
+print('DONE — Checkpoint Node Identity complete')
+PYEOF
+
+  BASE_URL="$BASE_URL" DOT_TOKEN="$DOT_TOKEN" DRY_RUN="${DRY_RUN}" \
+    python3 "$tmp_py" < /dev/null
+
+  rm -f "$tmp_py"
+
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Checkpoint Node Identity - COMPLETE"
+  echo "========================================="
+}
+
+main "$@"
