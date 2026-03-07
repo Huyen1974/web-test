@@ -17,6 +17,8 @@ const tableIdMap: Record<string, string> = {
 	collection: 'tbl_registry_collections',
 	task: 'tbl_tasks_list',
 	agent: 'tbl_registry_agents',
+	checkpoint_type: 'tbl_registry_checkpoint_types',
+	checkpoint_set: 'tbl_registry_checkpoint_sets',
 };
 
 const tableId = computed(() => tableIdMap[entityType.value] || '');
