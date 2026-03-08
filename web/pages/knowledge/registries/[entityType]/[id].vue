@@ -63,7 +63,7 @@ definePageMeta({ title: 'Chi tiet' });
 
 useHead({
 	title: computed(() => {
-		const name = item.value?.name || item.value?.code || itemId.value;
+		const name = item.value?.name || item.value?.title || item.value?.code || itemId.value;
 		return `${name} — ${catalogEntry.value?.name || entityType.value}`;
 	}),
 });
@@ -84,9 +84,9 @@ useHead({
 			</div>
 
 			<h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-				{{ item?.name || item?.code || `Item #${itemId}` }}
+				{{ item?.name || item?.title || item?.code || `Item #${itemId}` }}
 			</h1>
-			<p v-if="item?.code && item?.name" class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+			<p v-if="item?.code && (item?.name || item?.title)" class="mt-1 text-sm text-gray-500 dark:text-gray-400">
 				{{ item.code }}
 			</p>
 		</div>

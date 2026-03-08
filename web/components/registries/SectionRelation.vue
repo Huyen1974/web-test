@@ -20,13 +20,23 @@ const queryFields = computed(() => {
 	return Array.from(fields);
 });
 
+// For many-to-one (localKey set): filter related collection by id = item[localKey]
+// For one-to-many (default): filter related collection by foreignKey = item.id
+const filterValue = computed(() => {
+	if (props.config.localKey) {
+		return props.item?.[props.config.localKey];
+	}
+	return props.item?.id;
+});
+
 const { data: relatedItems } = useAsyncData(
-	`section-relation-${props.config.id}-${props.item?.id}`,
+	`section-relation-${props.config.id}-${filterValue.value}`,
 	async () => {
-		if (!props.item?.id) return [];
+		if (!filterValue.value) return [];
 		try {
+			const filterField = props.config.localKey ? 'id' : props.config.foreignKey;
 			const options: any = {
-				filter: { [props.config.foreignKey]: { _eq: props.item.id } },
+				filter: { [filterField]: { _eq: filterValue.value } },
 				fields: queryFields.value,
 				limit: 100,
 			};
