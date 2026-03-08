@@ -206,6 +206,8 @@ get_code_prefix() {
     checkpoint_type) echo "CP-" ;;
     checkpoint_set) echo "CPS-" ;;
     entity_dependency) echo "DEP-" ;;
+    table_proposal) echo "TP-" ;;
+    checkpoint_instance) echo "CPI-" ;;
     *) echo "" ;;
   esac
 }
