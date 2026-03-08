@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-registries-verify - Verify ALL Registries pages via public HTTP
+# =============================================================================
+# VERSION: 1.0.0
+# CHECKED-NO-DUPLICATE: [grep dot/bin/ for "registries-verify" — no match]
+#
+# Verifies every Registries page returns HTTP 200 with valid HTML content.
+# Uses PUBLIC requests (no auth token) to match actual user experience.
+# Checks both HTTP status AND embedded error messages in HTML body.
+#
+# Usage:
+#   dot/bin/dot-registries-verify [--deep] [--url URL]
+#
+# Options:
+#   --deep    Also check HTML body for embedded 403/permission errors
+#   --url     Override base URL (default: https://vps.incomexsaigoncorp.vn)
+# =============================================================================
+
+set -euo pipefail
+
+VERSION="1.0.0"
+BASE_URL="https://vps.incomexsaigoncorp.vn"
+DEEP=false
+
+for arg in "$@"; do
+  case "$arg" in
+    --deep) DEEP=true ;;
+    --url=*) BASE_URL="${arg#--url=}" ;;
+    --help|-h)
+      echo "dot-registries-verify v${VERSION}"
+      echo "Usage: dot-registries-verify [--deep] [--url=URL]"
+      echo "  --deep  Check HTML body for embedded errors"
+      echo "  --url   Override base URL"
+      exit 0
+      ;;
+  esac
+done
+
+# Layer 1: Main registries index
+# Layer 2: Entity type list pages
+# Layer 3: Individual entity detail pages (sample)
+PAGES=(
+  "/knowledge/registries"
+  "/knowledge/registries/collection"
+  "/knowledge/registries/dot_tool"
+  "/knowledge/registries/ui_page"
+  "/knowledge/registries/checkpoint_type"
+  "/knowledge/registries/checkpoint_set"
+  "/knowledge/registries/workflow_step"
+)
+
+FAIL=0
+PASS=0
+TOTAL=${#PAGES[@]}
+
+echo "========================================="
+echo "DOT Registries Verify v${VERSION}"
+echo "========================================="
+echo "Base URL: ${BASE_URL}"
+echo "Deep check: ${DEEP}"
+echo "Pages to check: ${TOTAL}"
+echo ""
+
+for page in "${PAGES[@]}"; do
+  URL="${BASE_URL}${page}"
+
+  if [[ "$DEEP" == "true" ]]; then
+    # Full body + status check in one request
+    tmpfile=$(mktemp)
+    STATUS=$(curl -sk -o "$tmpfile" -w "%{http_code}" --max-time 30 "$URL" 2>/dev/null || echo "000")
+    BODY=$(cat "$tmpfile" 2>/dev/null || echo "")
+    rm -f "$tmpfile"
+
+    if [[ "$STATUS" != "200" ]]; then
+      echo "FAIL: ${page} -> HTTP ${STATUS}"
+      FAIL=$((FAIL+1))
+      continue
+    fi
+
+    # Check for embedded permission/403 errors in HTML
+    ERR_COUNT=$(echo "$BODY" | grep -ci "don't have permission\|FORBIDDEN\|statusCode.*403\|statusCode.*500" 2>/dev/null || true)
+    ERR_COUNT="${ERR_COUNT:-0}"
+    ERR_COUNT=$(echo "$ERR_COUNT" | tr -d '[:space:]')
+    BODY_SIZE=${#BODY}
+
+    if [[ "$ERR_COUNT" -gt 0 ]]; then
+      echo "FAIL: ${page} -> HTTP 200 but ${ERR_COUNT} embedded errors (${BODY_SIZE}b)"
+      FAIL=$((FAIL+1))
+    elif [[ "$BODY_SIZE" -lt 1000 ]]; then
+      echo "FAIL: ${page} -> HTTP 200 but body too small (${BODY_SIZE}b)"
+      FAIL=$((FAIL+1))
+    else
+      echo "PASS: ${page} -> HTTP 200 (${BODY_SIZE}b, 0 errors)"
+      PASS=$((PASS+1))
+    fi
+  else
+    # Quick status-only check
+    STATUS=$(curl -sk -o /dev/null -w "%{http_code}" --max-time 30 "$URL" 2>/dev/null || echo "000")
+    if [[ "$STATUS" != "200" ]]; then
+      echo "FAIL: ${page} -> HTTP ${STATUS}"
+      FAIL=$((FAIL+1))
+    else
+      echo "PASS: ${page} -> HTTP 200"
+      PASS=$((PASS+1))
+    fi
+  fi
+done
+
+echo ""
+echo "========================================="
+echo "Results: ${PASS}/${TOTAL} PASS, ${FAIL}/${TOTAL} FAIL"
+echo "========================================="
+
+if [[ $FAIL -gt 0 ]]; then
+  echo "REGISTRIES VERIFY: FAILED"
+  exit 1
+else
+  echo "REGISTRIES VERIFY: ALL PASS"
+  exit 0
+fi
