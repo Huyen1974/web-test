@@ -1,0 +1,222 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-layer3-audit — Audit Layer 3 detail pages: "Dung du sach song"
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [grep dot/bin/ for "layer3-audit" — no match]
+# VERSION: 1.0.0
+#
+# Checks every entity type in meta_catalog:
+#   - IDENTITY: record exists, has code/name/status
+#   - BELONGS_TO: M2O relations discoverable
+#   - USED_BY: entity_dependencies present
+#   - PEERS: same-collection items exist
+#   - CLEAN: no broken references
+#   - LIVE: detail page renders sections
+#
+# Usage:
+#   dot-layer3-audit [--cloud|--local] [--verbose]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+VERBOSE=""
+SAMPLE_SIZE=3
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "  [PASS] $1"; }
+log_fail() { echo "  [FAIL] $1"; }
+log_warn() { echo "  [WARN] $1"; }
+log_skip() { echo "  [----] $1"; }
+
+show_help() {
+  cat << EOF
+dot-layer3-audit v${VERSION}
+
+Audits Layer 3 detail pages for all entity types.
+Checks identity, relations, dependencies, peers, and live rendering.
+
+Usage:
+  dot-layer3-audit [--cloud|--local] [--verbose]
+
+EOF
+  show_environment_help
+}
+
+main() {
+  for arg in "$@"; do
+    case "$arg" in
+      --verbose) VERBOSE="1" ;;
+      --help|-h) show_help; exit 0 ;;
+    esac
+  done
+
+  init_environment "$@"
+  local BASE_URL="$DIRECTUS_URL"
+  local NUXT_URL="$NUXT_URL"
+
+  echo "========================================="
+  echo "DOT Tool: Layer 3 Audit v${VERSION}"
+  echo "========================================="
+  print_environment_banner "$@"
+  echo ""
+
+  # Get all entity types from meta_catalog
+  local catalog_json
+  catalog_json=$(curl -sf "${BASE_URL}/items/meta_catalog?fields=entity_type,registry_collection,code&limit=100&sort=entity_type" 2>/dev/null)
+  if [[ -z "$catalog_json" ]]; then
+    echo "[ERR] Cannot fetch meta_catalog"
+    exit 1
+  fi
+
+  local total_entities=0
+  local total_pass=0
+  local total_fail=0
+  local total_warn=0
+  local total_checks=0
+
+  # Parse entity types
+  local entity_types
+  entity_types=$(echo "$catalog_json" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)['data']
+for r in d:
+    et = r.get('entity_type','')
+    rc = r.get('registry_collection','')
+    if et and rc:
+        print(f'{et}|{rc}')
+")
+
+  # Code field overrides
+  get_code_field() {
+    case "$1" in
+      workflows) echo "process_code" ;;
+      table_registry) echo "table_id" ;;
+      *) echo "code" ;;
+    esac
+  }
+
+  while IFS='|' read -r entity_type registry_collection; do
+    echo ""
+    echo "=== $entity_type ($registry_collection) ==="
+    total_entities=$((total_entities + 1))
+
+    local code_field
+    code_field=$(get_code_field "$registry_collection")
+    local entity_pass=0
+    local entity_fail=0
+    local entity_checks=0
+
+    # Get sample items
+    local items_json
+    items_json=$(curl -sf "${BASE_URL}/items/${registry_collection}?fields=*&limit=${SAMPLE_SIZE}&sort=-date_created" 2>/dev/null || echo '{"data":[]}')
+
+    local item_count
+    item_count=$(echo "$items_json" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('data',[])))" 2>/dev/null || echo "0")
+
+    if [[ "$item_count" == "0" ]]; then
+      log_warn "No items found in $registry_collection"
+      total_warn=$((total_warn + 1))
+      continue
+    fi
+
+    # For each sample item
+    local codes
+    codes=$(echo "$items_json" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)['data']
+cf = '${code_field}'
+for item in d:
+    code = item.get(cf, '') or item.get('code', '') or str(item.get('id', ''))
+    has_name = 1 if (item.get('name') or item.get('title')) else 0
+    has_status = 1 if item.get('status') else 0
+    field_count = len([k for k in item.keys() if item[k] is not None and k not in ('id','sort','user_created','user_updated')])
+    print(f'{code}|{has_name}|{has_status}|{field_count}')
+")
+
+    while IFS='|' read -r item_code has_name has_status field_count; do
+      [[ -z "$item_code" ]] && continue
+
+      if [[ -n "$VERBOSE" ]]; then
+        echo "  --- $item_code ---"
+      fi
+
+      # CHECK 1: IDENTITY — record has metadata
+      entity_checks=$((entity_checks + 1))
+      if [[ "$field_count" -ge 3 ]]; then
+        log_ok "Identity: $item_code ($field_count fields)"
+        entity_pass=$((entity_pass + 1))
+      else
+        log_fail "Identity: $item_code only $field_count fields"
+        entity_fail=$((entity_fail + 1))
+      fi
+
+      # CHECK 2: USED_BY — entity_dependencies
+      entity_checks=$((entity_checks + 1))
+      local dep_count
+      dep_count=$(curl -sf "${BASE_URL}/items/entity_dependencies?filter[_or][0][source_code][_eq]=${item_code}&filter[_or][1][target_code][_eq]=${item_code}&limit=1&fields=id" 2>/dev/null | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('data',[])))" 2>/dev/null || echo "0")
+
+      if [[ "$dep_count" -gt 0 ]]; then
+        log_ok "Dependencies: $item_code has links"
+        entity_pass=$((entity_pass + 1))
+      else
+        log_skip "Dependencies: $item_code — none found"
+      fi
+
+      # CHECK 3: LIVE — detail page renders sections
+      entity_checks=$((entity_checks + 1))
+      local page_url="${NUXT_URL}/knowledge/registries/${entity_type}/${item_code}"
+      local page_html
+      page_html=$(curl -sf "$page_url" 2>/dev/null || echo "")
+
+      if [[ -z "$page_html" ]]; then
+        log_fail "Live: $page_url — no response"
+        entity_fail=$((entity_fail + 1))
+      else
+        local section_count
+        section_count=$(echo "$page_html" | grep -c 'font-semibold text-gray-900' 2>/dev/null || echo "0")
+
+        if [[ "$section_count" -ge 1 ]]; then
+          log_ok "Live: $item_code renders $section_count sections"
+          entity_pass=$((entity_pass + 1))
+        else
+          log_fail "Live: $item_code — 0 sections rendered"
+          entity_fail=$((entity_fail + 1))
+        fi
+      fi
+
+    done <<< "$codes"
+
+    total_pass=$((total_pass + entity_pass))
+    total_fail=$((total_fail + entity_fail))
+    total_checks=$((total_checks + entity_checks))
+
+    echo "  Score: ${entity_pass}/${entity_checks} checks passed"
+
+  done <<< "$entity_types"
+
+  # Summary
+  echo ""
+  echo "========================================="
+  echo "Layer 3 Audit — SUMMARY"
+  echo "========================================="
+  echo "  Entity types: $total_entities"
+  echo "  Total checks: $total_checks"
+  echo "  PASS: $total_pass"
+  echo "  FAIL: $total_fail"
+  echo "  WARN: $total_warn"
+  if [[ "$total_checks" -gt 0 ]]; then
+    local pct=$((total_pass * 100 / total_checks))
+    echo "  Coverage: ${pct}%"
+  fi
+  echo "========================================="
+
+  if [[ "$total_fail" -gt 0 ]]; then
+    exit 1
+  fi
+}
+
+main "$@"

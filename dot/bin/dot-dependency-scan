@@ -3,7 +3,7 @@
 # dot-dependency-scan — Scan Directus relations -> populate entity_dependencies
 # =============================================================================
 # CHECKED-NO-DUPLICATE: [grep dot/bin/ for "dependency-scan" — no match]
-# VERSION: 1.0.0
+# VERSION: 2.0.0
 #
 # Scans Directus relations API and known entity relationships to populate
 # the entity_dependencies collection. Idempotent: checks source+target
@@ -18,7 +18,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="1.0.0"
+VERSION="2.0.0"
 DRY_RUN=""
 
 log_info() { echo "[INFO] $1"; }
@@ -168,24 +168,26 @@ def create_dep(source_type, source_code, target_type, target_code,
         return 'error'
 
 # ===================================================================
-# Collection-to-collection type mapping for known entity types
+# Build collection→entity_type map dynamically from meta_catalog
 # ===================================================================
-ENTITY_TYPE_MAP = {
-    'checkpoint_types': 'checkpoint_type',
-    'checkpoint_sets': 'checkpoint_set',
-    'checkpoint_set_items': None,  # junction table
-    'workflows': 'workflow',
-    'workflow_steps': 'workflow_step',
-    'workflow_step_relations': None,  # junction table
-    'dot_tools': 'dot_tool',
-    'ui_pages': 'ui_page',
-    'collection_registry': 'collection',
-    'modules': 'module',
-    'agents': 'agent',
-    'meta_catalog': None,
-    'table_registry': None,
-    'tasks': None,
+print('Loading meta_catalog...')
+cat_items_raw = get_items('meta_catalog', fields='entity_type,registry_collection', limit=100)
+COLLECTION_TO_ENTITY = {}
+for c in cat_items_raw:
+    et = c.get('entity_type', '')
+    rc = c.get('registry_collection', '')
+    if et and rc:
+        COLLECTION_TO_ENTITY[rc] = et
+print(f'  Mapped {len(COLLECTION_TO_ENTITY)} collections to entity types')
+
+# Code field overrides (most collections use "code")
+CODE_FIELD = {
+    'workflows': 'process_code',
+    'table_registry': 'table_id',
 }
+
+def get_code_field(collection):
+    return CODE_FIELD.get(collection, 'code')
 
 stats = {'created': 0, 'skipped': 0, 'errors': 0}
 
@@ -200,31 +202,33 @@ def track(result):
         stats['created'] += 1
 
 # ===================================================================
-# SCAN 1: Directus relations (M2O/O2M)
+# SCAN 1: Schema-level relations (M2O between registry collections)
 # ===================================================================
 print()
-print('=== Scan 1: Directus Relations ===')
+print('=== Scan 1: Schema Relations ===')
 
 code, resp = api('GET', '/relations')
 if code == 200:
     relations = resp.get('data', [])
-    print(f'  Found {len(relations)} relations in Directus')
+    print(f'  Found {len(relations)} total Directus relations')
 
     for rel in relations:
         col = rel.get('collection', '')
         field = rel.get('field', '')
         related = rel.get('related_collection', '')
 
-        # Skip system collections, nulls, and junction tables
         if not col or not related:
             continue
         if col.startswith('directus_') or related.startswith('directus_'):
             continue
+        # Skip user_created/user_updated fields
+        if field in ('user_created', 'user_updated'):
+            continue
 
-        src_type = ENTITY_TYPE_MAP.get(col)
-        tgt_type = ENTITY_TYPE_MAP.get(related)
+        src_type = COLLECTION_TO_ENTITY.get(col)
+        tgt_type = COLLECTION_TO_ENTITY.get(related)
 
-        # Only track known entity types
+        # Both collections must be registry collections
         if src_type and tgt_type:
             track(create_dep(src_type, f'{col}.{field}', tgt_type, related,
                            'belongs_to', 'forward', 1.0))
@@ -232,43 +236,43 @@ else:
     print(f'  [WARN] Could not fetch relations: HTTP {code}')
 
 # ===================================================================
-# SCAN 2: Checkpoint Set Items (CP <-> CPS)
+# SCAN 2: Checkpoint Set Items (CP <-> CPS) — junction table
 # ===================================================================
 print()
 print('=== Scan 2: Checkpoint Set Items ===')
 
 cps_items = get_items('checkpoint_set_items',
-    fields='id,checkpoint_type_id.code,checkpoint_set_id.code',
+    fields='id,type_id.code,set_id.code',
     limit=500)
 print(f'  Found {len(cps_items)} checkpoint_set_items')
 
 for item in cps_items:
-    cp_code = (item.get('checkpoint_type_id') or {}).get('code', '')
-    cps_code = (item.get('checkpoint_set_id') or {}).get('code', '')
+    cp_code = (item.get('type_id') or {}).get('code', '')
+    cps_code = (item.get('set_id') or {}).get('code', '')
     if cp_code and cps_code:
         track(create_dep('checkpoint_type', cp_code, 'checkpoint_set', cps_code,
                         'belongs_to', 'forward', 1.0))
 
 # ===================================================================
-# SCAN 3: Workflow Steps -> Workflows
+# SCAN 3: Workflow Steps -> Workflows (instance-level)
 # ===================================================================
 print()
 print('=== Scan 3: Workflow Steps -> Workflows ===')
 
 wf_steps = get_items('workflow_steps',
-    fields='id,code,workflow_id.code',
+    fields='id,code,workflow_id.process_code',
     limit=500)
 print(f'  Found {len(wf_steps)} workflow_steps')
 
 for step in wf_steps:
     step_code = step.get('code', '')
-    wf_code = (step.get('workflow_id') or {}).get('code', '')
+    wf_code = (step.get('workflow_id') or {}).get('process_code', '')
     if step_code and wf_code:
         track(create_dep('workflow_step', step_code, 'workflow', wf_code,
                         'belongs_to', 'forward', 1.0))
 
 # ===================================================================
-# SCAN 4: Workflow Steps with Checkpoint Sets
+# SCAN 4: Workflow Steps with Checkpoint Sets (uses)
 # ===================================================================
 print()
 print('=== Scan 4: Workflow Steps <-> Checkpoint Sets ===')
@@ -285,6 +289,46 @@ for step in wf_steps_cps:
     if step_code and cps_code:
         track(create_dep('workflow_step', step_code, 'checkpoint_set', cps_code,
                         'uses', 'forward', 1.0))
+
+# ===================================================================
+# SCAN 4b: Workflow Change Requests -> Workflows
+# ===================================================================
+print()
+print('=== Scan 4b: WCR -> Workflows ===')
+
+wcrs = get_items('workflow_change_requests',
+    fields='id,title,workflow_id.process_code',
+    limit=500)
+print(f'  Found {len(wcrs)} workflow_change_requests')
+
+for wcr in wcrs:
+    wcr_title = wcr.get('title', '')
+    wf_code = (wcr.get('workflow_id') or {}).get('process_code', '')
+    if wcr_title and wf_code:
+        wcr_id = wcr.get('id', '')
+        track(create_dep('wcr', f'WCR-{wcr_id}', 'workflow', wf_code,
+                        'belongs_to', 'forward', 1.0))
+
+# ===================================================================
+# SCAN 4c: Workflows -> Tasks
+# ===================================================================
+print()
+print('=== Scan 4c: Workflows -> Tasks ===')
+
+wf_tasks = get_items('workflows',
+    fields='id,process_code,task_id.name',
+    filters='filter[task_id][_nnull]=true',
+    limit=500)
+print(f'  Found {len(wf_tasks)} workflows with tasks')
+
+for wf in wf_tasks:
+    wf_code = wf.get('process_code', '')
+    task_id = wf.get('task_id')
+    if wf_code and task_id and isinstance(task_id, dict):
+        task_name = task_id.get('name', '')
+        if task_name:
+            track(create_dep('workflow', wf_code, 'task', f'task-{wf.get("id","")}',
+                            'belongs_to', 'forward', 0.9))
 
 # ===================================================================
 # SCAN 5: Workflow Step Relations (step -> step)
