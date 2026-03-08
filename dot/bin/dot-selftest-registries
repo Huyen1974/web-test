@@ -54,16 +54,30 @@ pass() { echo "  PASS: $1"; PASS=$((PASS+1)); TOTAL=$((TOTAL+1)); }
 fail() { echo "  FAIL: $1"; FAIL=$((FAIL+1)); TOTAL=$((TOTAL+1)); }
 warn() { echo "  WARN: $1"; WARN=$((WARN+1)); TOTAL=$((TOTAL+1)); }
 
-fetch_page() {
+# Shared temp file for page fetches
+_PAGE_TMP=$(mktemp)
+trap "rm -f '$_PAGE_TMP'" EXIT
+
+fetch_page_status() {
+  # Fetch URL, save body to $_PAGE_TMP, return HTTP status code
   local url="$1"
-  local tmpfile
-  tmpfile=$(mktemp)
-  local status
-  status=$(curl -sk -o "$tmpfile" -w "%{http_code}" --max-time 30 "$url" 2>/dev/null || echo "000")
-  local body
-  body=$(cat "$tmpfile" 2>/dev/null || echo "")
-  rm -f "$tmpfile"
-  echo "${status}|${#body}|${body}"
+  curl -sk -o "$_PAGE_TMP" -w "%{http_code}" --max-time 30 "$url" 2>/dev/null || echo "000"
+}
+
+page_size() {
+  wc -c < "$_PAGE_TMP" 2>/dev/null | tr -d '[:space:]'
+}
+
+page_grep_count() {
+  local c
+  c=$(grep -c "$1" "$_PAGE_TMP" 2>/dev/null || true)
+  echo "${c:-0}" | tr -d '[:space:]'
+}
+
+page_grep_ci_count() {
+  local c
+  c=$(grep -ci "$1" "$_PAGE_TMP" 2>/dev/null || true)
+  echo "${c:-0}" | tr -d '[:space:]'
 }
 
 echo "========================================="
@@ -142,21 +156,14 @@ fi
 echo ""
 echo "--- Test 3: Layer 1 — Main Index ---"
 
-RESULT=$(fetch_page "${BASE_URL}/knowledge/registries")
-L1_STATUS="${RESULT%%|*}"
-RESULT="${RESULT#*|}"
-L1_SIZE="${RESULT%%|*}"
-L1_BODY="${RESULT#*|}"
+L1_STATUS=$(fetch_page_status "${BASE_URL}/knowledge/registries")
+L1_SIZE=$(page_size)
 
 if [[ "$L1_STATUS" != "200" ]]; then
   fail "Layer 1 index: HTTP ${L1_STATUS}"
 else
-  # Check meta_catalog data renders (CAT- codes should appear)
-  CAT_COUNT=$(echo "$L1_BODY" | grep -c "CAT-" 2>/dev/null || true)
-  CAT_COUNT=$(echo "$CAT_COUNT" | tr -d '[:space:]')
-
-  ERR=$(echo "$L1_BODY" | grep -ci "Chưa có bảng\|FORBIDDEN\|statusCode.*403\|don't have permission" 2>/dev/null || true)
-  ERR=$(echo "$ERR" | tr -d '[:space:]')
+  CAT_COUNT=$(page_grep_count "CAT-")
+  ERR=$(page_grep_ci_count "Chưa có bảng\|FORBIDDEN\|statusCode.*403\|don't have permission")
 
   if [[ "${ERR:-0}" -gt 0 ]]; then
     fail "Layer 1 index: HTTP 200 but has embedded errors"
@@ -206,41 +213,29 @@ get_code_prefix() {
 while IFS= read -r et; do
   [[ -z "$et" ]] && continue
   URL="${BASE_URL}/knowledge/registries/${et}"
-  RESULT=$(fetch_page "$URL")
-  STATUS="${RESULT%%|*}"
-  RESULT="${RESULT#*|}"
-  SIZE="${RESULT%%|*}"
-  BODY="${RESULT#*|}"
+  STATUS=$(fetch_page_status "$URL")
+  SIZE=$(page_size)
 
   if [[ "$STATUS" != "200" ]]; then
     fail "Layer 2 [${et}]: HTTP ${STATUS}"
     continue
   fi
 
-  # Check for "Chưa có bảng registry" error
-  HAS_NO_TABLE=$(echo "$BODY" | grep -c "Chưa có bảng registry" 2>/dev/null || true)
-  HAS_NO_TABLE=$(echo "$HAS_NO_TABLE" | tr -d '[:space:]')
-
+  HAS_NO_TABLE=$(page_grep_count "Chưa có bảng registry")
   if [[ "${HAS_NO_TABLE:-0}" -gt 0 ]]; then
     fail "Layer 2 [${et}]: Shows 'Chưa có bảng registry' — missing table_registry record"
     continue
   fi
 
-  # Check for other errors
-  HAS_ERR=$(echo "$BODY" | grep -ci "FORBIDDEN\|statusCode.*403\|statusCode.*500\|don't have permission" 2>/dev/null || true)
-  HAS_ERR=$(echo "$HAS_ERR" | tr -d '[:space:]')
-
+  HAS_ERR=$(page_grep_ci_count "FORBIDDEN\|statusCode.*403\|statusCode.*500\|don't have permission")
   if [[ "${HAS_ERR:-0}" -gt 0 ]]; then
     fail "Layer 2 [${et}]: HTTP 200 but has permission/server errors"
     continue
   fi
 
-  # Check data presence
   PREFIX=$(get_code_prefix "$et")
   if [[ -n "$PREFIX" ]]; then
-    DATA_HIT=$(echo "$BODY" | grep -c "$PREFIX" 2>/dev/null || true)
-    DATA_HIT=$(echo "$DATA_HIT" | tr -d '[:space:]')
-
+    DATA_HIT=$(page_grep_count "$PREFIX")
     if [[ "${DATA_HIT:-0}" -eq 0 ]]; then
       warn "Layer 2 [${et}]: No data markers '${PREFIX}' found (${SIZE}b) — collection may be empty"
     else
@@ -346,11 +341,8 @@ else:
 
   # Fetch detail page
   DETAIL_URL="${BASE_URL}/knowledge/registries/${et}/${ITEM_CODE}"
-  RESULT=$(fetch_page "$DETAIL_URL")
-  D_STATUS="${RESULT%%|*}"
-  RESULT="${RESULT#*|}"
-  D_SIZE="${RESULT%%|*}"
-  D_BODY="${RESULT#*|}"
+  D_STATUS=$(fetch_page_status "$DETAIL_URL")
+  D_SIZE=$(page_size)
 
   if [[ "$D_STATUS" != "200" ]]; then
     fail "Layer 3 [${et}/${ITEM_CODE}]: HTTP ${D_STATUS}"
@@ -358,8 +350,7 @@ else:
   fi
 
   # Count rendered sections (UCard headers with font-semibold)
-  SECTION_COUNT=$(echo "$D_BODY" | grep -c 'font-semibold text-gray-900' 2>/dev/null || true)
-  SECTION_COUNT=$(echo "$SECTION_COUNT" | tr -d '[:space:]')
+  SECTION_COUNT=$(page_grep_count 'font-semibold text-gray-900')
 
   # Determine if this is config or discovery mode
   IS_CONFIG=0
