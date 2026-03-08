@@ -22,8 +22,10 @@ export interface RelationSectionConfig {
 	label: string;
 	/** Collection to query */
 	collection: string;
-	/** Foreign key field in the related collection pointing to this item */
+	/** Foreign key field in the related collection pointing to this item (one-to-many) */
 	foreignKey: string;
+	/** Local key field in this item pointing to the related collection's ID (many-to-one). When set, queries related collection with filter: { id: { _eq: item[localKey] } } */
+	localKey?: string;
 	/** Fields to display from the related items */
 	displayFields: string[];
 	/** Entity type for linking related items (used to build /knowledge/registries/{type}/{code} URLs) */
@@ -52,17 +54,17 @@ export const sectionConfig: Record<string, SectionConfig[]> = {
 			id: 'info',
 			type: 'fields',
 			label: 'Thong tin co ban',
-			fields: ['code', 'name', 'legacy_code', 'description', 'layer', 'domain', 'category', 'status', 'date_created'],
+			fields: ['code', 'name', 'legacy_code', 'description', 'layer', 'domain', 'category', 'status'],
 		},
 		{
 			id: 'sets',
 			type: 'relation',
 			label: 'Thuoc to hop (Checkpoint Sets)',
 			collection: 'checkpoint_set_items',
-			foreignKey: 'checkpoint_type_id',
-			displayFields: ['checkpoint_set_id.code', 'checkpoint_set_id.name'],
+			foreignKey: 'type_id',
+			displayFields: ['set_id.code', 'set_id.name'],
 			linkEntityType: 'checkpoint_set',
-			linkCodeField: 'checkpoint_set_id.code',
+			linkCodeField: 'set_id.code',
 		},
 		{
 			id: 'deps',
@@ -84,10 +86,10 @@ export const sectionConfig: Record<string, SectionConfig[]> = {
 			type: 'relation',
 			label: 'Chua Checkpoints',
 			collection: 'checkpoint_set_items',
-			foreignKey: 'checkpoint_set_id',
-			displayFields: ['checkpoint_type_id.code', 'checkpoint_type_id.name', 'sort_order', 'is_required'],
+			foreignKey: 'set_id',
+			displayFields: ['type_id.code', 'type_id.name', 'sort_order', 'is_required'],
 			linkEntityType: 'checkpoint_type',
-			linkCodeField: 'checkpoint_type_id.code',
+			linkCodeField: 'type_id.code',
 			sort: 'sort_order',
 		},
 		{
@@ -103,7 +105,7 @@ export const sectionConfig: Record<string, SectionConfig[]> = {
 			id: 'info',
 			type: 'fields',
 			label: 'Thong tin quy trinh',
-			fields: ['process_code', 'name', 'description', 'level', 'status', 'date_created'],
+			fields: ['process_code', 'title', 'description', 'level', 'status', 'date_created'],
 		},
 		{
 			id: 'steps',
@@ -111,7 +113,7 @@ export const sectionConfig: Record<string, SectionConfig[]> = {
 			label: 'Cac buoc (Nodes)',
 			collection: 'workflow_steps',
 			foreignKey: 'workflow_id',
-			displayFields: ['code', 'name', 'sort_order', 'step_type', 'status'],
+			displayFields: ['code', 'title', 'sort_order', 'step_type'],
 			linkEntityType: 'workflow_step',
 			linkCodeField: 'code',
 			sort: 'sort_order',
@@ -122,9 +124,7 @@ export const sectionConfig: Record<string, SectionConfig[]> = {
 			label: 'De xuat thay doi',
 			collection: 'workflow_change_requests',
 			foreignKey: 'workflow_id',
-			displayFields: ['code', 'title', 'status', 'date_created'],
-			linkEntityType: 'wcr',
-			linkCodeField: 'code',
+			displayFields: ['title', 'status', 'change_type', 'date_created'],
 		},
 		{
 			id: 'deps',
@@ -139,7 +139,7 @@ export const sectionConfig: Record<string, SectionConfig[]> = {
 			id: 'info',
 			type: 'fields',
 			label: 'Thong tin Node',
-			fields: ['code', 'name', 'description', 'sort_order', 'step_type', 'status'],
+			fields: ['code', 'title', 'description', 'sort_order', 'step_type'],
 		},
 		{
 			id: 'workflow',
@@ -147,6 +147,7 @@ export const sectionConfig: Record<string, SectionConfig[]> = {
 			label: 'Thuoc quy trinh',
 			collection: 'workflows',
 			foreignKey: 'id',
+			localKey: 'workflow_id',
 			displayFields: ['process_code', 'name', 'status'],
 			linkEntityType: 'workflow',
 			linkCodeField: 'process_code',
@@ -247,7 +248,7 @@ export const sectionConfig: Record<string, SectionConfig[]> = {
 			id: 'info',
 			type: 'fields',
 			label: 'Thong tin de xuat',
-			fields: ['code', 'title', 'description', 'status', 'date_created'],
+			fields: ['title', 'description', 'change_type', 'status', 'date_created'],
 		},
 	],
 
@@ -256,7 +257,7 @@ export const sectionConfig: Record<string, SectionConfig[]> = {
 			id: 'info',
 			type: 'fields',
 			label: 'Thong tin Task',
-			fields: ['code', 'title', 'description', 'priority', 'status', 'date_created'],
+			fields: ['name', 'description', 'priority', 'status', 'task_type', 'date_created'],
 		},
 	],
 
