@@ -24,7 +24,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-VERSION="1.0.0"
+VERSION="1.1.0"
 BASE_URL="https://vps.incomexsaigoncorp.vn"
 DIRECTUS_URL="https://directus.incomexsaigoncorp.vn"
 FIX_MODE=false
@@ -292,6 +292,140 @@ except:
     pass "API [${code}] ${col}: Has data (${name})"
   fi
 done <<< "$COLLECTIONS"
+
+# =========================================================================
+# TEST 6: Layer 3 — Detail Pages (Config + Discovery Mode)
+# =========================================================================
+echo ""
+echo "--- Test 6: Layer 3 — Detail Pages ---"
+
+# Get sample items for each entity type and check detail page rendering
+LAYER3_TYPES=$(echo "$META_JSON" | python3 -c "
+import sys, json
+meta = json.load(sys.stdin).get('data', [])
+for m in meta:
+    et = m.get('entity_type', '')
+    rc = m.get('registry_collection', '')
+    if et and rc:
+        print(f'{et}|{rc}')
+" 2>/dev/null || echo "")
+
+# Config-mode entity types (have sectionConfig in detail-sections.ts)
+CONFIG_TYPES="checkpoint_type checkpoint_set workflow workflow_step dot_tool collection"
+
+get_l3_code_field() {
+  case "$1" in
+    workflows) echo "process_code" ;;
+    table_registry) echo "table_id" ;;
+    *) echo "code" ;;
+  esac
+}
+
+DISCOVERY_TESTED=0
+CONFIG_TESTED=0
+
+while IFS='|' read -r et rc; do
+  [[ -z "$et" ]] && continue
+
+  local_cf=$(get_l3_code_field "$rc")
+
+  # Get 1 sample item
+  SAMPLE=$(curl -sk --max-time 10 "${DIRECTUS_URL}/items/${rc}?fields=${local_cf},id&limit=1" 2>/dev/null || echo '{"data":[]}')
+  ITEM_CODE=$(echo "$SAMPLE" | python3 -c "
+import sys, json
+d = json.load(sys.stdin).get('data', [])
+cf = '${local_cf}'
+if d:
+    code = d[0].get(cf, '') or d[0].get('code', '') or str(d[0].get('id', ''))
+    print(code)
+else:
+    print('')
+" 2>/dev/null || echo "")
+
+  [[ -z "$ITEM_CODE" ]] && continue
+
+  # Fetch detail page
+  DETAIL_URL="${BASE_URL}/knowledge/registries/${et}/${ITEM_CODE}"
+  RESULT=$(fetch_page "$DETAIL_URL")
+  D_STATUS="${RESULT%%|*}"
+  RESULT="${RESULT#*|}"
+  D_SIZE="${RESULT%%|*}"
+  D_BODY="${RESULT#*|}"
+
+  if [[ "$D_STATUS" != "200" ]]; then
+    fail "Layer 3 [${et}/${ITEM_CODE}]: HTTP ${D_STATUS}"
+    continue
+  fi
+
+  # Count rendered sections (UCard headers with font-semibold)
+  SECTION_COUNT=$(echo "$D_BODY" | grep -c 'font-semibold text-gray-900' 2>/dev/null || true)
+  SECTION_COUNT=$(echo "$SECTION_COUNT" | tr -d '[:space:]')
+
+  # Determine if this is config or discovery mode
+  IS_CONFIG=0
+  for ct in $CONFIG_TYPES; do
+    if [[ "$et" == "$ct" ]]; then
+      IS_CONFIG=1
+      break
+    fi
+  done
+
+  if [[ "$IS_CONFIG" == "1" ]]; then
+    # Config mode: expect ≥2 sections
+    if [[ "${SECTION_COUNT:-0}" -ge 2 ]]; then
+      pass "Layer 3 config [${et}/${ITEM_CODE}]: ${SECTION_COUNT} sections"
+    elif [[ "${SECTION_COUNT:-0}" -ge 1 ]]; then
+      warn "Layer 3 config [${et}/${ITEM_CODE}]: only ${SECTION_COUNT} section (expected ≥2)"
+    else
+      fail "Layer 3 config [${et}/${ITEM_CODE}]: 0 sections rendered"
+    fi
+    CONFIG_TESTED=$((CONFIG_TESTED + 1))
+  else
+    # Discovery mode: expect ≥1 section (info at minimum)
+    if [[ "${SECTION_COUNT:-0}" -ge 2 ]]; then
+      pass "Layer 3 discovery [${et}/${ITEM_CODE}]: ${SECTION_COUNT} sections"
+    elif [[ "${SECTION_COUNT:-0}" -ge 1 ]]; then
+      pass "Layer 3 discovery [${et}/${ITEM_CODE}]: ${SECTION_COUNT} section (info)"
+    else
+      fail "Layer 3 discovery [${et}/${ITEM_CODE}]: 0 sections rendered"
+    fi
+    DISCOVERY_TESTED=$((DISCOVERY_TESTED + 1))
+  fi
+
+done <<< "$LAYER3_TYPES"
+
+echo "  (Config: ${CONFIG_TESTED} types, Discovery: ${DISCOVERY_TESTED} types)"
+
+# =========================================================================
+# TEST 7: Entity Dependencies — Data Volume
+# =========================================================================
+echo ""
+echo "--- Test 7: Entity Dependencies ---"
+
+DEP_COUNT=$(curl -sk --max-time 10 "${DIRECTUS_URL}/items/entity_dependencies?fields=id&limit=200&meta=total_count" 2>/dev/null | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    # Try meta.total_count first, fallback to counting returned items
+    meta = d.get('meta', {})
+    if meta and meta.get('total_count'):
+        print(int(meta['total_count']))
+    else:
+        print(len(d.get('data', [])))
+except:
+    print(0)
+" 2>/dev/null || echo "0")
+DEP_COUNT=$(echo "$DEP_COUNT" | tr -d '[:space:]')
+
+if [[ "$DEP_COUNT" -ge 150 ]]; then
+  pass "entity_dependencies: ${DEP_COUNT} records (≥150)"
+elif [[ "$DEP_COUNT" -ge 50 ]]; then
+  warn "entity_dependencies: ${DEP_COUNT} records (target: ≥150)"
+elif [[ "$DEP_COUNT" -gt 0 ]]; then
+  warn "entity_dependencies: ${DEP_COUNT} records (low — run dot-dependency-scan)"
+else
+  fail "entity_dependencies: 0 records"
+fi
 
 # =========================================================================
 # SUMMARY
