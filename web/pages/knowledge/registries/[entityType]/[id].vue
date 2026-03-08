@@ -50,14 +50,8 @@ const { data: catalogEntry } = useAsyncData(
 // Get sections config for this entity type
 const sections = computed<SectionConfig[]>(() => sectionConfig[entityType.value] || []);
 
-// Fallback: if no section config, show all fields as key-value
-const fallbackFields = computed(() => {
-	if (sections.value.length > 0 || !item.value) return [];
-	const hidden = new Set(['id', 'sort', 'user_created', 'user_updated']);
-	return Object.entries(item.value)
-		.filter(([key]) => !hidden.has(key))
-		.map(([key, value]) => ({ key, value }));
-});
+// Discovery mode: entity types without section config
+const isDiscoveryMode = computed(() => sections.value.length === 0);
 
 definePageMeta({ title: 'Chi tiet' });
 
@@ -105,19 +99,13 @@ useHead({
 			</template>
 		</div>
 
-		<!-- Fallback: generic key-value (for entity types without section config) -->
-		<div v-else-if="item" class="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
-			<div class="divide-y divide-gray-200 dark:divide-gray-700">
-				<div v-for="field in fallbackFields" :key="field.key" class="flex gap-4 px-6 py-3">
-					<dt class="w-48 flex-shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
-						{{ field.key }}
-					</dt>
-					<dd class="text-sm text-gray-900 dark:text-white">
-						<RegistriesAutoLinkedValue :value="field.value" :field-key="field.key" />
-					</dd>
-				</div>
-			</div>
-		</div>
+		<!-- Discovery mode: auto-discover relations for entity types without config -->
+		<RegistriesDiscoveryView
+			v-else-if="item && isDiscoveryMode"
+			:item="item"
+			:entity-type="entityType"
+			:collection="collection"
+		/>
 
 		<!-- Back link -->
 		<div class="mt-6">
