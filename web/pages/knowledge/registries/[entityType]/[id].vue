@@ -7,20 +7,47 @@ const route = useRoute();
 const entityType = computed(() => route.params.entityType as string);
 const itemId = computed(() => route.params.id as string);
 
-const collection = computed(() => collectionMap[entityType.value] || '');
-const codeField = computed(() => getCodeField(entityType.value));
-
 const { $directus } = useNuxtApp();
+
+// Fetch catalog entry for breadcrumb AND dynamic collection lookup
+const { data: catalogEntry } = useAsyncData(
+	`catalog-detail-${entityType.value}`,
+	() =>
+		$directus.request(
+			readItems('meta_catalog', {
+				filter: { entity_type: { _eq: entityType.value } },
+				fields: ['name', 'code', 'registry_collection'],
+				limit: 1,
+			}),
+		),
+	{ transform: (items: any[]) => items?.[0] || null },
+);
+
+// Dynamic collection: config first, then meta_catalog fallback
+const collection = computed(() => collectionMap[entityType.value] || catalogEntry.value?.registry_collection || '');
+const codeField = computed(() => getCodeField(entityType.value));
 
 // Fetch the item — support both numeric ID and code-based lookup
 const { data: item, error } = useAsyncData(`registry-detail-${entityType.value}-${itemId.value}`, async () => {
-	if (!collection.value) return null;
+	// For dynamic lookup, try collectionMap first, then meta_catalog
+	let col = collectionMap[entityType.value];
+	if (!col) {
+		const cats = await $directus.request(
+			readItems('meta_catalog', {
+				filter: { entity_type: { _eq: entityType.value } },
+				fields: ['registry_collection'],
+				limit: 1,
+			}),
+		);
+		col = (cats as any[])?.[0]?.registry_collection || '';
+	}
+	if (!col) return null;
 
 	// If itemId contains letters/dashes, look up by code field
 	const isCode = /[A-Za-z-]/.test(itemId.value);
 	if (isCode) {
 		const items = await $directus.request(
-			readItems(collection.value as any, {
+			readItems(col as any, {
 				filter: { [codeField.value]: { _eq: itemId.value } },
 				fields: ['*'],
 				limit: 1,
@@ -30,22 +57,8 @@ const { data: item, error } = useAsyncData(`registry-detail-${entityType.value}-
 	}
 
 	// Numeric ID — direct lookup
-	return $directus.request(readItem(collection.value as any, itemId.value, { fields: ['*'] }));
+	return $directus.request(readItem(col as any, itemId.value, { fields: ['*'] }));
 });
-
-// Fetch catalog entry for breadcrumb
-const { data: catalogEntry } = useAsyncData(
-	`catalog-detail-${entityType.value}`,
-	() =>
-		$directus.request(
-			readItems('meta_catalog', {
-				filter: { entity_type: { _eq: entityType.value } },
-				fields: ['name', 'code'],
-				limit: 1,
-			}),
-		),
-	{ transform: (items: any[]) => items?.[0] || null },
-);
 
 // Get sections config for this entity type
 const sections = computed<SectionConfig[]>(() => sectionConfig[entityType.value] || []);
