@@ -18,7 +18,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="2.0.0"
+VERSION="3.0.0"
 DRY_RUN=""
 
 log_info() { echo "[INFO] $1"; }
@@ -347,7 +347,8 @@ for rel in step_rels:
     rel_type = rel.get('relation_type', 'related')
     if from_code and to_code:
         # Map relation_type to our standard types
-        dep_rel = 'triggers' if rel_type in ('next', 'triggers') else 'related'
+        dep_rel = 'sequence' if rel_type in ('next', 'sequence') else \
+                  'triggers' if rel_type in ('triggers',) else 'related'
         track(create_dep('workflow_step', from_code, 'workflow_step', to_code,
                         dep_rel, 'forward', 1.0))
 
@@ -379,6 +380,121 @@ for item in cat_items:
                                 'contains', 'forward', 0.9))
 
 # ===================================================================
+# SCAN 7: DEPENDS_ON — table_registry → collections (functional dep)
+# ===================================================================
+print()
+print('=== Scan 7: table_registry -> collections (depends_on) ===')
+
+tbl_items = get_items('table_registry',
+    fields='id,table_id,collection',
+    filters='filter[collection][_nnull]=true',
+    limit=200)
+print(f'  Found {len(tbl_items)} table_registry entries with collection')
+
+for item in tbl_items:
+    tbl_code = item.get('table_id', '')
+    col_name = item.get('collection', '')
+    if tbl_code and col_name:
+        track(create_dep('table', tbl_code, 'collection', col_name,
+                        'depends_on', 'forward', 0.9))
+
+# ===================================================================
+# SCAN 8: DEPENDS_ON — workflow_steps with checkpoint_sets (functional)
+# ===================================================================
+print()
+print('=== Scan 8: workflow_steps depends_on checkpoint_sets ===')
+
+# Re-scan steps with checkpoint_set_id but as depends_on (functional dep)
+for step in wf_steps_cps:
+    step_code = step.get('code', '')
+    cps_code = (step.get('checkpoint_set_id') or {}).get('code', '')
+    if step_code and cps_code:
+        track(create_dep('workflow_step', step_code, 'checkpoint_set', cps_code,
+                        'depends_on', 'forward', 0.9))
+
+# ===================================================================
+# SCAN 9: DEPENDS_ON — DOT tools → collections they operate on
+# ===================================================================
+print()
+print('=== Scan 9: DOT tools depends_on collections ===')
+
+import os, glob
+
+dot_bin_dir = os.environ.get('DOT_BIN_DIR', '')
+if not dot_bin_dir:
+    # Try to find dot/bin relative to script
+    script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else ''
+    if not script_dir:
+        # Fallback: check common locations
+        for candidate in ['/opt/incomex/web-test/dot/bin', './dot/bin']:
+            if os.path.isdir(candidate):
+                dot_bin_dir = candidate
+                break
+
+if dot_bin_dir and os.path.isdir(dot_bin_dir):
+    # Get all registered collections
+    all_collections = set(COLLECTION_TO_ENTITY.keys())
+
+    dot_scripts = sorted(glob.glob(os.path.join(dot_bin_dir, 'dot-*')))
+    print(f'  Scanning {len(dot_scripts)} DOT scripts for collection references')
+
+    # Get DOT tools from registry
+    dot_tools = get_items('dot_tools', fields='code,name', limit=200)
+    name_to_code = {}
+    for dt in dot_tools:
+        name = dt.get('name', '')
+        code = dt.get('code', '')
+        if name and code:
+            name_to_code[name] = code
+
+    for script_path in dot_scripts:
+        script_name = os.path.basename(script_path)
+        dot_code = name_to_code.get(script_name, '')
+        if not dot_code:
+            continue
+
+        try:
+            with open(script_path, 'r', errors='ignore') as f:
+                content = f.read()
+        except:
+            continue
+
+        # Find collection references in script content
+        for col_name in all_collections:
+            # Look for collection name as a string literal or API path
+            if f"'{col_name}'" in content or f'"{col_name}"' in content or f'/items/{col_name}' in content:
+                track(create_dep('dot_tool', dot_code, 'collection', col_name,
+                                'depends_on', 'forward', 0.8))
+else:
+    print('  [SKIP] Cannot find dot/bin directory for DOT script scanning')
+
+# ===================================================================
+# SCAN 10: DEPENDS_ON — pages → collections (functional dep)
+# ===================================================================
+print()
+print('=== Scan 10: pages depends_on collections ===')
+
+pages = get_items('ui_pages', fields='code,route', limit=100)
+print(f'  Found {len(pages)} ui_pages')
+
+# Map page routes to known collection usage patterns
+page_collection_map = {
+    '/knowledge/registries': ['meta_catalog', 'table_registry'],
+    '/knowledge': ['meta_catalog'],
+}
+
+for page in pages:
+    page_code = page.get('code', '')
+    route = page.get('route', '')
+    if not page_code or not route:
+        continue
+    for route_prefix, cols in page_collection_map.items():
+        if route.startswith(route_prefix):
+            for col in cols:
+                track(create_dep('page', page_code, 'collection', col,
+                                'depends_on', 'forward', 0.7))
+
+# ===================================================================
 # Summary
 # ===================================================================
 print()
@@ -395,6 +511,7 @@ print('=========================================')
 PYEOF
 
   BASE_URL="$BASE_URL" DOT_TOKEN="$DOT_TOKEN" DRY_RUN="${DRY_RUN}" \
+    DOT_BIN_DIR="${SCRIPT_DIR}" \
     python3 "$tmp_py" < /dev/null
 
   rm -f "$tmp_py"

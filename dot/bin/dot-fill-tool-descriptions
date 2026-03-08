@@ -1,0 +1,440 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-fill-tool-descriptions — Fill missing descriptions for DOT tools in Directus
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/ for "fill-tool-desc" — no match]
+# VERSION: 1.0.0
+#
+# Reads each dot-* script from dot/bin/, extracts a description from the source
+# code (comment headers, VERSION lines, usage blocks), categorizes each tool,
+# and updates the dot_tools collection in Directus for records where
+# description IS NULL.
+#
+# Usage:
+#   dot-fill-tool-descriptions [--cloud|--local] [--dry-run]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+DRY_RUN=""
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_skip() { echo "[SKIP] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-fill-tool-descriptions v${VERSION}
+
+Reads DOT tool scripts, extracts descriptions from source code, categorizes
+each tool, and updates dot_tools records where description IS NULL.
+Idempotent — only fills missing descriptions.
+
+Usage:
+  dot-fill-tool-descriptions [--cloud|--local] [--dry-run]
+
+EOF
+  show_environment_help
+}
+
+main() {
+  for arg in "$@"; do
+    case "$arg" in
+      --dry-run) DRY_RUN="1" ;;
+      --help|-h) show_help; exit 0 ;;
+    esac
+  done
+
+  init_environment "$@"
+  local BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: Fill Tool Descriptions v${VERSION}"
+  echo "========================================="
+  print_environment_banner "$@"
+
+  # Auth
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    source "${SCRIPT_DIR}/dot-auth" "$@"
+  fi
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "Authentication failed"; exit 1
+  fi
+
+  local tmp_py
+  tmp_py=$(mktemp /tmp/dot-fill-desc-XXXXXX.py)
+  trap "rm -f '$tmp_py'" EXIT
+
+  cat > "$tmp_py" << 'PYEOF'
+import json, os, sys, ssl, re, glob
+import urllib.request, urllib.parse
+
+base_url = os.environ['BASE_URL']
+token = os.environ['DOT_TOKEN']
+dry_run = os.environ.get('DRY_RUN', '')
+bin_dir = os.environ['BIN_DIR']
+
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+def api(method, path, data=None):
+    url = f'{base_url}{path}'
+    payload = json.dumps(data).encode() if data else None
+    req = urllib.request.Request(url, data=payload, method=method,
+        headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'})
+    try:
+        resp = urllib.request.urlopen(req, context=ctx)
+        return resp.status, json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        try:
+            return e.code, json.loads(body)
+        except:
+            return e.code, {'error': body[:300]}
+
+# ===================================================================
+# Category mapping based on tool name prefix
+# ===================================================================
+CATEGORY_PREFIXES = [
+    ('dot-schema-', 'schema'),
+    ('dot-flow-', 'flow'),
+    ('dot-permission', 'permission'),
+    ('dot-health', 'health'),
+    ('dot-sync', 'sync'),
+    ('dot-registry', 'registry'),
+    ('dot-registries', 'registry'),
+    ('dot-metadata', 'metadata'),
+    ('dot-catalog', 'metadata'),
+    ('dot-cost', 'audit'),
+    ('dot-vector-audit', 'audit'),
+    ('dot-orphan', 'audit'),
+    ('dot-field-duplicate', 'audit'),
+    ('dot-ai-', 'ai'),
+    ('dot-gpt-', 'ai'),
+    ('dot-gemini', 'ai'),
+    ('dot-content-', 'content'),
+    ('dot-knowledge-', 'knowledge'),
+    ('dot-ops-', 'ops'),
+    ('dot-local-', 'ops'),
+    ('dot-start-', 'ops'),
+    ('dot-hook-', 'ops'),
+    ('dot-agent-', 'agent'),
+    ('dot-claude-', 'agent'),
+    ('dot-mcp-', 'mcp'),
+    ('dot-env-', 'env'),
+    ('dot-seed-', 'seed'),
+    ('dot-dependency', 'metadata'),
+    ('dot-nav-', 'content'),
+    ('dot-spider', 'health'),
+    ('dot-test-', 'health'),
+    ('dot-e2e-', 'health'),
+    ('dot-verify', 'health'),
+    ('dot-arch-', 'audit'),
+    ('dot-token', 'env'),
+    ('dot-auth', 'env'),
+    ('dot-backup', 'ops'),
+    ('dot-rollback', 'ops'),
+    ('dot-clean-', 'ops'),
+    ('dot-apply', 'ops'),
+    ('dot-web28', 'ops'),
+    ('dot-fix-', 'ops'),
+    ('dot-fill-', 'metadata'),
+]
+
+def get_category(tool_name):
+    for prefix, cat in CATEGORY_PREFIXES:
+        if tool_name.startswith(prefix):
+            return cat
+    return 'other'
+
+# ===================================================================
+# Description extraction from source code
+# ===================================================================
+def extract_description_from_source(filepath, tool_name):
+    """Extract description from the first 20 lines of a script."""
+    try:
+        with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
+            lines = []
+            for i, line in enumerate(f):
+                if i >= 20:
+                    break
+                lines.append(line.rstrip())
+    except Exception:
+        return None
+
+    # Pattern 1: # dot-xxx — Description
+    for line in lines:
+        m = re.match(r'^#\s*' + re.escape(tool_name) + r'\s*[—–-]\s*(.+)', line)
+        if m:
+            return m.group(1).strip()
+
+    # Pattern 2: /** ... DOT Spider - Description (JS doc comment)
+    for line in lines:
+        m = re.match(r'^\s*\*?\s*DOT\s+\S+\s*[-–—]\s*(.+)', line)
+        if m:
+            return m.group(1).strip()
+
+    # Pattern 3: Look for comment lines that describe what the script does
+    # (lines starting with # that contain verbs like "Scan", "Fill", "Create", etc.)
+    for line in lines:
+        m = re.match(r'^#\s+((?:Scan|Fill|Create|Setup|Check|Manage|Provide|Build|Run|Deploy|Start|Stop|Restart|Monitor|Audit|Verify|Ensure|Sync|Backup|Restore|Configure|Generate|Import|Export|List|Delete|Update|Patch|Read|Write|Download|Upload|Crawl|Test|Fix|Clean|Apply|Populate|Remove)\w*\s+.{10,})', line, re.IGNORECASE)
+        if m:
+            desc = m.group(1).strip().rstrip('.')
+            if len(desc) > 15:
+                return desc
+
+    # Pattern 4: Look for description in comment block (line after the header)
+    # e.g., "# Provides environment detection..."
+    for line in lines:
+        m = re.match(r'^#\s+((?:Provides|Bulk|Reads|Scans|Populates|Manages|Runs|Sets up|Configures|Creates|Generates|Checks|Tests|Deploys|Monitors|Audits|Verifies|Ensures|Syncs|Fills|Crawls|Fixes|Cleans|Applies)\s+.{10,})', line, re.IGNORECASE)
+        if m:
+            desc = m.group(1).strip().rstrip('.')
+            if len(desc) > 15:
+                return desc
+
+    return None
+
+def generate_description_from_name(tool_name):
+    """Generate a Vietnamese description from the tool name pattern."""
+    name = tool_name  # e.g., dot-schema-blog-ensure
+
+    # dot-schema-*-ensure
+    m = re.match(r'^dot-schema-(.+)-ensure$', name)
+    if m:
+        part = m.group(1).replace('-', ' ')
+        return f'Tạo và đảm bảo schema {part} trong Directus'
+
+    # dot-schema-*
+    m = re.match(r'^dot-schema-(.+)$', name)
+    if m:
+        part = m.group(1).replace('-', ' ')
+        return f'Quản lý schema {part} trong Directus'
+
+    # dot-local-*
+    m = re.match(r'^dot-local-(.+)$', name)
+    if m:
+        action = m.group(1).replace('-', ' ')
+        return f'Quản lý môi trường local Docker: {action}'
+
+    # dot-agent-*
+    m = re.match(r'^dot-agent-(.+)$', name)
+    if m:
+        action = m.group(1).replace('-', ' ')
+        return f'Quản lý Agent services: {action}'
+
+    # dot-ai-*
+    m = re.match(r'^dot-ai-(.+)$', name)
+    if m:
+        purpose = m.group(1).replace('-', ' ')
+        return f'Cấu hình AI integration: {purpose}'
+
+    # dot-content-*
+    m = re.match(r'^dot-content-(.+)$', name)
+    if m:
+        action = m.group(1).replace('-', ' ')
+        return f'Quản lý nội dung Directus: {action}'
+
+    # dot-mcp-*
+    m = re.match(r'^dot-mcp-(.+)$', name)
+    if m:
+        action = m.group(1).replace('-', ' ')
+        return f'Quản lý MCP server/tools: {action}'
+
+    # dot-knowledge-*
+    m = re.match(r'^dot-knowledge-(.+)$', name)
+    if m:
+        action = m.group(1).replace('-', ' ')
+        return f'Quản lý Knowledge Base: {action}'
+
+    # dot-flow-*
+    m = re.match(r'^dot-flow-(.+)$', name)
+    if m:
+        action = m.group(1).replace('-', ' ')
+        return f'Thiết lập Directus Flows: {action}'
+
+    # dot-env-*
+    m = re.match(r'^dot-env-(.+)$', name)
+    if m:
+        action = m.group(1).replace('-', ' ')
+        return f'Quản lý environment: {action}'
+
+    # dot-seed-*
+    m = re.match(r'^dot-seed-(.+)$', name)
+    if m:
+        action = m.group(1).replace('-', ' ')
+        return f'Seed dữ liệu mẫu: {action}'
+
+    # dot-gpt-*
+    m = re.match(r'^dot-gpt-(.+)$', name)
+    if m:
+        action = m.group(1).replace('-', ' ')
+        return f'Cấu hình GPT integration: {action}'
+
+    # dot-ops-*
+    m = re.match(r'^dot-ops-(.+)$', name)
+    if m:
+        action = m.group(1).replace('-', ' ')
+        return f'Vận hành hệ thống: {action}'
+
+    # dot-fix-*
+    m = re.match(r'^dot-fix-(.+)$', name)
+    if m:
+        action = m.group(1).replace('-', ' ')
+        return f'Sửa lỗi: {action}'
+
+    # dot-verify-*
+    m = re.match(r'^dot-verify-(.+)$', name)
+    if m:
+        action = m.group(1).replace('-', ' ')
+        return f'Kiểm tra: {action}'
+
+    # dot-registry-*
+    m = re.match(r'^dot-registr(?:y|ies)-(.+)$', name)
+    if m:
+        action = m.group(1).replace('-', ' ')
+        return f'Quản lý Registry: {action}'
+
+    # dot-vector-*
+    m = re.match(r'^dot-vector-(.+)$', name)
+    if m:
+        action = m.group(1).replace('-', ' ')
+        return f'Kiểm tra vector embeddings: {action}'
+
+    # dot-metadata-*
+    m = re.match(r'^dot-metadata-(.+)$', name)
+    if m:
+        action = m.group(1).replace('-', ' ')
+        return f'Quản lý metadata: {action}'
+
+    # dot-catalog-*
+    m = re.match(r'^dot-catalog-(.+)$', name)
+    if m:
+        action = m.group(1).replace('-', ' ')
+        return f'Quản lý catalog: {action}'
+
+    # Fallback: generate from full tool name
+    action = name.replace('dot-', '').replace('-', ' ')
+    return f'DOT tool: {action}'
+
+# ===================================================================
+# Main logic
+# ===================================================================
+
+# 1. Get all dot-* files from bin directory
+tool_files = sorted(glob.glob(os.path.join(bin_dir, 'dot-*')))
+print(f'Found {len(tool_files)} dot-* scripts on disk')
+print()
+
+# 2. Fetch all dot_tools records with null description
+print('Fetching dot_tools records with null description...')
+code, resp = api('GET', '/items/dot_tools?filter[description][_null]=true&fields=id,name,description,category&limit=500')
+if code != 200:
+    print(f'[ERR] Failed to fetch dot_tools: HTTP {code} — {json.dumps(resp)[:200]}')
+    sys.exit(1)
+
+null_desc_tools = resp.get('data', [])
+print(f'  Found {len(null_desc_tools)} tools with null description')
+
+# Build lookup: tool_name -> record
+null_desc_map = {}
+for t in null_desc_tools:
+    name = t.get('name', '')
+    if name:
+        null_desc_map[name] = t
+
+# Also fetch all tools to know which exist
+code2, resp2 = api('GET', '/items/dot_tools?fields=id,name&limit=500')
+all_tools_map = {}
+if code2 == 200:
+    for t in resp2.get('data', []):
+        name = t.get('name', '')
+        if name:
+            all_tools_map[name] = t
+
+print(f'  Total tools in DB: {len(all_tools_map)}')
+print()
+
+# 3. Process each tool file
+stats = {'updated': 0, 'skipped_has_desc': 0, 'skipped_not_in_db': 0, 'errors': 0}
+
+for filepath in tool_files:
+    tool_name = os.path.basename(filepath)
+
+    # Skip self
+    if tool_name == 'dot-fill-tool-descriptions':
+        continue
+
+    # Check if tool exists in DB with null description
+    if tool_name not in null_desc_map:
+        if tool_name in all_tools_map:
+            stats['skipped_has_desc'] += 1
+        else:
+            stats['skipped_not_in_db'] += 1
+            print(f'  [SKIP] {tool_name} — not in dot_tools collection')
+        continue
+
+    record = null_desc_map[tool_name]
+    record_id = record['id']
+
+    # Extract description from source
+    desc = extract_description_from_source(filepath, tool_name)
+    source = 'source'
+    if not desc:
+        desc = generate_description_from_name(tool_name)
+        source = 'generated'
+
+    # Determine category
+    category = get_category(tool_name)
+    existing_category = record.get('category')
+
+    # Build patch payload
+    patch = {'description': desc}
+    if not existing_category or existing_category == 'other':
+        patch['category'] = category
+
+    if dry_run:
+        print(f'  [DRY]  {tool_name} ({source}) → "{desc}" [{category}]')
+        stats['updated'] += 1
+        continue
+
+    # PATCH the record
+    code, resp = api('PATCH', f'/items/dot_tools/{record_id}', patch)
+    if code == 200:
+        print(f'  [OK]   {tool_name} ({source}) → "{desc}" [{category}]')
+        stats['updated'] += 1
+    else:
+        print(f'  [ERR]  {tool_name}: HTTP {code} — {json.dumps(resp)[:150]}')
+        stats['errors'] += 1
+
+# ===================================================================
+# Summary
+# ===================================================================
+print()
+print('=========================================')
+print('Fill Tool Descriptions — Complete')
+print(f'  Updated:           {stats["updated"]}')
+print(f'  Skipped (has desc): {stats["skipped_has_desc"]}')
+print(f'  Skipped (not in DB): {stats["skipped_not_in_db"]}')
+print(f'  Errors:            {stats["errors"]}')
+print('=========================================')
+PYEOF
+
+  BASE_URL="$BASE_URL" DOT_TOKEN="$DOT_TOKEN" DRY_RUN="${DRY_RUN}" BIN_DIR="$SCRIPT_DIR" \
+    python3 "$tmp_py" < /dev/null
+
+  rm -f "$tmp_py"
+
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Fill Tool Descriptions - COMPLETE"
+  echo "========================================="
+}
+
+main "$@"
