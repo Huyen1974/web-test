@@ -179,6 +179,42 @@ const transitiveColumns = [
 	{ key: 'path', label: 'Duong di' },
 ];
 
+// === DETAIL LINK — link to dedicated page if available ===
+const { data: detailLink } = useAsyncData(
+	`discovery-detail-link-${props.entityType}`,
+	async () => {
+		try {
+			const items = await $directus.request(
+				readItems('meta_catalog' as any, {
+					filter: { entity_type: { _eq: props.entityType } },
+					fields: ['ui_page'],
+					limit: 1,
+				}),
+			);
+			const uiPage = (items as any[])?.[0]?.ui_page;
+			// Only show if it's a dedicated page, not the generic registries listing
+			if (uiPage && uiPage !== '/knowledge/registries' && !uiPage.startsWith('/knowledge/registries/')) {
+				return uiPage;
+			}
+			return null;
+		} catch {
+			return null;
+		}
+	},
+	{ default: () => null },
+);
+
+const detailPageUrl = computed(() => {
+	if (!detailLink.value) return null;
+	const itemId = props.item?.id;
+	const code = props.item?.code || props.item?.process_code || props.item?.table_id;
+	// Build link to dedicated page with item context
+	const base = detailLink.value as string;
+	if (code) return `${base}?highlight=${encodeURIComponent(code)}`;
+	if (itemId) return `${base}?id=${itemId}`;
+	return base;
+});
+
 // === RULE 7: PEERS — same collection, nearby items ===
 const { data: peers } = useAsyncData(
 	`discovery-peers-${props.entityType}-${props.item?.id}`,
@@ -266,6 +302,18 @@ function getChildColumns(items: any[]): { key: string; label: string }[] {
 				</div>
 			</div>
 		</UCard>
+
+		<!-- DETAIL LINK: Link to dedicated page -->
+		<div v-if="detailPageUrl" class="flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-4 py-3 dark:border-primary-800 dark:bg-primary-900/20">
+			<UIcon name="i-heroicons-arrow-top-right-on-square" class="h-5 w-5 text-primary-600 dark:text-primary-400" />
+			<span class="text-sm text-gray-700 dark:text-gray-300">Xem trang chi tiet:</span>
+			<NuxtLink
+				:to="detailPageUrl"
+				class="text-sm font-medium text-primary-600 hover:text-primary-800 hover:underline dark:text-primary-400"
+			>
+				{{ detailLink }}
+			</NuxtLink>
+		</div>
 
 		<!-- BELONGS_TO: Parent records -->
 		<UCard

@@ -178,6 +178,14 @@ jobs:
               exit 1
             fi
 
+            # Refresh registry counts after successful deploy
+            echo "=== Refreshing registry counts ==="
+            curl -sf -X POST --max-time 30 \
+              --resolve vps.incomexsaigoncorp.vn:443:127.0.0.1 \
+              https://vps.incomexsaigoncorp.vn/api/registry/refresh-counts \
+              -H "Content-Type: application/json" \
+              -o /dev/null 2>/dev/null && echo "Registry counts refreshed" || echo "Registry refresh skipped (non-critical)"
+
             echo "=== Direct deploy complete ==="
 
   # ===========================================================================
@@ -343,5 +351,13 @@ jobs:
               echo "WARNING: Some health checks failed. Check container logs."
               exit 1
             fi
+
+            # Refresh registry counts after successful deploy
+            echo "=== Refreshing registry counts ==="
+            curl -sf -X POST --max-time 30 \
+              --resolve vps.incomexsaigoncorp.vn:443:127.0.0.1 \
+              https://vps.incomexsaigoncorp.vn/api/registry/refresh-counts \
+              -H "Content-Type: application/json" \
+              -o /dev/null 2>/dev/null && echo "Registry counts refreshed" || echo "Registry refresh skipped (non-critical)"
 
             echo "=== Deploy complete ==="

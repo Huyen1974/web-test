@@ -20,6 +20,8 @@ const tableIdMap: Record<string, string> = {
 	checkpoint_type: 'tbl_registry_checkpoint_types',
 	checkpoint_set: 'tbl_registry_checkpoint_sets',
 	entity_dependency: 'tbl_registry_entity_dependencies',
+	table_proposal: 'tbl_proposals_list',
+	checkpoint_instance: 'tbl_checkpoint_instances',
 };
 
 const tableId = computed(() => tableIdMap[entityType.value] || '');
