@@ -9,7 +9,6 @@ const props = defineProps<{
 
 const { $directus } = useNuxtApp();
 
-// Build the fields list from displayFields (need top-level + nested)
 const queryFields = computed(() => {
 	const fields = new Set<string>(['id']);
 	for (const f of props.config.displayFields) {
@@ -44,14 +43,6 @@ const { data: relatedItems } = useAsyncData(
 
 const hasData = computed(() => relatedItems.value && relatedItems.value.length > 0);
 
-// Build table columns from displayFields
-const columns = computed(() => {
-	return props.config.displayFields.map((f) => {
-		const label = f.includes('.') ? f.split('.').pop()! : f;
-		return { key: f, label };
-	});
-});
-
 // Resolve nested field values (e.g., "checkpoint_set_id.code")
 function resolveField(item: any, field: string): any {
 	const parts = field.split('.');
@@ -63,47 +54,53 @@ function resolveField(item: any, field: string): any {
 	return val;
 }
 
-// Build link URL for a related item
-function getItemLink(relItem: any): string | null {
+// Build UTable columns from displayFields
+const columns = computed(() => {
+	return props.config.displayFields.map((f) => {
+		const label = f.includes('.') ? f.split('.').pop()! : f;
+		return { key: f.replace(/\./g, '_'), label };
+	});
+});
+
+// Transform rows for UTable (flatten nested fields)
+const rows = computed(() => {
+	if (!relatedItems.value) return [];
+	return relatedItems.value.map((item: any) => {
+		const row: Record<string, any> = { _raw: item };
+		for (const f of props.config.displayFields) {
+			row[f.replace(/\./g, '_')] = resolveField(item, f);
+		}
+		return row;
+	});
+});
+
+function getItemLink(row: any): string | null {
 	if (!props.config.linkEntityType || !props.config.linkCodeField) return null;
-	const code = resolveField(relItem, props.config.linkCodeField);
+	const code = resolveField(row._raw, props.config.linkCodeField);
 	if (!code) return null;
 	return `/knowledge/registries/${props.config.linkEntityType}/${code}`;
 }
 </script>
 
 <template>
-	<UCard v-if="hasData" :ui="{ body: { padding: 'p-0 sm:p-0' } }">
+	<UCard v-if="hasData">
 		<template #header>
 			<div class="flex items-center gap-2">
 				<h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ config.label }}</h3>
 				<UBadge color="gray" variant="subtle" size="xs">{{ relatedItems?.length || 0 }}</UBadge>
 			</div>
 		</template>
-		<div class="overflow-x-auto">
-			<table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-				<thead class="bg-gray-50 dark:bg-gray-800/50">
-					<tr>
-						<th v-for="col in columns" :key="col.key" class="px-4 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
-							{{ col.label }}
-						</th>
-					</tr>
-				</thead>
-				<tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-					<tr v-for="(relItem, idx) in relatedItems" :key="idx" class="hover:bg-gray-50 dark:hover:bg-gray-800/30">
-						<td v-for="col in columns" :key="col.key" class="px-4 py-2 text-sm text-gray-900 dark:text-white">
-							<NuxtLink
-								v-if="col.key === config.linkCodeField && getItemLink(relItem)"
-								:to="getItemLink(relItem)!"
-								class="font-medium text-primary-600 hover:text-primary-800 dark:text-primary-400 hover:underline"
-							>
-								{{ resolveField(relItem, col.key) ?? '—' }}
-							</NuxtLink>
-							<RegistriesAutoLinkedValue v-else :value="resolveField(relItem, col.key)" :field-key="col.key" />
-						</td>
-					</tr>
-				</tbody>
-			</table>
-		</div>
+		<UTable :columns="columns" :rows="rows" :ui="{ td: { padding: 'py-2 px-3' }, th: { padding: 'py-2 px-3' } }">
+			<template v-for="col in columns" :key="col.key" #[`cell-${col.key}`]="{ row }">
+				<NuxtLink
+					v-if="config.linkCodeField && col.key === config.linkCodeField.replace(/\./g, '_') && getItemLink(row)"
+					:to="getItemLink(row)!"
+					class="font-medium text-primary-600 hover:text-primary-800 dark:text-primary-400 hover:underline"
+				>
+					{{ row[col.key] ?? '—' }}
+				</NuxtLink>
+				<RegistriesAutoLinkedValue v-else :value="row[col.key]" :field-key="col.key" />
+			</template>
+		</UTable>
 	</UCard>
 </template>
