@@ -2,35 +2,31 @@
 # =============================================================================
 # dot-registries-verify - Verify ALL Registries pages via public HTTP
 # =============================================================================
-# VERSION: 1.0.0
+# VERSION: 2.0.0
 # CHECKED-NO-DUPLICATE: [grep dot/bin/ for "registries-verify" — no match]
 #
 # Verifies every Registries page returns HTTP 200 with valid HTML content.
 # Uses PUBLIC requests (no auth token) to match actual user experience.
-# Checks both HTTP status AND embedded error messages in HTML body.
+# Always checks HTTP status, embedded errors, AND data presence in HTML body.
 #
 # Usage:
-#   dot/bin/dot-registries-verify [--deep] [--url URL]
+#   dot/bin/dot-registries-verify [--url=URL]
 #
 # Options:
-#   --deep    Also check HTML body for embedded 403/permission errors
 #   --url     Override base URL (default: https://vps.incomexsaigoncorp.vn)
 # =============================================================================
 
 set -euo pipefail
 
-VERSION="1.0.0"
+VERSION="2.0.0"
 BASE_URL="https://vps.incomexsaigoncorp.vn"
-DEEP=false
 
 for arg in "$@"; do
   case "$arg" in
-    --deep) DEEP=true ;;
     --url=*) BASE_URL="${arg#--url=}" ;;
     --help|-h)
       echo "dot-registries-verify v${VERSION}"
-      echo "Usage: dot-registries-verify [--deep] [--url=URL]"
-      echo "  --deep  Check HTML body for embedded errors"
+      echo "Usage: dot-registries-verify [--url=URL]"
       echo "  --url   Override base URL"
       exit 0
       ;;
@@ -38,83 +34,133 @@ for arg in "$@"; do
 done
 
 # Layer 1: Main registries index
-# Layer 2: Entity type list pages
-# Layer 3: Individual entity detail pages (sample)
+# Layer 2: Entity type list pages (entity_type from meta_catalog)
 PAGES=(
   "/knowledge/registries"
-  "/knowledge/registries/collection"
+  "/knowledge/registries/catalog"
+  "/knowledge/registries/module"
+  "/knowledge/registries/workflow"
+  "/knowledge/registries/workflow_step"
+  "/knowledge/registries/wcr"
   "/knowledge/registries/dot_tool"
-  "/knowledge/registries/ui_page"
+  "/knowledge/registries/page"
+  "/knowledge/registries/collection"
+  "/knowledge/registries/task"
+  "/knowledge/registries/agent"
   "/knowledge/registries/checkpoint_type"
   "/knowledge/registries/checkpoint_set"
-  "/knowledge/registries/workflow_step"
+  "/knowledge/registries/entity_dependency"
+)
+
+# Error patterns that indicate data NOT rendering
+ERROR_PATTERNS="Chưa có bảng registry\|don't have permission\|FORBIDDEN\|statusCode.*403\|statusCode.*500\|INTERNAL_SERVER_ERROR"
+
+# Data indicators per page — if present, proves real data rendered
+# Format: page_path|expected_pattern
+DATA_MARKERS=(
+  "/knowledge/registries|CAT-"
+  "/knowledge/registries/catalog|CAT-"
+  "/knowledge/registries/module|MOD-"
+  "/knowledge/registries/workflow|WF-"
+  "/knowledge/registries/workflow_step|WFS-"
+  "/knowledge/registries/wcr|WCR-"
+  "/knowledge/registries/dot_tool|DOT-"
+  "/knowledge/registries/page|PG-"
+  "/knowledge/registries/collection|COL-"
+  "/knowledge/registries/task|TD-"
+  "/knowledge/registries/agent|AGT-"
+  "/knowledge/registries/checkpoint_type|CP-"
+  "/knowledge/registries/checkpoint_set|CPS-"
+  "/knowledge/registries/entity_dependency|DEP-"
 )
 
 FAIL=0
 PASS=0
+WARN=0
 TOTAL=${#PAGES[@]}
 
 echo "========================================="
 echo "DOT Registries Verify v${VERSION}"
 echo "========================================="
 echo "Base URL: ${BASE_URL}"
-echo "Deep check: ${DEEP}"
 echo "Pages to check: ${TOTAL}"
 echo ""
 
 for page in "${PAGES[@]}"; do
   URL="${BASE_URL}${page}"
+  tmpfile=$(mktemp)
+  STATUS=$(curl -sk -o "$tmpfile" -w "%{http_code}" --max-time 30 "$URL" 2>/dev/null || echo "000")
+  BODY=$(cat "$tmpfile" 2>/dev/null || echo "")
+  rm -f "$tmpfile"
+  BODY_SIZE=${#BODY}
 
-  if [[ "$DEEP" == "true" ]]; then
-    # Full body + status check in one request
-    tmpfile=$(mktemp)
-    STATUS=$(curl -sk -o "$tmpfile" -w "%{http_code}" --max-time 30 "$URL" 2>/dev/null || echo "000")
-    BODY=$(cat "$tmpfile" 2>/dev/null || echo "")
-    rm -f "$tmpfile"
+  # Check 1: HTTP status
+  if [[ "$STATUS" != "200" ]]; then
+    echo "FAIL: ${page} -> HTTP ${STATUS}"
+    FAIL=$((FAIL+1))
+    continue
+  fi
 
-    if [[ "$STATUS" != "200" ]]; then
-      echo "FAIL: ${page} -> HTTP ${STATUS}"
-      FAIL=$((FAIL+1))
-      continue
+  # Check 2: Body size (< 1000 = probably empty/error)
+  if [[ "$BODY_SIZE" -lt 1000 ]]; then
+    echo "FAIL: ${page} -> HTTP 200 but body too small (${BODY_SIZE}b)"
+    FAIL=$((FAIL+1))
+    continue
+  fi
+
+  # Check 3: Embedded error patterns
+  ERR_COUNT=$(echo "$BODY" | grep -ci "${ERROR_PATTERNS}" 2>/dev/null || true)
+  ERR_COUNT="${ERR_COUNT:-0}"
+  ERR_COUNT=$(echo "$ERR_COUNT" | tr -d '[:space:]')
+
+  if [[ "$ERR_COUNT" -gt 0 ]]; then
+    # Extract first error for diagnostics
+    FIRST_ERR=$(echo "$BODY" | grep -oi "${ERROR_PATTERNS}" 2>/dev/null | head -1 || true)
+    echo "FAIL: ${page} -> HTTP 200 but embedded error: ${FIRST_ERR} (${BODY_SIZE}b)"
+    FAIL=$((FAIL+1))
+    continue
+  fi
+
+  # Check 4: Data presence — does the page contain actual data markers?
+  DATA_MARKER=""
+  for marker_entry in "${DATA_MARKERS[@]}"; do
+    marker_page="${marker_entry%%|*}"
+    marker_pattern="${marker_entry##*|}"
+    if [[ "$page" == "$marker_page" ]]; then
+      DATA_MARKER="$marker_pattern"
+      break
     fi
+  done
 
-    # Check for embedded permission/403 errors in HTML
-    ERR_COUNT=$(echo "$BODY" | grep -ci "don't have permission\|FORBIDDEN\|statusCode.*403\|statusCode.*500" 2>/dev/null || true)
-    ERR_COUNT="${ERR_COUNT:-0}"
-    ERR_COUNT=$(echo "$ERR_COUNT" | tr -d '[:space:]')
-    BODY_SIZE=${#BODY}
+  if [[ -n "$DATA_MARKER" ]]; then
+    DATA_COUNT=$(echo "$BODY" | grep -c "$DATA_MARKER" 2>/dev/null || true)
+    DATA_COUNT="${DATA_COUNT:-0}"
+    DATA_COUNT=$(echo "$DATA_COUNT" | tr -d '[:space:]')
 
-    if [[ "$ERR_COUNT" -gt 0 ]]; then
-      echo "FAIL: ${page} -> HTTP 200 but ${ERR_COUNT} embedded errors (${BODY_SIZE}b)"
-      FAIL=$((FAIL+1))
-    elif [[ "$BODY_SIZE" -lt 1000 ]]; then
-      echo "FAIL: ${page} -> HTTP 200 but body too small (${BODY_SIZE}b)"
-      FAIL=$((FAIL+1))
+    if [[ "$DATA_COUNT" -eq 0 ]]; then
+      echo "WARN: ${page} -> HTTP 200, no errors, but NO data markers '${DATA_MARKER}' found (${BODY_SIZE}b)"
+      WARN=$((WARN+1))
     else
-      echo "PASS: ${page} -> HTTP 200 (${BODY_SIZE}b, 0 errors)"
+      echo "PASS: ${page} -> HTTP 200 (${BODY_SIZE}b, ${DATA_COUNT}x ${DATA_MARKER})"
       PASS=$((PASS+1))
     fi
   else
-    # Quick status-only check
-    STATUS=$(curl -sk -o /dev/null -w "%{http_code}" --max-time 30 "$URL" 2>/dev/null || echo "000")
-    if [[ "$STATUS" != "200" ]]; then
-      echo "FAIL: ${page} -> HTTP ${STATUS}"
-      FAIL=$((FAIL+1))
-    else
-      echo "PASS: ${page} -> HTTP 200"
-      PASS=$((PASS+1))
-    fi
+    echo "PASS: ${page} -> HTTP 200 (${BODY_SIZE}b)"
+    PASS=$((PASS+1))
   fi
 done
 
 echo ""
 echo "========================================="
-echo "Results: ${PASS}/${TOTAL} PASS, ${FAIL}/${TOTAL} FAIL"
+echo "Results: ${PASS}/${TOTAL} PASS, ${FAIL}/${TOTAL} FAIL, ${WARN}/${TOTAL} WARN"
 echo "========================================="
 
 if [[ $FAIL -gt 0 ]]; then
   echo "REGISTRIES VERIFY: FAILED"
   exit 1
+elif [[ $WARN -gt 0 ]]; then
+  echo "REGISTRIES VERIFY: PASS WITH WARNINGS (data may be missing)"
+  exit 0
 else
   echo "REGISTRIES VERIFY: ALL PASS"
   exit 0

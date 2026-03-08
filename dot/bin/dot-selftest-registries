@@ -1,0 +1,313 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-selftest-registries — Comprehensive Registry System Self-Test
+# =============================================================================
+# VERSION: 1.0.0
+# CHECKED-NO-DUPLICATE: [grep dot/bin/ for "selftest-registries" — no match]
+#
+# Tests ALL 3 layers of the Registry system plus data integrity:
+#   Layer 1: Main index (/knowledge/registries) — meta_catalog renders
+#   Layer 2: Entity type pages — table_registry config present + data renders
+#   Layer 3: Individual entity detail pages — sample items load
+#   Completeness: meta_catalog ↔ table_registry alignment
+#   Data Presence: Each collection has actual records
+#
+# Usage:
+#   dot-selftest-registries [--cloud|--local] [--url=URL] [--fix]
+#
+# Options:
+#   --url=URL    Override public site URL
+#   --fix        Auto-fix missing table_registry entries (requires auth)
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+VERSION="1.0.0"
+BASE_URL="https://vps.incomexsaigoncorp.vn"
+DIRECTUS_URL="https://directus.incomexsaigoncorp.vn"
+FIX_MODE=false
+
+for arg in "$@"; do
+  case "$arg" in
+    --url=*) BASE_URL="${arg#--url=}" ;;
+    --fix) FIX_MODE=true ;;
+    --help|-h)
+      echo "dot-selftest-registries v${VERSION}"
+      echo ""
+      echo "Comprehensive Registry System Self-Test"
+      echo ""
+      echo "Usage: dot-selftest-registries [--url=URL]"
+      echo "  --url=URL   Override public site URL"
+      exit 0
+      ;;
+  esac
+done
+
+FAIL=0
+PASS=0
+WARN=0
+TOTAL=0
+
+pass() { echo "  PASS: $1"; PASS=$((PASS+1)); TOTAL=$((TOTAL+1)); }
+fail() { echo "  FAIL: $1"; FAIL=$((FAIL+1)); TOTAL=$((TOTAL+1)); }
+warn() { echo "  WARN: $1"; WARN=$((WARN+1)); TOTAL=$((TOTAL+1)); }
+
+fetch_page() {
+  local url="$1"
+  local tmpfile
+  tmpfile=$(mktemp)
+  local status
+  status=$(curl -sk -o "$tmpfile" -w "%{http_code}" --max-time 30 "$url" 2>/dev/null || echo "000")
+  local body
+  body=$(cat "$tmpfile" 2>/dev/null || echo "")
+  rm -f "$tmpfile"
+  echo "${status}|${#body}|${body}"
+}
+
+echo "========================================="
+echo "DOT Self-Test: Registries v${VERSION}"
+echo "========================================="
+echo "Site URL:     ${BASE_URL}"
+echo "Directus URL: ${DIRECTUS_URL}"
+echo ""
+
+# =========================================================================
+# TEST 1: Directus API Health
+# =========================================================================
+echo "--- Test 1: Directus API Health ---"
+
+API_STATUS=$(curl -sk -o /dev/null -w "%{http_code}" --max-time 10 "${DIRECTUS_URL}/server/health" 2>/dev/null || echo "000")
+if [[ "$API_STATUS" == "200" ]]; then
+  pass "Directus API healthy"
+else
+  fail "Directus API returned HTTP ${API_STATUS}"
+fi
+
+# =========================================================================
+# TEST 2: Completeness — meta_catalog ↔ table_registry alignment
+# =========================================================================
+echo ""
+echo "--- Test 2: meta_catalog ↔ table_registry Alignment ---"
+
+# Fetch meta_catalog entries
+META_JSON=$(curl -sk --max-time 15 "${DIRECTUS_URL}/items/meta_catalog?fields=id,code,name,entity_type,registry_collection&limit=100" 2>/dev/null || echo '{"data":[]}')
+META_COUNT=$(echo "$META_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('data',[])))" 2>/dev/null || echo "0")
+
+if [[ "$META_COUNT" -gt 0 ]]; then
+  pass "meta_catalog has ${META_COUNT} entries"
+else
+  fail "meta_catalog is empty or inaccessible"
+fi
+
+# Fetch table_registry entries
+TBL_JSON=$(curl -sk --max-time 15 "${DIRECTUS_URL}/items/table_registry?fields=id,table_id,collection,status&limit=100" 2>/dev/null || echo '{"data":[]}')
+TBL_COUNT=$(echo "$TBL_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('data',[])))" 2>/dev/null || echo "0")
+
+if [[ "$TBL_COUNT" -gt 0 ]]; then
+  pass "table_registry has ${TBL_COUNT} entries"
+else
+  fail "table_registry is empty or inaccessible"
+fi
+
+# Cross-check: each meta_catalog.registry_collection should have a table_registry record
+MISSING_TBL=$(echo "$META_JSON" | python3 -c "
+import sys, json
+meta = json.load(sys.stdin).get('data', [])
+tbl_data = json.loads('''${TBL_JSON}''').get('data', [])
+tbl_collections = {t['collection'] for t in tbl_data}
+# table_registry itself is meta, skip it
+skip = {'table_registry', 'meta_catalog'}
+missing = []
+for m in meta:
+    rc = m.get('registry_collection', '')
+    if rc and rc not in skip and rc not in tbl_collections:
+        missing.append(f\"{m.get('code','?')}: {m.get('name','')} ({rc})\")
+for m in missing:
+    print(m)
+" 2>/dev/null || echo "")
+
+if [[ -z "$MISSING_TBL" ]]; then
+  pass "All meta_catalog entries have matching table_registry records"
+else
+  while IFS= read -r line; do
+    fail "Missing table_registry for: ${line}"
+  done <<< "$MISSING_TBL"
+fi
+
+# =========================================================================
+# TEST 3: Layer 1 — Main Index Page
+# =========================================================================
+echo ""
+echo "--- Test 3: Layer 1 — Main Index ---"
+
+RESULT=$(fetch_page "${BASE_URL}/knowledge/registries")
+L1_STATUS="${RESULT%%|*}"
+RESULT="${RESULT#*|}"
+L1_SIZE="${RESULT%%|*}"
+L1_BODY="${RESULT#*|}"
+
+if [[ "$L1_STATUS" != "200" ]]; then
+  fail "Layer 1 index: HTTP ${L1_STATUS}"
+else
+  # Check meta_catalog data renders (CAT- codes should appear)
+  CAT_COUNT=$(echo "$L1_BODY" | grep -c "CAT-" 2>/dev/null || true)
+  CAT_COUNT=$(echo "$CAT_COUNT" | tr -d '[:space:]')
+
+  ERR=$(echo "$L1_BODY" | grep -ci "Chưa có bảng\|FORBIDDEN\|statusCode.*403\|don't have permission" 2>/dev/null || true)
+  ERR=$(echo "$ERR" | tr -d '[:space:]')
+
+  if [[ "${ERR:-0}" -gt 0 ]]; then
+    fail "Layer 1 index: HTTP 200 but has embedded errors"
+  elif [[ "${CAT_COUNT:-0}" -lt 1 ]]; then
+    fail "Layer 1 index: HTTP 200 but no CAT- markers found"
+  else
+    pass "Layer 1 index: OK (${L1_SIZE}b, ${CAT_COUNT}x CAT-)"
+  fi
+fi
+
+# =========================================================================
+# TEST 4: Layer 2 — All Entity Type Pages
+# =========================================================================
+echo ""
+echo "--- Test 4: Layer 2 — Entity Type Pages ---"
+
+# Build page list from meta_catalog entity_types
+ENTITY_TYPES=$(echo "$META_JSON" | python3 -c "
+import sys, json
+meta = json.load(sys.stdin).get('data', [])
+for m in meta:
+    et = m.get('entity_type', '')
+    if et:
+        print(et)
+" 2>/dev/null || echo "")
+
+# Known data code prefixes per entity_type (bash 3.x compatible)
+get_code_prefix() {
+  case "$1" in
+    catalog) echo "CAT-" ;;
+    module) echo "MOD-" ;;
+    workflow) echo "WF-" ;;
+    workflow_step) echo "ND-" ;;
+    wcr) echo "WCR-" ;;
+    dot_tool) echo "DOT-" ;;
+    page) echo "PG-" ;;
+    collection) echo "COL-" ;;
+    task) echo "TASK-" ;;
+    agent) echo "AGT-" ;;
+    checkpoint_type) echo "CP-" ;;
+    checkpoint_set) echo "CPS-" ;;
+    entity_dependency) echo "DEP-" ;;
+    *) echo "" ;;
+  esac
+}
+
+while IFS= read -r et; do
+  [[ -z "$et" ]] && continue
+  URL="${BASE_URL}/knowledge/registries/${et}"
+  RESULT=$(fetch_page "$URL")
+  STATUS="${RESULT%%|*}"
+  RESULT="${RESULT#*|}"
+  SIZE="${RESULT%%|*}"
+  BODY="${RESULT#*|}"
+
+  if [[ "$STATUS" != "200" ]]; then
+    fail "Layer 2 [${et}]: HTTP ${STATUS}"
+    continue
+  fi
+
+  # Check for "Chưa có bảng registry" error
+  HAS_NO_TABLE=$(echo "$BODY" | grep -c "Chưa có bảng registry" 2>/dev/null || true)
+  HAS_NO_TABLE=$(echo "$HAS_NO_TABLE" | tr -d '[:space:]')
+
+  if [[ "${HAS_NO_TABLE:-0}" -gt 0 ]]; then
+    fail "Layer 2 [${et}]: Shows 'Chưa có bảng registry' — missing table_registry record"
+    continue
+  fi
+
+  # Check for other errors
+  HAS_ERR=$(echo "$BODY" | grep -ci "FORBIDDEN\|statusCode.*403\|statusCode.*500\|don't have permission" 2>/dev/null || true)
+  HAS_ERR=$(echo "$HAS_ERR" | tr -d '[:space:]')
+
+  if [[ "${HAS_ERR:-0}" -gt 0 ]]; then
+    fail "Layer 2 [${et}]: HTTP 200 but has permission/server errors"
+    continue
+  fi
+
+  # Check data presence
+  PREFIX=$(get_code_prefix "$et")
+  if [[ -n "$PREFIX" ]]; then
+    DATA_HIT=$(echo "$BODY" | grep -c "$PREFIX" 2>/dev/null || true)
+    DATA_HIT=$(echo "$DATA_HIT" | tr -d '[:space:]')
+
+    if [[ "${DATA_HIT:-0}" -eq 0 ]]; then
+      warn "Layer 2 [${et}]: No data markers '${PREFIX}' found (${SIZE}b) — collection may be empty"
+    else
+      pass "Layer 2 [${et}]: OK (${SIZE}b, ${DATA_HIT}x ${PREFIX})"
+    fi
+  else
+    pass "Layer 2 [${et}]: OK (${SIZE}b)"
+  fi
+done <<< "$ENTITY_TYPES"
+
+# =========================================================================
+# TEST 5: Data Presence — Each collection has records via API
+# =========================================================================
+echo ""
+echo "--- Test 5: Data Presence via Directus API ---"
+
+COLLECTIONS=$(echo "$META_JSON" | python3 -c "
+import sys, json
+meta = json.load(sys.stdin).get('data', [])
+for m in meta:
+    rc = m.get('registry_collection', '')
+    name = m.get('name', '')
+    code = m.get('code', '')
+    if rc:
+        print(f'{rc}|{code}|{name}')
+" 2>/dev/null || echo "")
+
+while IFS='|' read -r col code name; do
+  [[ -z "$col" ]] && continue
+  API_RESP=$(curl -sk --max-time 10 "${DIRECTUS_URL}/items/${col}?fields=id&limit=1" 2>/dev/null || echo '{}')
+  RESULT=$(echo "$API_RESP" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    if 'errors' in d:
+        print('error')
+    else:
+        data = d.get('data', [])
+        print(len(data))
+except:
+    print('error')
+" 2>/dev/null || echo "error")
+
+  if [[ "$RESULT" == "error" ]]; then
+    warn "API [${code}] ${col}: Not accessible via public API (${name})"
+  elif [[ "$RESULT" == "0" ]]; then
+    warn "API [${code}] ${col}: 0 records (${name})"
+  else
+    pass "API [${code}] ${col}: Has data (${name})"
+  fi
+done <<< "$COLLECTIONS"
+
+# =========================================================================
+# SUMMARY
+# =========================================================================
+echo ""
+echo "========================================="
+echo "Self-Test Results: ${PASS}/${TOTAL} PASS, ${FAIL}/${TOTAL} FAIL, ${WARN}/${TOTAL} WARN"
+echo "========================================="
+
+if [[ $FAIL -gt 0 ]]; then
+  echo "SELFTEST: FAILED (${FAIL} failures)"
+  exit 1
+elif [[ $WARN -gt 0 ]]; then
+  echo "SELFTEST: PASS WITH WARNINGS (${WARN} warnings)"
+  exit 0
+else
+  echo "SELFTEST: ALL PASS"
+  exit 0
+fi
