@@ -104,7 +104,7 @@ const { data: childRecords } = useAsyncData(
 const itemCode = computed(() => props.item?.code || props.item?.process_code || props.item?.table_id || '');
 
 const { data: deps } = useAsyncData(
-	`discovery-deps-${itemCode.value}`,
+	`discovery-deps-${props.entityType}-${props.item?.id}`,
 	async () => {
 		if (!itemCode.value) return [];
 		try {
@@ -146,18 +146,53 @@ const depColumns = [
 	{ key: 'code', label: 'Ma' },
 ];
 
-// === RULE 5: PEERS — same collection, same classification ===
+// === RULE 6: TRANSITIVE — indirect relations via BFS ===
+const { data: transitiveData } = useAsyncData(
+	`discovery-transitive-${props.entityType}-${props.item?.id}`,
+	async () => {
+		if (!itemCode.value) return null;
+		try {
+			return await $fetch(`/api/transitive/${encodeURIComponent(itemCode.value)}`);
+		} catch {
+			return null;
+		}
+	},
+	{ default: () => null },
+);
+
+const transitiveRows = computed(() => {
+	const data = transitiveData.value as any;
+	if (!data?.transitive?.length) return [];
+	return data.transitive.map((t: any) => ({
+		code: t.code,
+		type: t.type,
+		depth: t.depth,
+		path: t.path?.join(' → ') || '',
+		_entityType: t.type,
+	}));
+});
+
+const transitiveColumns = [
+	{ key: 'code', label: 'Ma' },
+	{ key: 'type', label: 'Loai' },
+	{ key: 'depth', label: 'Do sau' },
+	{ key: 'path', label: 'Duong di' },
+];
+
+// === RULE 7: PEERS — same collection, nearby items ===
 const { data: peers } = useAsyncData(
 	`discovery-peers-${props.entityType}-${props.item?.id}`,
 	async () => {
-		if (!props.item?.id) return [];
+		if (!props.item?.id || !props.collection) return [];
 		try {
 			const filter: any = { id: { _neq: props.item.id } };
-			// Group by classification if available
+			// Group by classification/category if available
 			if (props.item.classification) {
 				filter.classification = { _eq: props.item.classification };
 			} else if (props.item.category) {
 				filter.category = { _eq: props.item.category };
+			} else if (props.item.status) {
+				filter.status = { _eq: props.item.status };
 			}
 			return await $directus.request(
 				readItems(props.collection as any, {
@@ -174,11 +209,12 @@ const { data: peers } = useAsyncData(
 	{ default: () => [] },
 );
 
-const peerColumns = [
-	{ key: 'code_display', label: 'Ma' },
-	{ key: 'name_display', label: 'Ten' },
-	{ key: 'status', label: 'Trang thai' },
-];
+const peerGroupLabel = computed(() => {
+	if (props.item?.classification) return `classification=${props.item.classification}`;
+	if (props.item?.category) return `category=${props.item.category}`;
+	if (props.item?.status) return `status=${props.item.status}`;
+	return '';
+});
 
 const peerRows = computed(() => {
 	return (peers.value as any[]).map((p: any) => ({
@@ -297,24 +333,46 @@ function getChildColumns(items: any[]): { key: string; label: string }[] {
 			</UTable>
 		</UCard>
 
-		<!-- PEERS: Same collection, same classification -->
+		<!-- TRANSITIVE: Indirect relations -->
+		<UCard v-if="transitiveRows.length > 0">
+			<template #header>
+				<div class="flex items-center gap-2">
+					<h3 class="text-base font-semibold text-gray-900 dark:text-white">Lien quan gian tiep</h3>
+					<UBadge color="gray" variant="subtle" size="xs">{{ transitiveRows.length }}</UBadge>
+				</div>
+			</template>
+			<UTable :columns="transitiveColumns" :rows="transitiveRows" :ui="{ td: { padding: 'py-2 px-3' }, th: { padding: 'py-2 px-3' } }">
+				<template #cell-code="{ row }">
+					<NuxtLink
+						:to="`/knowledge/registries/${row._entityType}/${row.code}`"
+						class="font-medium text-primary-600 hover:text-primary-800 dark:text-primary-400 hover:underline"
+					>
+						{{ row.code }}
+					</NuxtLink>
+				</template>
+			</UTable>
+		</UCard>
+
+		<!-- PEERS: Same collection, same group -->
 		<UCard v-if="peerRows.length > 0">
 			<template #header>
 				<div class="flex items-center gap-2">
 					<h3 class="text-base font-semibold text-gray-900 dark:text-white">Cung nhom</h3>
+					<UBadge v-if="peerGroupLabel" color="primary" variant="subtle" size="xs">{{ peerGroupLabel }}</UBadge>
 					<UBadge color="gray" variant="subtle" size="xs">{{ peerRows.length }}</UBadge>
 				</div>
 			</template>
-			<UTable :columns="peerColumns" :rows="peerRows" :ui="{ td: { padding: 'py-2 px-3' }, th: { padding: 'py-2 px-3' } }">
-				<template #cell-code_display="{ row }">
-					<NuxtLink
-						:to="`/knowledge/registries/${entityType}/${row._code}`"
-						class="font-medium text-primary-600 hover:text-primary-800 dark:text-primary-400 hover:underline"
-					>
-						{{ row.code_display }}
-					</NuxtLink>
-				</template>
-			</UTable>
+			<div class="flex flex-wrap gap-2 p-1">
+				<NuxtLink
+					v-for="peer in peerRows"
+					:key="peer._code"
+					:to="`/knowledge/registries/${entityType}/${peer._code}`"
+					class="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm hover:border-primary-300 hover:bg-primary-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-primary-600 dark:hover:bg-primary-900/20"
+				>
+					<span class="font-medium text-primary-600 dark:text-primary-400">{{ peer.code_display }}</span>
+					<span v-if="peer.name_display" class="text-gray-500 dark:text-gray-400">{{ peer.name_display }}</span>
+				</NuxtLink>
+			</div>
 		</UCard>
 	</div>
 </template>
