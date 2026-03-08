@@ -92,7 +92,7 @@ useHead({
 		<SharedDirectusTable
 			v-if="tableId"
 			:table-id="tableId"
-			:row-link="(item: any) => `/knowledge/registries/${entityType}/${item.id}`"
+			:row-link="(item: any) => `/knowledge/registries/${entityType}/${item.code || item.process_code || item.table_id || item.id}`"
 		>
 			<template #cell-status="{ value }">
 				<span
