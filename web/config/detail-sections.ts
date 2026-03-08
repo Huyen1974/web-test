@@ -148,7 +148,7 @@ export const sectionConfig: Record<string, SectionConfig[]> = {
 			collection: 'workflows',
 			foreignKey: 'id',
 			localKey: 'workflow_id',
-			displayFields: ['process_code', 'name', 'status'],
+			displayFields: ['process_code', 'title', 'status'],
 			linkEntityType: 'workflow',
 			linkCodeField: 'process_code',
 		},
