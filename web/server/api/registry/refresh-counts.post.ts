@@ -3,12 +3,14 @@
  *
  * Refreshes record_count for all meta_catalog entries by counting
  * actual records in each registry_collection via Directus API.
- * Updates meta_catalog with fresh counts and last_scan_date.
+ *
+ * Model A (Directus SSOT): actual_count = record_count (same source — correct)
+ * Model B (File-scanned):  actual_count NOT touched (needs filesystem — CLI only)
  *
  * Called by:
  *   - Directus Flow (every 6h schedule)
  *   - Post-deploy hook in deploy-vps.yml
- *   - CLI: dot-registry-count-refresh
+ *   - CLI: dot-registry-count-refresh (does filesystem counts separately)
  *
  * Auth: Requires service token (internal only).
  */
@@ -17,6 +19,7 @@ interface CountResult {
 	code: string;
 	name: string;
 	collection: string;
+	source_model: string;
 	old_count: number;
 	new_count: number;
 	changed: boolean;
@@ -36,11 +39,11 @@ export default defineEventHandler(async (event) => {
 		'Content-Type': 'application/json',
 	};
 
-	// 1. Fetch all meta_catalog entries
+	// 1. Fetch all meta_catalog entries (including source_model)
 	const catalogResp: any = await $fetch(`${directusUrl}/items/meta_catalog`, {
 		headers,
 		params: {
-			fields: 'id,code,name,registry_collection,record_count,actual_count,orphan_count',
+			fields: 'id,code,name,source_model,registry_collection,record_count,actual_count,orphan_count',
 			sort: 'code',
 			limit: -1,
 		},
@@ -80,32 +83,37 @@ export default defineEventHandler(async (event) => {
 				}
 			}
 		} catch {
-			// Collection might not be accessible — keep old count
 			errors++;
 			continue;
 		}
 
 		const oldCount = entry.record_count || 0;
+		const sourceModel = entry.source_model || 'A';
 		const changed = newCount !== oldCount;
 
 		results.push({
 			code: entry.code,
 			name: entry.name,
 			collection,
+			source_model: sourceModel,
 			old_count: oldCount,
 			new_count: newCount,
 			changed,
 		});
 
-		// 3. Update meta_catalog with fresh counts
-		// For self-contained collections, actual_count = record_count
-		// (DOT tools / pages actual counts need filesystem — handled by dot-orphan-scan)
+		// 3. Build patch based on source_model
 		const patch: Record<string, any> = {
 			record_count: newCount,
-			actual_count: newCount,
-			orphan_count: 0,
 			last_scan_date: now,
 		};
+
+		if (sourceModel === 'A') {
+			// Model A: Directus IS the source → actual = record, orphan = 0
+			patch.actual_count = newCount;
+			patch.orphan_count = 0;
+		}
+		// Model B: DO NOT touch actual_count or orphan_count
+		// Those require filesystem counting (handled by CLI script)
 
 		try {
 			await $fetch(`${directusUrl}/items/meta_catalog/${entry.id}`, {

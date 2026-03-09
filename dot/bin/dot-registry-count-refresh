@@ -2,16 +2,19 @@
 # =============================================================================
 # dot-registry-count-refresh — Refresh meta_catalog record counts
 # =============================================================================
-# CHECKED-NO-DUPLICATE: [searched dot/bin/ for "count-refresh" — no match]
-# VERSION: 1.0.0
+# CHECKED-NO-DUPLICATE: [searched dot/bin/ for "count-refresh" — only this]
+# VERSION: 2.0.0
 #
-# Counts actual records in each registry_collection via Directus API
-# and updates meta_catalog with fresh record_count, actual_count, orphan_count.
+# Counts entities using 2 INDEPENDENT methods per source_model:
 #
-# 3 independent counting methods:
-#   1. record_count  — countDistinct=id on registry_collection
-#   2. actual_count  — same (API-only) or filesystem count (with --full)
-#   3. orphan_count  — |record_count - actual_count|
+#   Model A (Directus SSOT):
+#     record_count = actual_count = COUNT(registry_collection)
+#     orphan_count = 0 (Directus IS the source, no orphans possible)
+#
+#   Model B (File-scanned):
+#     record_count = COUNT(registry_collection) — what's REGISTERED in Directus
+#     actual_count = FILE SYSTEM count — what ACTUALLY EXISTS on disk
+#     orphan_count = |actual - record| — unregistered entities
 #
 # Can be triggered by:
 #   - CLI: dot-registry-count-refresh [--cloud|--local]
@@ -19,11 +22,7 @@
 #   - Post-deploy hook in deploy-vps.yml
 #
 # Usage:
-#   dot-registry-count-refresh [--cloud|--local] [--full] [--dry-run]
-#
-# Options:
-#   --full       Include filesystem counts for DOT tools and pages
-#   --dry-run    Show what would be updated without writing
+#   dot-registry-count-refresh [--cloud|--local] [--dry-run]
 # =============================================================================
 
 set -euo pipefail
@@ -34,21 +33,22 @@ PROJECT_ROOT="$(cd "$DOT_ROOT/.." && pwd)"
 
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="1.0.0"
-FULL_MODE=""
+VERSION="2.0.0"
 DRY_RUN=""
 
 show_help() {
   cat << EOF
 dot-registry-count-refresh v${VERSION} — Refresh meta_catalog record counts
 
+Model A: record = actual = Directus count (same source — correct)
+Model B: record = Directus registry, actual = FILE SYSTEM (independent)
+
 Usage:
-  dot-registry-count-refresh [--cloud|--local] [--full] [--dry-run]
+  dot-registry-count-refresh [--cloud|--local] [--dry-run]
 
 Options:
   --cloud      Use cloud Directus (default)
   --local      Use local Directus
-  --full       Include filesystem counts for DOT tools and pages
   --dry-run    Show what would be updated without writing
   --help, -h   Show help
 
@@ -59,7 +59,6 @@ EOF
 main() {
   for arg in "$@"; do
     case "$arg" in
-      --full) FULL_MODE="1" ;;
       --dry-run) DRY_RUN="1" ;;
       --help|-h) show_help; exit 0 ;;
     esac
@@ -82,13 +81,11 @@ main() {
     echo "[ERR] Authentication failed" >&2; exit 1
   fi
 
-  # Gather filesystem counts if --full
-  local actual_tools=0 actual_pages=0
-  if [[ -n "$FULL_MODE" ]]; then
-    actual_tools=$(find "${DOT_ROOT}/bin" -name "dot-*" -type f 2>/dev/null | wc -l | tr -d ' ')
-    actual_pages=$(find "${PROJECT_ROOT}/web/pages" -name "*.vue" -type f 2>/dev/null | wc -l | tr -d ' ')
-    echo "[INFO] Filesystem: ${actual_tools} DOT tools, ${actual_pages} pages"
-  fi
+  # Gather filesystem counts for Model B — ALWAYS (not optional)
+  local actual_tools actual_pages
+  actual_tools=$(find "${DOT_ROOT}/bin" -name "dot-*" -type f 2>/dev/null | wc -l | tr -d ' ')
+  actual_pages=$(find "${PROJECT_ROOT}/web/pages" -name "*.vue" -type f 2>/dev/null | wc -l | tr -d ' ')
+  echo "[INFO] Filesystem: ${actual_tools} DOT tools, ${actual_pages} pages"
 
   local tmp_py
   tmp_py=$(mktemp /tmp/dot-count-refresh-XXXXXX.py)
@@ -101,7 +98,6 @@ from datetime import datetime, timezone
 base_url = os.environ['BASE_URL']
 token = os.environ['DOT_TOKEN']
 dry_run = os.environ.get('DRY_RUN', '')
-full_mode = os.environ.get('FULL_MODE', '')
 actual_tools = int(os.environ.get('ACTUAL_TOOLS', '0'))
 actual_pages = int(os.environ.get('ACTUAL_PAGES', '0'))
 now_iso = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z')
@@ -140,8 +136,31 @@ def count_collection(collection):
             return int(cd['id'])
     return 0
 
-# Fetch meta_catalog
-code, resp = api('GET', '/items/meta_catalog?fields=id,code,name,entity_type,registry_collection,record_count,actual_count,orphan_count&sort=code&limit=-1')
+def count_system_collections():
+    """Count non-directus_ collections via system API (independent of collection_registry)."""
+    code, resp = api('GET', '/collections?limit=-1')
+    if code != 200:
+        return -1
+    data = resp.get('data', [])
+    return sum(1 for c in data if not c.get('collection', '').startswith('directus_'))
+
+# ============================================================
+# Model B filesystem count map: registry_collection -> actual count
+# These are INDEPENDENT of the Directus registry query
+# ============================================================
+FS_ACTUAL = {
+    'dot_tools': actual_tools,       # files on disk
+    'ui_pages': actual_pages,        # .vue files on disk
+}
+
+# Special: collection_registry actual = system /collections API
+# (collection_registry is Model A but actual should cross-check system)
+SYSTEM_ACTUAL = {
+    'collection_registry': count_system_collections,
+}
+
+# Fetch meta_catalog with source_model
+code, resp = api('GET', '/items/meta_catalog?fields=id,code,name,entity_type,source_model,registry_collection,record_count,actual_count,orphan_count&sort=code&limit=-1')
 if code != 200:
     print(f'[ERR] Failed to fetch meta_catalog: HTTP {code}')
     sys.exit(1)
@@ -149,12 +168,6 @@ if code != 200:
 catalog = resp.get('data', [])
 print(f'[INFO] meta_catalog: {len(catalog)} entries')
 print()
-
-# Filesystem override map (only in --full mode)
-fs_overrides = {}
-if full_mode:
-    fs_overrides['dot_tools'] = actual_tools
-    fs_overrides['ui_pages'] = actual_pages
 
 updated = 0
 unchanged = 0
@@ -165,39 +178,58 @@ for entry in catalog:
     cat_id = entry['id']
     cat_code = entry['code']
     cat_name = entry['name']
+    source_model = entry.get('source_model', 'A')
     collection = entry.get('registry_collection', '')
     old_record = entry.get('record_count') or 0
     old_actual = entry.get('actual_count') or 0
+    old_orphan = entry.get('orphan_count') or 0
 
     if not collection:
         print(f'  [SKIP] {cat_code} {cat_name}: no registry_collection')
         continue
 
-    # Method 1: record_count — count from registry collection
+    # Method 1: record_count — count from Directus registry collection
     new_record = count_collection(collection)
     if new_record < 0:
         print(f'  [WARN] {cat_code} {cat_name}: collection "{collection}" not accessible')
         errors += 1
         continue
 
-    # Method 2: actual_count — filesystem override or same as record_count
-    if collection in fs_overrides:
-        new_actual = fs_overrides[collection]
-    else:
+    # Method 2: actual_count — INDEPENDENT source per model
+    if collection in FS_ACTUAL:
+        # Model B: filesystem count
+        new_actual = FS_ACTUAL[collection]
+        count_source = 'filesystem'
+    elif collection in SYSTEM_ACTUAL:
+        # Special: system API count
+        new_actual = SYSTEM_ACTUAL[collection]()
+        count_source = 'system-api'
+    elif source_model == 'B':
+        # Model B without filesystem override — flag as unknown
+        # Use Directus count but mark for investigation
         new_actual = new_record
+        count_source = 'directus(NEEDS-FS)'
+    else:
+        # Model A: Directus IS the source, actual = record
+        new_actual = new_record
+        count_source = 'directus'
+
+    if new_actual < 0:
+        new_actual = new_record  # fallback if system API fails
 
     # Method 3: orphan_count = |actual - record|
     new_orphan = abs(new_actual - new_record)
 
-    changed = (new_record != old_record or new_actual != old_actual)
+    changed = (new_record != old_record or new_actual != old_actual or new_orphan != old_orphan)
     delta_str = ''
     if changed:
-        delta_str = f' (was {old_record}/{old_actual})'
-        changes.append(f'{cat_code}: {old_record}→{new_record}')
+        delta_str = f' (was rec={old_record}/act={old_actual}/orp={old_orphan})'
+        changes.append(f'{cat_code}: rec={new_record} act={new_actual} orp={new_orphan}')
 
+    model_tag = f'[{source_model}:{count_source}]'
     if dry_run:
         tag = '[CHG]' if changed else '[OK] '
-        print(f'  {tag} {cat_code} {cat_name}: record={new_record}, actual={new_actual}, orphan={new_orphan}{delta_str}')
+        print(f'  {tag} {cat_code} {cat_name} {model_tag}: rec={new_record}, act={new_actual}, orp={new_orphan}{delta_str}')
         if changed:
             updated += 1
         else:
@@ -215,7 +247,7 @@ for entry in catalog:
     p_code, p_resp = api('PATCH', f'/items/meta_catalog/{cat_id}', patch)
     if p_code == 200:
         tag = '[CHG]' if changed else '[OK] '
-        print(f'  {tag} {cat_code} {cat_name}: record={new_record}, actual={new_actual}, orphan={new_orphan}{delta_str}')
+        print(f'  {tag} {cat_code} {cat_name} {model_tag}: rec={new_record}, act={new_actual}, orp={new_orphan}{delta_str}')
         if changed:
             updated += 1
         else:
@@ -226,17 +258,19 @@ for entry in catalog:
 
 print()
 print('=========================================')
-print(f'Count Refresh Complete')
+print(f'Count Refresh v2.0 Complete')
 print(f'  Changed:   {updated}')
 print(f'  Unchanged: {unchanged}')
 print(f'  Errors:    {errors}')
 if changes:
-    print(f'  Deltas:    {", ".join(changes)}')
+    print(f'  Deltas:')
+    for c in changes:
+        print(f'    {c}')
 print('=========================================')
 PYEOF
 
   BASE_URL="$BASE_URL" DOT_TOKEN="$DOT_TOKEN" DRY_RUN="${DRY_RUN:-}" \
-    FULL_MODE="${FULL_MODE:-}" ACTUAL_TOOLS="$actual_tools" ACTUAL_PAGES="$actual_pages" \
+    ACTUAL_TOOLS="$actual_tools" ACTUAL_PAGES="$actual_pages" \
     python3 "$tmp_py" < /dev/null
 
   rm -f "$tmp_py"

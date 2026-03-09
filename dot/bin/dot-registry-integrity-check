@@ -1,0 +1,267 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-registry-integrity-check — Agent self-check for registry integrity
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/ for "integrity-check" — no match]
+# VERSION: 1.0.0
+#
+# Runs 6 automated checks on meta_catalog health:
+#   1. record_count > 0 for all active entries
+#   2. actual_count >= record_count (no ghost records)
+#   3. orphan_count = |actual - record| (math correct)
+#   4. last_scan_date < 7h ago (scheduled refresh working)
+#   5. Model B: actual_count != record_count allowed (independent sources)
+#   6. Summary: total atoms across system
+#
+# Exit 0 = ALL PASS, Exit 1 = FAIL detected
+#
+# Usage:
+#   dot-registry-integrity-check [--cloud|--local]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+
+show_help() {
+  cat << EOF
+dot-registry-integrity-check v${VERSION} — Agent self-check
+
+Runs 6 automated checks. Exit 0 = PASS, Exit 1 = FAIL.
+
+Usage:
+  dot-registry-integrity-check [--cloud|--local]
+
+EOF
+  show_environment_help
+}
+
+main() {
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h) show_help; exit 0 ;;
+    esac
+  done
+
+  init_environment "$@"
+  local BASE_URL="$DIRECTUS_URL"
+
+  echo ""
+  echo "======================================================="
+  echo "  DOT Tool: Registry Integrity Check v${VERSION}"
+  echo "======================================================="
+  print_environment_banner "$@"
+
+  # Auth
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    source "${SCRIPT_DIR}/dot-auth" "$@" 2>/dev/null || true
+  fi
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    echo "[ERR] Authentication failed" >&2; exit 1
+  fi
+
+  local tmp_py
+  tmp_py=$(mktemp /tmp/dot-integrity-XXXXXX.py)
+  trap "rm -f '$tmp_py'" EXIT
+
+  cat > "$tmp_py" << 'PYEOF'
+import json, os, sys, ssl, urllib.request
+from datetime import datetime, timezone, timedelta
+
+base_url = os.environ['BASE_URL']
+token = os.environ['DOT_TOKEN']
+
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+def api_get(path):
+    url = base_url + path
+    req = urllib.request.Request(url, headers={'Authorization': f'Bearer {token}'})
+    try:
+        resp = urllib.request.urlopen(req, context=ctx, timeout=30)
+        return json.loads(resp.read())
+    except Exception as e:
+        return {'error': str(e)}
+
+# Fetch all meta_catalog entries
+resp = api_get('/items/meta_catalog?fields=id,code,name,source_model,registry_collection,record_count,actual_count,orphan_count,last_scan_date,status&sort=code&limit=-1')
+catalog = resp.get('data', [])
+
+if not catalog:
+    print('[FAIL] Cannot fetch meta_catalog')
+    sys.exit(1)
+
+now = datetime.now(timezone.utc)
+PASS = 0
+FAIL = 0
+WARN = 0
+total_atoms = 0
+total_orphans = 0
+
+def check_pass(msg):
+    global PASS
+    print(f'  PASS: {msg}')
+    PASS += 1
+
+def check_fail(msg):
+    global FAIL
+    print(f'  FAIL: {msg}')
+    FAIL += 1
+
+def check_warn(msg):
+    global WARN
+    print(f'  WARN: {msg}')
+    WARN += 1
+
+print(f'[INFO] Checking {len(catalog)} meta_catalog entries')
+print()
+
+# ============================================================
+# CHECK 1: record_count > 0 for all active entries
+# ============================================================
+print('--- Check 1: record_count > 0 ---')
+for entry in catalog:
+    rc = entry.get('record_count') or 0
+    status = entry.get('status', '')
+    if status in ('published', 'active') and rc == 0:
+        check_warn(f'{entry["code"]} {entry["name"]}: record_count=0 (empty collection)')
+    elif rc > 0:
+        total_atoms += rc
+
+if WARN == 0:
+    check_pass(f'All active entries have record_count > 0')
+print()
+
+# ============================================================
+# CHECK 2: No ghost records (actual >= record for Model B)
+# ============================================================
+print('--- Check 2: No ghost records ---')
+ghost_count = 0
+for entry in catalog:
+    sm = entry.get('source_model', 'A')
+    rc = entry.get('record_count') or 0
+    ac = entry.get('actual_count') or 0
+    if sm == 'B' and ac > 0 and ac < rc:
+        check_fail(f'{entry["code"]} {entry["name"]}: actual({ac}) < record({rc}) — ghost records in registry')
+        ghost_count += 1
+
+if ghost_count == 0:
+    check_pass('No ghost records detected')
+print()
+
+# ============================================================
+# CHECK 3: orphan_count = |actual - record| (math correct)
+# ============================================================
+print('--- Check 3: orphan_count math ---')
+math_errors = 0
+for entry in catalog:
+    rc = entry.get('record_count') or 0
+    ac = entry.get('actual_count') or 0
+    oc = entry.get('orphan_count') or 0
+    expected = abs(ac - rc)
+    if oc != expected:
+        check_fail(f'{entry["code"]}: orphan={oc} but |{ac}-{rc}|={expected}')
+        math_errors += 1
+    total_orphans += oc
+
+if math_errors == 0:
+    check_pass('All orphan_count values are mathematically correct')
+print()
+
+# ============================================================
+# CHECK 4: last_scan_date freshness (< 7h ago)
+# ============================================================
+print('--- Check 4: Scan freshness ---')
+stale_count = 0
+threshold = now - timedelta(hours=7)
+for entry in catalog:
+    lsd = entry.get('last_scan_date')
+    if not lsd:
+        check_warn(f'{entry["code"]} {entry["name"]}: never scanned')
+        stale_count += 1
+        continue
+    try:
+        scan_dt = datetime.fromisoformat(lsd.replace('Z', '+00:00'))
+        if scan_dt < threshold:
+            age_hours = (now - scan_dt).total_seconds() / 3600
+            check_warn(f'{entry["code"]}: last scan {age_hours:.1f}h ago (threshold: 7h)')
+            stale_count += 1
+    except:
+        check_warn(f'{entry["code"]}: invalid last_scan_date: {lsd}')
+        stale_count += 1
+
+if stale_count == 0:
+    check_pass('All entries scanned within 7h')
+print()
+
+# ============================================================
+# CHECK 5: Model B independence verification
+# ============================================================
+print('--- Check 5: Model B independence ---')
+model_b_entries = [e for e in catalog if e.get('source_model') == 'B']
+model_b_same = 0
+for entry in model_b_entries:
+    rc = entry.get('record_count') or 0
+    ac = entry.get('actual_count') or 0
+    if rc == ac and rc > 0:
+        model_b_same += 1
+
+if model_b_entries:
+    if model_b_same == len(model_b_entries):
+        check_warn(f'ALL {len(model_b_entries)} Model B entries have record=actual — may still be counting from same source')
+    else:
+        check_pass(f'{len(model_b_entries)} Model B entries, {len(model_b_entries)-model_b_same} with independent counts')
+else:
+    check_pass('No Model B entries')
+print()
+
+# ============================================================
+# CHECK 6: System summary
+# ============================================================
+print('--- Check 6: System summary ---')
+check_pass(f'Total atoms: {total_atoms} across {len(catalog)} categories')
+if total_orphans > 0:
+    check_warn(f'Total orphans: {total_orphans}')
+else:
+    check_pass(f'Total orphans: 0')
+print()
+
+# ============================================================
+# SUMMARY
+# ============================================================
+total = PASS + FAIL + WARN
+print('=========================================')
+print(f'Integrity Check: {PASS}/{total} PASS, {FAIL}/{total} FAIL, {WARN}/{total} WARN')
+print(f'System: {total_atoms} atoms, {len(catalog)} categories, {total_orphans} orphans')
+print('=========================================')
+
+if FAIL > 0:
+    print('INTEGRITY: FAILED')
+    sys.exit(1)
+elif WARN > 0:
+    print('INTEGRITY: PASS WITH WARNINGS')
+    sys.exit(0)
+else:
+    print('INTEGRITY: ALL PASS')
+    sys.exit(0)
+PYEOF
+
+  BASE_URL="$BASE_URL" DOT_TOKEN="$DOT_TOKEN" \
+    python3 "$tmp_py" < /dev/null
+
+  local exit_code=$?
+  rm -f "$tmp_py"
+
+  echo ""
+  echo "======================================================="
+  echo "  DOT Tool: Registry Integrity Check - COMPLETE"
+  echo "======================================================="
+
+  return $exit_code
+}
+
+main "$@"
