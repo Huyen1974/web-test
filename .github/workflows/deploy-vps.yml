@@ -178,13 +178,13 @@ jobs:
               exit 1
             fi
 
-            # Refresh registry counts after successful deploy
+            # Refresh registry counts + integrity check after successful deploy
             echo "=== Refreshing registry counts ==="
-            curl -sf -X POST --max-time 30 \
+            REFRESH_OUT=$(curl -sf -X POST --max-time 30 \
               --resolve vps.incomexsaigoncorp.vn:443:127.0.0.1 \
               https://vps.incomexsaigoncorp.vn/api/registry/refresh-counts \
-              -H "Content-Type: application/json" \
-              -o /dev/null 2>/dev/null && echo "Registry counts refreshed" || echo "Registry refresh skipped (non-critical)"
+              -H "Content-Type: application/json" 2>/dev/null || echo '{"status":"error"}')
+            echo "Registry refresh: $(echo "$REFRESH_OUT" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(f"updated={d.get(\"updated\",\"?\")}, errors={d.get(\"errors\",\"?\")}")' 2>/dev/null || echo 'unknown')"
 
             echo "=== Direct deploy complete ==="
 
@@ -352,12 +352,12 @@ jobs:
               exit 1
             fi
 
-            # Refresh registry counts after successful deploy
+            # Refresh registry counts + integrity check after successful deploy
             echo "=== Refreshing registry counts ==="
-            curl -sf -X POST --max-time 30 \
+            REFRESH_OUT=$(curl -sf -X POST --max-time 30 \
               --resolve vps.incomexsaigoncorp.vn:443:127.0.0.1 \
               https://vps.incomexsaigoncorp.vn/api/registry/refresh-counts \
-              -H "Content-Type: application/json" \
-              -o /dev/null 2>/dev/null && echo "Registry counts refreshed" || echo "Registry refresh skipped (non-critical)"
+              -H "Content-Type: application/json" 2>/dev/null || echo '{"status":"error"}')
+            echo "Registry refresh: $(echo "$REFRESH_OUT" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(f"updated={d.get(\"updated\",\"?\")}, errors={d.get(\"errors\",\"?\")}")' 2>/dev/null || echo 'unknown')"
 
             echo "=== Deploy complete ==="

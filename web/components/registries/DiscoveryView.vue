@@ -179,7 +179,14 @@ const transitiveColumns = [
 	{ key: 'path', label: 'Duong di' },
 ];
 
-// === DETAIL LINK — link to dedicated page if available ===
+// === DETAIL LINKS — link to dedicated list + detail pages ===
+// Map entity types to their dedicated detail page patterns
+const detailPageMap: Record<string, (item: Record<string, any>) => string | null> = {
+	workflow: (item) => item?.id ? `/knowledge/workflows/${item.id}` : null,
+	module: (item) => item?.id ? `/knowledge/modules/${item.id}` : null,
+	task: (item) => item?.id ? `/knowledge/current-tasks/${item.id}` : null,
+};
+
 const { data: detailLink } = useAsyncData(
 	`discovery-detail-link-${props.entityType}`,
 	async () => {
@@ -204,15 +211,14 @@ const { data: detailLink } = useAsyncData(
 	{ default: () => null },
 );
 
-const detailPageUrl = computed(() => {
-	if (!detailLink.value) return null;
-	const itemId = props.item?.id;
-	const code = props.item?.code || props.item?.process_code || props.item?.table_id;
-	// Build link to dedicated page with item context
-	const base = detailLink.value as string;
-	if (code) return `${base}?highlight=${encodeURIComponent(code)}`;
-	if (itemId) return `${base}?id=${itemId}`;
-	return base;
+// List page URL (from meta_catalog ui_page)
+const listPageUrl = computed(() => detailLink.value as string | null);
+
+// Detail page URL (entity-specific, goes to dedicated detail page with this item)
+const entityDetailUrl = computed(() => {
+	const fn = detailPageMap[props.entityType];
+	if (!fn) return null;
+	return fn(props.item);
 });
 
 // === RULE 7: PEERS — same collection, nearby items ===
@@ -303,15 +309,23 @@ function getChildColumns(items: any[]): { key: string; label: string }[] {
 			</div>
 		</UCard>
 
-		<!-- DETAIL LINK: Link to dedicated page -->
-		<div v-if="detailPageUrl" class="flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-4 py-3 dark:border-primary-800 dark:bg-primary-900/20">
-			<UIcon name="i-heroicons-arrow-top-right-on-square" class="h-5 w-5 text-primary-600 dark:text-primary-400" />
-			<span class="text-sm text-gray-700 dark:text-gray-300">Xem trang chi tiet:</span>
+		<!-- DETAIL LINKS: Link to dedicated list + detail pages -->
+		<div v-if="listPageUrl || entityDetailUrl" class="flex flex-wrap items-center gap-3 rounded-lg border border-primary-200 bg-primary-50 px-4 py-3 dark:border-primary-800 dark:bg-primary-900/20">
+			<UIcon name="i-heroicons-arrow-top-right-on-square" class="h-5 w-5 flex-shrink-0 text-primary-600 dark:text-primary-400" />
 			<NuxtLink
-				:to="detailPageUrl"
+				v-if="entityDetailUrl"
+				:to="entityDetailUrl"
 				class="text-sm font-medium text-primary-600 hover:text-primary-800 hover:underline dark:text-primary-400"
 			>
-				{{ detailLink }}
+				Xem chi tiet {{ itemCode || `#${item?.id}` }}
+			</NuxtLink>
+			<span v-if="entityDetailUrl && listPageUrl" class="text-gray-400">|</span>
+			<NuxtLink
+				v-if="listPageUrl"
+				:to="listPageUrl"
+				class="text-sm text-gray-600 hover:text-primary-600 hover:underline dark:text-gray-400 dark:hover:text-primary-400"
+			>
+				Danh sach {{ entityType.replace(/_/g, ' ') }}
 			</NuxtLink>
 		</div>
 

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { readItems } from '@directus/sdk';
+
 definePageMeta({
 	title: 'Danh mục hệ thống',
 	description: 'Meta-Catalog — Danh mục sống 3 tầng',
@@ -8,6 +10,33 @@ function getRegistryLink(item: any) {
 	if (!item?.entity_type) return '/knowledge/registries';
 	return `/knowledge/registries/${item.entity_type}`;
 }
+
+const { $directus } = useNuxtApp();
+
+// Fetch summary stats from meta_catalog
+const { data: summary } = useAsyncData(
+	'registry-summary',
+	async () => {
+		try {
+			const items = await $directus.request(
+				readItems('meta_catalog' as any, {
+					fields: ['record_count', 'orphan_count', 'status'],
+					limit: -1,
+				}),
+			);
+			const entries = items as any[];
+			const active = entries.filter((e) => e.status === 'published' || e.status === 'active');
+			return {
+				totalAtoms: active.reduce((sum, e) => sum + (e.record_count || 0), 0),
+				totalCategories: active.length,
+				totalOrphans: active.reduce((sum, e) => sum + (e.orphan_count || 0), 0),
+			};
+		} catch {
+			return null;
+		}
+	},
+	{ default: () => null },
+);
 </script>
 
 <template>
@@ -23,6 +52,27 @@ function getRegistryLink(item: any) {
 			<p class="mt-2 text-gray-600 dark:text-gray-400">
 				Meta-Catalog — Danh mục sống 3 tầng. Click vào số lượng hoặc tên để xem chi tiết.
 			</p>
+		</div>
+
+		<!-- Summary stats -->
+		<div v-if="summary" class="mb-6 grid grid-cols-3 gap-4">
+			<div class="rounded-lg border border-gray-200 bg-white p-4 text-center dark:border-gray-700 dark:bg-gray-800">
+				<div class="text-3xl font-bold text-primary-600 dark:text-primary-400">{{ summary.totalAtoms }}</div>
+				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">nguyen tu</div>
+			</div>
+			<div class="rounded-lg border border-gray-200 bg-white p-4 text-center dark:border-gray-700 dark:bg-gray-800">
+				<div class="text-3xl font-bold text-gray-900 dark:text-white">{{ summary.totalCategories }}</div>
+				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">loai thuc the</div>
+			</div>
+			<div class="rounded-lg border border-gray-200 bg-white p-4 text-center dark:border-gray-700 dark:bg-gray-800">
+				<div
+					class="text-3xl font-bold"
+					:class="summary.totalOrphans > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'"
+				>
+					{{ summary.totalOrphans }}
+				</div>
+				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">mo coi</div>
+			</div>
 		</div>
 
 		<SharedDirectusTable
