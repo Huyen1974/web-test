@@ -337,8 +337,8 @@ setup_update_changelog_flow() {
     --arg flow "$flow_id" \
     --arg entity_type "$entity_type" \
     --arg collection "$collection" \
-    --arg code_tpl "{{__DOLLAR__read_item.${code_field}}}" \
-    --arg name_tpl "{{__DOLLAR__read_item.${name_field}}}" \
+    --arg code_tpl "{{read_item.${code_field}}}" \
+    --arg name_tpl "{{read_item.${name_field}}}" \
     '{
       flow: $flow,
       name: "Write Changelog",
