@@ -19,9 +19,14 @@ function formatAction(action: string) {
 	return action;
 }
 
-function formatTime(ts: string) {
+function formatMinuteKey(ts: string) {
 	if (!ts) return '';
-	const d = new Date(ts);
+	return ts.slice(0, 16); // "2026-03-10T08:44" — minute precision
+}
+
+function formatMinuteDisplay(minuteKey: string) {
+	if (!minuteKey) return '';
+	const d = new Date(minuteKey + ':00Z');
 	const now = new Date();
 	const diffMs = now.getTime() - d.getTime();
 	const diffMin = Math.floor(diffMs / 60000);
@@ -29,7 +34,7 @@ function formatTime(ts: string) {
 	if (diffMin < 60) return `${diffMin} phút trước`;
 	const diffH = Math.floor(diffMin / 60);
 	if (diffH < 24) return `${diffH}h trước`;
-	return d.toLocaleDateString('vi-VN');
+	return d.toLocaleDateString('vi-VN') + ' ' + d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 }
 
 const { $directus } = useNuxtApp();
@@ -59,37 +64,49 @@ const { data: summary } = useAsyncData(
 	{ default: () => null },
 );
 
-// Fetch recent changelog entries and aggregate by entity_type + time window
+// Fetch recent changelog entries grouped by MINUTE
 const { data: recentChanges } = useAsyncData(
 	'registry-changelog',
 	async () => {
 		try {
 			const items = await $directus.request(
 				readItems('registry_changelog' as any, {
-					fields: ['id', 'timestamp', 'entity_type', 'action', 'alert_level', 'alert_detail'],
+					fields: ['id', 'timestamp', 'entity_type', 'action', 'entity_code', 'alert_level', 'alert_detail'],
 					sort: ['-timestamp'],
-					limit: 100,
+					limit: 200,
 				}),
 			);
-			// Aggregate: group by entity_type, count create/update/delete, take latest timestamp
-			const groups = new Map<string, { ts: string; type: string; created: number; updated: number; deleted: number; alerts: string[] }>();
-			for (const e of items as any[]) {
-				const key = e.entity_type || 'unknown';
-				if (!groups.has(key)) {
-					groups.set(key, { ts: e.timestamp, type: key, created: 0, updated: 0, deleted: 0, alerts: [] });
+			// Group by minute
+			const minuteGroups = new Map<
+				string,
+				{
+					minuteKey: string;
+					created: number;
+					updated: number;
+					deleted: number;
+					types: Set<string>;
+					details: Array<{ type: string; code: string; action: string }>;
 				}
-				const g = groups.get(key)!;
-				if (e.timestamp > g.ts) g.ts = e.timestamp;
+			>();
+			for (const e of items as any[]) {
+				const mk = formatMinuteKey(e.timestamp);
+				if (!minuteGroups.has(mk)) {
+					minuteGroups.set(mk, { minuteKey: mk, created: 0, updated: 0, deleted: 0, types: new Set(), details: [] });
+				}
+				const g = minuteGroups.get(mk)!;
 				const action = formatAction(e.action);
 				if (action === 'created') g.created++;
 				else if (action === 'updated') g.updated++;
 				else if (action === 'deleted') g.deleted++;
-				if (e.alert_level && e.alert_level !== 'ok' && e.alert_detail) {
-					g.alerts.push(e.alert_detail);
-				}
+				g.types.add(e.entity_type || '');
+				g.details.push({
+					type: e.entity_type || '',
+					code: e.entity_code || e.id || '',
+					action,
+				});
 			}
-			return Array.from(groups.values())
-				.sort((a, b) => b.ts.localeCompare(a.ts))
+			return Array.from(minuteGroups.values())
+				.sort((a, b) => b.minuteKey.localeCompare(a.minuteKey))
 				.slice(0, 10);
 		} catch {
 			return null;
@@ -98,165 +115,42 @@ const { data: recentChanges } = useAsyncData(
 	{ default: () => null },
 );
 
+// Expanded minute rows tracking
+const expandedMinutes = ref<Set<string>>(new Set());
+
+function toggleMinute(mk: string) {
+	if (expandedMinutes.value.has(mk)) {
+		expandedMinutes.value.delete(mk);
+	} else {
+		expandedMinutes.value.add(mk);
+	}
+	// Force reactivity
+	expandedMinutes.value = new Set(expandedMinutes.value);
+}
+
 // UTable config for changelog
 const changelogColumns = [
 	{ key: 'time', label: 'Thời gian' },
-	{ key: 'type', label: 'Loại' },
+	{ key: 'types', label: 'Loại' },
 	{ key: 'created', label: 'Thêm' },
 	{ key: 'updated', label: 'Cập nhật' },
 	{ key: 'deleted', label: 'Xoá' },
-	{ key: 'note', label: 'Ghi chú' },
+	{ key: 'total', label: 'Tổng' },
 ];
 
 const changelogRows = computed(() =>
-	(recentChanges.value || []).map((g: any) => ({
-		time: formatTime(g.ts),
-		type: g.type,
+	(recentChanges.value || []).map((g) => ({
+		minuteKey: g.minuteKey,
+		time: formatMinuteDisplay(g.minuteKey),
+		types: Array.from(g.types).join(', '),
 		created: g.created || 0,
 		updated: g.updated || 0,
 		deleted: g.deleted || 0,
-		note: g.alerts.length > 0 ? g.alerts[0] : '',
-		hasAlert: g.alerts.length > 0,
+		total: g.created + g.updated + g.deleted,
+		details: g.details,
+		isExpanded: expandedMinutes.value.has(g.minuteKey),
 	})),
 );
-
-// Fetch open system issues
-const { data: systemIssues } = useAsyncData(
-	'registry-issues',
-	async () => {
-		try {
-			const items = await $directus.request(
-				readItems('system_issues' as any, {
-					fields: ['id', 'code', 'title', 'issue_type', 'severity', 'source', 'detected_at', 'entity_type', 'entity_code'],
-					filter: { status: { _in: ['mở', 'đang_xử_lý'] } },
-					sort: ['-detected_at'],
-					limit: 50,
-				}),
-			);
-			return items as any[];
-		} catch {
-			return null;
-		}
-	},
-	{ default: () => null },
-);
-
-const issuesSummary = computed(() => {
-	const items = systemIssues.value || [];
-	return {
-		total: items.length,
-		critical: items.filter((i: any) => i.severity === 'nghiêm_trọng').length,
-		warning: items.filter((i: any) => i.severity === 'cảnh_báo').length,
-		info: items.filter((i: any) => i.severity === 'thông_tin').length,
-	};
-});
-
-const issueColumns = [
-	{ key: 'code', label: 'Mã' },
-	{ key: 'title', label: 'Tiêu đề' },
-	{ key: 'issue_type', label: 'Loại lỗi' },
-	{ key: 'severity', label: 'Mức độ' },
-	{ key: 'source', label: 'Phát hiện bởi' },
-	{ key: 'time', label: 'Thời gian' },
-];
-
-const issueTypeLabels: Record<string, string> = {
-	'lỗi_lớp_2': 'Lớp 2 trống',
-	'lỗi_lớp_3': 'Lớp 3 lỗi',
-	'thiếu_mã_định_danh': 'Thiếu mã',
-	'sai_lệch_dữ_liệu': 'Sai lệch',
-	'thiếu_quan_hệ': 'Thiếu quan hệ',
-	'link_hỏng': 'Link hỏng',
-};
-
-const issueRows = computed(() =>
-	(systemIssues.value || []).map((i: any) => ({
-		code: i.code || '—',
-		title: i.title,
-		issue_type: issueTypeLabels[i.issue_type] || i.issue_type,
-		severity: i.severity,
-		source: i.source,
-		time: formatTime(i.detected_at),
-	})),
-);
-
-// Kiểm chứng ngược: xuôi (live count from actual_count) vs ngược (baseline + changelog Δ)
-const { data: crosscheckData } = useAsyncData(
-	'registry-crosscheck',
-	async () => {
-		try {
-			// Fetch meta_catalog with baseline_count
-			const catalogItems = await $directus.request(
-				readItems('meta_catalog' as any, {
-					fields: ['code', 'name', 'entity_type', 'actual_count', 'baseline_count', 'status'],
-					filter: { status: { _in: ['active', 'published'] } },
-					sort: ['code'],
-					limit: -1,
-				}),
-			);
-
-			// Fetch all changelog entries
-			const changelogItems = await $directus.request(
-				readItems('registry_changelog' as any, {
-					fields: ['entity_type', 'action'],
-					limit: -1,
-				}),
-			);
-
-			// Aggregate changelog: count create/delete per entity_type
-			const clStats: Record<string, { created: number; deleted: number }> = {};
-			for (const e of changelogItems as any[]) {
-				const et = e.entity_type || '';
-				if (!clStats[et]) clStats[et] = { created: 0, deleted: 0 };
-				if ((e.action || '').includes('create')) clStats[et].created++;
-				else if ((e.action || '').includes('delete')) clStats[et].deleted++;
-			}
-
-			// Build crosscheck rows
-			let matchCount = 0;
-			let mismatchCount = 0;
-			const rows = (catalogItems as any[]).map((entry) => {
-				const et = entry.entity_type || '';
-				const xuoi = entry.actual_count || 0;
-				const baseline = entry.baseline_count || 0;
-				const stats = clStats[et] || { created: 0, deleted: 0 };
-				const nguoc = baseline > 0 ? baseline + stats.created - stats.deleted : null;
-				let status: 'match' | 'mismatch' | 'no_baseline' = 'no_baseline';
-				if (baseline > 0 && nguoc !== null) {
-					status = xuoi === nguoc ? 'match' : 'mismatch';
-					if (status === 'match') matchCount++;
-					else mismatchCount++;
-				}
-				return {
-					code: entry.code,
-					name: entry.name,
-					xuoi,
-					baseline,
-					created: stats.created,
-					deleted: stats.deleted,
-					nguoc,
-					status,
-				};
-			});
-
-			return { rows, matchCount, mismatchCount, total: matchCount + mismatchCount };
-		} catch {
-			return null;
-		}
-	},
-	{ default: () => null },
-);
-
-const crosscheckColumns = [
-	{ key: 'code', label: 'Mã' },
-	{ key: 'name', label: 'Tên' },
-	{ key: 'xuoi', label: 'Xuôi' },
-	{ key: 'baseline', label: 'Baseline' },
-	{ key: 'created', label: '+Tạo' },
-	{ key: 'deleted', label: '-Xoá' },
-	{ key: 'nguoc', label: 'Ngược' },
-	{ key: 'status', label: 'Kết quả' },
-];
 
 // Count unresolved alerts
 const { data: alertCount } = useAsyncData(
@@ -375,132 +269,66 @@ const { data: alertCount } = useAsyncData(
 		<!-- Nhật ký thay đổi gần đây -->
 		<div v-if="recentChanges && recentChanges.length > 0" class="mt-10">
 			<h2 class="mb-4 text-xl font-semibold text-gray-900 dark:text-white">Nhật ký thay đổi gần đây</h2>
-			<UTable
-				:rows="changelogRows"
-				:columns="changelogColumns"
-			>
-				<template #cell-time="{ row }">
-					<span class="text-gray-500 dark:text-gray-400">{{ row.time }}</span>
-				</template>
-				<template #cell-created="{ row }">
-					<span v-if="row.created > 0" class="font-medium text-emerald-600 dark:text-emerald-400">+{{ row.created }}</span>
-					<span v-else class="text-gray-300 dark:text-gray-600">0</span>
-				</template>
-				<template #cell-updated="{ row }">
-					<span v-if="row.updated > 0" class="font-medium text-blue-600 dark:text-blue-400">{{ row.updated }}</span>
-					<span v-else class="text-gray-300 dark:text-gray-600">0</span>
-				</template>
-				<template #cell-deleted="{ row }">
-					<span v-if="row.deleted > 0" class="font-medium text-red-600 dark:text-red-400">-{{ row.deleted }}</span>
-					<span v-else class="text-gray-300 dark:text-gray-600">0</span>
-				</template>
-				<template #cell-note="{ row }">
-					<UBadge v-if="row.hasAlert" color="yellow" variant="subtle" size="xs">{{ row.note }}</UBadge>
-				</template>
-			</UTable>
-		</div>
-
-		<!-- Kiểm chứng ngược -->
-		<div v-if="crosscheckData && crosscheckData.rows.length > 0" class="mt-10">
-			<h2 class="mb-2 text-xl font-semibold text-gray-900 dark:text-white">Kiểm chứng ngược</h2>
-			<p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
-				Xuôi (live count) vs Ngược (baseline + changelog Δ) —
-				<template v-if="crosscheckData.total > 0">
-					<span
-						class="font-medium"
-						:class="crosscheckData.mismatchCount > 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'"
-					>
-						{{ crosscheckData.matchCount }}/{{ crosscheckData.total }} KHỚP
-					</span>
-					<template v-if="crosscheckData.mismatchCount > 0">
-						, {{ crosscheckData.mismatchCount }} LỆCH
-					</template>
-				</template>
-				<template v-else>
-					Chưa có baseline
-				</template>
-			</p>
-			<UTable
-				:rows="crosscheckData.rows"
-				:columns="crosscheckColumns"
-			>
-				<template #cell-xuoi="{ row }">
-					<span class="font-medium">{{ row.xuoi }}</span>
-				</template>
-				<template #cell-baseline="{ row }">
-					<span v-if="row.baseline > 0">{{ row.baseline }}</span>
-					<span v-else class="text-gray-300 dark:text-gray-600">—</span>
-				</template>
-				<template #cell-created="{ row }">
-					<span v-if="row.created > 0" class="text-emerald-600 dark:text-emerald-400">+{{ row.created }}</span>
-					<span v-else class="text-gray-300 dark:text-gray-600">0</span>
-				</template>
-				<template #cell-deleted="{ row }">
-					<span v-if="row.deleted > 0" class="text-red-600 dark:text-red-400">-{{ row.deleted }}</span>
-					<span v-else class="text-gray-300 dark:text-gray-600">0</span>
-				</template>
-				<template #cell-nguoc="{ row }">
-					<span v-if="row.nguoc !== null" class="font-medium">{{ row.nguoc }}</span>
-					<span v-else class="text-gray-300 dark:text-gray-600">—</span>
-				</template>
-				<template #cell-status="{ row }">
-					<UBadge
-						v-if="row.status === 'match'"
-						color="green"
-						variant="subtle"
-						size="xs"
-					>
-						KHỚP
-					</UBadge>
-					<UBadge
-						v-else-if="row.status === 'mismatch'"
-						color="red"
-						variant="subtle"
-						size="xs"
-					>
-						LỆCH {{ row.xuoi - row.nguoc > 0 ? '+' : '' }}{{ row.xuoi - row.nguoc }}
-					</UBadge>
-					<UBadge
-						v-else
-						color="gray"
-						variant="subtle"
-						size="xs"
-					>
-						Chưa baseline
-					</UBadge>
-				</template>
-			</UTable>
-		</div>
-
-		<!-- Vấn đề hệ thống -->
-		<div v-if="systemIssues && systemIssues.length > 0" class="mt-10">
-			<h2 class="mb-2 text-xl font-semibold text-gray-900 dark:text-white">Vấn đề hệ thống</h2>
-			<p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
-				{{ issuesSummary.total }} vấn đề chưa giải quyết
-				<template v-if="issuesSummary.critical > 0">
-					(<span class="font-medium text-red-600 dark:text-red-400">{{ issuesSummary.critical }} nghiêm trọng</span><template v-if="issuesSummary.warning > 0">, {{ issuesSummary.warning }} cảnh báo</template>)
-				</template>
-				<template v-else-if="issuesSummary.warning > 0">
-					({{ issuesSummary.warning }} cảnh báo)
-				</template>
-			</p>
-			<UTable
-				:rows="issueRows"
-				:columns="issueColumns"
-			>
-				<template #cell-severity="{ row }">
-					<UBadge
-						:color="row.severity === 'nghiêm_trọng' ? 'red' : row.severity === 'cảnh_báo' ? 'yellow' : 'blue'"
-						variant="subtle"
-						size="xs"
-					>
-						{{ row.severity === 'nghiêm_trọng' ? 'Nghiêm trọng' : row.severity === 'cảnh_báo' ? 'Cảnh báo' : 'Thông tin' }}
-					</UBadge>
-				</template>
-				<template #cell-time="{ row }">
-					<span class="text-gray-500 dark:text-gray-400">{{ row.time }}</span>
-				</template>
-			</UTable>
+			<div class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+				<table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+					<thead class="bg-gray-50 dark:bg-gray-800">
+						<tr>
+							<th v-for="col in changelogColumns" :key="col.key" class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
+								{{ col.label }}
+							</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
+						<template v-for="row in changelogRows" :key="row.minuteKey">
+							<tr
+								class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+								@click="toggleMinute(row.minuteKey)"
+							>
+								<td class="whitespace-nowrap px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
+									<span class="mr-1 inline-block w-4 text-center">{{ row.isExpanded ? '▼' : '▶' }}</span>
+									{{ row.time }}
+								</td>
+								<td class="px-3 py-2 text-sm text-gray-900 dark:text-white">{{ row.types }}</td>
+								<td class="px-3 py-2 text-sm">
+									<span v-if="row.created > 0" class="font-medium text-emerald-600 dark:text-emerald-400">+{{ row.created }}</span>
+									<span v-else class="text-gray-300 dark:text-gray-600">0</span>
+								</td>
+								<td class="px-3 py-2 text-sm">
+									<span v-if="row.updated > 0" class="font-medium text-blue-600 dark:text-blue-400">{{ row.updated }}</span>
+									<span v-else class="text-gray-300 dark:text-gray-600">0</span>
+								</td>
+								<td class="px-3 py-2 text-sm">
+									<span v-if="row.deleted > 0" class="font-medium text-red-600 dark:text-red-400">-{{ row.deleted }}</span>
+									<span v-else class="text-gray-300 dark:text-gray-600">0</span>
+								</td>
+								<td class="px-3 py-2 text-sm font-medium text-gray-900 dark:text-white">{{ row.total }}</td>
+							</tr>
+							<!-- Expanded detail rows -->
+							<tr v-if="row.isExpanded">
+								<td colspan="6" class="bg-gray-50 px-6 py-2 dark:bg-gray-800/50">
+									<div class="space-y-1">
+										<div
+											v-for="(detail, idx) in row.details"
+											:key="idx"
+											class="flex items-center gap-3 text-xs"
+										>
+											<UBadge
+												:color="detail.action === 'created' ? 'green' : detail.action === 'deleted' ? 'red' : 'blue'"
+												variant="subtle"
+												size="xs"
+											>
+												{{ detail.action === 'created' ? 'Thêm' : detail.action === 'deleted' ? 'Xoá' : 'Sửa' }}
+											</UBadge>
+											<span class="text-gray-500 dark:text-gray-400">{{ detail.type }}</span>
+											<span class="font-mono text-gray-700 dark:text-gray-300">{{ detail.code }}</span>
+										</div>
+									</div>
+								</td>
+							</tr>
+						</template>
+					</tbody>
+				</table>
+			</div>
 		</div>
 	</div>
 </template>
