@@ -180,6 +180,84 @@ const issueRows = computed(() =>
 	})),
 );
 
+// Kiểm chứng ngược: xuôi (live count from actual_count) vs ngược (baseline + changelog Δ)
+const { data: crosscheckData } = useAsyncData(
+	'registry-crosscheck',
+	async () => {
+		try {
+			// Fetch meta_catalog with baseline_count
+			const catalogItems = await $directus.request(
+				readItems('meta_catalog' as any, {
+					fields: ['code', 'name', 'entity_type', 'actual_count', 'baseline_count', 'status'],
+					filter: { status: { _in: ['active', 'published'] } },
+					sort: ['code'],
+					limit: -1,
+				}),
+			);
+
+			// Fetch all changelog entries
+			const changelogItems = await $directus.request(
+				readItems('registry_changelog' as any, {
+					fields: ['entity_type', 'action'],
+					limit: -1,
+				}),
+			);
+
+			// Aggregate changelog: count create/delete per entity_type
+			const clStats: Record<string, { created: number; deleted: number }> = {};
+			for (const e of changelogItems as any[]) {
+				const et = e.entity_type || '';
+				if (!clStats[et]) clStats[et] = { created: 0, deleted: 0 };
+				if ((e.action || '').includes('create')) clStats[et].created++;
+				else if ((e.action || '').includes('delete')) clStats[et].deleted++;
+			}
+
+			// Build crosscheck rows
+			let matchCount = 0;
+			let mismatchCount = 0;
+			const rows = (catalogItems as any[]).map((entry) => {
+				const et = entry.entity_type || '';
+				const xuoi = entry.actual_count || 0;
+				const baseline = entry.baseline_count || 0;
+				const stats = clStats[et] || { created: 0, deleted: 0 };
+				const nguoc = baseline > 0 ? baseline + stats.created - stats.deleted : null;
+				let status: 'match' | 'mismatch' | 'no_baseline' = 'no_baseline';
+				if (baseline > 0 && nguoc !== null) {
+					status = xuoi === nguoc ? 'match' : 'mismatch';
+					if (status === 'match') matchCount++;
+					else mismatchCount++;
+				}
+				return {
+					code: entry.code,
+					name: entry.name,
+					xuoi,
+					baseline,
+					created: stats.created,
+					deleted: stats.deleted,
+					nguoc,
+					status,
+				};
+			});
+
+			return { rows, matchCount, mismatchCount, total: matchCount + mismatchCount };
+		} catch {
+			return null;
+		}
+	},
+	{ default: () => null },
+);
+
+const crosscheckColumns = [
+	{ key: 'code', label: 'Mã' },
+	{ key: 'name', label: 'Tên' },
+	{ key: 'xuoi', label: 'Xuôi' },
+	{ key: 'baseline', label: 'Baseline' },
+	{ key: 'created', label: '+Tạo' },
+	{ key: 'deleted', label: '-Xoá' },
+	{ key: 'nguoc', label: 'Ngược' },
+	{ key: 'status', label: 'Kết quả' },
+];
+
 // Count unresolved alerts
 const { data: alertCount } = useAsyncData(
 	'registry-alerts',
@@ -318,6 +396,78 @@ const { data: alertCount } = useAsyncData(
 				</template>
 				<template #cell-note="{ row }">
 					<UBadge v-if="row.hasAlert" color="yellow" variant="subtle" size="xs">{{ row.note }}</UBadge>
+				</template>
+			</UTable>
+		</div>
+
+		<!-- Kiểm chứng ngược -->
+		<div v-if="crosscheckData && crosscheckData.rows.length > 0" class="mt-10">
+			<h2 class="mb-2 text-xl font-semibold text-gray-900 dark:text-white">Kiểm chứng ngược</h2>
+			<p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
+				Xuôi (live count) vs Ngược (baseline + changelog Δ) —
+				<template v-if="crosscheckData.total > 0">
+					<span
+						class="font-medium"
+						:class="crosscheckData.mismatchCount > 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'"
+					>
+						{{ crosscheckData.matchCount }}/{{ crosscheckData.total }} KHỚP
+					</span>
+					<template v-if="crosscheckData.mismatchCount > 0">
+						, {{ crosscheckData.mismatchCount }} LỆCH
+					</template>
+				</template>
+				<template v-else>
+					Chưa có baseline
+				</template>
+			</p>
+			<UTable
+				:rows="crosscheckData.rows"
+				:columns="crosscheckColumns"
+			>
+				<template #cell-xuoi="{ row }">
+					<span class="font-medium">{{ row.xuoi }}</span>
+				</template>
+				<template #cell-baseline="{ row }">
+					<span v-if="row.baseline > 0">{{ row.baseline }}</span>
+					<span v-else class="text-gray-300 dark:text-gray-600">—</span>
+				</template>
+				<template #cell-created="{ row }">
+					<span v-if="row.created > 0" class="text-emerald-600 dark:text-emerald-400">+{{ row.created }}</span>
+					<span v-else class="text-gray-300 dark:text-gray-600">0</span>
+				</template>
+				<template #cell-deleted="{ row }">
+					<span v-if="row.deleted > 0" class="text-red-600 dark:text-red-400">-{{ row.deleted }}</span>
+					<span v-else class="text-gray-300 dark:text-gray-600">0</span>
+				</template>
+				<template #cell-nguoc="{ row }">
+					<span v-if="row.nguoc !== null" class="font-medium">{{ row.nguoc }}</span>
+					<span v-else class="text-gray-300 dark:text-gray-600">—</span>
+				</template>
+				<template #cell-status="{ row }">
+					<UBadge
+						v-if="row.status === 'match'"
+						color="green"
+						variant="subtle"
+						size="xs"
+					>
+						KHỚP
+					</UBadge>
+					<UBadge
+						v-else-if="row.status === 'mismatch'"
+						color="red"
+						variant="subtle"
+						size="xs"
+					>
+						LỆCH {{ row.xuoi - row.nguoc > 0 ? '+' : '' }}{{ row.xuoi - row.nguoc }}
+					</UBadge>
+					<UBadge
+						v-else
+						color="gray"
+						variant="subtle"
+						size="xs"
+					>
+						Chưa baseline
+					</UBadge>
 				</template>
 			</UTable>
 		</div>
