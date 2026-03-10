@@ -22,6 +22,7 @@ const tableIdMap: Record<string, string> = {
 	entity_dependency: 'tbl_registry_entity_dependencies',
 	table_proposal: 'tbl_proposals_list',
 	checkpoint_instance: 'tbl_checkpoint_instances',
+	changelog: 'tbl_registry_changelog',
 };
 
 const tableId = computed(() => tableIdMap[entityType.value] || '');
