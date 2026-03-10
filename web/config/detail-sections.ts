@@ -233,6 +233,8 @@ export const collectionMap: Record<string, string> = {
 	checkpoint_type: 'checkpoint_types',
 	checkpoint_set: 'checkpoint_sets',
 	entity_dependency: 'entity_dependencies',
+	changelog: 'registry_changelog',
+	system_issue: 'system_issues',
 };
 
 /** entityType → primary code field (used for URL lookups) */

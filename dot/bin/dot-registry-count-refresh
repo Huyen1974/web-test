@@ -3,18 +3,22 @@
 # dot-registry-count-refresh — Refresh meta_catalog record counts
 # =============================================================================
 # CHECKED-NO-DUPLICATE: [searched dot/bin/ for "count-refresh" — only this]
-# VERSION: 2.0.0
+# VERSION: 3.0.0
 #
-# Counts entities using 2 INDEPENDENT methods per source_model:
+# 3-COLUMN COUNTING: record ≠ actual = FIND DIFFERENCES
 #
-#   Model A (Directus SSOT):
-#     record_count = actual_count = COUNT(registry_collection)
-#     orphan_count = 0 (Directus IS the source, no orphans possible)
+#   record_count = "How many items are RECOGNIZED" (have valid code PREFIX-NNN)
+#     → COUNT(registry_collection WHERE code IS NOT NULL AND code LIKE 'PREFIX-%')
 #
-#   Model B (File-scanned):
-#     record_count = COUNT(registry_collection) — what's REGISTERED in Directus
-#     actual_count = FILE SYSTEM count — what ACTUALLY EXISTS on disk
-#     orphan_count = |actual - record| — unregistered entities
+#   actual_count = "How many items ACTUALLY EXIST" (from INDEPENDENT source)
+#     → Model B: filesystem scan (dot-*, *.vue files)
+#     → Model A with independent: system API, cross-reference count, etc.
+#     → Model A without independent: total COUNT(registry_collection) — flagged
+#
+#   orphan_count = actual_count - record_count
+#     → Positive = entities exist but not recognized (real orphans)
+#     → Negative = registry has ghosts
+#     → Zero only valid if 2 INDEPENDENT sources agree
 #
 # Can be triggered by:
 #   - CLI: dot-registry-count-refresh [--cloud|--local]
@@ -33,15 +37,16 @@ PROJECT_ROOT="$(cd "$DOT_ROOT/.." && pwd)"
 
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="2.0.0"
+VERSION="3.0.0"
 DRY_RUN=""
 
 show_help() {
   cat << EOF
 dot-registry-count-refresh v${VERSION} — Refresh meta_catalog record counts
 
-Model A: record = actual = Directus count (same source — correct)
-Model B: record = Directus registry, actual = FILE SYSTEM (independent)
+record = items WITH valid code PREFIX-NNN (recognized entities)
+actual = total items from INDEPENDENT source (what really exists)
+orphan = actual - record (entities not yet recognized)
 
 Usage:
   dot-registry-count-refresh [--cloud|--local] [--dry-run]
@@ -124,11 +129,35 @@ def api(method, path, data=None):
     except Exception as e:
         return 0, {'error': str(e)}
 
-def count_collection(collection):
-    """Count records via aggregate API."""
+def count_total(collection):
+    """Count ALL records in a collection via aggregate API."""
     code, resp = api('GET', f'/items/{collection}?aggregate[countDistinct]=id')
     if code != 200:
         return -1
+    data = resp.get('data', [])
+    if data and isinstance(data[0], dict):
+        cd = data[0].get('countDistinct', {})
+        if isinstance(cd, dict) and cd.get('id'):
+            return int(cd['id'])
+    return 0
+
+def count_with_code(collection, prefix, code_field='code'):
+    """Count records that have a valid code matching PREFIX-NNN pattern."""
+    if not prefix:
+        return count_total(collection)  # no prefix known, count all
+    encoded = urllib.parse.quote(prefix)
+    code, resp = api('GET', f'/items/{collection}?filter[{code_field}][_starts_with]={encoded}&aggregate[countDistinct]=id')
+    if code != 200:
+        # Field might not exist — fall back to counting all with non-null code_field
+        code2, resp2 = api('GET', f'/items/{collection}?filter[{code_field}][_nnull]=true&aggregate[countDistinct]=id')
+        if code2 != 200:
+            return count_total(collection)  # ultimate fallback
+        data = resp2.get('data', [])
+        if data and isinstance(data[0], dict):
+            cd = data[0].get('countDistinct', {})
+            if isinstance(cd, dict) and cd.get('id'):
+                return int(cd['id'])
+        return 0
     data = resp.get('data', [])
     if data and isinstance(data[0], dict):
         cd = data[0].get('countDistinct', {})
@@ -144,19 +173,58 @@ def count_system_collections():
     data = resp.get('data', [])
     return sum(1 for c in data if not c.get('collection', '').startswith('directus_'))
 
+def count_distinct_refs(collection, field):
+    """Count distinct references to entity_type in a related collection."""
+    code, resp = api('GET', f'/items/{collection}?aggregate[countDistinct]={field}')
+    if code != 200:
+        return -1
+    data = resp.get('data', [])
+    if data and isinstance(data[0], dict):
+        cd = data[0].get('countDistinct', {})
+        if isinstance(cd, dict) and cd.get(field):
+            return int(cd[field])
+    return 0
+
+import urllib.parse
+
 # ============================================================
-# Model B filesystem count map: registry_collection -> actual count
-# These are INDEPENDENT of the Directus registry query
+# CODE PREFIX MAP: registry_collection -> (prefix, code_field)
+# record_count = items WITH valid code PREFIX-NNN in code_field
+# Some collections use different field names for their identifier
+# ============================================================
+CODE_INFO = {
+    'meta_catalog':               ('CAT-',  'code'),
+    'table_registry':             ('tbl_',   'table_id'),   # uses table_id, not code
+    'modules':                    ('MOD-',  'code'),
+    'workflows':                  ('WF-',   'process_code'),  # uses process_code
+    'workflow_steps':             ('ND-',   'code'),
+    'workflow_change_requests':   ('WCR-',  'code'),
+    'dot_tools':                  ('DOT-',  'code'),
+    'ui_pages':                   ('PG-',   'code'),
+    'collection_registry':        ('COL-',  'code'),
+    'tasks':                      ('TASK-', 'code'),
+    'agents':                     ('AGT-',  'code'),
+    'checkpoint_types':           ('CP-',   'code'),
+    'checkpoint_sets':            ('CPS-',  'code'),
+    'entity_dependencies':        ('DEP-',  'code'),
+    'table_proposals':            ('TP-',   'code'),
+    'checkpoint_instances':       ('',      'code'),   # no prefix yet
+    'registry_changelog':         ('',      'code'),   # no prefix
+    'system_issues':              ('ISS-',  'code'),
+}
+
+# ============================================================
+# ACTUAL COUNT: independent source per collection
+# Model B: filesystem scan
+# Model A: system API or total count (flagged if not independent)
 # ============================================================
 FS_ACTUAL = {
     'dot_tools': actual_tools,       # files on disk
     'ui_pages': actual_pages,        # .vue files on disk
 }
 
-# Special: collection_registry actual = system /collections API
-# (collection_registry is Model A but actual should cross-check system)
 SYSTEM_ACTUAL = {
-    'collection_registry': count_system_collections,
+    'collection_registry': count_system_collections,  # /collections system API
 }
 
 # Fetch meta_catalog with source_model
@@ -188,37 +256,46 @@ for entry in catalog:
         print(f'  [SKIP] {cat_code} {cat_name}: no registry_collection')
         continue
 
-    # Method 1: record_count — count from Directus registry collection
-    new_record = count_collection(collection)
+    # METHOD 1: record_count — items WITH valid code PREFIX-NNN
+    code_info = CODE_INFO.get(collection, ('', 'code'))
+    prefix, code_field = code_info
+    if prefix:
+        new_record = count_with_code(collection, prefix, code_field)
+    else:
+        # No code prefix defined → count all (changelog, etc.)
+        new_record = count_total(collection)
+
     if new_record < 0:
         print(f'  [WARN] {cat_code} {cat_name}: collection "{collection}" not accessible')
         errors += 1
         continue
 
-    # Method 2: actual_count — INDEPENDENT source per model
+    # METHOD 2: actual_count — from INDEPENDENT source
     if collection in FS_ACTUAL:
-        # Model B: filesystem count
+        # Model B: filesystem count (truly independent)
         new_actual = FS_ACTUAL[collection]
         count_source = 'filesystem'
     elif collection in SYSTEM_ACTUAL:
-        # Special: system API count
+        # System API count (truly independent)
         new_actual = SYSTEM_ACTUAL[collection]()
         count_source = 'system-api'
     elif source_model == 'B':
-        # Model B without filesystem override — flag as unknown
-        # Use Directus count but mark for investigation
-        new_actual = new_record
+        # Model B without filesystem override — use total count as fallback
+        new_actual = count_total(collection)
         count_source = 'directus(NEEDS-FS)'
     else:
-        # Model A: Directus IS the source, actual = record
-        new_actual = new_record
-        count_source = 'directus'
+        # Model A: use total count (all items, including those without code)
+        # If prefix exists, actual may differ from record (items without code = orphans)
+        new_actual = count_total(collection)
+        count_source = 'directus-total'
 
     if new_actual < 0:
-        new_actual = new_record  # fallback if system API fails
+        new_actual = new_record  # fallback if source fails
 
-    # Method 3: orphan_count = |actual - record|
-    new_orphan = abs(new_actual - new_record)
+    # METHOD 3: orphan_count = actual - record
+    # Positive = entities exist but lack proper code (real orphans)
+    # Negative = ghost records in registry
+    new_orphan = new_actual - new_record
 
     changed = (new_record != old_record or new_actual != old_actual or new_orphan != old_orphan)
     delta_str = ''
@@ -258,7 +335,7 @@ for entry in catalog:
 
 print()
 print('=========================================')
-print(f'Count Refresh v2.0 Complete')
+print(f'Count Refresh v3.0 Complete')
 print(f'  Changed:   {updated}')
 print(f'  Unchanged: {unchanged}')
 print(f'  Errors:    {errors}')
