@@ -93,14 +93,14 @@ function getItemLink(row: any): string | null {
 </script>
 
 <template>
-	<UCard v-if="hasData">
+	<UCard>
 		<template #header>
 			<div class="flex items-center gap-2">
 				<h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ config.label }}</h3>
-				<UBadge color="gray" variant="subtle" size="xs">{{ relatedItems?.length || 0 }}</UBadge>
+				<UBadge v-if="hasData" color="gray" variant="subtle" size="xs">{{ relatedItems?.length || 0 }}</UBadge>
 			</div>
 		</template>
-		<UTable :columns="columns" :rows="rows" :ui="{ td: { padding: 'py-2 px-3' }, th: { padding: 'py-2 px-3' } }">
+		<UTable v-if="hasData" :columns="columns" :rows="rows" :ui="{ td: { padding: 'py-2 px-3' }, th: { padding: 'py-2 px-3' } }">
 			<template v-for="col in columns" :key="col.key" #[`cell-${col.key}`]="{ row }">
 				<NuxtLink
 					v-if="config.linkCodeField && col.key === config.linkCodeField.replace(/\./g, '_') && getItemLink(row)"
@@ -112,5 +112,6 @@ function getItemLink(row: any): string | null {
 				<RegistriesAutoLinkedValue v-else :value="row[col.key]" :field-key="col.key" />
 			</template>
 		</UTable>
+		<p v-else class="px-4 py-4 text-sm text-gray-400 dark:text-gray-500">Chưa có dữ liệu</p>
 	</UCard>
 </template>

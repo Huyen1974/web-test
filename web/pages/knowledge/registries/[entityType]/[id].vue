@@ -66,6 +66,17 @@ const sections = computed<SectionConfig[]>(() => sectionConfig[entityType.value]
 // Discovery mode: entity types without section config
 const isDiscoveryMode = computed(() => sections.value.length === 0);
 
+// Group sections into 4 categories for config mode
+const fieldsSections = computed(() => sections.value.filter((s) => s.type === 'fields'));
+const relationSections = computed(() => sections.value.filter((s) => s.type === 'relation'));
+const dependencySections = computed(() => sections.value.filter((s) => s.type === 'dependency'));
+
+// Detect page_url for "Xem trang thực tế" button
+const pageUrl = computed(() => {
+	if (!item.value) return null;
+	return item.value.page_url || item.value.url || item.value.script_path || null;
+});
+
 definePageMeta({ title: 'Chi tiết' });
 
 useHead({
@@ -90,9 +101,22 @@ useHead({
 				<span class="text-gray-900 dark:text-white">{{ item?.code || item?.process_code || item?.name || itemId }}</span>
 			</div>
 
-			<h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-				{{ item?.name || item?.title || item?.code || `Item #${itemId}` }}
-			</h1>
+			<div class="flex items-center gap-4">
+				<h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+					{{ item?.name || item?.title || item?.code || `Item #${itemId}` }}
+				</h1>
+				<UButton
+					v-if="pageUrl"
+					:to="pageUrl"
+					target="_blank"
+					color="primary"
+					variant="outline"
+					size="sm"
+					icon="i-heroicons-arrow-top-right-on-square"
+				>
+					Xem trang thực tế
+				</UButton>
+			</div>
 			<p v-if="item?.code && (item?.name || item?.title)" class="mt-1 text-sm text-gray-500 dark:text-gray-400">
 				{{ item.code }}
 			</p>
@@ -103,13 +127,48 @@ useHead({
 			Không tìm thấy mục hoặc lỗi truy cập.
 		</div>
 
-		<!-- Section-based rendering -->
-		<div v-else-if="item && sections.length > 0" class="space-y-6">
-			<template v-for="section in sections" :key="section.id">
-				<RegistriesSectionFields v-if="section.type === 'fields'" :item="item" :config="section" />
-				<RegistriesSectionRelation v-else-if="section.type === 'relation'" :item="item" :config="section" />
-				<RegistriesSectionDependency v-else-if="section.type === 'dependency'" :item="item" :config="section" :entity-type="entityType" />
-			</template>
+		<!-- Config mode: 4 grouped sections -->
+		<div v-else-if="item && sections.length > 0" class="space-y-8">
+			<!-- 1. Thông tin cơ bản -->
+			<section>
+				<h2 class="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">Thông tin cơ bản</h2>
+				<div v-if="fieldsSections.length" class="space-y-4">
+					<RegistriesSectionFields v-for="s in fieldsSections" :key="s.id" :item="item" :config="s" />
+				</div>
+				<UCard v-else>
+					<p class="text-sm text-gray-400 dark:text-gray-500">Chưa có dữ liệu</p>
+				</UCard>
+			</section>
+
+			<!-- 2. Cấu trúc -->
+			<section>
+				<h2 class="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">Cấu trúc</h2>
+				<div v-if="relationSections.length" class="space-y-4">
+					<RegistriesSectionRelation v-for="s in relationSections" :key="s.id" :item="item" :config="s" />
+				</div>
+				<UCard v-else>
+					<p class="text-sm text-gray-400 dark:text-gray-500">Chưa có dữ liệu</p>
+				</UCard>
+			</section>
+
+			<!-- 3. Phụ thuộc -->
+			<section>
+				<h2 class="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">Phụ thuộc</h2>
+				<div v-if="dependencySections.length" class="space-y-4">
+					<RegistriesSectionDependency v-for="s in dependencySections" :key="s.id" :item="item" :config="s" :entity-type="entityType" />
+				</div>
+				<UCard v-else>
+					<p class="text-sm text-gray-400 dark:text-gray-500">Chưa có dữ liệu</p>
+				</UCard>
+			</section>
+
+			<!-- 4. Liên quan -->
+			<section>
+				<h2 class="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">Liên quan</h2>
+				<UCard>
+					<p class="text-sm text-gray-400 dark:text-gray-500">Chưa có dữ liệu</p>
+				</UCard>
+			</section>
 		</div>
 
 		<!-- Discovery mode: auto-discover relations for entity types without config -->

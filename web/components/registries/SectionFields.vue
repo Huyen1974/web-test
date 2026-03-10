@@ -17,11 +17,11 @@ const hasData = computed(() => visibleFields.value.length > 0);
 </script>
 
 <template>
-	<UCard v-if="hasData" :ui="{ body: { padding: 'p-0 sm:p-0' } }">
+	<UCard :ui="{ body: { padding: 'p-0 sm:p-0' } }">
 		<template #header>
 			<h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ config.label }}</h3>
 		</template>
-		<div class="divide-y divide-gray-200 dark:divide-gray-700">
+		<div v-if="hasData" class="divide-y divide-gray-200 dark:divide-gray-700">
 			<div v-for="field in visibleFields" :key="field.key" class="flex gap-4 px-4 py-2.5 sm:px-6">
 				<dt class="w-40 flex-shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
 					{{ field.key }}
@@ -31,5 +31,6 @@ const hasData = computed(() => visibleFields.value.length > 0);
 				</dd>
 			</div>
 		</div>
+		<p v-else class="px-4 py-4 text-sm text-gray-400 dark:text-gray-500 sm:px-6">Chưa có dữ liệu</p>
 	</UCard>
 </template>

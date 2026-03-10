@@ -53,9 +53,9 @@ function getOtherSide(dep: any): { type: string; code: string; relation: string 
 }
 
 const columns = [
-	{ key: 'relation', label: 'Quan he' },
-	{ key: 'type', label: 'Loai' },
-	{ key: 'code', label: 'Ma' },
+	{ key: 'relation', label: 'Quan hệ' },
+	{ key: 'type', label: 'Loại' },
+	{ key: 'code', label: 'Mã' },
 ];
 
 const rows = computed(() => {
@@ -73,14 +73,14 @@ const rows = computed(() => {
 </script>
 
 <template>
-	<UCard v-if="hasData">
+	<UCard>
 		<template #header>
 			<div class="flex items-center gap-2">
 				<h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ config.label }}</h3>
-				<UBadge color="gray" variant="subtle" size="xs">{{ deps?.length || 0 }}</UBadge>
+				<UBadge v-if="hasData" color="gray" variant="subtle" size="xs">{{ deps?.length || 0 }}</UBadge>
 			</div>
 		</template>
-		<UTable :columns="columns" :rows="rows" :ui="{ td: { padding: 'py-2 px-3' }, th: { padding: 'py-2 px-3' } }">
+		<UTable v-if="hasData" :columns="columns" :rows="rows" :ui="{ td: { padding: 'py-2 px-3' }, th: { padding: 'py-2 px-3' } }">
 			<template #cell-code="{ row }">
 				<NuxtLink
 					:to="`/knowledge/registries/${row._entityType}/${row.code}`"
@@ -90,5 +90,6 @@ const rows = computed(() => {
 				</NuxtLink>
 			</template>
 		</UTable>
+		<p v-else class="px-4 py-4 text-sm text-gray-400 dark:text-gray-500">Chưa có dữ liệu</p>
 	</UCard>
 </template>
