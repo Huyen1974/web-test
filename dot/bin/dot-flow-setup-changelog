@@ -3,7 +3,7 @@
 # dot-flow-setup-changelog — Create Directus Flows for registry changelog logging
 # =============================================================================
 # CHECKED-NO-DUPLICATE: [grep dot/bin/ for "changelog" — no match except schema]
-# VERSION: 2.0.0
+# VERSION: 3.0.0
 #
 # Creates Directus Flows that log entity changes to registry_changelog collection.
 # For each collection: 1 create/update flow + 1 delete flow.
@@ -25,7 +25,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="2.0.0"
+VERSION="3.0.0"
 DRY_RUN=""
 ENV_FLAG=""
 
@@ -156,21 +156,23 @@ patch_resource() {
 }
 
 # ---------------------------------------------------------------
-# Setup changelog flow for create/update
+# Setup changelog flow for CREATE only
 # Args: collection entity_type code_field name_field
 # ---------------------------------------------------------------
-setup_changelog_flow() {
+setup_create_changelog_flow() {
   local collection="$1" entity_type="$2" code_field="$3" name_field="$4"
-  local flow_name="[WATCHDOG] ${collection} Change → Changelog"
+  local flow_name="[WATCHDOG] ${collection} Create → Changelog"
 
   echo -e "${BOLD}${flow_name}${NC}"
 
   if [[ -z "$DRY_RUN" ]]; then
     cleanup_existing_flows "$flow_name"
+    # Also clean up old combined flow
+    cleanup_existing_flows "[WATCHDOG] ${collection} Change → Changelog"
   fi
 
   if [[ -n "$DRY_RUN" ]]; then
-    echo -e "  ${YELLOW}[DRY RUN]${NC} Would create flow with 2 operations"
+    echo -e "  ${YELLOW}[DRY RUN]${NC} Would create create-flow with 2 operations"
     TOTAL_FLOWS=$((TOTAL_FLOWS + 1))
     return
   fi
@@ -188,7 +190,7 @@ setup_changelog_flow() {
       accountability: "all",
       options: {
         type: "action",
-        scope: ["items.create", "items.update"],
+        scope: ["items.create"],
         collections: [$collection]
       }
     }')")
@@ -209,10 +211,10 @@ setup_changelog_flow() {
     type: "log",
     position_x: 10,
     position_y: 1,
-    options: { message: "[WATCHDOG] {{$trigger.event}} on {{$trigger.collection}}" }
+    options: { message: "[WATCHDOG] Create on {{$trigger.collection}}" }
   }')")
 
-  # Op2: Create changelog entry
+  # Op2: Create changelog entry — $trigger.payload has ALL fields on create
   local create_id
   create_id=$(create_operation "$(jq -n \
     --arg flow "$flow_id" \
@@ -246,6 +248,124 @@ setup_changelog_flow() {
   patch_resource "operations" "$gate_id" "$(jq -n --arg r "$create_id" '{resolve: $r}')"
   patch_resource "flows" "$flow_id" "$(jq -n --arg op "$gate_id" '{operation: $op}')"
   echo -e "  Chain: gate -> write_changelog ${GREEN}OK${NC}"
+  TOTAL_FLOWS=$((TOTAL_FLOWS + 1))
+}
+
+# ---------------------------------------------------------------
+# Setup changelog flow for UPDATE only (with read-item to get full entity)
+# Args: collection entity_type code_field name_field
+# ---------------------------------------------------------------
+setup_update_changelog_flow() {
+  local collection="$1" entity_type="$2" code_field="$3" name_field="$4"
+  local flow_name="[WATCHDOG] ${collection} Update → Changelog"
+
+  echo -e "${BOLD}${flow_name}${NC}"
+
+  if [[ -z "$DRY_RUN" ]]; then
+    cleanup_existing_flows "$flow_name"
+  fi
+
+  if [[ -n "$DRY_RUN" ]]; then
+    echo -e "  ${YELLOW}[DRY RUN]${NC} Would create update-flow with 3 operations"
+    TOTAL_FLOWS=$((TOTAL_FLOWS + 1))
+    return
+  fi
+
+  local flow_id
+  flow_id=$(create_flow "$(jq -n \
+    --arg name "$flow_name" \
+    --arg collection "$collection" \
+    '{
+      name: $name,
+      icon: "history",
+      color: "#2563EB",
+      status: "active",
+      trigger: "event",
+      accountability: "all",
+      options: {
+        type: "action",
+        scope: ["items.update"],
+        collections: [$collection]
+      }
+    }')")
+
+  if [[ -z "$flow_id" ]]; then
+    echo -e "  ${RED}FAILED${NC}"
+    FAILED_FLOWS=$((FAILED_FLOWS + 1))
+    return
+  fi
+  echo -e "  Flow: ${GREEN}${flow_id}${NC}"
+
+  # Op1: Log gate
+  local gate_id
+  gate_id=$(create_operation "$(jq -n --arg flow "$flow_id" '{
+    flow: $flow,
+    name: "Gate",
+    key: "gate",
+    type: "log",
+    position_x: 10,
+    position_y: 1,
+    options: { message: "[WATCHDOG] Update on {{$trigger.collection}}" }
+  }')")
+
+  # Op2: Read the updated item to get code + name fields
+  local read_id
+  read_id=$(create_operation "$(jq -n \
+    --arg flow "$flow_id" \
+    --arg collection "$collection" \
+    --arg code_field "$code_field" \
+    --arg name_field "$name_field" \
+    '{
+      flow: $flow,
+      name: "Read Updated Item",
+      key: "read_item",
+      type: "item-read",
+      position_x: 20,
+      position_y: 1,
+      options: {
+        collection: $collection,
+        key: "{{$trigger.keys[0]}}",
+        query: {
+          fields: [$code_field, $name_field]
+        }
+      }
+    }')")
+
+  # Op3: Create changelog entry using read result
+  local create_id
+  create_id=$(create_operation "$(jq -n \
+    --arg flow "$flow_id" \
+    --arg entity_type "$entity_type" \
+    --arg collection "$collection" \
+    --arg code_tpl "{{__DOLLAR__read_item.${code_field}}}" \
+    --arg name_tpl "{{__DOLLAR__read_item.${name_field}}}" \
+    '{
+      flow: $flow,
+      name: "Write Changelog",
+      key: "write_changelog",
+      type: "item-create",
+      position_x: 35,
+      position_y: 1,
+      options: {
+        collection: "registry_changelog",
+        emitEvents: false,
+        payload: {
+          entity_type: $entity_type,
+          entity_code: $code_tpl,
+          entity_name: $name_tpl,
+          action: "{{__DOLLAR__trigger.event}}",
+          collection_name: $collection,
+          changed_by: "directus_flow",
+          alert_level: "ok"
+        }
+      }
+    }' | sed 's/__DOLLAR__/$/g')")
+
+  # Chain: gate -> read_item -> write_changelog
+  patch_resource "operations" "$read_id" "$(jq -n --arg r "$create_id" '{resolve: $r}')"
+  patch_resource "operations" "$gate_id" "$(jq -n --arg r "$read_id" '{resolve: $r}')"
+  patch_resource "flows" "$flow_id" "$(jq -n --arg op "$gate_id" '{operation: $op}')"
+  echo -e "  Chain: gate -> read_item -> write_changelog ${GREEN}OK${NC}"
   TOTAL_FLOWS=$((TOTAL_FLOWS + 1))
 }
 
@@ -375,7 +495,9 @@ for entry in "${COLLECTIONS[@]}"; do
   IDX=$((IDX + 1))
 
   echo "--- ${IDX}/${TOTAL_COLS}: ${col} ---"
-  setup_changelog_flow "$col" "$et" "$cf" "$nf"
+  setup_create_changelog_flow "$col" "$et" "$cf" "$nf"
+  echo ""
+  setup_update_changelog_flow "$col" "$et" "$cf" "$nf"
   echo ""
   setup_delete_changelog_flow "$col" "$et"
   echo ""
@@ -397,10 +519,10 @@ IDX=0
 for entry in "${COLLECTIONS[@]}"; do
   read -r col et cf nf <<< "$entry"
   IDX=$((IDX + 1))
-  printf "  %2d. %-28s → create/update + delete\n" "$IDX" "$col"
+  printf "  %2d. %-28s → create + update + delete\n" "$IDX" "$col"
 done
 echo ""
-echo "Tổng flows: ${TOTAL_FLOWS} (${TOTAL_COLS} create/update + ${TOTAL_COLS} delete)"
+echo "Tổng flows: ${TOTAL_FLOWS} (${TOTAL_COLS} create + ${TOTAL_COLS} update + ${TOTAL_COLS} delete)"
 echo "Chống vòng lặp: emitEvents=false trên item-create operations"
 echo "Loại trừ: registry_changelog (tránh vòng lặp đệ quy)"
 echo ""
