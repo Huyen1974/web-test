@@ -8,6 +8,7 @@ definePageMeta({
 
 function getRegistryLink(item: any) {
 	if (!item?.entity_type) return '/knowledge/registries';
+	if (item.entity_type === 'all') return '/knowledge/registries/all';
 	return `/knowledge/registries/${item.entity_type}`;
 }
 
@@ -71,7 +72,7 @@ const { data: recentChanges } = useAsyncData(
 		try {
 			const items = await $directus.request(
 				readItems('registry_changelog' as any, {
-					fields: ['id', 'timestamp', 'entity_type', 'action', 'entity_code', 'alert_level', 'alert_detail'],
+					fields: ['id', 'timestamp', 'entity_type', 'action', 'entity_code', 'entity_name', 'alert_level', 'alert_detail'],
 					sort: ['-timestamp'],
 					limit: 200,
 				}),
@@ -85,7 +86,7 @@ const { data: recentChanges } = useAsyncData(
 					updated: number;
 					deleted: number;
 					types: Set<string>;
-					details: Array<{ type: string; code: string; action: string }>;
+					details: Array<{ type: string; code: string; name: string; action: string }>;
 				}
 			>();
 			for (const e of items as any[]) {
@@ -99,9 +100,12 @@ const { data: recentChanges } = useAsyncData(
 				else if (action === 'updated') g.updated++;
 				else if (action === 'deleted') g.deleted++;
 				g.types.add(e.entity_type || '');
+				const rawCode = e.entity_code || '';
+				const rawName = e.entity_name || '';
 				g.details.push({
 					type: e.entity_type || '',
-					code: e.entity_code || e.id || '',
+					code: rawCode !== 'undefined' ? rawCode : '',
+					name: rawName !== 'undefined' ? rawName : '',
 					action,
 				});
 			}
@@ -151,6 +155,44 @@ const changelogRows = computed(() =>
 		isExpanded: expandedMinutes.value.has(g.minuteKey),
 	})),
 );
+
+// Crosscheck data: changelog stats per entity_type
+const { data: changelogStats } = useAsyncData(
+	'registry-crosscheck-stats',
+	async () => {
+		try {
+			const items = await $directus.request(
+				readItems('registry_changelog' as any, {
+					fields: ['entity_type', 'action'],
+					limit: -1,
+				}),
+			);
+			const stats: Record<string, { created: number; deleted: number }> = {};
+			for (const e of items as any[]) {
+				const et = e.entity_type || '';
+				if (!stats[et]) stats[et] = { created: 0, deleted: 0 };
+				if ((e.action || '').includes('create')) stats[et].created++;
+				else if ((e.action || '').includes('delete')) stats[et].deleted++;
+			}
+			return stats;
+		} catch {
+			return {};
+		}
+	},
+	{ default: () => ({}) },
+);
+
+function getCrosscheckStatus(item: any): { label: string; color: string } {
+	const baseline = item?.baseline_count || 0;
+	const actual = item?.actual_count || 0;
+	const et = item?.entity_type || '';
+	if (baseline <= 0) return { label: '—', color: 'gray' };
+	const stats = (changelogStats.value as any)?.[et] || { created: 0, deleted: 0 };
+	const nguoc = baseline + stats.created - stats.deleted;
+	if (actual === nguoc) return { label: '✅ khớp', color: 'green' };
+	const delta = actual - nguoc;
+	return { label: `❌ lệch ${delta > 0 ? '+' : ''}${delta}`, color: 'red' };
+}
 
 // Count unresolved alerts
 const { data: alertCount } = useAsyncData(
@@ -264,6 +306,23 @@ const { data: alertCount } = useAsyncData(
 					{{ value }}
 				</span>
 			</template>
+			<template #cell-baseline_count="{ value, item }">
+				<span v-if="value > 0" class="text-xs" :class="getCrosscheckStatus(item).color === 'green' ? 'text-emerald-600 dark:text-emerald-400' : getCrosscheckStatus(item).color === 'red' ? 'text-red-600 dark:text-red-400' : 'text-gray-400'">
+					{{ getCrosscheckStatus(item).label }}
+				</span>
+				<span v-else class="text-gray-300 dark:text-gray-600">—</span>
+			</template>
+			<template #cell-atom_group="{ value }">
+				<UBadge
+					v-if="value"
+					:color="value === 'cấu_trúc' ? 'blue' : value === 'quy_trình' ? 'purple' : value === 'công_cụ' ? 'green' : value === 'dữ_liệu' ? 'orange' : 'gray'"
+					variant="subtle"
+					size="xs"
+				>
+					{{ value === 'cấu_trúc' ? 'Cấu trúc' : value === 'quy_trình' ? 'Quy trình' : value === 'công_cụ' ? 'Công cụ' : value === 'dữ_liệu' ? 'Dữ liệu' : 'Giám sát' }}
+				</UBadge>
+				<span v-else class="text-gray-300 dark:text-gray-600">—</span>
+			</template>
 		</SharedDirectusTable>
 
 		<!-- Nhật ký thay đổi gần đây -->
@@ -321,7 +380,8 @@ const { data: alertCount } = useAsyncData(
 												{{ detail.action === 'created' ? 'Thêm' : detail.action === 'deleted' ? 'Xoá' : 'Sửa' }}
 											</UBadge>
 											<span class="text-gray-500 dark:text-gray-400">{{ detail.type }}</span>
-											<span class="font-mono text-gray-700 dark:text-gray-300">{{ detail.code }}</span>
+											<span v-if="detail.code" class="font-mono text-gray-700 dark:text-gray-300">{{ detail.code }}</span>
+											<span v-if="detail.name" class="text-gray-600 dark:text-gray-300">{{ detail.name }}</span>
 										</div>
 									</div>
 								</td>

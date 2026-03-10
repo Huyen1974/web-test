@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-registry-set-atom-groups — Gán atom_group cho tất cả entity types
+# =============================================================================
+# VERSION: 1.0.0
+#
+# Phân nhóm 19 entity types:
+#   cấu_trúc  — catalog, table, collection (xương sống)
+#   quy_trình — workflow, workflow_step, wcr, checkpoint_type, checkpoint_set (logic nghiệp vụ)
+#   công_cụ   — module, dot_tool, page, agent (hỗ trợ vận hành)
+#   dữ_liệu  — task, table_proposal, checkpoint_instance (data runtime)
+#   giám_sát  — entity_dependency, changelog, system_issue (Tầng 5)
+#
+# Usage:
+#   dot-registry-set-atom-groups [--cloud|--local] [--dry-run]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+DRY_RUN=""
+
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) DRY_RUN="yes" ;;
+    --help|-h)
+      head -14 "$0" | tail -12
+      show_environment_help
+      exit 0
+      ;;
+  esac
+done
+
+init_environment "$@"
+
+echo ""
+echo "═══════════════════════════════════════════════════════════"
+echo "  Gán Atom Group v${VERSION}"
+echo "═══════════════════════════════════════════════════════════"
+print_environment_banner "$@"
+
+TOKEN="${DIRECTUS_TOKEN:-}"
+if [[ -z "$TOKEN" ]]; then
+  echo -e "${RED}[LỖI]${NC} Không thể xác thực với Directus" >&2
+  exit 1
+fi
+
+tmp_py=$(mktemp /tmp/dot-atom-groups-XXXXXX.py)
+trap "rm -f '$tmp_py'" EXIT
+
+cat > "$tmp_py" << 'PYEOF'
+import json, os, sys, ssl, urllib.request
+
+base_url = os.environ['DIRECTUS_URL']
+token = os.environ['DIRECTUS_TOKEN']
+dry_run = os.environ.get('DRY_RUN', '') == 'yes'
+
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+def api_get(path):
+    url = base_url + path
+    req = urllib.request.Request(url, headers={'Authorization': f'Bearer {token}'})
+    resp = urllib.request.urlopen(req, context=ctx, timeout=30)
+    return json.loads(resp.read())
+
+def api_patch(path, data):
+    url = base_url + path
+    payload = json.dumps(data).encode()
+    req = urllib.request.Request(url, data=payload, headers={
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    }, method='PATCH')
+    resp = urllib.request.urlopen(req, context=ctx, timeout=30)
+    return json.loads(resp.read())
+
+# Mapping entity_type -> atom_group
+GROUP_MAP = {
+    'catalog':             'cấu_trúc',
+    'table':               'cấu_trúc',
+    'collection':          'cấu_trúc',
+    'workflow':            'quy_trình',
+    'workflow_step':       'quy_trình',
+    'wcr':                 'quy_trình',
+    'checkpoint_type':     'quy_trình',
+    'checkpoint_set':      'quy_trình',
+    'module':              'công_cụ',
+    'dot_tool':            'công_cụ',
+    'page':                'công_cụ',
+    'agent':               'công_cụ',
+    'task':                'dữ_liệu',
+    'table_proposal':      'dữ_liệu',
+    'checkpoint_instance': 'dữ_liệu',
+    'entity_dependency':   'giám_sát',
+    'changelog':           'giám_sát',
+    'system_issue':        'giám_sát',
+    'uncategorized':       None,
+}
+
+# Fetch meta_catalog
+resp = api_get('/items/meta_catalog?fields=id,code,name,entity_type,atom_group&sort=code&limit=-1')
+catalog = resp.get('data', [])
+
+print(f'[INFO] {len(catalog)} entity types')
+
+updated = 0
+skipped = 0
+failed = 0
+
+for entry in catalog:
+    entry_id = entry['id']
+    code = entry.get('code', '')
+    name = entry.get('name', '')
+    et = entry.get('entity_type', '')
+    current = entry.get('atom_group', '')
+
+    target = GROUP_MAP.get(et)
+    if target is None:
+        print(f'  [SKIP] {code} {name}: không có nhóm')
+        skipped += 1
+        continue
+
+    if current == target:
+        print(f'  [OK]   {code} {name}: đã đúng = {target}')
+        skipped += 1
+        continue
+
+    if dry_run:
+        print(f'  [DRY]  {code} {name}: {current or "—"} → {target}')
+        updated += 1
+    else:
+        try:
+            api_patch(f'/items/meta_catalog/{entry_id}', {'atom_group': target})
+            print(f'  [SET]  {code} {name}: → {target}')
+            updated += 1
+        except Exception as e:
+            print(f'  [ERR]  {code} {name}: {e}')
+            failed += 1
+
+print()
+print('═══════════════════════════════════════════════════════════')
+print(f'  Gán nhóm: {updated}, Bỏ qua: {skipped}, Lỗi: {failed}')
+print('═══════════════════════════════════════════════════════════')
+PYEOF
+
+DIRECTUS_URL="$DIRECTUS_URL" DIRECTUS_TOKEN="$TOKEN" \
+  DRY_RUN="${DRY_RUN}" \
+  python3 "$tmp_py" < /dev/null
+
+echo ""
+echo "═══════════════════════════════════════════════════════════"
+echo "  Gán Atom Group — HOÀN THÀNH"
+echo "═══════════════════════════════════════════════════════════"

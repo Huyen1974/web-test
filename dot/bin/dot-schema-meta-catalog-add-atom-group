@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-schema-meta-catalog-add-atom-group — Thêm field atom_group vào meta_catalog
+# =============================================================================
+# VERSION: 1.0.0
+#
+# Thêm field atom_group (string, dropdown) vào collection meta_catalog.
+# Idempotent: bỏ qua nếu field đã tồn tại.
+#
+# Giá trị:
+#   cấu_trúc  — Collections, Fields, Bảng UI (xương sống)
+#   quy_trình — Workflows, Nodes, Checkpoints, Sets (logic nghiệp vụ)
+#   công_cụ   — DOT Tools, Pages, Agents (hỗ trợ vận hành)
+#   dữ_liệu  — Tasks, Proposals, Instances (data runtime)
+#   giám_sát  — Changelog, Issues, Dependencies (Tầng 5)
+#
+# Usage:
+#   dot-schema-meta-catalog-add-atom-group [--cloud|--local] [--dry-run]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+DRY_RUN=""
+
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) DRY_RUN="yes" ;;
+    --help|-h)
+      head -16 "$0" | tail -14
+      show_environment_help
+      exit 0
+      ;;
+  esac
+done
+
+init_environment "$@"
+
+echo ""
+echo "═══════════════════════════════════════════════════════════"
+echo "  Thêm atom_group vào meta_catalog v${VERSION}"
+echo "═══════════════════════════════════════════════════════════"
+print_environment_banner "$@"
+
+TOKEN="${DIRECTUS_TOKEN:-}"
+if [[ -z "$TOKEN" ]]; then
+  echo -e "${RED}[LỖI]${NC} Không thể xác thực với Directus" >&2
+  exit 1
+fi
+
+# Check if field already exists
+HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" \
+  "${DIRECTUS_URL}/fields/meta_catalog/atom_group" \
+  -H "Authorization: Bearer $TOKEN")
+
+if [[ "$HTTP_CODE" == "200" ]]; then
+  echo "[SKIP] Field atom_group đã tồn tại"
+  exit 0
+fi
+
+echo "[INFO] Field atom_group chưa tồn tại, tạo mới..."
+
+if [[ "$DRY_RUN" == "yes" ]]; then
+  echo "[DRY] Sẽ tạo field atom_group (string, dropdown)"
+  exit 0
+fi
+
+PAYLOAD=$(cat <<'JSON'
+{
+  "field": "atom_group",
+  "type": "string",
+  "schema": {
+    "default_value": null,
+    "is_nullable": true,
+    "max_length": 50
+  },
+  "meta": {
+    "interface": "select-dropdown",
+    "display": "labels",
+    "note": "Phân nhóm nguyên tử: cấu_trúc, quy_trình, công_cụ, dữ_liệu, giám_sát",
+    "width": "half",
+    "sort": 20,
+    "group": null,
+    "hidden": false,
+    "options": {
+      "choices": [
+        { "text": "Cấu trúc", "value": "cấu_trúc" },
+        { "text": "Quy trình", "value": "quy_trình" },
+        { "text": "Công cụ", "value": "công_cụ" },
+        { "text": "Dữ liệu", "value": "dữ_liệu" },
+        { "text": "Giám sát", "value": "giám_sát" }
+      ]
+    }
+  }
+}
+JSON
+)
+
+RESPONSE=$(curl -sk -w "\n%{http_code}" \
+  -X POST "${DIRECTUS_URL}/fields/meta_catalog" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "$PAYLOAD")
+
+HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
+
+if [[ "$HTTP_CODE" == "200" ]] || [[ "$HTTP_CODE" == "204" ]]; then
+  echo "[OK] Field atom_group đã tạo thành công"
+else
+  echo "[ERR] HTTP $HTTP_CODE: $BODY" >&2
+  exit 1
+fi
+
+echo ""
+echo "═══════════════════════════════════════════════════════════"
+echo "  Thêm atom_group — HOÀN THÀNH"
+echo "═══════════════════════════════════════════════════════════"
