@@ -59,19 +59,38 @@ const { data: summary } = useAsyncData(
 	{ default: () => null },
 );
 
-// Fetch recent changelog entries
+// Fetch recent changelog entries and aggregate by entity_type + time window
 const { data: recentChanges } = useAsyncData(
 	'registry-changelog',
 	async () => {
 		try {
 			const items = await $directus.request(
 				readItems('registry_changelog' as any, {
-					fields: ['id', 'timestamp', 'entity_type', 'entity_code', 'entity_name', 'action', 'alert_level'],
+					fields: ['id', 'timestamp', 'entity_type', 'action', 'alert_level', 'alert_detail'],
 					sort: ['-timestamp'],
-					limit: 10,
+					limit: 100,
 				}),
 			);
-			return items as any[];
+			// Aggregate: group by entity_type, count create/update/delete, take latest timestamp
+			const groups = new Map<string, { ts: string; type: string; created: number; updated: number; deleted: number; alerts: string[] }>();
+			for (const e of items as any[]) {
+				const key = e.entity_type || 'unknown';
+				if (!groups.has(key)) {
+					groups.set(key, { ts: e.timestamp, type: key, created: 0, updated: 0, deleted: 0, alerts: [] });
+				}
+				const g = groups.get(key)!;
+				if (e.timestamp > g.ts) g.ts = e.timestamp;
+				const action = formatAction(e.action);
+				if (action === 'created') g.created++;
+				else if (action === 'updated') g.updated++;
+				else if (action === 'deleted') g.deleted++;
+				if (e.alert_level && e.alert_level !== 'ok' && e.alert_detail) {
+					g.alerts.push(e.alert_detail);
+				}
+			}
+			return Array.from(groups.values())
+				.sort((a, b) => b.ts.localeCompare(a.ts))
+				.slice(0, 10);
 		} catch {
 			return null;
 		}
@@ -83,20 +102,21 @@ const { data: recentChanges } = useAsyncData(
 const changelogColumns = [
 	{ key: 'time', label: 'Thời gian' },
 	{ key: 'type', label: 'Loại' },
-	{ key: 'entity', label: 'Thực thể' },
-	{ key: 'action', label: 'Hành động' },
-	{ key: 'alert', label: 'Cảnh báo' },
+	{ key: 'created', label: 'Thêm' },
+	{ key: 'updated', label: 'Cập nhật' },
+	{ key: 'deleted', label: 'Xoá' },
+	{ key: 'note', label: 'Ghi chú' },
 ];
 
 const changelogRows = computed(() =>
-	(recentChanges.value || []).map((e: any) => ({
-		time: formatTime(e.timestamp),
-		type: e.entity_type,
-		code: e.entity_code,
-		entityName: e.entity_name,
-		entity: e.entity_code || e.entity_name || '—',
-		action: formatAction(e.action),
-		alert: e.alert_level,
+	(recentChanges.value || []).map((g: any) => ({
+		time: formatTime(g.ts),
+		type: g.type,
+		created: g.created || 0,
+		updated: g.updated || 0,
+		deleted: g.deleted || 0,
+		note: g.alerts.length > 0 ? g.alerts[0] : '',
+		hasAlert: g.alerts.length > 0,
 	})),
 );
 
@@ -214,9 +234,9 @@ const { data: alertCount } = useAsyncData(
 			</template>
 		</SharedDirectusTable>
 
-		<!-- Recent Changes -->
+		<!-- Nhật ký thay đổi gần đây -->
 		<div v-if="recentChanges && recentChanges.length > 0" class="mt-10">
-			<h2 class="mb-4 text-xl font-semibold text-gray-900 dark:text-white">Thay đổi Gần đây</h2>
+			<h2 class="mb-4 text-xl font-semibold text-gray-900 dark:text-white">Nhật ký thay đổi gần đây</h2>
 			<UTable
 				:rows="changelogRows"
 				:columns="changelogColumns"
@@ -224,26 +244,20 @@ const { data: alertCount } = useAsyncData(
 				<template #cell-time="{ row }">
 					<span class="text-gray-500 dark:text-gray-400">{{ row.time }}</span>
 				</template>
-				<template #cell-entity="{ row }">
-					<span v-if="row.code" class="font-medium text-gray-900 dark:text-white">{{ row.code }}</span>
-					<span v-if="row.entityName" class="ml-1 text-gray-500 dark:text-gray-400">{{ row.entityName }}</span>
-					<span v-if="!row.code && !row.entityName" class="italic text-gray-400">&mdash;</span>
+				<template #cell-created="{ row }">
+					<span v-if="row.created > 0" class="font-medium text-emerald-600 dark:text-emerald-400">+{{ row.created }}</span>
+					<span v-else class="text-gray-300 dark:text-gray-600">0</span>
 				</template>
-				<template #cell-action="{ row }">
-					<span
-						class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium"
-						:class="{
-							'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300': row.action === 'created',
-							'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300': row.action === 'updated',
-							'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300': row.action === 'deleted',
-						}"
-					>
-						{{ row.action }}
-					</span>
+				<template #cell-updated="{ row }">
+					<span v-if="row.updated > 0" class="font-medium text-blue-600 dark:text-blue-400">{{ row.updated }}</span>
+					<span v-else class="text-gray-300 dark:text-gray-600">0</span>
 				</template>
-				<template #cell-alert="{ row }">
-					<UBadge v-if="row.alert === 'warning'" color="yellow" variant="subtle" size="xs">warning</UBadge>
-					<UBadge v-else-if="row.alert === 'critical'" color="red" variant="subtle" size="xs">critical</UBadge>
+				<template #cell-deleted="{ row }">
+					<span v-if="row.deleted > 0" class="font-medium text-red-600 dark:text-red-400">-{{ row.deleted }}</span>
+					<span v-else class="text-gray-300 dark:text-gray-600">0</span>
+				</template>
+				<template #cell-note="{ row }">
+					<UBadge v-if="row.hasAlert" color="yellow" variant="subtle" size="xs">{{ row.note }}</UBadge>
 				</template>
 			</UTable>
 		</div>
