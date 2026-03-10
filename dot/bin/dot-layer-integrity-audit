@@ -298,34 +298,23 @@ for entry in catalog:
         r['c5'] = '—'
 
     # CHECK 6 — Items have description (not empty, ≥ 20 words)
-    # Common description field names per collection
-    DESC_FIELDS = {
-        'table_registry': 'description',
-        'registry_modules': 'description',
-        'workflow_list': 'description',
-        'workflow_steps': 'description',
-        'wcr_list': 'description',
-        'registry_dot_tools': 'description',
-        'registry_ui_pages': 'description',
-        'registry_collections': 'description',
-        'tasks_list': 'description',
-        'registry_agents': 'description',
-        'registry_checkpoint_types': 'description',
-        'registry_checkpoint_sets': 'description',
-        'registry_entity_dependencies': 'description',
-        'proposals_list': 'description',
-        'meta_catalog': 'description',
-    }
-    desc_field = DESC_FIELDS.get(reg_col, '')
-    if reg_col and desc_field:
+    # Skip collections that don't have a description field
+    SKIP_DESC = {'_uncategorized', 'registry_changelog'}
+    desc_field = 'description'
+    if reg_col and reg_col not in SKIP_DESC:
         # Count items with empty or NULL description
         empty_resp = api_get(
             f'/items/{reg_col}?filter[{desc_field}][_null]=true&limit=0&meta=filter_count'
         )
+        if 'error' in empty_resp:
+            # Collection may not have description field
+            r['c6'] = '—'
+            results.append(r)
+            print()
+            continue
         empty_count = empty_resp.get('meta', {}).get('filter_count') or 0
 
         # Count items with non-null but short description (< 20 words)
-        # Fetch non-null descriptions and count short ones
         desc_resp = api_get(
             f'/items/{reg_col}?fields={desc_field}&filter[{desc_field}][_nnull]=true&limit=-1'
         )
