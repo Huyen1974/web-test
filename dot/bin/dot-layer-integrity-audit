@@ -3,14 +3,15 @@
 # dot-layer-integrity-audit — Layer 2+3 integrity audit for all entity types
 # =============================================================================
 # CHECKED-NO-DUPLICATE: [searched dot/bin/ for "layer-integrity" — no match]
-# VERSION: 1.0.0
+# VERSION: 2.0.0
 #
-# Runs 5 checks × N entity types (from meta_catalog):
+# Runs 6 checks × N entity types (from meta_catalog):
 #   CHECK 1 — Layer 2 page renders data (not empty)
 #   CHECK 2 — Items have code (PREFIX-NNN) identifiers
 #   CHECK 3 — Entity has relationships in entity_dependencies
 #   CHECK 4 — Dedicated page link works (if configured)
 #   CHECK 5 — Cross-check: meta_catalog.record_count == actual item count
+#   CHECK 6 — Items have description (not empty, ≥ 20 words)
 #
 # Issues found are written to system_issues collection (idempotent).
 #
@@ -25,7 +26,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="1.0.0"
+VERSION="2.0.0"
 DRY_RUN=""
 NO_WRITE=""
 
@@ -45,7 +46,7 @@ init_environment "$@"
 
 echo ""
 echo "═══════════════════════════════════════════════════════════"
-echo "  LỚP 2+3 INTEGRITY AUDIT v${VERSION}"
+echo "  LỚP 2+3 INTEGRITY AUDIT v${VERSION} (6 checks)"
 echo "═══════════════════════════════════════════════════════════"
 print_environment_banner "$@"
 
@@ -136,7 +137,7 @@ CODE_INFO = {
 # ============================================================
 # Fetch meta_catalog
 # ============================================================
-resp = api_get('/items/meta_catalog?fields=id,code,name,entity_type,registry_collection,record_count,actual_count,source_model,status,ui_page&sort=code&limit=-1')
+resp = api_get('/items/meta_catalog?fields=id,code,name,entity_type,registry_collection,record_count,actual_count,source_model,status,ui_page,description_field&sort=code&limit=-1')
 catalog = resp.get('data', [])
 
 if not catalog:
@@ -200,7 +201,7 @@ for entry in catalog:
 
     r = {
         'code': code, 'name': name, 'et': et,
-        'c1': '—', 'c2': '—', 'c3': '—', 'c4': '—', 'c5': '—'
+        'c1': '—', 'c2': '—', 'c3': '—', 'c4': '—', 'c5': '—', 'c6': '—'
     }
 
     print(f'{code} {name} ({et}):')
@@ -296,6 +297,63 @@ for entry in catalog:
     else:
         r['c5'] = '—'
 
+    # CHECK 6 — Items have description (not empty, ≥ 20 words)
+    # Common description field names per collection
+    DESC_FIELDS = {
+        'table_registry': 'description',
+        'registry_modules': 'description',
+        'workflow_list': 'description',
+        'workflow_steps': 'description',
+        'wcr_list': 'description',
+        'registry_dot_tools': 'description',
+        'registry_ui_pages': 'description',
+        'registry_collections': 'description',
+        'tasks_list': 'description',
+        'registry_agents': 'description',
+        'registry_checkpoint_types': 'description',
+        'registry_checkpoint_sets': 'description',
+        'registry_entity_dependencies': 'description',
+        'proposals_list': 'description',
+        'meta_catalog': 'description',
+    }
+    desc_field = DESC_FIELDS.get(reg_col, '')
+    if reg_col and desc_field:
+        # Count items with empty or NULL description
+        empty_resp = api_get(
+            f'/items/{reg_col}?filter[{desc_field}][_null]=true&limit=0&meta=filter_count'
+        )
+        empty_count = empty_resp.get('meta', {}).get('filter_count') or 0
+
+        # Count items with non-null but short description (< 20 words)
+        # Fetch non-null descriptions and count short ones
+        desc_resp = api_get(
+            f'/items/{reg_col}?fields={desc_field}&filter[{desc_field}][_nnull]=true&limit=-1'
+        )
+        desc_items = desc_resp.get('data', [])
+        short_count = 0
+        for item in desc_items:
+            desc_text = (item.get(desc_field) or '').strip()
+            if desc_text and len(desc_text.split()) < 20:
+                short_count += 1
+
+        total_resp = api_get(f'/items/{reg_col}?limit=0&meta=total_count')
+        total_items = total_resp.get('meta', {}).get('total_count') or 0
+
+        missing = empty_count + short_count
+        if total_items > 0 and missing > 0:
+            pct_missing = round(missing / total_items * 100)
+            if pct_missing > 50:
+                check_fail(entry, f'{code} {name} — {missing}/{total_items} items thiếu mô tả ({empty_count} trống, {short_count} < 20 từ)', 'thiếu_mô_tả', 'cảnh_báo')
+                r['c6'] = f'❌ {pct_missing}%'
+            elif missing > 0:
+                check_warn(entry, f'{code} {name} — {missing}/{total_items} items thiếu mô tả ({empty_count} trống, {short_count} < 20 từ)', 'thiếu_mô_tả')
+                r['c6'] = f'⚠️ {missing}'
+        elif total_items > 0:
+            check_pass(entry, f'{code} Mô tả đầy đủ')
+            r['c6'] = '✅'
+    else:
+        r['c6'] = '—'
+
     results.append(r)
     print()
 
@@ -306,10 +364,10 @@ print('════════════════════════�
 print(f'  TỔNG: {PASS} PASS, {WARN} CẢNH BÁO, {FAIL} LỖI')
 print('═══════════════════════════════════════════════════════════')
 print()
-print(f'{"Mã":<10} {"Tên":<30} {"Lớp2":<15} {"ID%":<10} {"QuanHệ":<10} {"Link":<10} {"NhấtQuán":<10}')
-print('─' * 95)
+print(f'{"Mã":<10} {"Tên":<30} {"Lớp2":<15} {"ID%":<10} {"QuanHệ":<10} {"Link":<10} {"NhấtQuán":<10} {"MôTả":<10}')
+print('─' * 105)
 for r in results:
-    print(f'{r["code"]:<10} {r["name"]:<30} {r["c1"]:<15} {r["c2"]:<10} {r["c3"]:<10} {r["c4"]:<10} {r["c5"]:<10}')
+    print(f'{r["code"]:<10} {r["name"]:<30} {r["c1"]:<15} {r["c2"]:<10} {r["c3"]:<10} {r["c4"]:<10} {r["c5"]:<10} {r["c6"]:<10}')
 
 # ============================================================
 # Write issues to system_issues (idempotent)
