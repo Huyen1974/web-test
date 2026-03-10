@@ -241,6 +241,8 @@ updated = 0
 unchanged = 0
 errors = 0
 changes = []
+uncategorized_entry = None
+managed_collections = set()  # track all registry_collection names
 
 for entry in catalog:
     cat_id = entry['id']
@@ -254,6 +256,14 @@ for entry in catalog:
 
     if not collection:
         print(f'  [SKIP] {cat_code} {cat_name}: no registry_collection')
+        continue
+
+    # Track managed collections for uncategorized subtraction
+    managed_collections.add(collection)
+
+    # SPECIAL: _uncategorized — count by subtraction (handled after main loop)
+    if collection == '_uncategorized':
+        uncategorized_entry = entry
         continue
 
     # METHOD 1: record_count — items WITH valid code PREFIX-NNN
@@ -332,6 +342,72 @@ for entry in catalog:
     else:
         print(f'  [ERR] {cat_code}: PATCH failed HTTP {p_code}')
         errors += 1
+
+# ============================================================
+# SPECIAL: CAT-999 "Chưa phân loại" — count by subtraction
+# actual = total Directus collections - managed collections
+# ============================================================
+if uncategorized_entry:
+    entry = uncategorized_entry
+    cat_id = entry['id']
+    cat_code = entry['code']
+    cat_name = entry['name']
+    old_record = entry.get('record_count') or 0
+    old_actual = entry.get('actual_count') or 0
+    old_orphan = entry.get('orphan_count') or 0
+
+    # Count ALL non-system collections in Directus
+    total_collections = count_system_collections()
+
+    # Also get list of collections registered in collection_registry
+    cr_code, cr_resp = api('GET', '/items/collection_registry?fields=collection_name&limit=-1')
+    registered_in_cr = set()
+    if cr_code == 200:
+        for item in cr_resp.get('data', []):
+            cn = item.get('collection_name', '')
+            if cn:
+                registered_in_cr.add(cn)
+
+    # Uncategorized = total collections - managed - registered in collection_registry
+    all_known = managed_collections | registered_in_cr
+    new_actual = max(0, total_collections - len(all_known)) if total_collections >= 0 else 0
+    new_record = 0  # by definition — nobody owns them
+    new_orphan = new_actual  # all are orphans
+
+    count_source = 'subtraction'
+    source_model = 'B'
+    changed = (new_record != old_record or new_actual != old_actual or new_orphan != old_orphan)
+    delta_str = ''
+    if changed:
+        delta_str = f' (was rec={old_record}/act={old_actual}/orp={old_orphan})'
+        changes.append(f'{cat_code}: rec={new_record} act={new_actual} orp={new_orphan}')
+
+    model_tag = f'[{source_model}:{count_source}]'
+    if dry_run:
+        tag = '[CHG]' if changed else '[OK] '
+        print(f'  {tag} {cat_code} {cat_name} {model_tag}: rec={new_record}, act={new_actual}, orp={new_orphan}{delta_str}')
+        if changed:
+            updated += 1
+        else:
+            unchanged += 1
+    else:
+        patch = {
+            'record_count': new_record,
+            'actual_count': new_actual,
+            'orphan_count': new_orphan,
+            'last_scan_date': now_iso,
+        }
+        p_code, p_resp = api('PATCH', f'/items/meta_catalog/{cat_id}', patch)
+        if p_code == 200:
+            tag = '[CHG]' if changed else '[OK] '
+            print(f'  {tag} {cat_code} {cat_name} {model_tag}: rec={new_record}, act={new_actual}, orp={new_orphan}{delta_str}')
+            if changed:
+                updated += 1
+            else:
+                unchanged += 1
+        else:
+            print(f'  [ERR] {cat_code}: PATCH failed HTTP {p_code}')
+            errors += 1
 
 print()
 print('=========================================')
