@@ -109,20 +109,34 @@ def fetch_page(url):
     except Exception:
         return 0, ''
 
-# Known code prefixes per entity_type
-CODE_PREFIXES = {
-    'catalog': 'CAT-', 'module': 'MOD-', 'workflow': 'WF-',
-    'workflow_step': 'ND-', 'wcr': 'WCR-', 'dot_tool': 'DOT-',
-    'page': 'PG-', 'collection': 'COL-', 'task': 'TASK-',
-    'agent': 'AGT-', 'checkpoint_type': 'CP-', 'checkpoint_set': 'CPS-',
-    'entity_dependency': 'DEP-', 'table_proposal': 'TP-',
-    'checkpoint_instance': 'CPI-', 'table': 'TBL-', 'changelog': '',
+# Known code prefixes + code field per entity_type
+# (prefix, code_field) — code_field is the field that holds the identifier
+CODE_INFO = {
+    'catalog':             ('CAT-',  'code'),
+    'table':               ('tbl_',  'table_id'),
+    'module':              ('MOD-',  'code'),
+    'workflow':            ('WF-',   'process_code'),
+    'workflow_step':       ('ND-',   'code'),
+    'wcr':                 ('WCR-',  'code'),
+    'dot_tool':            ('DOT-',  'code'),
+    'page':                ('PG-',   'code'),
+    'collection':          ('COL-',  'code'),
+    'task':                ('TASK-', 'code'),
+    'agent':               ('AGT-',  'code'),
+    'checkpoint_type':     ('CP-',   'code'),
+    'checkpoint_set':      ('CPS-',  'code'),
+    'entity_dependency':   ('DEP-',  'code'),
+    'table_proposal':      ('TP-',   'code'),
+    'checkpoint_instance': ('CPI-',  'code'),
+    'changelog':           ('',      'code'),
+    'system_issue':        ('ISS-',  'code'),
+    'uncategorized':       ('',      ''),
 }
 
 # ============================================================
 # Fetch meta_catalog
 # ============================================================
-resp = api_get('/items/meta_catalog?fields=id,code,name,entity_type,registry_collection,record_count,actual_count,status,ui_page&sort=code&limit=-1')
+resp = api_get('/items/meta_catalog?fields=id,code,name,entity_type,registry_collection,record_count,actual_count,source_model,status,ui_page&sort=code&limit=-1')
 catalog = resp.get('data', [])
 
 if not catalog:
@@ -211,9 +225,11 @@ for entry in catalog:
         r['c1'] = f'⚠️ {len(body)}b'
 
     # CHECK 2 — Items have code identifiers
-    prefix = CODE_PREFIXES.get(et, '')
-    if reg_col and prefix:
-        code_resp = api_get(f'/items/{reg_col}?fields=code&filter[code][_nnull]=true&limit=0&meta=filter_count')
+    ci = CODE_INFO.get(et, ('', 'code'))
+    prefix = ci[0]
+    code_field = ci[1]
+    if reg_col and prefix and code_field:
+        code_resp = api_get(f'/items/{reg_col}?fields={code_field}&filter[{code_field}][_nnull]=true&limit=0&meta=filter_count')
         with_code = (code_resp.get('meta', {}).get('filter_count') or 0)
         total_resp = api_get(f'/items/{reg_col}?limit=0&meta=total_count')
         total = (total_resp.get('meta', {}).get('total_count') or 0)
@@ -260,16 +276,23 @@ for entry in catalog:
     else:
         r['c4'] = '—'
 
-    # CHECK 5 — Cross-check record_count consistency
-    if reg_col:
+    # CHECK 5 — Cross-check actual_count consistency
+    # For Model A: actual_count comes from Directus total → compare with live total_count
+    # For Model B: actual_count comes from independent source (FS, API) → skip collection comparison
+    source_model = entry.get('source_model', 'A')
+    if reg_col and source_model == 'A':
         count_resp = api_get(f'/items/{reg_col}?limit=0&meta=total_count')
         real_count = count_resp.get('meta', {}).get('total_count') or 0
-        if real_count == rec_count:
-            check_pass(entry, f'{code} Nhất quán ({rec_count})')
+        if real_count == act_count:
+            check_pass(entry, f'{code} Nhất quán ({act_count})')
             r['c5'] = '✅'
         else:
-            check_fail(entry, f'{code} {name} — meta_catalog nói {rec_count} nhưng thực tế {real_count}', 'sai_lệch_dữ_liệu', 'cảnh_báo')
-            r['c5'] = f'❌ {rec_count}≠{real_count}'
+            check_fail(entry, f'{code} {name} — meta_catalog nói {act_count} nhưng thực tế {real_count}', 'sai_lệch_dữ_liệu', 'cảnh_báo')
+            r['c5'] = f'❌ {act_count}≠{real_count}'
+    elif reg_col and source_model == 'B':
+        # Model B: actual_count is from independent source, skip collection comparison
+        check_pass(entry, f'{code} Model B — bỏ qua so sánh collection')
+        r['c5'] = '✅ B'
     else:
         r['c5'] = '—'
 
