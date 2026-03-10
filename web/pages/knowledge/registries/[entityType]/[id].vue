@@ -66,7 +66,7 @@ const sections = computed<SectionConfig[]>(() => sectionConfig[entityType.value]
 // Discovery mode: entity types without section config
 const isDiscoveryMode = computed(() => sections.value.length === 0);
 
-definePageMeta({ title: 'Chi tiet' });
+definePageMeta({ title: 'Chi tiết' });
 
 useHead({
 	title: computed(() => {
@@ -81,7 +81,7 @@ useHead({
 		<!-- Breadcrumb + Header -->
 		<div class="mb-8">
 			<div class="mb-4 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-				<NuxtLink to="/knowledge/registries" class="hover:text-gray-700 dark:hover:text-gray-200"> Danh muc </NuxtLink>
+				<NuxtLink to="/knowledge/registries" class="hover:text-gray-700 dark:hover:text-gray-200"> Danh mục </NuxtLink>
 				<span>/</span>
 				<NuxtLink :to="`/knowledge/registries/${entityType}`" class="hover:text-gray-700 dark:hover:text-gray-200">
 					{{ catalogEntry?.name || entityType }}
@@ -100,7 +100,7 @@ useHead({
 
 		<!-- Error state -->
 		<div v-if="error" class="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
-			Khong tim thay item hoac loi truy cap.
+			Không tìm thấy mục hoặc lỗi truy cập.
 		</div>
 
 		<!-- Section-based rendering -->
@@ -126,7 +126,7 @@ useHead({
 				:to="`/knowledge/registries/${entityType}`"
 				class="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-800 dark:text-primary-400"
 			>
-				&larr; Quay lai {{ catalogEntry?.name || entityType }}
+				&larr; Quay lại {{ catalogEntry?.name || entityType }}
 			</NuxtLink>
 		</div>
 	</div>

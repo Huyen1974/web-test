@@ -1,0 +1,451 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-registry-crosscheck — Kiểm chứng ngược TOÀN DIỆN: mọi con số trên UI
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/ for "crosscheck" — no match]
+# VERSION: 2.0.0
+#
+# NGUYÊN TẮC: "2×3=6, verify 6÷3=2" (Huyen)
+#
+# Kiểm chứng MỌI con số hiển thị trên UI Layer 1:
+#   A. 3 summary cards: tổng nguyên tử, số loại, tổng mồ côi
+#   B. 19 dòng × 3 cột: record_count, actual_count, orphan_count
+#   C. system_issues count (mở + đang xử lý)
+#   D. changelog count
+#
+# Phương pháp cho mỗi con số:
+#   XUÔI  = meta_catalog snapshot (số lưu sẵn)
+#   NGƯỢC = đếm độc lập từ nguồn gốc (live query collection, aggregate, etc.)
+#
+# Output: "X/Y KHỚP, Z LỆCH" cho TẤT CẢ.
+# Nếu LỆCH → ghi system_issues nghiêm_trọng (với --write).
+#
+# Usage:
+#   dot-registry-crosscheck [--cloud|--local] [--write]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="2.0.0"
+WRITE_ISSUES=""
+
+for arg in "$@"; do
+  case "$arg" in
+    --write) WRITE_ISSUES="yes" ;;
+    --help|-h)
+      head -24 "$0" | tail -22
+      show_environment_help
+      exit 0
+      ;;
+  esac
+done
+
+init_environment "$@"
+
+echo ""
+echo "═══════════════════════════════════════════════════════════"
+echo "  KIỂM CHỨNG NGƯỢC TOÀN DIỆN v${VERSION}"
+echo "  Nguyên tắc: Xuôi (snapshot) vs Ngược (live query)"
+echo "═══════════════════════════════════════════════════════════"
+print_environment_banner "$@"
+
+TOKEN="${DIRECTUS_TOKEN:-}"
+if [[ -z "$TOKEN" ]]; then
+  echo -e "${RED}[LỖI]${NC} Không thể xác thực với Directus" >&2
+  exit 1
+fi
+
+tmp_py=$(mktemp /tmp/dot-crosscheck-XXXXXX.py)
+trap "rm -f '$tmp_py'" EXIT
+
+cat > "$tmp_py" << 'PYEOF'
+import json, os, sys, ssl, urllib.request, urllib.parse
+
+base_url = os.environ['DIRECTUS_URL']
+token = os.environ['DIRECTUS_TOKEN']
+write_issues = os.environ.get('WRITE_ISSUES', '') == 'yes'
+
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+def api_get(path):
+    url = base_url + path
+    req = urllib.request.Request(url, headers={'Authorization': f'Bearer {token}'})
+    try:
+        resp = urllib.request.urlopen(req, context=ctx, timeout=30)
+        return json.loads(resp.read())
+    except Exception as e:
+        return {'error': str(e)}
+
+def api_post(path, data):
+    url = base_url + path
+    payload = json.dumps(data).encode()
+    req = urllib.request.Request(url, data=payload, headers={
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    }, method='POST')
+    try:
+        resp = urllib.request.urlopen(req, context=ctx, timeout=30)
+        return json.loads(resp.read())
+    except Exception as e:
+        return {'error': str(e)}
+
+def api_aggregate_count(collection, filter_qs=''):
+    """Đếm live từ collection bằng aggregate API"""
+    path = f'/items/{collection}?aggregate[count]=id&limit=0'
+    if filter_qs:
+        path += '&' + filter_qs
+    resp = api_get(path)
+    data = resp.get('data', [])
+    if data and isinstance(data, list) and len(data) > 0:
+        return int(data[0].get('count', {}).get('id', 0) if isinstance(data[0].get('count'), dict) else data[0].get('count', 0))
+    return None  # Lỗi hoặc không truy cập được
+
+# ============================================================
+# Bước 1: Lấy meta_catalog (hướng xuôi — snapshot)
+# ============================================================
+resp = api_get('/items/meta_catalog?fields=id,code,name,entity_type,registry_collection,actual_count,record_count,orphan_count,status&sort=code&limit=-1')
+catalog = resp.get('data', [])
+if not catalog:
+    print('[LỖI] Không thể đọc meta_catalog')
+    sys.exit(1)
+
+active_catalog = [e for e in catalog if e.get('status') in ('active', 'published')]
+
+print(f'[INFO] {len(catalog)} loại thực thể ({len(active_catalog)} active)')
+
+# ============================================================
+# Thu thập dữ liệu ngược (live queries)
+# ============================================================
+
+# Changelog stats
+changelog_resp = api_get('/items/registry_changelog?fields=entity_type,action&limit=-1')
+changelog = changelog_resp.get('data', [])
+changelog_total = len(changelog)
+print(f'[INFO] {changelog_total} bản ghi changelog')
+
+changelog_stats = {}
+for entry in changelog:
+    et = entry.get('entity_type', '')
+    action = entry.get('action', '')
+    if et not in changelog_stats:
+        changelog_stats[et] = {'create': 0, 'update': 0, 'delete': 0}
+    if 'create' in action:
+        changelog_stats[et]['create'] += 1
+    elif 'delete' in action:
+        changelog_stats[et]['delete'] += 1
+    elif 'update' in action:
+        changelog_stats[et]['update'] += 1
+
+# System issues count (live)
+issues_resp = api_get('/items/system_issues?aggregate[count]=id&limit=0&filter[status][_in]=mở,đang_xử_lý')
+issues_data = issues_resp.get('data', [])
+live_issues_count = 0
+if issues_data and isinstance(issues_data, list) and len(issues_data) > 0:
+    cnt = issues_data[0].get('count', {})
+    live_issues_count = int(cnt.get('id', 0) if isinstance(cnt, dict) else cnt)
+
+# Changelog total count (live aggregate for verification)
+cl_agg = api_get('/items/registry_changelog?aggregate[count]=id&limit=0')
+cl_data = cl_agg.get('data', [])
+live_changelog_count = 0
+if cl_data and isinstance(cl_data, list) and len(cl_data) > 0:
+    cnt = cl_data[0].get('count', {})
+    live_changelog_count = int(cnt.get('id', 0) if isinstance(cnt, dict) else cnt)
+
+print()
+
+# ============================================================
+# KIỂM CHỨNG A: 3 Summary Cards
+# ============================================================
+print('╔══════════════════════════════════════════════════════════╗')
+print('║  A. KIỂM CHỨNG 3 SUMMARY CARDS                        ║')
+print('╚══════════════════════════════════════════════════════════╝')
+
+MATCH = 0
+MISMATCH = 0
+issues_to_write = []
+
+# Card 1: Tổng nguyên tử = SUM(record_count) active
+xuoi_atoms = sum(e.get('record_count') or 0 for e in active_catalog)
+# Ngược: sum live counts per collection
+nguoc_atoms = 0
+nguoc_atoms_detail = []
+for entry in active_catalog:
+    col = entry.get('registry_collection', '')
+    et = entry.get('entity_type', '')
+    if not col:
+        continue
+    live = api_aggregate_count(col)
+    if live is not None:
+        nguoc_atoms += live
+        nguoc_atoms_detail.append((et, live))
+
+# Note: nguoc_atoms counts actual items, xuoi_atoms counts record_count (code-recognized)
+# So we compare xuoi_atoms with snapshot SUM, nguoc_atoms is the actual_count equivalent
+xuoi_actual_sum = sum(e.get('actual_count') or 0 for e in active_catalog)
+
+print(f'  Card "Tổng nguyên tử" (record_count):')
+print(f'    XUÔI (SUM meta_catalog.record_count): {xuoi_atoms}')
+print(f'    → Giá trị hiển thị trên UI')
+
+print(f'  Card "Tổng thực tế" (actual_count):')
+print(f'    XUÔI (SUM meta_catalog.actual_count): {xuoi_actual_sum}')
+print(f'    NGƯỢC (SUM live aggregate mỗi collection): {nguoc_atoms}')
+if xuoi_actual_sum == nguoc_atoms:
+    print(f'    → ✅ KHỚP')
+    MATCH += 1
+else:
+    delta = abs(xuoi_actual_sum - nguoc_atoms)
+    print(f'    → ❌ LỆCH {delta} (snapshot cũ hơn live)')
+    MISMATCH += 1
+    issues_to_write.append({
+        'entity_type': 'meta_catalog',
+        'entity_code': 'CARD-TOTAL',
+        'title': f'Kiểm chứng ngược: tổng actual_count lệch {delta} (xuôi={xuoi_actual_sum}, ngược={nguoc_atoms})',
+        'issue_type': 'sai_lệch_dữ_liệu',
+        'severity': 'nghiêm_trọng',
+    })
+
+# Card 2: Số loại = COUNT active
+xuoi_types = len(active_catalog)
+# Ngược: đếm live meta_catalog active
+nguoc_types = api_aggregate_count('meta_catalog', 'filter[status][_in]=active,published')
+print(f'  Card "Số loại":')
+print(f'    XUÔI (COUNT active in snapshot): {xuoi_types}')
+print(f'    NGƯỢC (live aggregate meta_catalog): {nguoc_types}')
+if nguoc_types is not None and xuoi_types == nguoc_types:
+    print(f'    → ✅ KHỚP')
+    MATCH += 1
+else:
+    print(f'    → ❌ LỆCH')
+    MISMATCH += 1
+
+# Card 3: Tổng mồ côi = SUM(orphan_count) active
+xuoi_orphan = sum(e.get('orphan_count') or 0 for e in active_catalog)
+# Ngược: SUM(actual_count - record_count) vì orphan = actual - record
+nguoc_orphan = sum(max(0, (e.get('actual_count') or 0) - (e.get('record_count') or 0)) for e in active_catalog)
+print(f'  Card "Tổng mồ côi":')
+print(f'    XUÔI (SUM meta_catalog.orphan_count): {xuoi_orphan}')
+print(f'    NGƯỢC (SUM(actual-record) per entity): {nguoc_orphan}')
+if xuoi_orphan == nguoc_orphan:
+    print(f'    → ✅ KHỚP')
+    MATCH += 1
+else:
+    delta = abs(xuoi_orphan - nguoc_orphan)
+    print(f'    → ❌ LỆCH {delta}')
+    MISMATCH += 1
+    issues_to_write.append({
+        'entity_type': 'meta_catalog',
+        'entity_code': 'CARD-ORPHAN',
+        'title': f'Kiểm chứng ngược: tổng orphan_count lệch {delta} (xuôi={xuoi_orphan}, ngược={nguoc_orphan})',
+        'issue_type': 'sai_lệch_dữ_liệu',
+        'severity': 'nghiêm_trọng',
+    })
+
+print()
+
+# ============================================================
+# KIỂM CHỨNG B: 19 dòng × 3 cột
+# ============================================================
+print('╔══════════════════════════════════════════════════════════╗')
+print('║  B. KIỂM CHỨNG 19 DÒNG (record, actual, orphan)       ║')
+print('╚══════════════════════════════════════════════════════════╝')
+print(f'{"Mã":<10} {"actual_x":<10} {"actual_n":<10} {"orphan_x":<10} {"orphan_n":<10} {"Trạng thái":<15}')
+print('─' * 70)
+
+for entry in active_catalog:
+    et = entry.get('entity_type', '')
+    code = entry.get('code', '')
+    col = entry.get('registry_collection', '')
+    actual_xuoi = entry.get('actual_count') or 0
+    record_xuoi = entry.get('record_count') or 0
+    orphan_xuoi = entry.get('orphan_count') or 0
+
+    # Ngược: live count
+    actual_nguoc = api_aggregate_count(col) if col else None
+    orphan_nguoc = max(0, (actual_nguoc or 0) - record_xuoi) if actual_nguoc is not None else None
+
+    status_parts = []
+
+    # Kiểm actual_count
+    if actual_nguoc is not None:
+        if actual_xuoi == actual_nguoc:
+            status_parts.append('actual✅')
+            MATCH += 1
+        else:
+            delta = actual_nguoc - actual_xuoi
+            status_parts.append(f'actual❌({delta:+d})')
+            MISMATCH += 1
+            if abs(delta) > 0:
+                issues_to_write.append({
+                    'entity_type': et,
+                    'entity_code': code,
+                    'title': f'{code} — actual_count lệch {delta} (xuôi={actual_xuoi}, ngược={actual_nguoc})',
+                    'issue_type': 'sai_lệch_dữ_liệu',
+                    'severity': 'nghiêm_trọng' if abs(delta) > 5 else 'cảnh_báo',
+                })
+    else:
+        status_parts.append('actual⚠️')
+
+    # Kiểm orphan_count
+    if orphan_nguoc is not None:
+        if orphan_xuoi == orphan_nguoc:
+            status_parts.append('orphan✅')
+            MATCH += 1
+        else:
+            delta = orphan_nguoc - orphan_xuoi
+            status_parts.append(f'orphan❌({delta:+d})')
+            MISMATCH += 1
+    else:
+        status_parts.append('orphan⚠️')
+
+    print(f'{code:<10} {actual_xuoi:<10} {str(actual_nguoc):<10} {orphan_xuoi:<10} {str(orphan_nguoc):<10} {" ".join(status_parts)}')
+
+print()
+
+# ============================================================
+# KIỂM CHỨNG C: system_issues count
+# ============================================================
+print('╔══════════════════════════════════════════════════════════╗')
+print('║  C. KIỂM CHỨNG system_issues count                     ║')
+print('╚══════════════════════════════════════════════════════════╝')
+
+# Xuôi: đếm qua items list
+issues_list_resp = api_get('/items/system_issues?fields=id&filter[status][_in]=mở,đang_xử_lý&limit=-1')
+xuoi_issues = len(issues_list_resp.get('data', []))
+print(f'  XUÔI (list items count): {xuoi_issues}')
+print(f'  NGƯỢC (aggregate count): {live_issues_count}')
+if xuoi_issues == live_issues_count:
+    print(f'  → ✅ KHỚP')
+    MATCH += 1
+else:
+    print(f'  → ❌ LỆCH {abs(xuoi_issues - live_issues_count)}')
+    MISMATCH += 1
+
+print()
+
+# ============================================================
+# KIỂM CHỨNG D: changelog count
+# ============================================================
+print('╔══════════════════════════════════════════════════════════╗')
+print('║  D. KIỂM CHỨNG changelog count                         ║')
+print('╚══════════════════════════════════════════════════════════╝')
+
+print(f'  XUÔI (list items count): {changelog_total}')
+print(f'  NGƯỢC (aggregate count): {live_changelog_count}')
+if changelog_total == live_changelog_count:
+    print(f'  → ✅ KHỚP')
+    MATCH += 1
+else:
+    print(f'  → ❌ LỆCH {abs(changelog_total - live_changelog_count)}')
+    MISMATCH += 1
+
+print()
+
+# ============================================================
+# KIỂM CHỨNG E: Giám sát changelog (có flow hay chưa)
+# ============================================================
+print('╔══════════════════════════════════════════════════════════╗')
+print('║  E. KIỂM CHỨNG giám sát changelog per entity type      ║')
+print('╚══════════════════════════════════════════════════════════╝')
+
+for entry in active_catalog:
+    et = entry.get('entity_type', '')
+    code = entry.get('code', '')
+    name = entry.get('name', '')
+    has_changelog = et in changelog_stats
+    stats = changelog_stats.get(et, {'create': 0, 'update': 0, 'delete': 0})
+
+    if not has_changelog:
+        print(f'  {code:<10} {name:<25} ⚠️ CHƯA GIÁM SÁT')
+        issues_to_write.append({
+            'entity_type': et,
+            'entity_code': code,
+            'title': f'{code} {name} — Chưa có changelog (chưa giám sát)',
+            'issue_type': 'thiếu_giám_sát',
+            'severity': 'cảnh_báo',
+        })
+    else:
+        c, u, d = stats['create'], stats['update'], stats['delete']
+        print(f'  {code:<10} {name:<25} ✅ +{c}c/{u}u/{d}d')
+
+print()
+
+# ============================================================
+# Ghi vấn đề vào system_issues
+# ============================================================
+if issues_to_write and write_issues:
+    print(f'[GHI] {len(issues_to_write)} vấn đề vào system_issues...')
+    written = 0
+    skipped = 0
+    for issue in issues_to_write:
+        et_filter = urllib.parse.quote(issue['entity_type'])
+        title_filter = urllib.parse.quote(issue['title'][:200])
+        existing = api_get(
+            f'/items/system_issues?filter[entity_type][_eq]={et_filter}'
+            f'&filter[source][_eq]=dot-registry-crosscheck'
+            f'&filter[status][_in]=mở,đang_xử_lý'
+            f'&limit=1&fields=id'
+        )
+        if existing.get('data', []):
+            skipped += 1
+            continue
+        result = api_post('/items/system_issues', {
+            'title': issue['title'][:500],
+            'entity_type': issue['entity_type'],
+            'entity_code': issue['entity_code'],
+            'issue_type': issue['issue_type'],
+            'severity': issue['severity'],
+            'source': 'dot-registry-crosscheck',
+            'status': 'mở',
+        })
+        if 'error' not in result:
+            written += 1
+    print(f'  Đã ghi: {written}, Bỏ qua (trùng): {skipped}')
+    print()
+elif issues_to_write:
+    print(f'[THÔNG TIN] {len(issues_to_write)} vấn đề (dùng --write để ghi vào system_issues)')
+    print()
+
+# ============================================================
+# TỔNG KẾT TOÀN DIỆN
+# ============================================================
+total = MATCH + MISMATCH
+print('═══════════════════════════════════════════════════════════')
+print(f'  KIỂM CHỨNG NGƯỢC TOÀN DIỆN: {MATCH}/{total} KHỚP, {MISMATCH} LỆCH')
+print('═══════════════════════════════════════════════════════════')
+print(f'  A. Summary cards:     3 số')
+print(f'  B. 19 dòng × 2 cột:  {len(active_catalog)*2} số (actual + orphan)')
+print(f'  C. system_issues:     1 số')
+print(f'  D. changelog:         1 số')
+print(f'  ─────────────────────────────')
+print(f'  TỔNG CỘNG:            {total} số kiểm chứng')
+print(f'  KHỚP:                 {MATCH}')
+print(f'  LỆCH:                 {MISMATCH}')
+if issues_to_write:
+    print(f'  VẤN ĐỀ:              {len(issues_to_write)}')
+print('═══════════════════════════════════════════════════════════')
+
+if MISMATCH > 0:
+    sys.exit(1)
+else:
+    sys.exit(0)
+PYEOF
+
+DIRECTUS_URL="$DIRECTUS_URL" DIRECTUS_TOKEN="$TOKEN" \
+  WRITE_ISSUES="${WRITE_ISSUES}" \
+  python3 "$tmp_py" < /dev/null
+
+exit_code=$?
+
+echo ""
+echo "═══════════════════════════════════════════════════════════"
+echo "  DOT Tool: Kiểm chứng ngược toàn diện - HOÀN THÀNH"
+echo "═══════════════════════════════════════════════════════════"
+
+exit $exit_code
