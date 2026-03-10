@@ -141,9 +141,9 @@ const depRows = computed(() => {
 });
 
 const depColumns = [
-	{ key: 'relation', label: 'Quan he' },
-	{ key: 'type', label: 'Loai' },
-	{ key: 'code', label: 'Ma' },
+	{ key: 'relation', label: 'Quan hệ' },
+	{ key: 'type', label: 'Loại' },
+	{ key: 'code', label: 'Mã' },
 ];
 
 // === RULE 6: TRANSITIVE — indirect relations via BFS ===
@@ -173,10 +173,10 @@ const transitiveRows = computed(() => {
 });
 
 const transitiveColumns = [
-	{ key: 'code', label: 'Ma' },
-	{ key: 'type', label: 'Loai' },
-	{ key: 'depth', label: 'Do sau' },
-	{ key: 'path', label: 'Duong di' },
+	{ key: 'code', label: 'Mã' },
+	{ key: 'type', label: 'Loại' },
+	{ key: 'depth', label: 'Độ sâu' },
+	{ key: 'path', label: 'Đường đi' },
 ];
 
 // === DETAIL LINKS — link to dedicated list + detail pages ===
@@ -295,7 +295,7 @@ function getChildColumns(items: any[]): { key: string; label: string }[] {
 		<!-- IDENTITY: All fields -->
 		<UCard v-if="infoFields.length > 0" :ui="{ body: { padding: 'p-0 sm:p-0' } }">
 			<template #header>
-				<h3 class="text-base font-semibold text-gray-900 dark:text-white">Thong tin</h3>
+				<h3 class="text-base font-semibold text-gray-900 dark:text-white">Thông tin</h3>
 			</template>
 			<div class="divide-y divide-gray-200 dark:divide-gray-700">
 				<div v-for="field in infoFields" :key="field.key" class="flex gap-4 px-4 py-2.5 sm:px-6">
@@ -337,7 +337,7 @@ function getChildColumns(items: any[]): { key: string; label: string }[] {
 		>
 			<template #header>
 				<h3 class="text-base font-semibold text-gray-900 dark:text-white">
-					Thuoc ve: {{ rel.relatedCollection.replace(/_/g, ' ') }}
+					Thuộc về: {{ rel.relatedCollection.replace(/_/g, ' ') }}
 				</h3>
 			</template>
 			<div v-if="parentRecords?.[rel.field]" class="flex items-center gap-3">
@@ -363,7 +363,7 @@ function getChildColumns(items: any[]): { key: string; label: string }[] {
 			<template #header>
 				<div class="flex items-center gap-2">
 					<h3 class="text-base font-semibold text-gray-900 dark:text-white">
-						Chua: {{ getChildLabel(String(field), o2mRelations.find(r => r.field === field)?.relatedCollection || '') }}
+						Chứa: {{ getChildLabel(String(field), o2mRelations.find(r => r.field === field)?.relatedCollection || '') }}
 					</h3>
 					<UBadge color="gray" variant="subtle" size="xs">{{ items.length }}</UBadge>
 				</div>
@@ -379,7 +379,7 @@ function getChildColumns(items: any[]): { key: string; label: string }[] {
 		<UCard v-if="depRows.length > 0">
 			<template #header>
 				<div class="flex items-center gap-2">
-					<h3 class="text-base font-semibold text-gray-900 dark:text-white">Lien ket</h3>
+					<h3 class="text-base font-semibold text-gray-900 dark:text-white">Liên kết</h3>
 					<UBadge color="gray" variant="subtle" size="xs">{{ depRows.length }}</UBadge>
 				</div>
 			</template>
@@ -399,7 +399,7 @@ function getChildColumns(items: any[]): { key: string; label: string }[] {
 		<UCard v-if="transitiveRows.length > 0">
 			<template #header>
 				<div class="flex items-center gap-2">
-					<h3 class="text-base font-semibold text-gray-900 dark:text-white">Lien quan gian tiep</h3>
+					<h3 class="text-base font-semibold text-gray-900 dark:text-white">Liên quan gián tiếp</h3>
 					<UBadge color="gray" variant="subtle" size="xs">{{ transitiveRows.length }}</UBadge>
 				</div>
 			</template>
@@ -419,7 +419,7 @@ function getChildColumns(items: any[]): { key: string; label: string }[] {
 		<UCard v-if="peerRows.length > 0">
 			<template #header>
 				<div class="flex items-center gap-2">
-					<h3 class="text-base font-semibold text-gray-900 dark:text-white">Cung nhom</h3>
+					<h3 class="text-base font-semibold text-gray-900 dark:text-white">Cùng nhóm</h3>
 					<UBadge v-if="peerGroupLabel" color="primary" variant="subtle" size="xs">{{ peerGroupLabel }}</UBadge>
 					<UBadge color="gray" variant="subtle" size="xs">{{ peerRows.length }}</UBadge>
 				</div>

@@ -53,13 +53,13 @@ export const sectionConfig: Record<string, SectionConfig[]> = {
 		{
 			id: 'info',
 			type: 'fields',
-			label: 'Thong tin co ban',
+			label: 'Thông tin cơ bản',
 			fields: ['code', 'name', 'legacy_code', 'description', 'layer', 'domain', 'category', 'status'],
 		},
 		{
 			id: 'sets',
 			type: 'relation',
-			label: 'Thuoc to hop (Checkpoint Sets)',
+			label: 'Thuộc tổ hợp (Checkpoint Sets)',
 			collection: 'checkpoint_set_items',
 			foreignKey: 'type_id',
 			displayFields: ['set_id.code', 'set_id.name'],
@@ -69,7 +69,7 @@ export const sectionConfig: Record<string, SectionConfig[]> = {
 		{
 			id: 'deps',
 			type: 'dependency',
-			label: 'Lien ket',
+			label: 'Liên kết',
 			direction: 'both',
 		},
 	],
@@ -78,13 +78,13 @@ export const sectionConfig: Record<string, SectionConfig[]> = {
 		{
 			id: 'info',
 			type: 'fields',
-			label: 'Thong tin to hop',
+			label: 'Thông tin tổ hợp',
 			fields: ['code', 'name', 'description', 'applicable_to', 'status', 'date_created'],
 		},
 		{
 			id: 'items',
 			type: 'relation',
-			label: 'Chua Checkpoints',
+			label: 'Chứa Checkpoints',
 			collection: 'checkpoint_set_items',
 			foreignKey: 'set_id',
 			displayFields: ['type_id.code', 'type_id.name', 'sort_order', 'is_required'],
@@ -95,7 +95,7 @@ export const sectionConfig: Record<string, SectionConfig[]> = {
 		{
 			id: 'deps',
 			type: 'dependency',
-			label: 'Lien ket',
+			label: 'Liên kết',
 			direction: 'both',
 		},
 	],
@@ -104,13 +104,13 @@ export const sectionConfig: Record<string, SectionConfig[]> = {
 		{
 			id: 'info',
 			type: 'fields',
-			label: 'Thong tin quy trinh',
+			label: 'Thông tin quy trình',
 			fields: ['process_code', 'title', 'description', 'level', 'status', 'date_created'],
 		},
 		{
 			id: 'steps',
 			type: 'relation',
-			label: 'Cac buoc (Nodes)',
+			label: 'Các bước (Nodes)',
 			collection: 'workflow_steps',
 			foreignKey: 'workflow_id',
 			displayFields: ['code', 'title', 'sort_order', 'step_type'],
@@ -121,7 +121,7 @@ export const sectionConfig: Record<string, SectionConfig[]> = {
 		{
 			id: 'wcrs',
 			type: 'relation',
-			label: 'De xuat thay doi',
+			label: 'Đề xuất thay đổi',
 			collection: 'workflow_change_requests',
 			foreignKey: 'workflow_id',
 			displayFields: ['title', 'status', 'change_type', 'date_created'],
@@ -129,7 +129,7 @@ export const sectionConfig: Record<string, SectionConfig[]> = {
 		{
 			id: 'deps',
 			type: 'dependency',
-			label: 'Lien ket',
+			label: 'Liên kết',
 			direction: 'both',
 		},
 	],
@@ -138,13 +138,13 @@ export const sectionConfig: Record<string, SectionConfig[]> = {
 		{
 			id: 'info',
 			type: 'fields',
-			label: 'Thong tin Node',
+			label: 'Thông tin Node',
 			fields: ['code', 'title', 'description', 'sort_order', 'step_type'],
 		},
 		{
 			id: 'workflow',
 			type: 'relation',
-			label: 'Thuoc quy trinh',
+			label: 'Thuộc quy trình',
 			collection: 'workflows',
 			foreignKey: 'id',
 			localKey: 'workflow_id',
@@ -155,13 +155,13 @@ export const sectionConfig: Record<string, SectionConfig[]> = {
 		{
 			id: 'deps_forward',
 			type: 'dependency',
-			label: 'Lien ket toi',
+			label: 'Liên kết tới',
 			direction: 'forward',
 		},
 		{
 			id: 'deps_reverse',
 			type: 'dependency',
-			label: 'Duoc lien ket boi',
+			label: 'Được liên kết bởi',
 			direction: 'reverse',
 		},
 	],
@@ -170,13 +170,13 @@ export const sectionConfig: Record<string, SectionConfig[]> = {
 		{
 			id: 'info',
 			type: 'fields',
-			label: 'Thong tin DOT Tool',
+			label: 'Thông tin DOT Tool',
 			fields: ['code', 'name', 'description', 'category', 'token_type', 'script_path', 'status'],
 		},
 		{
 			id: 'deps',
 			type: 'dependency',
-			label: 'Lien ket',
+			label: 'Liên kết',
 			direction: 'both',
 		},
 	],
@@ -185,13 +185,13 @@ export const sectionConfig: Record<string, SectionConfig[]> = {
 		{
 			id: 'info',
 			type: 'fields',
-			label: 'Thong tin Collection',
+			label: 'Thông tin Collection',
 			fields: ['code', 'collection_name', 'name', 'description', 'classification', 'status'],
 		},
 		{
 			id: 'deps',
 			type: 'dependency',
-			label: 'Lien ket',
+			label: 'Liên kết',
 			direction: 'both',
 		},
 	],
