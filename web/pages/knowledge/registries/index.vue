@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { readItems } from '@directus/sdk';
+import { readItems, aggregate } from '@directus/sdk';
 
 definePageMeta({
 	title: 'Danh mục hệ thống',
@@ -9,6 +9,27 @@ definePageMeta({
 function getRegistryLink(item: any) {
 	if (!item?.entity_type) return '/knowledge/registries';
 	return `/knowledge/registries/${item.entity_type}`;
+}
+
+function formatAction(action: string) {
+	if (!action) return '';
+	if (action.includes('create')) return 'created';
+	if (action.includes('update')) return 'updated';
+	if (action.includes('delete')) return 'deleted';
+	return action;
+}
+
+function formatTime(ts: string) {
+	if (!ts) return '';
+	const d = new Date(ts);
+	const now = new Date();
+	const diffMs = now.getTime() - d.getTime();
+	const diffMin = Math.floor(diffMs / 60000);
+	if (diffMin < 1) return 'vừa xong';
+	if (diffMin < 60) return `${diffMin} phút trước`;
+	const diffH = Math.floor(diffMin / 60);
+	if (diffH < 24) return `${diffH}h trước`;
+	return d.toLocaleDateString('vi-VN');
 }
 
 const { $directus } = useNuxtApp();
@@ -37,6 +58,92 @@ const { data: summary } = useAsyncData(
 	},
 	{ default: () => null },
 );
+
+// Fetch recent changelog entries and aggregate by entity_type + time window
+const { data: recentChanges } = useAsyncData(
+	'registry-changelog',
+	async () => {
+		try {
+			const items = await $directus.request(
+				readItems('registry_changelog' as any, {
+					fields: ['id', 'timestamp', 'entity_type', 'action', 'alert_level', 'alert_detail'],
+					sort: ['-timestamp'],
+					limit: 100,
+				}),
+			);
+			// Aggregate: group by entity_type, count create/update/delete, take latest timestamp
+			const groups = new Map<string, { ts: string; type: string; created: number; updated: number; deleted: number; alerts: string[] }>();
+			for (const e of items as any[]) {
+				const key = e.entity_type || 'unknown';
+				if (!groups.has(key)) {
+					groups.set(key, { ts: e.timestamp, type: key, created: 0, updated: 0, deleted: 0, alerts: [] });
+				}
+				const g = groups.get(key)!;
+				if (e.timestamp > g.ts) g.ts = e.timestamp;
+				const action = formatAction(e.action);
+				if (action === 'created') g.created++;
+				else if (action === 'updated') g.updated++;
+				else if (action === 'deleted') g.deleted++;
+				if (e.alert_level && e.alert_level !== 'ok' && e.alert_detail) {
+					g.alerts.push(e.alert_detail);
+				}
+			}
+			return Array.from(groups.values())
+				.sort((a, b) => b.ts.localeCompare(a.ts))
+				.slice(0, 10);
+		} catch {
+			return null;
+		}
+	},
+	{ default: () => null },
+);
+
+// UTable config for changelog
+const changelogColumns = [
+	{ key: 'time', label: 'Thời gian' },
+	{ key: 'type', label: 'Loại' },
+	{ key: 'created', label: 'Thêm' },
+	{ key: 'updated', label: 'Cập nhật' },
+	{ key: 'deleted', label: 'Xoá' },
+	{ key: 'note', label: 'Ghi chú' },
+];
+
+const changelogRows = computed(() =>
+	(recentChanges.value || []).map((g: any) => ({
+		time: formatTime(g.ts),
+		type: g.type,
+		created: g.created || 0,
+		updated: g.updated || 0,
+		deleted: g.deleted || 0,
+		note: g.alerts.length > 0 ? g.alerts[0] : '',
+		hasAlert: g.alerts.length > 0,
+	})),
+);
+
+// Count unresolved alerts
+const { data: alertCount } = useAsyncData(
+	'registry-alerts',
+	async () => {
+		try {
+			const result = await $directus.request(
+				aggregate('registry_changelog' as any, {
+					aggregate: { countDistinct: 'id' },
+					query: {
+						filter: {
+							alert_level: { _in: ['warning', 'critical'] },
+							resolved: { _eq: false },
+						},
+					},
+				}),
+			);
+			const count = (result as any)?.[0]?.countDistinct?.id;
+			return count ? parseInt(count) : 0;
+		} catch {
+			return 0;
+		}
+	},
+	{ default: () => 0 },
+);
 </script>
 
 <template>
@@ -58,11 +165,11 @@ const { data: summary } = useAsyncData(
 		<div v-if="summary" class="mb-6 grid grid-cols-3 gap-4">
 			<div class="rounded-lg border border-gray-200 bg-white p-4 text-center dark:border-gray-700 dark:bg-gray-800">
 				<div class="text-3xl font-bold text-primary-600 dark:text-primary-400">{{ summary.totalAtoms }}</div>
-				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">nguyen tu</div>
+				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">nguyên tử</div>
 			</div>
 			<div class="rounded-lg border border-gray-200 bg-white p-4 text-center dark:border-gray-700 dark:bg-gray-800">
 				<div class="text-3xl font-bold text-gray-900 dark:text-white">{{ summary.totalCategories }}</div>
-				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">loai thuc the</div>
+				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">loại thực thể</div>
 			</div>
 			<div class="rounded-lg border border-gray-200 bg-white p-4 text-center dark:border-gray-700 dark:bg-gray-800">
 				<div
@@ -71,7 +178,20 @@ const { data: summary } = useAsyncData(
 				>
 					{{ summary.totalOrphans }}
 				</div>
-				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">mo coi</div>
+				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">mồ côi</div>
+			</div>
+		</div>
+
+		<!-- Alert banner -->
+		<div
+			v-if="alertCount && alertCount > 0"
+			class="mb-6 rounded-lg border border-red-300 bg-red-50 px-4 py-3 dark:border-red-700 dark:bg-red-900/20"
+		>
+			<div class="flex items-center gap-2">
+				<UIcon name="i-heroicons-exclamation-triangle" class="h-5 w-5 text-red-600 dark:text-red-400" />
+				<span class="font-medium text-red-800 dark:text-red-200">
+					{{ alertCount }} cảnh báo chưa xử lý
+				</span>
 			</div>
 		</div>
 
@@ -113,5 +233,33 @@ const { data: summary } = useAsyncData(
 				</span>
 			</template>
 		</SharedDirectusTable>
+
+		<!-- Nhật ký thay đổi gần đây -->
+		<div v-if="recentChanges && recentChanges.length > 0" class="mt-10">
+			<h2 class="mb-4 text-xl font-semibold text-gray-900 dark:text-white">Nhật ký thay đổi gần đây</h2>
+			<UTable
+				:rows="changelogRows"
+				:columns="changelogColumns"
+			>
+				<template #cell-time="{ row }">
+					<span class="text-gray-500 dark:text-gray-400">{{ row.time }}</span>
+				</template>
+				<template #cell-created="{ row }">
+					<span v-if="row.created > 0" class="font-medium text-emerald-600 dark:text-emerald-400">+{{ row.created }}</span>
+					<span v-else class="text-gray-300 dark:text-gray-600">0</span>
+				</template>
+				<template #cell-updated="{ row }">
+					<span v-if="row.updated > 0" class="font-medium text-blue-600 dark:text-blue-400">{{ row.updated }}</span>
+					<span v-else class="text-gray-300 dark:text-gray-600">0</span>
+				</template>
+				<template #cell-deleted="{ row }">
+					<span v-if="row.deleted > 0" class="font-medium text-red-600 dark:text-red-400">-{{ row.deleted }}</span>
+					<span v-else class="text-gray-300 dark:text-gray-600">0</span>
+				</template>
+				<template #cell-note="{ row }">
+					<UBadge v-if="row.hasAlert" color="yellow" variant="subtle" size="xs">{{ row.note }}</UBadge>
+				</template>
+			</UTable>
+		</div>
 	</div>
 </template>
