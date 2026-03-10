@@ -96,10 +96,12 @@ def api_post(path, data):
 
 def api_aggregate_count(collection, filter_qs=''):
     """Đếm live từ collection bằng aggregate API"""
-    path = f'/items/{collection}?aggregate[count]=id&limit=0'
+    path = f'/items/{collection}?aggregate[count]=id'
     if filter_qs:
         path += '&' + filter_qs
     resp = api_get(path)
+    if 'error' in resp:
+        return None
     data = resp.get('data', [])
     if data and isinstance(data, list) and len(data) > 0:
         return int(data[0].get('count', {}).get('id', 0) if isinstance(data[0].get('count'), dict) else data[0].get('count', 0))
@@ -142,7 +144,7 @@ for entry in changelog:
         changelog_stats[et]['update'] += 1
 
 # System issues count (live)
-issues_resp = api_get('/items/system_issues?aggregate[count]=id&limit=0&filter[status][_in]=mở,đang_xử_lý')
+issues_resp = api_get('/items/system_issues?aggregate[count]=id&filter[status][_in]=mở,đang_xử_lý')
 issues_data = issues_resp.get('data', [])
 live_issues_count = 0
 if issues_data and isinstance(issues_data, list) and len(issues_data) > 0:
@@ -150,7 +152,7 @@ if issues_data and isinstance(issues_data, list) and len(issues_data) > 0:
     live_issues_count = int(cnt.get('id', 0) if isinstance(cnt, dict) else cnt)
 
 # Changelog total count (live aggregate for verification)
-cl_agg = api_get('/items/registry_changelog?aggregate[count]=id&limit=0')
+cl_agg = api_get('/items/registry_changelog?aggregate[count]=id')
 cl_data = cl_agg.get('data', [])
 live_changelog_count = 0
 if cl_data and isinstance(cl_data, list) and len(cl_data) > 0:
