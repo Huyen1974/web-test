@@ -161,3 +161,11 @@ DOT=DOT tool    PG=Page         API=API endpoint CMP=Component
 EVT=Event       DEP=Dependency  AGT=Agent       CAT=Catalog entry
 Format: PREFIX-NNN (3+ số tự tăng)
 ```
+
+## TD-111: CODE = UNIQUE ID TOÀN HỆ THỐNG
+
+- **code (PREFIX-NNN) = unique ID duy nhất** cho cross-reference giữa các collection.
+- **KHÔNG dùng integer id** (auto-increment) làm foreign key hoặc cross-reference.
+- Integer id chỉ dùng nội bộ trong 1 collection (primary key).
+- Collections MỚI **PHẢI dùng UUID** làm primary key (không dùng auto-increment integer).
+- Khi tham chiếu entity khác: dùng code field (VD: `workflow_code = "WF-001"`), KHÔNG dùng `workflow_id = 1`.
