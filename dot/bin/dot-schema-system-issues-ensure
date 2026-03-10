@@ -1,0 +1,352 @@
+#!/usr/bin/env bash
+# CHECKED-NO-DUPLICATE: [searched dot/bin/ for "system-issues" — no match]
+# =============================================================================
+# dot-schema-system-issues-ensure - Ensure system_issues collection
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-03-10): Initial version for System Issues tracking
+#     - system_issues: tracks integrity issues detected by audits
+#     - 13 fields: code, title, description, entity_type, entity_code,
+#       issue_type, severity, source, detected_at, status, resolved_at,
+#       resolved_by, resolution
+#     - Idempotent: checks existence before create
+#     - Based on dot-schema-registry-changelog-ensure pattern
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOT_AUTH="${SCRIPT_DIR}/dot-auth"
+
+# Source environment configuration
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+COLLECTION="system_issues"
+
+# Logging
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_skip() { echo "[SKIP] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+require_cmds() {
+  for cmd in curl jq; do
+    command -v "$cmd" >/dev/null 2>&1 || { log_err "Missing required command: $cmd"; exit 1; }
+  done
+}
+
+api_request() {
+  local method="$1" url="$2" data="${3-}"
+  if [[ -n "${data-}" ]]; then
+    curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "$data" -w "\n%{http_code}"
+  else
+    curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -w "\n%{http_code}"
+  fi
+}
+
+# Required fields list (for verification)
+REQUIRED_FIELDS=(code title description entity_type entity_code issue_type severity source detected_at status resolved_at resolved_by resolution)
+
+field_payload() {
+  case "$1" in
+    code)
+      cat <<'JSON'
+{"field":"code","type":"string","meta":{"required":true,"interface":"input","width":"half","note":"Mã tự động: ISS-NNNN","options":{"placeholder":"ISS-0001"}},"schema":{"is_nullable":false,"is_unique":true,"max_length":20}}
+JSON
+      ;;
+    title)
+      cat <<'JSON'
+{"field":"title","type":"string","meta":{"required":true,"interface":"input","width":"full","note":"Tiêu đề vấn đề"},"schema":{"is_nullable":false,"max_length":255}}
+JSON
+      ;;
+    description)
+      cat <<'JSON'
+{"field":"description","type":"text","meta":{"interface":"input-multiline","width":"full","note":"Mô tả chi tiết vấn đề"},"schema":{"is_nullable":true}}
+JSON
+      ;;
+    entity_type)
+      cat <<'JSON'
+{"field":"entity_type","type":"string","meta":{"interface":"input","width":"half","note":"Loại thực thể liên quan"},"schema":{"is_nullable":true,"max_length":50}}
+JSON
+      ;;
+    entity_code)
+      cat <<'JSON'
+{"field":"entity_code","type":"string","meta":{"interface":"input","width":"half","note":"Mã thực thể liên quan"},"schema":{"is_nullable":true,"max_length":50}}
+JSON
+      ;;
+    issue_type)
+      cat <<'JSON'
+{"field":"issue_type","type":"string","meta":{"required":true,"interface":"select-dropdown","width":"half","note":"Phân loại vấn đề","options":{"choices":[{"text":"Lỗi lớp 2","value":"lỗi_lớp_2"},{"text":"Lỗi lớp 3","value":"lỗi_lớp_3"},{"text":"Thiếu mã định danh","value":"thiếu_mã_định_danh"},{"text":"Sai lệch dữ liệu","value":"sai_lệch_dữ_liệu"},{"text":"Thiếu quan hệ","value":"thiếu_quan_hệ"},{"text":"Link hỏng","value":"link_hỏng"}]}},"schema":{"is_nullable":false,"max_length":50}}
+JSON
+      ;;
+    severity)
+      cat <<'JSON'
+{"field":"severity","type":"string","meta":{"required":true,"interface":"select-dropdown","width":"half","note":"Mức độ nghiêm trọng","options":{"choices":[{"text":"Nghiêm trọng","value":"nghiêm_trọng"},{"text":"Cảnh báo","value":"cảnh_báo"},{"text":"Thông tin","value":"thông_tin"}]}},"schema":{"is_nullable":false,"max_length":20}}
+JSON
+      ;;
+    source)
+      cat <<'JSON'
+{"field":"source","type":"string","meta":{"interface":"input","width":"half","note":"Nguồn phát hiện vấn đề","default_value":"dot-layer-integrity-audit"},"schema":{"is_nullable":true,"max_length":100,"default_value":"dot-layer-integrity-audit"}}
+JSON
+      ;;
+    detected_at)
+      cat <<'JSON'
+{"field":"detected_at","type":"timestamp","meta":{"special":["date-created"],"readonly":true,"width":"half","note":"Thời điểm phát hiện"},"schema":{"is_nullable":false}}
+JSON
+      ;;
+    status)
+      cat <<'JSON'
+{"field":"status","type":"string","meta":{"required":true,"interface":"select-dropdown","width":"half","note":"Trạng thái xử lý","default_value":"mở","options":{"choices":[{"text":"Mở","value":"mở"},{"text":"Đang xử lý","value":"đang_xử_lý"},{"text":"Đã giải quyết","value":"đã_giải_quyết"},{"text":"Bỏ qua","value":"bỏ_qua"}]}},"schema":{"is_nullable":false,"max_length":20,"default_value":"mở"}}
+JSON
+      ;;
+    resolved_at)
+      cat <<'JSON'
+{"field":"resolved_at","type":"timestamp","meta":{"interface":"datetime","width":"half","note":"Thời điểm giải quyết"},"schema":{"is_nullable":true}}
+JSON
+      ;;
+    resolved_by)
+      cat <<'JSON'
+{"field":"resolved_by","type":"string","meta":{"interface":"input","width":"half","note":"Người giải quyết"},"schema":{"is_nullable":true,"max_length":100}}
+JSON
+      ;;
+    resolution)
+      cat <<'JSON'
+{"field":"resolution","type":"text","meta":{"interface":"input-multiline","width":"full","note":"Mô tả cách giải quyết"},"schema":{"is_nullable":true}}
+JSON
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+collection_exists() {
+  local resp body code
+  resp=$(api_request GET "${BASE_URL}/collections/${COLLECTION}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+  [[ "$code" == "200" ]]
+}
+
+field_exists() {
+  local field_name="$1"
+  local resp body code
+  resp=$(api_request GET "${BASE_URL}/fields/${COLLECTION}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+  if [[ "$code" == "200" ]]; then
+    echo "$body" | jq -e --arg field "$field_name" '.data[]? | select(.field == $field)' >/dev/null 2>&1
+    return $?
+  fi
+  return 1
+}
+
+create_collection() {
+  local payload
+  payload=$(jq -nc \
+    --arg collection "$COLLECTION" \
+    '{
+      collection: $collection,
+      schema: {},
+      meta: {
+        collection: $collection,
+        icon: "bug_report",
+        color: "#DC2626",
+        note: "Vấn đề hệ thống — Theo dõi lỗi phát hiện bởi kiểm tra toàn vẹn — Created by DOT v1.0.0",
+        display_template: "{{code}}: {{title}} [{{severity}}]",
+        sort_field: null,
+        archive_field: "status",
+        archive_value: "đã_giải_quyết",
+        unarchive_value: "mở"
+      }
+    }')
+
+  log_info "Creating collection ${COLLECTION}"
+  local resp body code
+  resp=$(api_request POST "${BASE_URL}/collections" "$payload")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to create collection ${COLLECTION} (HTTP $code)"
+    echo "$body" | head -c 300 >&2
+    exit 1
+  fi
+  log_ok "Collection ${COLLECTION} created"
+}
+
+create_field() {
+  local field_name="$1"
+  local payload resp body code
+  payload=$(field_payload "$field_name")
+
+  log_info "Creating field ${COLLECTION}.${field_name}"
+  resp=$(api_request POST "${BASE_URL}/fields/${COLLECTION}" "$payload")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to create field ${COLLECTION}.${field_name} (HTTP $code)"
+    echo "$body" | head -c 200 >&2
+    exit 1
+  fi
+  log_ok "Field ${COLLECTION}.${field_name} created"
+}
+
+verify_fields() {
+  local resp body code missing=()
+  resp=$(api_request GET "${BASE_URL}/fields/${COLLECTION}")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_err "Failed to list fields for ${COLLECTION} (HTTP $code)"
+    exit 1
+  fi
+
+  local field_count
+  field_count=$(echo "$body" | jq '.data | length')
+
+  for field in "${REQUIRED_FIELDS[@]}"; do
+    if ! echo "$body" | jq -e --arg field "$field" '.data[]? | select(.field == $field)' >/dev/null 2>&1; then
+      missing+=("$field")
+    fi
+  done
+
+  if [[ "${#missing[@]}" -gt 0 ]]; then
+    log_err "Missing required fields: ${missing[*]}"
+    exit 1
+  fi
+
+  log_ok "${COLLECTION}: All required fields present (${field_count} total, including id)"
+}
+
+show_help() {
+  cat << EOF
+dot-schema-system-issues-ensure v${VERSION}
+
+Ensures the system_issues collection exists in Directus with all
+required fields for tracking integrity issues.
+
+Usage:
+  dot-schema-system-issues-ensure [options]
+
+Options:
+  --local       Use local development environment
+  --cloud       Use cloud/production environment (default)
+  --dry-run     Show what would be done without making changes
+  --help, -h    Show this help message
+
+Collection: system_issues (13 fields + id)
+  - code             Mã tự động: ISS-NNNN (unique)
+  - title            Tiêu đề vấn đề (bắt buộc)
+  - description      Mô tả chi tiết vấn đề
+  - entity_type      Loại thực thể liên quan
+  - entity_code      Mã thực thể liên quan
+  - issue_type       Phân loại: lỗi_lớp_2|lỗi_lớp_3|thiếu_mã_định_danh|sai_lệch_dữ_liệu|thiếu_quan_hệ|link_hỏng
+  - severity         Mức độ: nghiêm_trọng|cảnh_báo|thông_tin
+  - source           Nguồn phát hiện (default: dot-layer-integrity-audit)
+  - detected_at      Thời điểm phát hiện (auto date-created)
+  - status           Trạng thái: mở|đang_xử_lý|đã_giải_quyết|bỏ_qua (default: mở)
+  - resolved_at      Thời điểm giải quyết
+  - resolved_by      Người giải quyết
+  - resolution       Mô tả cách giải quyết
+
+EOF
+  show_environment_help
+}
+
+main() {
+  local DRY_RUN=false
+
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h) show_help; exit 0 ;;
+      --dry-run) DRY_RUN=true ;;
+    esac
+  done
+
+  require_cmds
+  init_environment "$@"
+  BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: Schema System Issues Ensure v${VERSION}"
+  echo "========================================="
+  print_environment_banner "$@"
+  echo "Ensuring system_issues collection for integrity issue tracking"
+  echo ""
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log_warn "DRY RUN MODE - No changes will be made"
+    echo ""
+  fi
+
+  # Authentication
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    if [[ ! -f "$DOT_AUTH" ]]; then
+      log_err "dot-auth not found at ${DOT_AUTH}"
+      exit 1
+    fi
+    log_info "Authenticating with Directus..."
+    source "$DOT_AUTH" "$@"
+  fi
+
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "DOT_TOKEN is empty after authentication"
+    exit 1
+  fi
+
+  # === COLLECTION ===
+  echo ""
+  echo "--- Collection: ${COLLECTION} ---"
+
+  if collection_exists; then
+    log_skip "Collection '${COLLECTION}' already exists"
+  else
+    if [[ "$DRY_RUN" == "true" ]]; then
+      log_info "Would create collection '${COLLECTION}'"
+    else
+      create_collection
+    fi
+  fi
+
+  # === FIELDS ===
+  log_info "Ensuring required fields..."
+  for field in "${REQUIRED_FIELDS[@]}"; do
+    if field_exists "$field"; then
+      log_skip "Field ${COLLECTION}.${field} already exists"
+    else
+      if [[ "$DRY_RUN" == "true" ]]; then
+        log_info "Would create field ${COLLECTION}.${field}"
+      else
+        create_field "$field"
+      fi
+    fi
+  done
+
+  # === VERIFICATION ===
+  echo ""
+  if [[ "$DRY_RUN" != "true" ]]; then
+    log_info "Running final verification..."
+    if ! collection_exists; then
+      log_err "Collection ${COLLECTION} missing after ensure"
+      exit 1
+    fi
+    verify_fields
+  fi
+
+  log_ok "Collection system_issues ready"
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Schema System Issues Ensure - COMPLETE"
+  echo "========================================="
+}
+
+main "$@"

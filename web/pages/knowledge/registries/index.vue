@@ -120,6 +120,66 @@ const changelogRows = computed(() =>
 	})),
 );
 
+// Fetch open system issues
+const { data: systemIssues } = useAsyncData(
+	'registry-issues',
+	async () => {
+		try {
+			const items = await $directus.request(
+				readItems('system_issues' as any, {
+					fields: ['id', 'code', 'title', 'issue_type', 'severity', 'source', 'detected_at', 'entity_type', 'entity_code'],
+					filter: { status: { _in: ['mở', 'đang_xử_lý'] } },
+					sort: ['-detected_at'],
+					limit: 50,
+				}),
+			);
+			return items as any[];
+		} catch {
+			return null;
+		}
+	},
+	{ default: () => null },
+);
+
+const issuesSummary = computed(() => {
+	const items = systemIssues.value || [];
+	return {
+		total: items.length,
+		critical: items.filter((i: any) => i.severity === 'nghiêm_trọng').length,
+		warning: items.filter((i: any) => i.severity === 'cảnh_báo').length,
+		info: items.filter((i: any) => i.severity === 'thông_tin').length,
+	};
+});
+
+const issueColumns = [
+	{ key: 'code', label: 'Mã' },
+	{ key: 'title', label: 'Tiêu đề' },
+	{ key: 'issue_type', label: 'Loại lỗi' },
+	{ key: 'severity', label: 'Mức độ' },
+	{ key: 'source', label: 'Phát hiện bởi' },
+	{ key: 'time', label: 'Thời gian' },
+];
+
+const issueTypeLabels: Record<string, string> = {
+	'lỗi_lớp_2': 'Lớp 2 trống',
+	'lỗi_lớp_3': 'Lớp 3 lỗi',
+	'thiếu_mã_định_danh': 'Thiếu mã',
+	'sai_lệch_dữ_liệu': 'Sai lệch',
+	'thiếu_quan_hệ': 'Thiếu quan hệ',
+	'link_hỏng': 'Link hỏng',
+};
+
+const issueRows = computed(() =>
+	(systemIssues.value || []).map((i: any) => ({
+		code: i.code || '—',
+		title: i.title,
+		issue_type: issueTypeLabels[i.issue_type] || i.issue_type,
+		severity: i.severity,
+		source: i.source,
+		time: formatTime(i.detected_at),
+	})),
+);
+
 // Count unresolved alerts
 const { data: alertCount } = useAsyncData(
 	'registry-alerts',
@@ -258,6 +318,37 @@ const { data: alertCount } = useAsyncData(
 				</template>
 				<template #cell-note="{ row }">
 					<UBadge v-if="row.hasAlert" color="yellow" variant="subtle" size="xs">{{ row.note }}</UBadge>
+				</template>
+			</UTable>
+		</div>
+
+		<!-- Vấn đề hệ thống -->
+		<div v-if="systemIssues && systemIssues.length > 0" class="mt-10">
+			<h2 class="mb-2 text-xl font-semibold text-gray-900 dark:text-white">Vấn đề hệ thống</h2>
+			<p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
+				{{ issuesSummary.total }} vấn đề chưa giải quyết
+				<template v-if="issuesSummary.critical > 0">
+					(<span class="font-medium text-red-600 dark:text-red-400">{{ issuesSummary.critical }} nghiêm trọng</span><template v-if="issuesSummary.warning > 0">, {{ issuesSummary.warning }} cảnh báo</template>)
+				</template>
+				<template v-else-if="issuesSummary.warning > 0">
+					({{ issuesSummary.warning }} cảnh báo)
+				</template>
+			</p>
+			<UTable
+				:rows="issueRows"
+				:columns="issueColumns"
+			>
+				<template #cell-severity="{ row }">
+					<UBadge
+						:color="row.severity === 'nghiêm_trọng' ? 'red' : row.severity === 'cảnh_báo' ? 'yellow' : 'blue'"
+						variant="subtle"
+						size="xs"
+					>
+						{{ row.severity === 'nghiêm_trọng' ? 'Nghiêm trọng' : row.severity === 'cảnh_báo' ? 'Cảnh báo' : 'Thông tin' }}
+					</UBadge>
+				</template>
+				<template #cell-time="{ row }">
+					<span class="text-gray-500 dark:text-gray-400">{{ row.time }}</span>
 				</template>
 			</UTable>
 		</div>

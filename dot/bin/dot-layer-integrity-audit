@@ -1,0 +1,375 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-layer-integrity-audit — Layer 2+3 integrity audit for all entity types
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/ for "layer-integrity" — no match]
+# VERSION: 1.0.0
+#
+# Runs 5 checks × N entity types (from meta_catalog):
+#   CHECK 1 — Layer 2 page renders data (not empty)
+#   CHECK 2 — Items have code (PREFIX-NNN) identifiers
+#   CHECK 3 — Entity has relationships in entity_dependencies
+#   CHECK 4 — Dedicated page link works (if configured)
+#   CHECK 5 — Cross-check: meta_catalog.record_count == actual item count
+#
+# Issues found are written to system_issues collection (idempotent).
+#
+# Exit 0 = ALL PASS, Exit 1 = FAIL detected
+#
+# Usage:
+#   dot-layer-integrity-audit [--cloud|--local] [--dry-run] [--no-write]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+DRY_RUN=""
+NO_WRITE=""
+
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) DRY_RUN="yes" ;;
+    --no-write) NO_WRITE="yes" ;;
+    --help|-h)
+      head -20 "$0" | tail -18
+      show_environment_help
+      exit 0
+      ;;
+  esac
+done
+
+init_environment "$@"
+
+echo ""
+echo "═══════════════════════════════════════════════════════════"
+echo "  LỚP 2+3 INTEGRITY AUDIT v${VERSION}"
+echo "═══════════════════════════════════════════════════════════"
+print_environment_banner "$@"
+
+TOKEN="${DIRECTUS_TOKEN:-}"
+if [[ -z "$TOKEN" ]]; then
+  echo -e "${RED}[LỖI]${NC} Không thể xác thực với Directus" >&2
+  exit 1
+fi
+
+NUXT_BASE="${NUXT_URL:-https://vps.incomexsaigoncorp.vn}"
+
+# Create Python audit script
+tmp_py=$(mktemp /tmp/dot-layer-audit-XXXXXX.py)
+trap "rm -f '$tmp_py'" EXIT
+
+cat > "$tmp_py" << 'PYEOF'
+import json, os, sys, ssl, urllib.request, urllib.parse
+from datetime import datetime, timezone
+
+base_url = os.environ['DIRECTUS_URL']
+nuxt_url = os.environ['NUXT_BASE']
+token = os.environ['DIRECTUS_TOKEN']
+dry_run = os.environ.get('DRY_RUN', '') == 'yes'
+no_write = os.environ.get('NO_WRITE', '') == 'yes'
+
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+def api_get(path):
+    url = base_url + path
+    req = urllib.request.Request(url, headers={'Authorization': f'Bearer {token}'})
+    try:
+        resp = urllib.request.urlopen(req, context=ctx, timeout=30)
+        return json.loads(resp.read())
+    except Exception as e:
+        return {'error': str(e)}
+
+def api_post(path, data):
+    url = base_url + path
+    payload = json.dumps(data).encode()
+    req = urllib.request.Request(url, data=payload, headers={
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    }, method='POST')
+    try:
+        resp = urllib.request.urlopen(req, context=ctx, timeout=30)
+        return json.loads(resp.read())
+    except Exception as e:
+        return {'error': str(e)}
+
+def fetch_page(url):
+    """Fetch a page and return (status_code, body_text)"""
+    req = urllib.request.Request(url)
+    try:
+        resp = urllib.request.urlopen(req, context=ctx, timeout=15)
+        body = resp.read().decode('utf-8', errors='replace')
+        return resp.status, body
+    except urllib.error.HTTPError as e:
+        return e.code, ''
+    except Exception:
+        return 0, ''
+
+# Known code prefixes per entity_type
+CODE_PREFIXES = {
+    'catalog': 'CAT-', 'module': 'MOD-', 'workflow': 'WF-',
+    'workflow_step': 'ND-', 'wcr': 'WCR-', 'dot_tool': 'DOT-',
+    'page': 'PG-', 'collection': 'COL-', 'task': 'TASK-',
+    'agent': 'AGT-', 'checkpoint_type': 'CP-', 'checkpoint_set': 'CPS-',
+    'entity_dependency': 'DEP-', 'table_proposal': 'TP-',
+    'checkpoint_instance': 'CPI-', 'table': 'TBL-', 'changelog': '',
+}
+
+# ============================================================
+# Fetch meta_catalog
+# ============================================================
+resp = api_get('/items/meta_catalog?fields=id,code,name,entity_type,registry_collection,record_count,actual_count,status,ui_page&sort=code&limit=-1')
+catalog = resp.get('data', [])
+
+if not catalog:
+    print('[LỖI] Không thể đọc meta_catalog')
+    sys.exit(1)
+
+print(f'[INFO] Kiểm tra {len(catalog)} loại thực thể')
+print()
+
+PASS = 0
+FAIL = 0
+WARN = 0
+issues = []  # Collected issues to write
+
+def check_pass(et, msg):
+    global PASS
+    PASS += 1
+
+def check_fail(et, msg, issue_type, severity='nghiêm_trọng'):
+    global FAIL
+    FAIL += 1
+    print(f'  ❌ {msg}')
+    issues.append({
+        'entity_type': et.get('entity_type', ''),
+        'entity_code': et.get('code', ''),
+        'title': msg,
+        'issue_type': issue_type,
+        'severity': severity,
+        'source': 'dot-layer-integrity-audit',
+    })
+
+def check_warn(et, msg, issue_type):
+    global WARN
+    WARN += 1
+    print(f'  ⚠️  {msg}')
+    issues.append({
+        'entity_type': et.get('entity_type', ''),
+        'entity_code': et.get('code', ''),
+        'title': msg,
+        'issue_type': issue_type,
+        'severity': 'cảnh_báo',
+        'source': 'dot-layer-integrity-audit',
+    })
+
+# ============================================================
+# Run 5 checks per entity type
+# ============================================================
+results = []
+
+for entry in catalog:
+    et = entry.get('entity_type', '')
+    code = entry.get('code', '')
+    name = entry.get('name', '')
+    reg_col = entry.get('registry_collection', '')
+    rec_count = entry.get('record_count') or 0
+    act_count = entry.get('actual_count') or 0
+    status = entry.get('status', '')
+
+    if status not in ('active', 'published'):
+        continue
+
+    r = {
+        'code': code, 'name': name, 'et': et,
+        'c1': '—', 'c2': '—', 'c3': '—', 'c4': '—', 'c5': '—'
+    }
+
+    print(f'{code} {name} ({et}):')
+
+    # CHECK 1 — Layer 2 page renders data
+    page_url = f'{nuxt_url}/knowledge/registries/{et}'
+    http_code, body = fetch_page(page_url)
+    if http_code != 200:
+        check_fail(entry, f'{code} {name} — Lớp 2 trả mã {http_code}', 'lỗi_lớp_2')
+        r['c1'] = f'❌ HTTP {http_code}'
+    elif 'Chưa có bảng registry' in body:
+        check_fail(entry, f'{code} {name} — Lớp 2 thiếu cấu hình bảng registry', 'lỗi_lớp_2')
+        r['c1'] = '❌ Thiếu config'
+    elif 'Không có dữ liệu' in body and rec_count > 0:
+        check_fail(entry, f'{code} {name} — Lớp 2 trống dù có {rec_count} bản ghi', 'lỗi_lớp_2')
+        r['c1'] = '❌ TRỐNG'
+    elif body and len(body) > 500:
+        check_pass(entry, f'{code} Lớp 2 OK')
+        r['c1'] = '✅'
+    else:
+        check_warn(entry, f'{code} {name} — Lớp 2 nội dung ít ({len(body)}b)', 'lỗi_lớp_2')
+        r['c1'] = f'⚠️ {len(body)}b'
+
+    # CHECK 2 — Items have code identifiers
+    prefix = CODE_PREFIXES.get(et, '')
+    if reg_col and prefix:
+        code_resp = api_get(f'/items/{reg_col}?fields=code&filter[code][_nnull]=true&limit=0&meta=filter_count')
+        with_code = (code_resp.get('meta', {}).get('filter_count') or 0)
+        total_resp = api_get(f'/items/{reg_col}?limit=0&meta=total_count')
+        total = (total_resp.get('meta', {}).get('total_count') or 0)
+        if total > 0:
+            pct = round(with_code / total * 100)
+            if pct == 100:
+                check_pass(entry, f'{code} ID 100%')
+                r['c2'] = '100%'
+            elif pct >= 80:
+                check_warn(entry, f'{code} {name} — {pct}% items có mã định danh ({with_code}/{total})', 'thiếu_mã_định_danh')
+                r['c2'] = f'⚠️ {pct}%'
+            else:
+                check_fail(entry, f'{code} {name} — Chỉ {pct}% items có mã định danh ({with_code}/{total})', 'thiếu_mã_định_danh', 'cảnh_báo')
+                r['c2'] = f'❌ {pct}%'
+        else:
+            r['c2'] = '—'
+    else:
+        r['c2'] = '—'
+
+    # CHECK 3 — Entity has relationships in entity_dependencies
+    dep_resp = api_get(f'/items/entity_dependencies?filter[source_type][_eq]={urllib.parse.quote(et)}&limit=0&meta=filter_count')
+    dep_count = dep_resp.get('meta', {}).get('filter_count') or 0
+    if dep_count > 0:
+        check_pass(entry, f'{code} Quan hệ={dep_count}')
+        r['c3'] = str(dep_count)
+    elif et in ('changelog', 'table_proposal', 'checkpoint_instance'):
+        # These types may not have dependencies yet — acceptable
+        r['c3'] = '—'
+    else:
+        check_warn(entry, f'{code} {name} — Không có quan hệ entity_dependencies', 'thiếu_quan_hệ')
+        r['c3'] = '⚠️ 0'
+
+    # CHECK 4 — Dedicated page link works
+    ui_page = entry.get('ui_page', '')
+    if ui_page:
+        link_url = f'{nuxt_url}{ui_page}' if ui_page.startswith('/') else ui_page
+        link_code, _ = fetch_page(link_url)
+        if link_code == 200:
+            check_pass(entry, f'{code} Link OK')
+            r['c4'] = '✅'
+        else:
+            check_warn(entry, f'{code} {name} — Link riêng trả {link_code}: {ui_page}', 'link_hỏng')
+            r['c4'] = f'⚠️ {link_code}'
+    else:
+        r['c4'] = '—'
+
+    # CHECK 5 — Cross-check record_count consistency
+    if reg_col:
+        count_resp = api_get(f'/items/{reg_col}?limit=0&meta=total_count')
+        real_count = count_resp.get('meta', {}).get('total_count') or 0
+        if real_count == rec_count:
+            check_pass(entry, f'{code} Nhất quán ({rec_count})')
+            r['c5'] = '✅'
+        else:
+            check_fail(entry, f'{code} {name} — meta_catalog nói {rec_count} nhưng thực tế {real_count}', 'sai_lệch_dữ_liệu', 'cảnh_báo')
+            r['c5'] = f'❌ {rec_count}≠{real_count}'
+    else:
+        r['c5'] = '—'
+
+    results.append(r)
+    print()
+
+# ============================================================
+# Summary table
+# ============================================================
+print('═══════════════════════════════════════════════════════════')
+print(f'  TỔNG: {PASS} PASS, {WARN} CẢNH BÁO, {FAIL} LỖI')
+print('═══════════════════════════════════════════════════════════')
+print()
+print(f'{"Mã":<10} {"Tên":<30} {"Lớp2":<15} {"ID%":<10} {"QuanHệ":<10} {"Link":<10} {"NhấtQuán":<10}')
+print('─' * 95)
+for r in results:
+    print(f'{r["code"]:<10} {r["name"]:<30} {r["c1"]:<15} {r["c2"]:<10} {r["c3"]:<10} {r["c4"]:<10} {r["c5"]:<10}')
+
+# ============================================================
+# Write issues to system_issues (idempotent)
+# ============================================================
+if issues and not dry_run and not no_write:
+    print()
+    print(f'[GHI] Ghi {len(issues)} vấn đề vào system_issues...')
+    written = 0
+    skipped = 0
+    for issue in issues:
+        # Check for existing open issue with same entity_type + title
+        et_filter = urllib.parse.quote(issue['entity_type'])
+        title_filter = urllib.parse.quote(issue['title'])
+        existing = api_get(
+            f'/items/system_issues?filter[entity_type][_eq]={et_filter}'
+            f'&filter[title][_eq]={title_filter}'
+            f'&filter[status][_in]=mở,đang_xử_lý'
+            f'&limit=1&fields=id'
+        )
+        existing_items = existing.get('data', [])
+        if existing_items:
+            skipped += 1
+            continue
+
+        # Create new issue
+        result = api_post('/items/system_issues', {
+            'title': issue['title'],
+            'entity_type': issue['entity_type'],
+            'entity_code': issue['entity_code'],
+            'issue_type': issue['issue_type'],
+            'severity': issue['severity'],
+            'source': issue['source'],
+            'status': 'mở',
+        })
+        if 'error' not in result:
+            written += 1
+        else:
+            print(f'  [CẢNH BÁO] Không ghi được: {result["error"]}')
+
+    print(f'  Đã ghi: {written}, Bỏ qua (đã tồn tại): {skipped}')
+elif issues and (dry_run or no_write):
+    print()
+    print(f'[DRY RUN] Sẽ ghi {len(issues)} vấn đề (bỏ qua do --dry-run hoặc --no-write)')
+else:
+    print()
+    print('[TUYỆT] Không phát hiện vấn đề nào cần ghi.')
+
+# ============================================================
+# Issues list
+# ============================================================
+if issues:
+    print()
+    print('VẤN ĐỀ PHÁT HIỆN:')
+    for i, issue in enumerate(issues, 1):
+        sev = 'LỖI' if issue['severity'] == 'nghiêm_trọng' else 'CẢNH BÁO'
+        print(f'  {i}. [{sev}] {issue["entity_code"]} — {issue["title"]}')
+
+print()
+total = PASS + FAIL + WARN
+print('═══════════════════════════════════════════════════════════')
+print(f'  Kết quả: {PASS}/{total} PASS, {FAIL}/{total} LỖI, {WARN}/{total} CẢNH BÁO')
+print('═══════════════════════════════════════════════════════════')
+
+if FAIL > 0:
+    print('KẾT LUẬN: CÓ LỖI')
+    sys.exit(1)
+elif WARN > 0:
+    print('KẾT LUẬN: PASS VỚI CẢNH BÁO')
+    sys.exit(0)
+else:
+    print('KẾT LUẬN: TẤT CẢ PASS')
+    sys.exit(0)
+PYEOF
+
+DIRECTUS_URL="$DIRECTUS_URL" DIRECTUS_TOKEN="$TOKEN" NUXT_BASE="$NUXT_BASE" \
+  DRY_RUN="${DRY_RUN}" NO_WRITE="${NO_WRITE}" \
+  python3 "$tmp_py" < /dev/null
+
+exit_code=$?
+
+echo ""
+echo "═══════════════════════════════════════════════════════════"
+echo "  DOT Tool: Layer Integrity Audit - HOÀN THÀNH"
+echo "═══════════════════════════════════════════════════════════"
+
+exit $exit_code

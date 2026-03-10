@@ -7,7 +7,7 @@ const entityType = computed(() => route.params.entityType as string);
 // Map entity_type -> table_id for DirectusTable
 const tableIdMap: Record<string, string> = {
 	catalog: 'tbl_meta_catalog',
-	table: 'tbl_proposals_list',
+	table: 'tbl_table_registry',
 	module: 'tbl_registry_modules',
 	workflow: 'tbl_workflow_list',
 	workflow_step: 'tbl_workflow_steps',
@@ -23,6 +23,7 @@ const tableIdMap: Record<string, string> = {
 	table_proposal: 'tbl_proposals_list',
 	checkpoint_instance: 'tbl_checkpoint_instances',
 	changelog: 'tbl_registry_changelog',
+	system_issue: 'tbl_system_issues',
 };
 
 const tableId = computed(() => tableIdMap[entityType.value] || '');
