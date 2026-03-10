@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { readItems } from '@directus/sdk';
+import { readItems, aggregate } from '@directus/sdk';
 
 definePageMeta({
 	title: 'Danh mục hệ thống',
@@ -9,6 +9,27 @@ definePageMeta({
 function getRegistryLink(item: any) {
 	if (!item?.entity_type) return '/knowledge/registries';
 	return `/knowledge/registries/${item.entity_type}`;
+}
+
+function formatAction(action: string) {
+	if (!action) return '';
+	if (action.includes('create')) return 'created';
+	if (action.includes('update')) return 'updated';
+	if (action.includes('delete')) return 'deleted';
+	return action;
+}
+
+function formatTime(ts: string) {
+	if (!ts) return '';
+	const d = new Date(ts);
+	const now = new Date();
+	const diffMs = now.getTime() - d.getTime();
+	const diffMin = Math.floor(diffMs / 60000);
+	if (diffMin < 1) return 'vừa xong';
+	if (diffMin < 60) return `${diffMin} phút trước`;
+	const diffH = Math.floor(diffMin / 60);
+	if (diffH < 24) return `${diffH}h trước`;
+	return d.toLocaleDateString('vi-VN');
 }
 
 const { $directus } = useNuxtApp();
@@ -37,6 +58,72 @@ const { data: summary } = useAsyncData(
 	},
 	{ default: () => null },
 );
+
+// Fetch recent changelog entries
+const { data: recentChanges } = useAsyncData(
+	'registry-changelog',
+	async () => {
+		try {
+			const items = await $directus.request(
+				readItems('registry_changelog' as any, {
+					fields: ['id', 'timestamp', 'entity_type', 'entity_code', 'entity_name', 'action', 'alert_level'],
+					sort: ['-timestamp'],
+					limit: 10,
+				}),
+			);
+			return items as any[];
+		} catch {
+			return null;
+		}
+	},
+	{ default: () => null },
+);
+
+// UTable config for changelog
+const changelogColumns = [
+	{ key: 'time', label: 'Thời gian' },
+	{ key: 'type', label: 'Loại' },
+	{ key: 'entity', label: 'Thực thể' },
+	{ key: 'action', label: 'Hành động' },
+	{ key: 'alert', label: 'Cảnh báo' },
+];
+
+const changelogRows = computed(() =>
+	(recentChanges.value || []).map((e: any) => ({
+		time: formatTime(e.timestamp),
+		type: e.entity_type,
+		code: e.entity_code,
+		entityName: e.entity_name,
+		entity: e.entity_code || e.entity_name || '—',
+		action: formatAction(e.action),
+		alert: e.alert_level,
+	})),
+);
+
+// Count unresolved alerts
+const { data: alertCount } = useAsyncData(
+	'registry-alerts',
+	async () => {
+		try {
+			const result = await $directus.request(
+				aggregate('registry_changelog' as any, {
+					aggregate: { countDistinct: 'id' },
+					query: {
+						filter: {
+							alert_level: { _in: ['warning', 'critical'] },
+							resolved: { _eq: false },
+						},
+					},
+				}),
+			);
+			const count = (result as any)?.[0]?.countDistinct?.id;
+			return count ? parseInt(count) : 0;
+		} catch {
+			return 0;
+		}
+	},
+	{ default: () => 0 },
+);
 </script>
 
 <template>
@@ -58,11 +145,11 @@ const { data: summary } = useAsyncData(
 		<div v-if="summary" class="mb-6 grid grid-cols-3 gap-4">
 			<div class="rounded-lg border border-gray-200 bg-white p-4 text-center dark:border-gray-700 dark:bg-gray-800">
 				<div class="text-3xl font-bold text-primary-600 dark:text-primary-400">{{ summary.totalAtoms }}</div>
-				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">nguyen tu</div>
+				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">nguyên tử</div>
 			</div>
 			<div class="rounded-lg border border-gray-200 bg-white p-4 text-center dark:border-gray-700 dark:bg-gray-800">
 				<div class="text-3xl font-bold text-gray-900 dark:text-white">{{ summary.totalCategories }}</div>
-				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">loai thuc the</div>
+				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">loại thực thể</div>
 			</div>
 			<div class="rounded-lg border border-gray-200 bg-white p-4 text-center dark:border-gray-700 dark:bg-gray-800">
 				<div
@@ -71,7 +158,20 @@ const { data: summary } = useAsyncData(
 				>
 					{{ summary.totalOrphans }}
 				</div>
-				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">mo coi</div>
+				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">mồ côi</div>
+			</div>
+		</div>
+
+		<!-- Alert banner -->
+		<div
+			v-if="alertCount && alertCount > 0"
+			class="mb-6 rounded-lg border border-red-300 bg-red-50 px-4 py-3 dark:border-red-700 dark:bg-red-900/20"
+		>
+			<div class="flex items-center gap-2">
+				<UIcon name="i-heroicons-exclamation-triangle" class="h-5 w-5 text-red-600 dark:text-red-400" />
+				<span class="font-medium text-red-800 dark:text-red-200">
+					{{ alertCount }} cảnh báo chưa xử lý
+				</span>
 			</div>
 		</div>
 
@@ -113,5 +213,39 @@ const { data: summary } = useAsyncData(
 				</span>
 			</template>
 		</SharedDirectusTable>
+
+		<!-- Recent Changes -->
+		<div v-if="recentChanges && recentChanges.length > 0" class="mt-10">
+			<h2 class="mb-4 text-xl font-semibold text-gray-900 dark:text-white">Thay đổi Gần đây</h2>
+			<UTable
+				:rows="changelogRows"
+				:columns="changelogColumns"
+			>
+				<template #cell-time="{ row }">
+					<span class="text-gray-500 dark:text-gray-400">{{ row.time }}</span>
+				</template>
+				<template #cell-entity="{ row }">
+					<span v-if="row.code" class="font-medium text-gray-900 dark:text-white">{{ row.code }}</span>
+					<span v-if="row.entityName" class="ml-1 text-gray-500 dark:text-gray-400">{{ row.entityName }}</span>
+					<span v-if="!row.code && !row.entityName" class="italic text-gray-400">&mdash;</span>
+				</template>
+				<template #cell-action="{ row }">
+					<span
+						class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium"
+						:class="{
+							'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300': row.action === 'created',
+							'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300': row.action === 'updated',
+							'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300': row.action === 'deleted',
+						}"
+					>
+						{{ row.action }}
+					</span>
+				</template>
+				<template #cell-alert="{ row }">
+					<UBadge v-if="row.alert === 'warning'" color="yellow" variant="subtle" size="xs">warning</UBadge>
+					<UBadge v-else-if="row.alert === 'critical'" color="red" variant="subtle" size="xs">critical</UBadge>
+				</template>
+			</UTable>
+		</div>
 	</div>
 </template>

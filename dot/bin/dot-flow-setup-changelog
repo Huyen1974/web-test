@@ -1,0 +1,397 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-flow-setup-changelog — Create Directus Flows for registry changelog logging
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [grep dot/bin/ for "changelog" — no match except schema]
+# VERSION: 1.0.0
+#
+# Creates Directus Flows that log entity changes to registry_changelog collection.
+# For each priority collection: 1 create/update flow + 1 delete flow.
+#
+# Priority collections (5): dot_tools, workflows, modules, tasks, checkpoint_types
+#
+# Anti-loop: emitEvents=false on item-create prevents recursive trigger.
+# registry_changelog is EXCLUDED from trigger scope.
+#
+# Prerequisites:
+#   - registry_changelog collection must exist (run dot-schema-registry-changelog-ensure first)
+#
+# Usage:
+#   dot-flow-setup-changelog [--cloud|--local] [--dry-run]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+DRY_RUN=""
+ENV_FLAG=""
+
+for arg in "$@"; do
+  case "$arg" in
+    --local)  ENV_FLAG="--local" ;;
+    --cloud)  ENV_FLAG="--cloud" ;;
+    --dry-run) DRY_RUN="yes" ;;
+    --help|-h)
+      head -18 "$0" | tail -16
+      exit 0
+      ;;
+  esac
+done
+
+init_environment "$ENV_FLAG"
+print_environment_banner "$ENV_FLAG"
+
+TOKEN="${DIRECTUS_TOKEN:-}"
+if [[ -z "$TOKEN" ]]; then
+  echo -e "${RED}[ERROR]${NC} Failed to authenticate with Directus" >&2
+  exit 1
+fi
+
+echo "============================================================"
+echo "  Directus Flow Setup: Registry Changelog v${VERSION}"
+echo "============================================================"
+echo ""
+
+TOTAL_FLOWS=0
+FAILED_FLOWS=0
+
+# ---------------------------------------------------------------
+# Helper Functions
+# ---------------------------------------------------------------
+
+cleanup_existing_flows() {
+  local name="$1"
+  python3 -c "
+import urllib.request, json, sys, ssl, urllib.parse
+url = '${DIRECTUS_URL}'
+token = '${TOKEN}'
+name = '''$name'''
+headers = {'Authorization': f'Bearer {token}'}
+
+ctx = ssl.create_default_context()
+if url.startswith('https'):
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
+encoded = urllib.parse.quote(name, safe='')
+req = urllib.request.Request(f'{url}/flows?filter[name][_eq]={encoded}&fields=id', headers=headers)
+try:
+    resp = urllib.request.urlopen(req, context=ctx)
+    flows = json.loads(resp.read())['data']
+except Exception as e:
+    print(f'  Warning: Could not list flows: {e}', file=sys.stderr)
+    sys.exit(0)
+
+for f in flows:
+    fid = f['id']
+    print(f'  Removing existing flow {fid}...')
+    req = urllib.request.Request(f'{url}/flows/{fid}', headers=headers, method='DELETE')
+    try:
+        urllib.request.urlopen(req, context=ctx)
+    except Exception as e:
+        print(f'  Warning: Could not delete flow {fid}: {e}', file=sys.stderr)
+" 2>&1
+}
+
+create_flow() {
+  local payload="$1"
+  local response
+  response=$(curl -sf --max-time 15 -X POST \
+    "${DIRECTUS_URL}/flows" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "$payload" 2>/dev/null || echo "")
+
+  if [[ -z "$response" ]]; then
+    echo -e "${RED}[ERROR]${NC} Failed to create flow" >&2
+    return 1
+  fi
+
+  local flow_id
+  flow_id=$(echo "$response" | jq -r '.data.id // empty')
+  if [[ -z "$flow_id" || "$flow_id" == "null" ]]; then
+    echo -e "${RED}[ERROR]${NC} No flow ID returned" >&2
+    echo "$response" | jq . 2>/dev/null >&2 || echo "$response" >&2
+    return 1
+  fi
+
+  echo "$flow_id"
+}
+
+create_operation() {
+  local payload="$1"
+  local response
+  response=$(curl -sf --max-time 15 -X POST \
+    "${DIRECTUS_URL}/operations" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "$payload" 2>/dev/null || echo "")
+
+  if [[ -z "$response" ]]; then
+    echo -e "${RED}[ERROR]${NC} Failed to create operation" >&2
+    return 1
+  fi
+
+  local op_id
+  op_id=$(echo "$response" | jq -r '.data.id // empty')
+  if [[ -z "$op_id" || "$op_id" == "null" ]]; then
+    echo -e "${RED}[ERROR]${NC} No operation ID returned" >&2
+    echo "$response" | jq . 2>/dev/null >&2 || echo "$response" >&2
+    return 1
+  fi
+
+  echo "$op_id"
+}
+
+patch_resource() {
+  local resource="$1" id="$2" payload="$3"
+  curl -sf --max-time 15 -X PATCH \
+    "${DIRECTUS_URL}/${resource}/${id}" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "$payload" >/dev/null 2>&1
+}
+
+# ---------------------------------------------------------------
+# Setup changelog flow for create/update
+# Args: collection entity_type code_field name_field
+# ---------------------------------------------------------------
+setup_changelog_flow() {
+  local collection="$1" entity_type="$2" code_field="$3" name_field="$4"
+  local flow_name="[WATCHDOG] ${collection} Change → Changelog"
+
+  echo -e "${BOLD}${flow_name}${NC}"
+
+  if [[ -z "$DRY_RUN" ]]; then
+    cleanup_existing_flows "$flow_name"
+  fi
+
+  if [[ -n "$DRY_RUN" ]]; then
+    echo -e "  ${YELLOW}[DRY RUN]${NC} Would create flow with 2 operations"
+    TOTAL_FLOWS=$((TOTAL_FLOWS + 1))
+    return
+  fi
+
+  local flow_id
+  flow_id=$(create_flow "$(jq -n \
+    --arg name "$flow_name" \
+    --arg collection "$collection" \
+    '{
+      name: $name,
+      icon: "history",
+      color: "#059669",
+      status: "active",
+      trigger: "event",
+      accountability: "all",
+      options: {
+        type: "action",
+        scope: ["items.create", "items.update"],
+        collections: [$collection]
+      }
+    }')")
+
+  if [[ -z "$flow_id" ]]; then
+    echo -e "  ${RED}FAILED${NC}"
+    FAILED_FLOWS=$((FAILED_FLOWS + 1))
+    return
+  fi
+  echo -e "  Flow: ${GREEN}${flow_id}${NC}"
+
+  # Op1: Log gate
+  local gate_id
+  gate_id=$(create_operation "$(jq -n --arg flow "$flow_id" '{
+    flow: $flow,
+    name: "Gate",
+    key: "gate",
+    type: "log",
+    position_x: 10,
+    position_y: 1,
+    options: { message: "[WATCHDOG] {{$trigger.event}} on {{$trigger.collection}}" }
+  }')")
+
+  # Op2: Create changelog entry
+  local create_id
+  create_id=$(create_operation "$(jq -n \
+    --arg flow "$flow_id" \
+    --arg entity_type "$entity_type" \
+    --arg collection "$collection" \
+    --arg code_tpl "{{__DOLLAR__trigger.payload.${code_field}}}" \
+    --arg name_tpl "{{__DOLLAR__trigger.payload.${name_field}}}" \
+    '{
+      flow: $flow,
+      name: "Write Changelog",
+      key: "write_changelog",
+      type: "item-create",
+      position_x: 25,
+      position_y: 1,
+      options: {
+        collection: "registry_changelog",
+        emitEvents: false,
+        payload: {
+          entity_type: $entity_type,
+          entity_code: $code_tpl,
+          entity_name: $name_tpl,
+          action: "{{__DOLLAR__trigger.event}}",
+          collection_name: $collection,
+          changed_by: "directus_flow",
+          alert_level: "ok"
+        }
+      }
+    }' | sed 's/__DOLLAR__/$/g')")
+
+  # Chain: gate -> write_changelog
+  patch_resource "operations" "$gate_id" "$(jq -n --arg r "$create_id" '{resolve: $r}')"
+  patch_resource "flows" "$flow_id" "$(jq -n --arg op "$gate_id" '{operation: $op}')"
+  echo -e "  Chain: gate -> write_changelog ${GREEN}OK${NC}"
+  TOTAL_FLOWS=$((TOTAL_FLOWS + 1))
+}
+
+# ---------------------------------------------------------------
+# Setup changelog flow for delete
+# Args: collection entity_type
+# ---------------------------------------------------------------
+setup_delete_changelog_flow() {
+  local collection="$1" entity_type="$2"
+  local flow_name="[WATCHDOG] ${collection} Delete → Changelog"
+
+  echo -e "${BOLD}${flow_name}${NC}"
+
+  if [[ -z "$DRY_RUN" ]]; then
+    cleanup_existing_flows "$flow_name"
+  fi
+
+  if [[ -n "$DRY_RUN" ]]; then
+    echo -e "  ${YELLOW}[DRY RUN]${NC} Would create delete flow"
+    TOTAL_FLOWS=$((TOTAL_FLOWS + 1))
+    return
+  fi
+
+  local flow_id
+  flow_id=$(create_flow "$(jq -n \
+    --arg name "$flow_name" \
+    --arg collection "$collection" \
+    '{
+      name: $name,
+      icon: "history",
+      color: "#DC2626",
+      status: "active",
+      trigger: "event",
+      accountability: "all",
+      options: {
+        type: "action",
+        scope: ["items.delete"],
+        collections: [$collection]
+      }
+    }')")
+
+  if [[ -z "$flow_id" ]]; then
+    echo -e "  ${RED}FAILED${NC}"
+    FAILED_FLOWS=$((FAILED_FLOWS + 1))
+    return
+  fi
+  echo -e "  Flow: ${GREEN}${flow_id}${NC}"
+
+  # Op1: Log gate
+  local gate_id
+  gate_id=$(create_operation "$(jq -n --arg flow "$flow_id" '{
+    flow: $flow,
+    name: "Gate",
+    key: "gate",
+    type: "log",
+    position_x: 10,
+    position_y: 1,
+    options: { message: "[WATCHDOG] Delete on {{$trigger.collection}}" }
+  }')")
+
+  # Op2: Create changelog entry for delete
+  local create_id
+  create_id=$(create_operation "$(jq -n \
+    --arg flow "$flow_id" \
+    --arg entity_type "$entity_type" \
+    --arg collection "$collection" \
+    '{
+      flow: $flow,
+      name: "Write Delete Changelog",
+      key: "write_changelog",
+      type: "item-create",
+      position_x: 25,
+      position_y: 1,
+      options: {
+        collection: "registry_changelog",
+        emitEvents: false,
+        payload: {
+          entity_type: $entity_type,
+          action: "items.delete",
+          collection_name: $collection,
+          changed_by: "directus_flow",
+          alert_level: "ok"
+        }
+      }
+    }')")
+
+  # Chain: gate -> write_changelog
+  patch_resource "operations" "$gate_id" "$(jq -n --arg r "$create_id" '{resolve: $r}')"
+  patch_resource "flows" "$flow_id" "$(jq -n --arg op "$gate_id" '{operation: $op}')"
+  echo -e "  Chain: gate -> write_changelog ${GREEN}OK${NC}"
+  TOTAL_FLOWS=$((TOTAL_FLOWS + 1))
+}
+
+# ===============================================================
+# PRIORITY COLLECTIONS (5)
+# Format: collection | entity_type | code_field | name_field
+# ===============================================================
+
+echo "--- 1/5: dot_tools ---"
+setup_changelog_flow "dot_tools" "dot_tool" "code" "name"
+echo ""
+setup_delete_changelog_flow "dot_tools" "dot_tool"
+echo ""
+
+echo "--- 2/5: workflows ---"
+setup_changelog_flow "workflows" "workflow" "process_code" "title"
+echo ""
+setup_delete_changelog_flow "workflows" "workflow"
+echo ""
+
+echo "--- 3/5: modules ---"
+setup_changelog_flow "modules" "module" "code" "name"
+echo ""
+setup_delete_changelog_flow "modules" "module"
+echo ""
+
+echo "--- 4/5: tasks ---"
+setup_changelog_flow "tasks" "task" "code" "name"
+echo ""
+setup_delete_changelog_flow "tasks" "task"
+echo ""
+
+echo "--- 5/5: checkpoint_types ---"
+setup_changelog_flow "checkpoint_types" "checkpoint_type" "code" "name"
+echo ""
+setup_delete_changelog_flow "checkpoint_types" "checkpoint_type"
+echo ""
+
+# ===============================================================
+# Summary
+# ===============================================================
+echo "============================================================"
+if [[ $FAILED_FLOWS -eq 0 ]]; then
+  echo -e "${GREEN}[SUCCESS]${NC} Changelog flows configured: ${TOTAL_FLOWS} flows"
+else
+  echo -e "${YELLOW}[PARTIAL]${NC} Created ${TOTAL_FLOWS} flows, ${FAILED_FLOWS} failed"
+fi
+echo "============================================================"
+echo ""
+echo "Collections monitored (5):"
+echo "  1. dot_tools         → create/update + delete"
+echo "  2. workflows         → create/update + delete"
+echo "  3. modules           → create/update + delete"
+echo "  4. tasks             → create/update + delete"
+echo "  5. checkpoint_types  → create/update + delete"
+echo ""
+echo "Total flows: ${TOTAL_FLOWS} (5 create/update + 5 delete)"
+echo "Anti-loop: emitEvents=false on item-create operations"
+echo ""
