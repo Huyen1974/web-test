@@ -6,7 +6,7 @@
 # VERSION: 1.0.0
 #
 # Quét TẤT CẢ collections có field `code`, phát hiện trùng code giữa các
-# collections. Ghi system_issues nếu tìm thấy trùng.
+# collections. Ghi system_issues nếu trùng.
 #
 # Usage:
 #   dot-id-collision-check [--cloud] [--fix]
@@ -18,47 +18,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/environment.sh"
 
 VERSION="1.0.0"
-
-log_info() { echo "[INFO] $1"; }
-log_ok()   { echo "[OK]   $1"; }
-log_warn() { echo "[WARN] $1"; }
-log_err()  { echo "[ERR]  $1" >&2; }
-
-api_request() {
-  local method="$1" url="$2" data="${3-}"
-  if [[ -n "${data-}" ]]; then
-    curl -sS --globoff -X "$method" "$url" \
-      -H "Authorization: Bearer $DOT_TOKEN" \
-      -H "Content-Type: application/json" \
-      -d "$data" -w "\n%{http_code}"
-  else
-    curl -sS --globoff -X "$method" "$url" \
-      -H "Authorization: Bearer $DOT_TOKEN" \
-      -w "\n%{http_code}"
-  fi
-}
-
-# Collections that have a `code` field
-COLLECTIONS=(
-  "meta_catalog:code"
-  "table_registry:table_id"
-  "modules:code"
-  "workflows:process_code"
-  "workflow_steps:code"
-  "workflow_change_requests:code"
-  "dot_tools:code"
-  "ui_pages:code"
-  "collection_registry:code"
-  "tasks:code"
-  "agents:code"
-  "checkpoint_types:code"
-  "checkpoint_sets:code"
-  "checkpoint_instances:code"
-  "entity_dependencies:code"
-  "table_proposals:code"
-  "system_issues:code"
-)
-
 CREATE_ISSUES=false
 
 for arg in "$@"; do
@@ -88,7 +47,7 @@ if [[ -z "${DOT_TOKEN:-}" ]]; then
 fi
 
 if [[ -z "${DOT_TOKEN:-}" ]]; then
-  log_err "Xác thực thất bại"
+  echo "[ERR] Xác thực thất bại" >&2
   exit 1
 fi
 
@@ -97,105 +56,139 @@ echo "DOT Tool: ID Collision Check v${VERSION}"
 echo "========================================="
 print_environment_banner "$@"
 
-# Collect all codes across collections
-declare -A CODE_MAP  # code -> "collection1:id1,collection2:id2,..."
-TOTAL_CODES=0
-TOTAL_COLLECTIONS=0
+# Use Python for the actual work (portable, handles associative data)
+python3 - "$BASE_URL" "$DOT_TOKEN" "$CREATE_ISSUES" <<'PYEOF'
+import sys, json, subprocess
 
-for entry in "${COLLECTIONS[@]}"; do
-  IFS=':' read -r collection code_field <<< "$entry"
+BASE_URL = sys.argv[1]
+TOKEN = sys.argv[2]
+CREATE_ISSUES = sys.argv[3] == "true"
 
-  resp=$(api_request GET "${BASE_URL}/items/${collection}?fields=id,${code_field}&limit=-1")
-  body="${resp%$'\n'*}"
-  code="${resp##*$'\n'}"
+COLLECTIONS = [
+    ("meta_catalog", "code"),
+    ("table_registry", "table_id"),
+    ("modules", "code"),
+    ("workflows", "process_code"),
+    ("workflow_steps", "code"),
+    ("workflow_change_requests", "code"),
+    ("dot_tools", "code"),
+    ("ui_pages", "code"),
+    ("collection_registry", "code"),
+    ("tasks", "code"),
+    ("agents", "code"),
+    ("checkpoint_types", "code"),
+    ("checkpoint_sets", "code"),
+    ("checkpoint_instances", "code"),
+    ("entity_dependencies", "code"),
+    ("table_proposals", "code"),
+    ("system_issues", "code"),
+]
 
-  if [[ "$code" != "200" ]]; then
-    log_warn "Bỏ qua ${collection} (HTTP $code)"
-    continue
-  fi
+def api_get(path):
+    url = f"{BASE_URL}{path}"
+    result = subprocess.run(
+        ["curl", "-sS", "--globoff", "--max-time", "15", url,
+         "-H", f"Authorization: Bearer {TOKEN}"],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
 
-  TOTAL_COLLECTIONS=$((TOTAL_COLLECTIONS + 1))
-  count=$(echo "$body" | jq '.data | length')
+def api_post(path, data):
+    url = f"{BASE_URL}{path}"
+    result = subprocess.run(
+        ["curl", "-sS", "--globoff", "--max-time", "15", "-X", "POST", url,
+         "-H", f"Authorization: Bearer {TOKEN}",
+         "-H", "Content-Type: application/json",
+         "-d", json.dumps(data)],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
 
-  while IFS= read -r line; do
-    item_code=$(echo "$line" | jq -r '.[0]')
-    item_id=$(echo "$line" | jq -r '.[1]')
-    [[ -z "$item_code" || "$item_code" == "null" ]] && continue
+# Collect all codes: code -> [(collection, id), ...]
+code_map = {}
+total_codes = 0
+total_collections = 0
 
-    TOTAL_CODES=$((TOTAL_CODES + 1))
+for collection, code_field in COLLECTIONS:
+    resp = api_get(f"/items/{collection}?fields=id,{code_field}&limit=-1")
+    if not resp or "data" not in resp:
+        print(f"[WARN] Bỏ qua {collection}")
+        continue
 
-    if [[ -n "${CODE_MAP[$item_code]+x}" ]]; then
-      CODE_MAP[$item_code]="${CODE_MAP[$item_code]},${collection}:${item_id}"
-    else
-      CODE_MAP[$item_code]="${collection}:${item_id}"
-    fi
-  done < <(echo "$body" | jq -c ".data[] | [.${code_field}, .id]")
+    total_collections += 1
+    items = resp["data"]
+    count = len(items)
 
-  log_info "${collection}: ${count} items (code field: ${code_field})"
-done
+    for item in items:
+        c = item.get(code_field)
+        if not c or c == "null":
+            continue
+        total_codes += 1
+        key = str(c)
+        if key not in code_map:
+            code_map[key] = []
+        code_map[key].append((collection, item.get("id")))
 
-echo ""
-echo "========================================="
-echo "KẾT QUẢ KIỂM TRA"
-echo "========================================="
-echo ""
+    print(f"[INFO] {collection}: {count} items (code field: {code_field})")
 
-COLLISIONS=0
-COLLISION_DETAILS=()
+print()
+print("=========================================")
+print("KẾT QUẢ KIỂM TRA")
+print("=========================================")
+print()
 
-for code in "${!CODE_MAP[@]}"; do
-  locations="${CODE_MAP[$code]}"
-  # Count commas to detect multi-collection
-  comma_count=$(echo "$locations" | tr -cd ',' | wc -c | tr -d ' ')
-  if [[ "$comma_count" -gt 0 ]]; then
-    COLLISIONS=$((COLLISIONS + 1))
-    log_warn "TRÙNG: ${code} → ${locations}"
-    COLLISION_DETAILS+=("${code}|${locations}")
-  fi
-done
+collisions = []
+for code, locations in sorted(code_map.items()):
+    if len(locations) > 1:
+        # Check if they span multiple collections
+        cols = set(loc[0] for loc in locations)
+        if len(cols) > 1:
+            loc_str = ", ".join(f"{c}:{i}" for c, i in locations)
+            print(f"[WARN] TRÙNG: {code} → {loc_str}")
+            collisions.append((code, loc_str))
 
-echo ""
-echo "Tổng kết:"
-echo "  Collections quét: ${TOTAL_COLLECTIONS}"
-echo "  Tổng codes: ${TOTAL_CODES}"
-echo "  Trùng cross-collection: ${COLLISIONS}"
-echo ""
+print()
+print(f"Tổng kết:")
+print(f"  Collections quét: {total_collections}")
+print(f"  Tổng codes: {total_codes}")
+print(f"  Trùng cross-collection: {len(collisions)}")
+print()
 
-if [[ "$COLLISIONS" -eq 0 ]]; then
-  log_ok "Không phát hiện trùng code cross-collection"
-else
-  log_warn "Phát hiện ${COLLISIONS} trùng code!"
+if len(collisions) == 0:
+    print("[OK]   Không phát hiện trùng code cross-collection")
+else:
+    print(f"[WARN] Phát hiện {len(collisions)} trùng code!")
+    if CREATE_ISSUES:
+        print()
+        print("Ghi system_issues...")
+        for dup_code, dup_locs in collisions:
+            result = api_post("/items/system_issues", {
+                "title": f"ID Collision: {dup_code}",
+                "description": f"Code {dup_code} trùng ở nhiều collections: {dup_locs}",
+                "severity": "warning",
+                "category": "data_integrity",
+                "status": "open",
+                "source": "dot-id-collision-check",
+            })
+            if result:
+                print(f"[OK]   Đã ghi issue: {dup_code}")
+            else:
+                print(f"[WARN] Không ghi được issue cho {dup_code}")
 
-  if [[ "$CREATE_ISSUES" == "true" ]]; then
-    echo ""
-    echo "Ghi system_issues..."
-    for detail in "${COLLISION_DETAILS[@]}"; do
-      IFS='|' read -r dup_code dup_locs <<< "$detail"
-      issue_data=$(cat <<EOJSON
-{
-  "title": "ID Collision: ${dup_code}",
-  "description": "Code ${dup_code} trùng ở nhiều collections: ${dup_locs}",
-  "severity": "warning",
-  "category": "data_integrity",
-  "status": "open",
-  "source": "dot-id-collision-check"
-}
-EOJSON
-)
-      resp=$(api_request POST "${BASE_URL}/items/system_issues" "$issue_data")
-      code="${resp##*$'\n'}"
-      if [[ "$code" == "200" || "$code" == "204" ]]; then
-        log_ok "Đã ghi issue: ${dup_code}"
-      else
-        log_warn "Không ghi được issue cho ${dup_code} (HTTP $code)"
-      fi
-    done
-  fi
-fi
+print()
+print("=========================================")
+print("DOT Tool: ID Collision Check — HOÀN TẤT")
+print("=========================================")
 
-echo ""
-echo "========================================="
-echo "DOT Tool: ID Collision Check — HOÀN TẤT"
-echo "========================================="
-
-exit $([[ "$COLLISIONS" -eq 0 ]] && echo 0 || echo 1)
+sys.exit(0 if len(collisions) == 0 else 1)
+PYEOF
