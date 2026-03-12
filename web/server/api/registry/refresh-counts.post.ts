@@ -134,6 +134,53 @@ export default defineEventHandler(async (event) => {
 		}
 	}
 
+	// 4. Handle CAT-ALL: sum of all other entries (excluding CAT-ALL and CAT-999)
+	const catAll = catalog.find((e: any) => e.code === 'CAT-ALL');
+	if (catAll) {
+		const sumRecord = catalog
+			.filter((e: any) => e.code !== 'CAT-ALL' && e.code !== 'CAT-999' && e.registry_collection)
+			.reduce((sum: number, e: any) => sum + (e.record_count || 0), 0);
+		const sumActual = catalog
+			.filter((e: any) => e.code !== 'CAT-ALL' && e.code !== 'CAT-999' && e.registry_collection)
+			.reduce((sum: number, e: any) => sum + (e.actual_count || 0), 0);
+
+		// Use freshly-computed counts from this run
+		let freshRecord = 0;
+		let freshActual = 0;
+		for (const r of results) {
+			freshRecord += r.new_count;
+		}
+		// For actual: Model A actual = record, Model B actual from modelBCounts or existing
+		for (const entry of catalog) {
+			if (entry.code === 'CAT-ALL' || entry.code === 'CAT-999' || !entry.registry_collection) continue;
+			const sm = entry.source_model || 'A';
+			const result = results.find((r) => r.code === entry.code);
+			if (sm === 'A') {
+				freshActual += result ? result.new_count : (entry.actual_count || 0);
+			} else if (modelBCounts[entry.code] !== undefined) {
+				freshActual += modelBCounts[entry.code];
+			} else {
+				freshActual += entry.actual_count || 0;
+			}
+		}
+
+		try {
+			await $fetch(`${directusUrl}/items/meta_catalog/${catAll.id}`, {
+				method: 'PATCH',
+				headers,
+				body: {
+					record_count: freshRecord,
+					actual_count: freshActual,
+					last_scan_date: now,
+				},
+				timeout: 10000,
+			});
+			updated++;
+		} catch {
+			errors++;
+		}
+	}
+
 	return {
 		status: 'ok',
 		timestamp: now,
