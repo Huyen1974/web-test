@@ -3,14 +3,16 @@
 # =============================================================================
 # dot-pg-views-ensure — Tạo PostgreSQL tables + refresh function cho registry counting
 # =============================================================================
-# VERSION: 2.0.0
+# VERSION: 3.0.0
 # CHANGELOG:
 #   v1.0.0 (2026-03-12): Initial version — tried VIEWs (Directus can't introspect)
 #   v2.0.0 (2026-03-12): Switch to tables + PG function refresh_registry_counts()
-#     - v_registry_counts: table đếm record/orphan per entity type
-#     - v_registry_summary: table tổng hợp SUM/COUNT
-#     - refresh_registry_counts(): PG function để cập nhật cả 2 tables
-#     - Directus tự nhận tables (BASE TABLE), public READ permissions
+#   v3.0.0 (2026-03-12): 3 phương pháp đếm độc lập (6÷3=2)
+#     - count_a: SELECT count(*) trực tiếp
+#     - count_b: pg_stat_user_tables n_live_tup (PG system stats)
+#     - count_c: count WHERE code IS NOT NULL (entities có PREFIX-NNN)
+#     - cross_check: KHỚP/LỆCH (|count_a - count_b| ≤ 1)
+#     - orphan_count = count_a - count_c
 # =============================================================================
 
 set -euo pipefail
@@ -18,7 +20,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="2.0.0"
+VERSION="3.0.0"
 VPS_HOST="38.242.240.89"
 VPS_KEY="${HOME}/.ssh/contabo_vps"
 PG_CONTAINER="postgres"
@@ -101,8 +103,15 @@ CREATE TABLE IF NOT EXISTS v_registry_counts (
   cat_code text NOT NULL,
   entity_type text NOT NULL,
   record_count int NOT NULL DEFAULT 0,
-  orphan_count int NOT NULL DEFAULT 0
+  orphan_count int NOT NULL DEFAULT 0,
+  count_b int NOT NULL DEFAULT 0,
+  count_c int NOT NULL DEFAULT 0,
+  cross_check text NOT NULL DEFAULT ''
 );
+-- Add columns if upgrading from v2
+ALTER TABLE v_registry_counts ADD COLUMN IF NOT EXISTS count_b int NOT NULL DEFAULT 0;
+ALTER TABLE v_registry_counts ADD COLUMN IF NOT EXISTS count_c int NOT NULL DEFAULT 0;
+ALTER TABLE v_registry_counts ADD COLUMN IF NOT EXISTS cross_check text NOT NULL DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS v_registry_summary (
   id serial PRIMARY KEY,
@@ -112,32 +121,62 @@ CREATE TABLE IF NOT EXISTS v_registry_summary (
 );
 
 -- =============================================================================
--- refresh_registry_counts(): Cập nhật cả 2 tables từ live data
+-- refresh_registry_counts(): 3 phương pháp đếm độc lập (6÷3=2)
+--   count_a (record_count) = SELECT count(*) trực tiếp
+--   count_b = pg_stat_user_tables n_live_tup
+--   count_c = count WHERE code IS NOT NULL (có PREFIX-NNN)
+--   cross_check = KHỚP nếu |count_a - count_b| ≤ 1
 -- =============================================================================
 CREATE OR REPLACE FUNCTION refresh_registry_counts() RETURNS void AS $$
+DECLARE
+  r RECORD;
 BEGIN
   TRUNCATE v_registry_counts;
-  INSERT INTO v_registry_counts (id, cat_code, entity_type, record_count, orphan_count)
-  SELECT row_number() OVER ()::int, sub.* FROM (
-    SELECT 'CAT-000'::text, 'catalog'::text, count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int FROM meta_catalog
-    UNION ALL SELECT 'CAT-001', 'table', count(*)::int, count(*) FILTER (WHERE table_id IS NULL OR table_id = '')::int FROM table_registry
-    UNION ALL SELECT 'CAT-002', 'module', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int FROM modules
-    UNION ALL SELECT 'CAT-003', 'workflow', count(*)::int, count(*) FILTER (WHERE process_code IS NULL OR process_code = '')::int FROM workflows
-    UNION ALL SELECT 'CAT-004', 'workflow_step', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int FROM workflow_steps
-    UNION ALL SELECT 'CAT-005', 'wcr', count(*)::int, 0::int FROM workflow_change_requests
-    UNION ALL SELECT 'CAT-006', 'dot_tool', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int FROM dot_tools
-    UNION ALL SELECT 'CAT-007', 'page', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int FROM ui_pages
-    UNION ALL SELECT 'CAT-008', 'collection', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int FROM collection_registry
-    UNION ALL SELECT 'CAT-009', 'task', count(*)::int, 0::int FROM tasks
-    UNION ALL SELECT 'CAT-010', 'agent', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int FROM agents
-    UNION ALL SELECT 'CAT-011', 'checkpoint_type', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int FROM checkpoint_types
-    UNION ALL SELECT 'CAT-012', 'checkpoint_set', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int FROM checkpoint_sets
-    UNION ALL SELECT 'CAT-013', 'entity_dependency', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int FROM entity_dependencies
-    UNION ALL SELECT 'CAT-014', 'table_proposal', count(*)::int, 0::int FROM table_proposals
-    UNION ALL SELECT 'CAT-015', 'checkpoint_instance', count(*)::int, 0::int FROM checkpoint_instances
-    UNION ALL SELECT 'CAT-016', 'changelog', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int FROM registry_changelog
-    UNION ALL SELECT 'CAT-017', 'system_issue', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int FROM system_issues
+  INSERT INTO v_registry_counts (id, cat_code, entity_type, record_count, orphan_count, count_b, count_c, cross_check)
+  SELECT row_number() OVER ()::int, sub.cat_code, sub.entity_type, sub.count_a, sub.orphan_count, 0, sub.count_c, ''
+  FROM (
+    SELECT 'CAT-000'::text AS cat_code, 'catalog'::text AS entity_type, count(*)::int AS count_a, count(*) FILTER (WHERE code IS NULL OR code = '')::int AS orphan_count, count(*) FILTER (WHERE code IS NOT NULL AND code != '')::int AS count_c FROM meta_catalog
+    UNION ALL SELECT 'CAT-001', 'table', count(*)::int, count(*) FILTER (WHERE table_id IS NULL OR table_id = '')::int, count(*) FILTER (WHERE table_id IS NOT NULL AND table_id != '')::int FROM table_registry
+    UNION ALL SELECT 'CAT-002', 'module', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int, count(*) FILTER (WHERE code IS NOT NULL AND code != '')::int FROM modules
+    UNION ALL SELECT 'CAT-003', 'workflow', count(*)::int, count(*) FILTER (WHERE process_code IS NULL OR process_code = '')::int, count(*) FILTER (WHERE process_code IS NOT NULL AND process_code != '')::int FROM workflows
+    UNION ALL SELECT 'CAT-004', 'workflow_step', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int, count(*) FILTER (WHERE code IS NOT NULL AND code != '')::int FROM workflow_steps
+    UNION ALL SELECT 'CAT-005', 'wcr', count(*)::int, 0::int, 0::int FROM workflow_change_requests
+    UNION ALL SELECT 'CAT-006', 'dot_tool', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int, count(*) FILTER (WHERE code IS NOT NULL AND code != '')::int FROM dot_tools
+    UNION ALL SELECT 'CAT-007', 'page', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int, count(*) FILTER (WHERE code IS NOT NULL AND code != '')::int FROM ui_pages
+    UNION ALL SELECT 'CAT-008', 'collection', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int, count(*) FILTER (WHERE code IS NOT NULL AND code != '')::int FROM collection_registry
+    UNION ALL SELECT 'CAT-009', 'task', count(*)::int, 0::int, 0::int FROM tasks
+    UNION ALL SELECT 'CAT-010', 'agent', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int, count(*) FILTER (WHERE code IS NOT NULL AND code != '')::int FROM agents
+    UNION ALL SELECT 'CAT-011', 'checkpoint_type', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int, count(*) FILTER (WHERE code IS NOT NULL AND code != '')::int FROM checkpoint_types
+    UNION ALL SELECT 'CAT-012', 'checkpoint_set', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int, count(*) FILTER (WHERE code IS NOT NULL AND code != '')::int FROM checkpoint_sets
+    UNION ALL SELECT 'CAT-013', 'entity_dependency', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int, count(*) FILTER (WHERE code IS NOT NULL AND code != '')::int FROM entity_dependencies
+    UNION ALL SELECT 'CAT-014', 'table_proposal', count(*)::int, 0::int, 0::int FROM table_proposals
+    UNION ALL SELECT 'CAT-015', 'checkpoint_instance', count(*)::int, 0::int, 0::int FROM checkpoint_instances
+    UNION ALL SELECT 'CAT-016', 'changelog', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int, count(*) FILTER (WHERE code IS NOT NULL AND code != '')::int FROM registry_changelog
+    UNION ALL SELECT 'CAT-017', 'system_issue', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int, count(*) FILTER (WHERE code IS NOT NULL AND code != '')::int FROM system_issues
   ) sub;
+
+  -- Update count_b from pg_stat_user_tables
+  FOR r IN SELECT id, entity_type FROM v_registry_counts
+  LOOP
+    UPDATE v_registry_counts SET count_b = COALESCE((
+      SELECT n_live_tup::int FROM pg_stat_user_tables WHERE relname = (
+        CASE r.entity_type
+          WHEN 'catalog' THEN 'meta_catalog' WHEN 'table' THEN 'table_registry'
+          WHEN 'module' THEN 'modules' WHEN 'workflow' THEN 'workflows'
+          WHEN 'workflow_step' THEN 'workflow_steps' WHEN 'wcr' THEN 'workflow_change_requests'
+          WHEN 'dot_tool' THEN 'dot_tools' WHEN 'page' THEN 'ui_pages'
+          WHEN 'collection' THEN 'collection_registry' WHEN 'task' THEN 'tasks'
+          WHEN 'agent' THEN 'agents' WHEN 'checkpoint_type' THEN 'checkpoint_types'
+          WHEN 'checkpoint_set' THEN 'checkpoint_sets' WHEN 'entity_dependency' THEN 'entity_dependencies'
+          WHEN 'table_proposal' THEN 'table_proposals' WHEN 'checkpoint_instance' THEN 'checkpoint_instances'
+          WHEN 'changelog' THEN 'registry_changelog' WHEN 'system_issue' THEN 'system_issues'
+        END
+      )
+    ), 0) WHERE id = r.id;
+  END LOOP;
+
+  UPDATE v_registry_counts SET cross_check =
+    CASE WHEN abs(record_count - count_b) <= 1 THEN 'KHỚP' ELSE 'LỆCH' END;
 
   DELETE FROM v_registry_summary;
   INSERT INTO v_registry_summary (id, total_atoms, total_types, total_orphans)
