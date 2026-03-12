@@ -156,25 +156,27 @@ const changelogRows = computed(() =>
 	})),
 );
 
-// Crosscheck data: changelog stats per entity_type
-const { data: changelogStats } = useAsyncData(
-	'registry-crosscheck-stats',
+// PG-based crosscheck: fetch v_registry_counts for independent verification
+const { data: pgCrosscheck } = useAsyncData(
+	'registry-crosscheck-pg',
 	async () => {
 		try {
 			const items = await $directus.request(
-				readItems('registry_changelog' as any, {
-					fields: ['entity_type', 'action'],
+				readItems('v_registry_counts' as any, {
+					fields: ['cat_code', 'entity_type', 'record_count', 'count_b', 'count_c', 'cross_check'],
 					limit: -1,
 				}),
 			);
-			const stats: Record<string, { created: number; deleted: number }> = {};
-			for (const e of items as any[]) {
-				const et = e.entity_type || '';
-				if (!stats[et]) stats[et] = { created: 0, deleted: 0 };
-				if ((e.action || '').includes('create')) stats[et].created++;
-				else if ((e.action || '').includes('delete')) stats[et].deleted++;
+			const map: Record<string, { count_a: number; count_b: number; count_c: number; cross_check: string }> = {};
+			for (const r of items as any[]) {
+				map[r.entity_type] = {
+					count_a: r.record_count || 0,
+					count_b: r.count_b || 0,
+					count_c: r.count_c || 0,
+					cross_check: r.cross_check || '',
+				};
 			}
-			return stats;
+			return map;
 		} catch {
 			return {};
 		}
@@ -183,27 +185,14 @@ const { data: changelogStats } = useAsyncData(
 );
 
 function getCrosscheckStatus(item: any): { label: string; color: string } {
-	const baseline = item?.baseline_count || 0;
-	const record = item?.record_count || 0;
-	const actual = item?.actual_count || 0;
 	const et = item?.entity_type || '';
-	if (baseline <= 0) return { label: '—', color: 'gray' };
-
-	// Check 1: record_count vs actual_count
-	if (record !== actual) {
-		const d = actual - record;
-		return { label: `❌ lệch ${d > 0 ? '+' : ''}${d}`, color: 'red' };
+	const pg = (pgCrosscheck.value as any)?.[et];
+	if (!pg) return { label: '—', color: 'gray' };
+	if (pg.cross_check === 'KHỚP') {
+		return { label: `✅ ${pg.count_a}=${pg.count_b}`, color: 'green' };
 	}
-
-	// Check 2: baseline + changelog vs record_count
-	const stats = (changelogStats.value as any)?.[et] || { created: 0, deleted: 0 };
-	const expected = baseline + stats.created - stats.deleted;
-	if (record !== expected) {
-		const delta = record - expected;
-		return { label: `❌ lệch ${delta > 0 ? '+' : ''}${delta}`, color: 'red' };
-	}
-
-	return { label: '✅ khớp', color: 'green' };
+	const delta = pg.count_a - pg.count_b;
+	return { label: `❌ lệch ${delta > 0 ? '+' : ''}${delta}`, color: 'red' };
 }
 
 // Count unresolved alerts
@@ -255,7 +244,7 @@ const { data: alertCount } = useAsyncData(
 			</div>
 			<div class="rounded-lg border border-gray-200 bg-white p-4 text-center dark:border-gray-700 dark:bg-gray-800">
 				<div class="text-3xl font-bold text-gray-900 dark:text-white">{{ summary.totalCategories }}</div>
-				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">loại thực thể</div>
+				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">loại thực thể (+ 2 tổng hợp)</div>
 			</div>
 			<div class="rounded-lg border border-gray-200 bg-white p-4 text-center dark:border-gray-700 dark:bg-gray-800">
 				<div
@@ -318,11 +307,10 @@ const { data: alertCount } = useAsyncData(
 					{{ value }}
 				</span>
 			</template>
-			<template #cell-baseline_count="{ value, item }">
-				<span v-if="value > 0" class="text-xs" :class="getCrosscheckStatus(item).color === 'green' ? 'text-emerald-600 dark:text-emerald-400' : getCrosscheckStatus(item).color === 'red' ? 'text-red-600 dark:text-red-400' : 'text-gray-400'">
+			<template #cell-baseline_count="{ item }">
+				<span class="text-xs" :class="getCrosscheckStatus(item).color === 'green' ? 'text-emerald-600 dark:text-emerald-400' : getCrosscheckStatus(item).color === 'red' ? 'text-red-600 dark:text-red-400' : 'text-gray-400'">
 					{{ getCrosscheckStatus(item).label }}
 				</span>
-				<span v-else class="text-gray-300 dark:text-gray-600">—</span>
 			</template>
 			<template #cell-atom_group="{ value }">
 				<UBadge
