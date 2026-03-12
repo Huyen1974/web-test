@@ -239,7 +239,7 @@ const { data: alertCount } = useAsyncData(
 		<div v-if="summary" class="mb-6 grid grid-cols-3 gap-4">
 			<div class="rounded-lg border border-gray-200 bg-white p-4 text-center dark:border-gray-700 dark:bg-gray-800">
 				<div class="text-3xl font-bold text-primary-600 dark:text-primary-400">{{ summary.totalAtoms }}</div>
-				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">nguyên tử</div>
+				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">Tổng nguyên tử</div>
 			</div>
 			<div class="rounded-lg border border-gray-200 bg-white p-4 text-center dark:border-gray-700 dark:bg-gray-800">
 				<div class="text-3xl font-bold text-gray-900 dark:text-white">{{ summary.totalCategories }}</div>

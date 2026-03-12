@@ -30,6 +30,10 @@ export default defineEventHandler(async (event) => {
 	const directusUrl = config.directusInternalUrl || config.public?.directusUrl || 'https://directus.incomexsaigoncorp.vn';
 	const token = config.directusServiceToken || process.env.NUXT_DIRECTUS_SERVICE_TOKEN;
 
+	// Optional Model B counts from request body (passed by CI deploy step)
+	const body = await readBody(event).catch(() => null);
+	const modelBCounts: Record<string, number> = body?.modelBCounts || {};
+
 	if (!token) {
 		throw createError({ statusCode: 500, message: 'Service token not configured' });
 	}
@@ -111,9 +115,11 @@ export default defineEventHandler(async (event) => {
 			// Model A: Directus IS the source → actual = record, orphan = 0
 			patch.actual_count = newCount;
 			patch.orphan_count = 0;
+		} else if (modelBCounts[entry.code] !== undefined) {
+			// Model B: CI passed filesystem counts → update actual_count
+			patch.actual_count = modelBCounts[entry.code];
 		}
-		// Model B: DO NOT touch actual_count or orphan_count
-		// Those require filesystem counting (handled by CLI script)
+		// Model B without CI counts: DO NOT touch actual_count (CLI only)
 
 		try {
 			await $fetch(`${directusUrl}/items/meta_catalog/${entry.id}`, {
