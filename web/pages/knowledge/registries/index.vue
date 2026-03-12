@@ -57,7 +57,7 @@ const { data: summary } = useAsyncData(
 			const countable = active.filter((e) => e.code !== 'CAT-ALL' && e.code !== 'CAT-999');
 			return {
 				totalAtoms: countable.reduce((sum, e) => sum + (e.record_count || 0), 0),
-				totalCategories: countable.length,
+				totalCategories: active.length,
 				totalOrphans: countable.reduce((sum, e) => sum + (e.orphan_count || 0), 0),
 			};
 		} catch {
