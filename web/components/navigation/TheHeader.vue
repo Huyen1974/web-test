@@ -46,6 +46,36 @@ const {
 	},
 );
 
+const knowledgeNavItem = {
+	id: 'knowledge-nav-static',
+	has_children: false,
+	icon: 'menu_book',
+	label: null,
+	type: 'url',
+	url: '/knowledge',
+	title: 'Knowledge',
+};
+
+const modulesNavItem = {
+	id: 'modules-nav-static',
+	has_children: false,
+	icon: 'view_module',
+	label: null,
+	type: 'url',
+	url: '/knowledge/modules',
+	title: 'Modules',
+};
+
+const tasksNavItem = {
+	id: 'tasks-nav-static',
+	has_children: false,
+	icon: 'task_alt',
+	label: null,
+	type: 'url',
+	url: '/knowledge/current-tasks',
+	title: 'Tasks',
+};
+
 const workflowNavItem = {
 	id: 'workflow-nav-static',
 	has_children: false,
@@ -66,7 +96,7 @@ const registriesNavItem = {
 	title: 'Registries',
 };
 
-const staticNavItems = [workflowNavItem, registriesNavItem];
+const staticNavItems = [knowledgeNavItem, modulesNavItem, tasksNavItem, workflowNavItem, registriesNavItem];
 
 const navigationItems = computed(() => {
 	const items = [...(navigation.value?.items || [])];
