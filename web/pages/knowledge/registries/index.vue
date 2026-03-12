@@ -47,16 +47,18 @@ const { data: summary } = useAsyncData(
 		try {
 			const items = await $directus.request(
 				readItems('meta_catalog' as any, {
-					fields: ['record_count', 'orphan_count', 'status'],
+					fields: ['code', 'record_count', 'orphan_count', 'status'],
 					limit: -1,
 				}),
 			);
 			const entries = items as any[];
 			const active = entries.filter((e) => e.status === 'published' || e.status === 'active');
+			// Exclude CAT-ALL and CAT-999 from sums to avoid double counting
+			const countable = active.filter((e) => e.code !== 'CAT-ALL' && e.code !== 'CAT-999');
 			return {
-				totalAtoms: active.reduce((sum, e) => sum + (e.record_count || 0), 0),
-				totalCategories: active.length,
-				totalOrphans: active.reduce((sum, e) => sum + (e.orphan_count || 0), 0),
+				totalAtoms: countable.reduce((sum, e) => sum + (e.record_count || 0), 0),
+				totalCategories: countable.length,
+				totalOrphans: countable.reduce((sum, e) => sum + (e.orphan_count || 0), 0),
 			};
 		} catch {
 			return null;
@@ -184,14 +186,26 @@ const { data: changelogStats } = useAsyncData(
 
 function getCrosscheckStatus(item: any): { label: string; color: string } {
 	const baseline = item?.baseline_count || 0;
+	const record = item?.record_count || 0;
 	const actual = item?.actual_count || 0;
 	const et = item?.entity_type || '';
 	if (baseline <= 0) return { label: '—', color: 'gray' };
+
+	// Check 1: record_count vs actual_count
+	if (record !== actual) {
+		const d = actual - record;
+		return { label: `❌ lệch ${d > 0 ? '+' : ''}${d}`, color: 'red' };
+	}
+
+	// Check 2: baseline + changelog vs record_count
 	const stats = (changelogStats.value as any)?.[et] || { created: 0, deleted: 0 };
-	const nguoc = baseline + stats.created - stats.deleted;
-	if (actual === nguoc) return { label: '✅ khớp', color: 'green' };
-	const delta = actual - nguoc;
-	return { label: `❌ lệch ${delta > 0 ? '+' : ''}${delta}`, color: 'red' };
+	const expected = baseline + stats.created - stats.deleted;
+	if (record !== expected) {
+		const delta = record - expected;
+		return { label: `❌ lệch ${delta > 0 ? '+' : ''}${delta}`, color: 'red' };
+	}
+
+	return { label: '✅ khớp', color: 'green' };
 }
 
 // Count unresolved alerts
