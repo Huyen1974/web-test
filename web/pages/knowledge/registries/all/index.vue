@@ -46,11 +46,19 @@ const { data: catalogEntries } = useAsyncData(
 	{ default: () => [] },
 );
 
-// Map entity_type -> display name + atom_group
+// Map entity_type -> display name + atom_group (from catalogEntries or allAtoms as fallback)
 const entityMeta = computed(() => {
 	const map: Record<string, { name: string; atomGroup: string }> = {};
-	for (const e of catalogEntries.value as any[]) {
-		map[e.entity_type] = { name: e.name || e.entity_type, atomGroup: e.atom_group || '' };
+	const entries = catalogEntries.value as any[];
+	if (entries.length) {
+		for (const e of entries) {
+			map[e.entity_type] = { name: e.name || e.entity_type, atomGroup: e.atom_group || '' };
+		}
+	} else {
+		// Derive from allAtoms when catalogEntries hasn't loaded yet
+		for (const a of allAtoms.value || []) {
+			if (!map[a.entityType]) map[a.entityType] = { name: a.entityType, atomGroup: a.atomGroup };
+		}
 	}
 	return map;
 });
@@ -64,11 +72,18 @@ const GROUP_LABELS: Record<string, string> = {
 	'giám_sát': 'Giám sát',
 };
 
-// Fetch all atoms from all collections
+// Fetch all atoms from all collections (fetches catalog inline to avoid SSR race)
 const { data: allAtoms, status: loadStatus } = useAsyncData(
 	'all-atoms-data',
 	async () => {
-		const entries = catalogEntries.value as any[];
+		// Fetch catalog inline to avoid SSR race condition with separate useAsyncData
+		const entries = (await $directus.request(
+			readItems('meta_catalog' as any, {
+				fields: ['entity_type', 'name', 'registry_collection', 'atom_group', 'status'],
+				filter: { status: { _in: ['active', 'published'] } },
+				limit: -1,
+			}),
+		)) as any[];
 		if (!entries.length) return [];
 
 		const results: Array<{ code: string; name: string; entityType: string; atomGroup: string }> = [];
@@ -100,7 +115,7 @@ const { data: allAtoms, status: loadStatus } = useAsyncData(
 		}
 		return results;
 	},
-	{ default: () => [], watch: [catalogEntries] },
+	{ default: () => [] },
 );
 
 // Filters

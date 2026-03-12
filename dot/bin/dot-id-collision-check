@@ -1,0 +1,201 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-id-collision-check — Phát hiện trùng code cross-collection (TD-111)
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-*collision* — no existing tool]
+# VERSION: 1.0.0
+#
+# Quét TẤT CẢ collections có field `code`, phát hiện trùng code giữa các
+# collections. Ghi system_issues nếu tìm thấy trùng.
+#
+# Usage:
+#   dot-id-collision-check [--cloud] [--fix]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+api_request() {
+  local method="$1" url="$2" data="${3-}"
+  if [[ -n "${data-}" ]]; then
+    curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "$data" -w "\n%{http_code}"
+  else
+    curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -w "\n%{http_code}"
+  fi
+}
+
+# Collections that have a `code` field
+COLLECTIONS=(
+  "meta_catalog:code"
+  "table_registry:table_id"
+  "modules:code"
+  "workflows:process_code"
+  "workflow_steps:code"
+  "workflow_change_requests:code"
+  "dot_tools:code"
+  "ui_pages:code"
+  "collection_registry:code"
+  "tasks:code"
+  "agents:code"
+  "checkpoint_types:code"
+  "checkpoint_sets:code"
+  "checkpoint_instances:code"
+  "entity_dependencies:code"
+  "table_proposals:code"
+  "system_issues:code"
+)
+
+CREATE_ISSUES=false
+
+for arg in "$@"; do
+  case "$arg" in
+    --fix) CREATE_ISSUES=true ;;
+    --help|-h)
+      echo "dot-id-collision-check v${VERSION} — Phát hiện trùng code cross-collection"
+      echo ""
+      echo "Usage:"
+      echo "  dot-id-collision-check [--cloud]        Kiểm tra trùng code"
+      echo "  dot-id-collision-check [--cloud] --fix   Kiểm tra + ghi system_issues"
+      echo ""
+      exit 0
+      ;;
+  esac
+done
+
+init_environment "$@"
+BASE_URL="$DIRECTUS_URL"
+
+# Auth
+if [[ -z "${DOT_TOKEN:-}" ]]; then
+  local_auth="${SCRIPT_DIR}/dot-auth"
+  if [[ -f "$local_auth" ]]; then
+    source "$local_auth" "$@"
+  fi
+fi
+
+if [[ -z "${DOT_TOKEN:-}" ]]; then
+  log_err "Xác thực thất bại"
+  exit 1
+fi
+
+echo "========================================="
+echo "DOT Tool: ID Collision Check v${VERSION}"
+echo "========================================="
+print_environment_banner "$@"
+
+# Collect all codes across collections
+declare -A CODE_MAP  # code -> "collection1:id1,collection2:id2,..."
+TOTAL_CODES=0
+TOTAL_COLLECTIONS=0
+
+for entry in "${COLLECTIONS[@]}"; do
+  IFS=':' read -r collection code_field <<< "$entry"
+
+  resp=$(api_request GET "${BASE_URL}/items/${collection}?fields=id,${code_field}&limit=-1")
+  body="${resp%$'\n'*}"
+  code="${resp##*$'\n'}"
+
+  if [[ "$code" != "200" ]]; then
+    log_warn "Bỏ qua ${collection} (HTTP $code)"
+    continue
+  fi
+
+  TOTAL_COLLECTIONS=$((TOTAL_COLLECTIONS + 1))
+  count=$(echo "$body" | jq '.data | length')
+
+  while IFS= read -r line; do
+    item_code=$(echo "$line" | jq -r '.[0]')
+    item_id=$(echo "$line" | jq -r '.[1]')
+    [[ -z "$item_code" || "$item_code" == "null" ]] && continue
+
+    TOTAL_CODES=$((TOTAL_CODES + 1))
+
+    if [[ -n "${CODE_MAP[$item_code]+x}" ]]; then
+      CODE_MAP[$item_code]="${CODE_MAP[$item_code]},${collection}:${item_id}"
+    else
+      CODE_MAP[$item_code]="${collection}:${item_id}"
+    fi
+  done < <(echo "$body" | jq -c ".data[] | [.${code_field}, .id]")
+
+  log_info "${collection}: ${count} items (code field: ${code_field})"
+done
+
+echo ""
+echo "========================================="
+echo "KẾT QUẢ KIỂM TRA"
+echo "========================================="
+echo ""
+
+COLLISIONS=0
+COLLISION_DETAILS=()
+
+for code in "${!CODE_MAP[@]}"; do
+  locations="${CODE_MAP[$code]}"
+  # Count commas to detect multi-collection
+  comma_count=$(echo "$locations" | tr -cd ',' | wc -c | tr -d ' ')
+  if [[ "$comma_count" -gt 0 ]]; then
+    COLLISIONS=$((COLLISIONS + 1))
+    log_warn "TRÙNG: ${code} → ${locations}"
+    COLLISION_DETAILS+=("${code}|${locations}")
+  fi
+done
+
+echo ""
+echo "Tổng kết:"
+echo "  Collections quét: ${TOTAL_COLLECTIONS}"
+echo "  Tổng codes: ${TOTAL_CODES}"
+echo "  Trùng cross-collection: ${COLLISIONS}"
+echo ""
+
+if [[ "$COLLISIONS" -eq 0 ]]; then
+  log_ok "Không phát hiện trùng code cross-collection"
+else
+  log_warn "Phát hiện ${COLLISIONS} trùng code!"
+
+  if [[ "$CREATE_ISSUES" == "true" ]]; then
+    echo ""
+    echo "Ghi system_issues..."
+    for detail in "${COLLISION_DETAILS[@]}"; do
+      IFS='|' read -r dup_code dup_locs <<< "$detail"
+      issue_data=$(cat <<EOJSON
+{
+  "title": "ID Collision: ${dup_code}",
+  "description": "Code ${dup_code} trùng ở nhiều collections: ${dup_locs}",
+  "severity": "warning",
+  "category": "data_integrity",
+  "status": "open",
+  "source": "dot-id-collision-check"
+}
+EOJSON
+)
+      resp=$(api_request POST "${BASE_URL}/items/system_issues" "$issue_data")
+      code="${resp##*$'\n'}"
+      if [[ "$code" == "200" || "$code" == "204" ]]; then
+        log_ok "Đã ghi issue: ${dup_code}"
+      else
+        log_warn "Không ghi được issue cho ${dup_code} (HTTP $code)"
+      fi
+    done
+  fi
+fi
+
+echo ""
+echo "========================================="
+echo "DOT Tool: ID Collision Check — HOÀN TẤT"
+echo "========================================="
+
+exit $([[ "$COLLISIONS" -eq 0 ]] && echo 0 || echo 1)
