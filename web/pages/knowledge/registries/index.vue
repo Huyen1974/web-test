@@ -40,25 +40,23 @@ function formatMinuteDisplay(minuteKey: string) {
 
 const { $directus } = useNuxtApp();
 
-// Fetch summary stats from meta_catalog
+// Fetch summary stats from PG-backed v_registry_summary table
 const { data: summary } = useAsyncData(
 	'registry-summary',
 	async () => {
 		try {
 			const items = await $directus.request(
-				readItems('meta_catalog' as any, {
-					fields: ['code', 'record_count', 'orphan_count', 'status'],
-					limit: -1,
+				readItems('v_registry_summary' as any, {
+					fields: ['total_atoms', 'total_types', 'total_orphans'],
+					limit: 1,
 				}),
 			);
-			const entries = items as any[];
-			const active = entries.filter((e) => e.status === 'published' || e.status === 'active');
-			// Exclude CAT-ALL and CAT-999 from sums to avoid double counting
-			const countable = active.filter((e) => e.code !== 'CAT-ALL' && e.code !== 'CAT-999');
+			const row = (items as any[])?.[0];
+			if (!row) return null;
 			return {
-				totalAtoms: countable.reduce((sum, e) => sum + (e.record_count || 0), 0),
-				totalCategories: active.length,
-				totalOrphans: countable.reduce((sum, e) => sum + (e.orphan_count || 0), 0),
+				totalAtoms: row.total_atoms || 0,
+				totalCategories: row.total_types || 0,
+				totalOrphans: row.total_orphans || 0,
 			};
 		} catch {
 			return null;
