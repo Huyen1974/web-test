@@ -152,6 +152,10 @@ jobs:
             echo "Waiting for Nuxt to start..."
             sleep 15
 
+            # Reload nginx to refresh upstream DNS (nuxt may have new IP after restart)
+            docker exec incomex-nginx nginx -s reload 2>/dev/null || true
+            sleep 2
+
             # Health checks
             echo "=== Health Checks ==="
             FAILED=0
@@ -318,6 +322,10 @@ jobs:
             # Wait for services to be healthy
             echo "Waiting for services to stabilize..."
             sleep 15
+
+            # Reload nginx to refresh upstream DNS (containers may have new IPs after restart)
+            docker exec incomex-nginx nginx -s reload 2>/dev/null || true
+            sleep 2
 
             # Health checks
             echo "=== Health Checks ==="
