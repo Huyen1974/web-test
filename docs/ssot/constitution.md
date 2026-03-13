@@ -1,3 +1,5 @@
+> **[S115 AMENDMENT — 2026-03-13]** Phụ lục E "MySQL First" đã RETIRED. VPS Directus đã chuyển sang PostgreSQL 16. Mọi references đến MySQL trong tài liệu này là lịch sử. DB hiện tại: `DB_CLIENT=pg`, container `postgres`.
+
 # 📜 Hiến Pháp Hạ Tầng Agent Data – Version 1.11e (Final Freeze)
 
 Updated: August 04, 2025 Purpose: Supreme principles governing Agent Data Langroid. All Laws and plans MUST comply. Scope: agent-data-test / agent-data-production Changes from v1.11d:

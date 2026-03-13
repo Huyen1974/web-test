@@ -5,6 +5,8 @@ It is protected by the "No-Code" protocol.
 Any changes must be approved by the project owner.
 -->
 
+> **[S115 — 2026-03-13]** VPS đã chuyển sang PostgreSQL. Local dev vẫn dùng Cloud SQL MySQL proxy cho đến khi Cloud SQL migrate. Xem `docker-compose.local.yml`.
+
 # LOCAL DEV - HYBRID LEAN
 
 ## CHIẾN LƯỢC
