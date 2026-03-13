@@ -1,3 +1,5 @@
+> **[S115 — 2026-03-13]** HISTORICAL. References to "MySQL-first" are superseded — VPS uses PostgreSQL 16.
+
 # Giai đoạn E1 – Content Operations & Agent Workflows (ĐỀ BÀI)
 
 > **Tài liệu yêu cầu (Requirements) – Format lại toàn bộ theo chuẩn Markdown, giữ nguyên nội dung và bố cục logic.**

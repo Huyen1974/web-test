@@ -1,3 +1,5 @@
+> **[S115 AMENDMENT — 2026-03-13]** VPS Directus đã chuyển từ MySQL sang PostgreSQL 16. Mọi references đến "MySQL-first", "Cloud SQL MySQL", `mysql-directus-web-test` trong tài liệu này là lịch sử. DB hiện tại: PostgreSQL (`DB_CLIENT=pg`).
+
 LUẬT LUỒNG DỮ LIỆU & KẾT NỐI
 
 *(Data Flow & Connectivity Law cho Hệ sinh thái Agent)*

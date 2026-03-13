@@ -1,3 +1,5 @@
+> **[S115 — 2026-03-13]** HISTORICAL DOCUMENT. MySQL-First strategy retired. VPS Directus now uses PostgreSQL 16.
+
 # Directus Schema for Giai đoạn 1 (GĐ1) - MySQL-First CMS
 
 **Date**: 2025-11-17
