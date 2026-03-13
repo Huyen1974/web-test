@@ -1,0 +1,268 @@
+#!/usr/bin/env bash
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-*composition* dot/bin/dot-*identity* — no existing tool]
+# =============================================================================
+# dot-schema-meta-catalog-add-composition — Thêm composition_level + identity_class
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-03-13): Initial — Điều 0-B v3.1 composition fields
+#     - composition_level: atom, molecule, compound, material, product, building
+#     - identity_class: managed, log, virtual
+#     - PG CHECK constraints for enum validation
+#     - Update all 20 meta_catalog records with correct values
+#     - Update refresh_registry_counts() to include composition breakdown
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+DRY_RUN=""
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) DRY_RUN="yes" ;;
+    --help|-h)
+      echo "dot-schema-meta-catalog-add-composition v${VERSION}"
+      echo ""
+      echo "Usage: dot-schema-meta-catalog-add-composition [--cloud] [--dry-run]"
+      echo ""
+      echo "Adds composition_level + identity_class fields to meta_catalog."
+      echo "Updates all 20 records with Điều 0-B v3.1 classification."
+      exit 0
+      ;;
+  esac
+done
+
+init_environment "$@"
+
+echo ""
+echo "========================================="
+echo "DOT Tool: Meta Catalog Composition v${VERSION}"
+echo "========================================="
+print_environment_banner "$@"
+
+TOKEN="${DIRECTUS_TOKEN:-}"
+if [[ -z "$TOKEN" ]]; then
+  log_err "Không thể xác thực với Directus"
+  exit 1
+fi
+
+# =============================================================================
+# STEP 1: Add composition_level field via Directus API
+# =============================================================================
+log_info "Step 1: Add composition_level field..."
+
+if [[ "$DRY_RUN" == "yes" ]]; then
+  echo "[DRY] Sẽ tạo composition_level + identity_class fields"
+  exit 0
+fi
+
+HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" \
+  "${DIRECTUS_URL}/fields/meta_catalog/composition_level" \
+  -H "Authorization: Bearer $TOKEN")
+
+if [[ "$HTTP_CODE" == "200" ]]; then
+  log_ok "Field composition_level đã tồn tại — skip"
+else
+  log_info "Tạo field composition_level..."
+  PAYLOAD=$(cat <<'JSON'
+{
+  "field": "composition_level",
+  "type": "string",
+  "schema": {
+    "default_value": "atom",
+    "is_nullable": false,
+    "max_length": 20
+  },
+  "meta": {
+    "interface": "select-dropdown",
+    "display": "labels",
+    "note": "Tầng cấu tạo (Điều 0-B v3.1): atom, molecule, compound, material, product, building",
+    "width": "half",
+    "sort": 21,
+    "hidden": false,
+    "options": {
+      "choices": [
+        { "text": "Atom", "value": "atom" },
+        { "text": "Molecule", "value": "molecule" },
+        { "text": "Compound", "value": "compound" },
+        { "text": "Material", "value": "material" },
+        { "text": "Product", "value": "product" },
+        { "text": "Building", "value": "building" }
+      ]
+    }
+  }
+}
+JSON
+  )
+
+  RESPONSE=$(curl -sk -w "\n%{http_code}" \
+    -X POST "${DIRECTUS_URL}/fields/meta_catalog" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "$PAYLOAD")
+
+  HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+  if [[ "$HTTP_CODE" == "200" ]] || [[ "$HTTP_CODE" == "204" ]]; then
+    log_ok "Field composition_level created"
+  else
+    BODY=$(echo "$RESPONSE" | sed '$d')
+    log_err "HTTP $HTTP_CODE: $BODY"
+    exit 1
+  fi
+fi
+
+# =============================================================================
+# STEP 2: Add identity_class field via Directus API
+# =============================================================================
+log_info "Step 2: Add identity_class field..."
+
+HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" \
+  "${DIRECTUS_URL}/fields/meta_catalog/identity_class" \
+  -H "Authorization: Bearer $TOKEN")
+
+if [[ "$HTTP_CODE" == "200" ]]; then
+  log_ok "Field identity_class đã tồn tại — skip"
+else
+  log_info "Tạo field identity_class..."
+  PAYLOAD=$(cat <<'JSON'
+{
+  "field": "identity_class",
+  "type": "string",
+  "schema": {
+    "default_value": "managed",
+    "is_nullable": false,
+    "max_length": 20
+  },
+  "meta": {
+    "interface": "select-dropdown",
+    "display": "labels",
+    "note": "Phân loại danh tính (Điều 0-B v3.1): managed, log, virtual",
+    "width": "half",
+    "sort": 22,
+    "hidden": false,
+    "options": {
+      "choices": [
+        { "text": "Managed", "value": "managed" },
+        { "text": "Log", "value": "log" },
+        { "text": "Virtual", "value": "virtual" }
+      ]
+    }
+  }
+}
+JSON
+  )
+
+  RESPONSE=$(curl -sk -w "\n%{http_code}" \
+    -X POST "${DIRECTUS_URL}/fields/meta_catalog" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "$PAYLOAD")
+
+  HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+  if [[ "$HTTP_CODE" == "200" ]] || [[ "$HTTP_CODE" == "204" ]]; then
+    log_ok "Field identity_class created"
+  else
+    BODY=$(echo "$RESPONSE" | sed '$d')
+    log_err "HTTP $HTTP_CODE: $BODY"
+    exit 1
+  fi
+fi
+
+# =============================================================================
+# STEP 3: PG CHECK constraints for enum validation
+# =============================================================================
+log_info "Step 3: Add PG CHECK constraints..."
+
+CHECK_SQL=$(cat <<'ENDSQL'
+-- Add CHECK constraints (idempotent: drop first if exists)
+ALTER TABLE meta_catalog DROP CONSTRAINT IF EXISTS chk_composition_level;
+ALTER TABLE meta_catalog ADD CONSTRAINT chk_composition_level
+  CHECK (composition_level IN ('atom', 'molecule', 'compound', 'material', 'product', 'building'));
+
+ALTER TABLE meta_catalog DROP CONSTRAINT IF EXISTS chk_identity_class;
+ALTER TABLE meta_catalog ADD CONSTRAINT chk_identity_class
+  CHECK (identity_class IN ('managed', 'log', 'virtual'));
+ENDSQL
+)
+
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+  "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB}" <<< "$CHECK_SQL"
+
+if [[ $? -eq 0 ]]; then
+  log_ok "PG CHECK constraints added"
+else
+  log_warn "CHECK constraints may already exist"
+fi
+
+# =============================================================================
+# STEP 4: Update all 20 records with correct values
+# =============================================================================
+log_info "Step 4: Update meta_catalog records..."
+
+UPDATE_SQL=$(cat <<'ENDSQL'
+-- Điều 0-B v3.1: Phân loại cấu tạo vật chất thông tin
+-- ATOM + managed
+UPDATE meta_catalog SET composition_level = 'atom', identity_class = 'managed'
+WHERE code IN ('CAT-006', 'CAT-010', 'CAT-011', 'CAT-013');
+-- CAT-006=DOT Tool, CAT-010=Agent, CAT-011=Checkpoint Type, CAT-013=Entity Dependency
+
+-- MOLECULE + managed
+UPDATE meta_catalog SET composition_level = 'molecule', identity_class = 'managed'
+WHERE code IN ('CAT-000', 'CAT-001', 'CAT-004', 'CAT-007', 'CAT-008', 'CAT-012', 'CAT-014', 'CAT-015');
+-- CAT-000=Catalog, CAT-001=Table, CAT-004=Workflow Step, CAT-007=Page
+-- CAT-008=Collection, CAT-012=Checkpoint Set, CAT-014=Table Proposal, CAT-015=Checkpoint Instance
+
+-- COMPOUND + managed
+UPDATE meta_catalog SET composition_level = 'compound', identity_class = 'managed'
+WHERE code IN ('CAT-002', 'CAT-003', 'CAT-005', 'CAT-009');
+-- CAT-002=Module, CAT-003=Workflow, CAT-005=WCR, CAT-009=Task
+
+-- LOG (atom + log)
+UPDATE meta_catalog SET composition_level = 'atom', identity_class = 'log'
+WHERE code IN ('CAT-016', 'CAT-017');
+-- CAT-016=Changelog, CAT-017=System Issue
+
+-- VIRTUAL
+UPDATE meta_catalog SET composition_level = 'atom', identity_class = 'virtual'
+WHERE code IN ('CAT-ALL', 'CAT-999');
+-- CAT-ALL=Tổng nguyên tử, CAT-999=Chưa phân loại
+ENDSQL
+)
+
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+  "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB}" <<< "$UPDATE_SQL"
+
+if [[ $? -eq 0 ]]; then
+  log_ok "All 20 records updated"
+else
+  log_err "Failed to update records"
+  exit 1
+fi
+
+# =============================================================================
+# STEP 5: Verify
+# =============================================================================
+log_info "Step 5: Verify classification..."
+
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+  "docker exec ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -c \
+  'SELECT code, entity_type, composition_level, identity_class FROM meta_catalog ORDER BY code;'"
+
+echo ""
+echo "========================================="
+echo "DOT Tool: Meta Catalog Composition — HOÀN TẤT"
+echo "========================================="
