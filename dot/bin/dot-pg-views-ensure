@@ -3,16 +3,14 @@
 # =============================================================================
 # dot-pg-views-ensure — Tạo PostgreSQL tables + refresh function cho registry counting
 # =============================================================================
-# VERSION: 5.0.0
+# VERSION: 6.0.0
 # CHANGELOG:
-#   v1.0.0 (2026-03-12): Initial version — tried VIEWs (Directus can't introspect)
-#   v2.0.0 (2026-03-12): Switch to tables + PG function refresh_registry_counts()
-#   v3.0.0 (2026-03-12): 3 phương pháp đếm độc lập
-#   v4.0.0 (2026-03-12): ANALYZE + exclude changelog/system_issues from total_orphans
-#   v5.0.0 (2026-03-13): Summary chỉ đếm 16 nguyên tử (exclude status='log')
-#     - v_registry_counts vẫn giữ 18 rows (all types including log)
-#     - v_registry_summary chỉ tổng hợp 16 atom types (WHERE entity_type NOT IN changelog, system_issue)
-#     - total_types = 16, total_atoms = sum of 16, total_orphans = orphans of 16 only
+#   v1–5: see git history
+#   v6.0.0 (2026-03-13): CHỈ đếm 16 nguyên tử (meta_catalog status='active'|'published')
+#     - Loại hoàn toàn CAT-016 changelog + CAT-017 system_issue khỏi UNION ALL
+#     - v_registry_counts = 16 rows (chỉ atom types)
+#     - v_registry_summary = SUM trực tiếp, không cần WHERE filter
+#     - KHÔNG ghi đè meta_catalog.status
 # =============================================================================
 
 set -euo pipefail
@@ -20,7 +18,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="5.0.0"
+VERSION="6.0.0"
 VPS_HOST="38.242.240.89"
 VPS_KEY="${HOME}/.ssh/contabo_vps"
 PG_CONTAINER="postgres"
@@ -149,8 +147,6 @@ BEGIN
   ANALYZE entity_dependencies;
   ANALYZE table_proposals;
   ANALYZE checkpoint_instances;
-  ANALYZE registry_changelog;
-  ANALYZE system_issues;
 
   TRUNCATE v_registry_counts;
   INSERT INTO v_registry_counts (id, cat_code, entity_type, record_count, orphan_count, count_b, count_c, cross_check)
@@ -172,8 +168,6 @@ BEGIN
     UNION ALL SELECT 'CAT-013', 'entity_dependency', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int, count(*) FILTER (WHERE code IS NOT NULL AND code != '')::int FROM entity_dependencies
     UNION ALL SELECT 'CAT-014', 'table_proposal', count(*)::int, 0::int, 0::int FROM table_proposals
     UNION ALL SELECT 'CAT-015', 'checkpoint_instance', count(*)::int, 0::int, 0::int FROM checkpoint_instances
-    UNION ALL SELECT 'CAT-016', 'changelog', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int, count(*) FILTER (WHERE code IS NOT NULL AND code != '')::int FROM registry_changelog
-    UNION ALL SELECT 'CAT-017', 'system_issue', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int, count(*) FILTER (WHERE code IS NOT NULL AND code != '')::int FROM system_issues
   ) sub;
 
   -- Update count_b from pg_stat_user_tables (now accurate after ANALYZE)
@@ -190,7 +184,6 @@ BEGIN
           WHEN 'agent' THEN 'agents' WHEN 'checkpoint_type' THEN 'checkpoint_types'
           WHEN 'checkpoint_set' THEN 'checkpoint_sets' WHEN 'entity_dependency' THEN 'entity_dependencies'
           WHEN 'table_proposal' THEN 'table_proposals' WHEN 'checkpoint_instance' THEN 'checkpoint_instances'
-          WHEN 'changelog' THEN 'registry_changelog' WHEN 'system_issue' THEN 'system_issues'
         END
       )
     ), 0) WHERE id = r.id;
@@ -199,12 +192,11 @@ BEGIN
   UPDATE v_registry_counts SET cross_check =
     CASE WHEN abs(record_count - count_b) <= 1 THEN 'KHỚP' ELSE 'LỆCH' END;
 
-  -- Summary: only 16 atom types (exclude changelog + system_issue = status='log')
+  -- Summary: all rows are atoms (16 types, no log types in table)
   DELETE FROM v_registry_summary;
   INSERT INTO v_registry_summary (id, total_atoms, total_types, total_orphans)
   SELECT 1, SUM(record_count)::int, COUNT(*)::int, SUM(orphan_count)::int
-  FROM v_registry_counts
-  WHERE entity_type NOT IN ('changelog', 'system_issue');
+  FROM v_registry_counts;
 END;
 $$ LANGUAGE plpgsql;
 
