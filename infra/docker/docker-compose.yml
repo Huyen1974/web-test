@@ -2,31 +2,32 @@
 # INCOMEX VPS DOCKER STACK — Production
 # =============================================================================
 # VPS: Contabo 38.242.240.89
-# Services: MySQL, Qdrant, Directus, Agent Data, Nuxt, Nginx
+# Services: PostgreSQL, Qdrant, Directus, Agent Data, Nuxt, Nginx
 #
 # Images: agent-data and nuxt pulled from Artifact Registry (CI/CD pipeline)
 # Registry: asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/
+# MySQL RETIRED 2026-03-13 (S115) — Replaced by PostgreSQL
 # =============================================================================
 
 services:
   # ---------------------------------------------------------------------------
-  # MySQL 8.0 — Database for Directus
+  # PostgreSQL 16 — Database for Directus (migrated from MySQL S115)
   # ---------------------------------------------------------------------------
-  mysql:
-    image: mysql:8.0
-    container_name: incomex-mysql
+  postgres:
+    image: postgres:16
+    container_name: postgres
     restart: unless-stopped
     mem_limit: 2g
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${DB_DATABASE}
-      MYSQL_USER: ${DB_USER}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${PG_DATABASE:-directus}
+      POSTGRES_USER: ${PG_USER:-directus}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
     volumes:
-      - ./mysql/data:/var/lib/mysql
-      - ./mysql/init:/docker-entrypoint-initdb.d
+      - /opt/workflow/postgres/data:/var/lib/postgresql/data
+      - /opt/workflow/postgres/backups:/backups
+      - /opt/workflow/postgres/init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      test: ["CMD-SHELL", "pg_isready -U directus -d directus"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -64,12 +65,12 @@ services:
     restart: unless-stopped
     mem_limit: 1g
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
     environment:
-      DB_CLIENT: mysql
-      DB_HOST: mysql
-      DB_PORT: "3306"
+      DB_CLIENT: pg
+      DB_HOST: postgres
+      DB_PORT: "5432"
       DB_DATABASE: ${DB_DATABASE}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}

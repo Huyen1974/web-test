@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 # CLI.CURSOR.0047C-TOKEN-PROXY – Bootstrap Directus admin token via Cloud SQL Auth Proxy
+# DEPRECATED (S115, 2026-03-13): Cloud SQL MySQL retired. VPS Directus now uses PostgreSQL.
+# This script targets mysql-directus-web-test (Cloud SQL MySQL) which is no longer in use.
+# For VPS token bootstrap, use SSH + psql on the postgres container directly.
 set -Eeuo pipefail
 
 # Constants
