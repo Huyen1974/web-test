@@ -4,7 +4,38 @@ import { readItems } from '@directus/sdk';
 const route = useRoute();
 const entityType = computed(() => route.params.entityType as string);
 
-// Map entity_type -> table_id for DirectusTable
+// Detect if this is a virtual entry (CAT-ALL, CAT-MOL, etc.)
+const VIRTUAL_CODE_LEVEL: Record<string, string> = {
+	'CAT-ALL': 'atom',
+	'CAT-MOL': 'molecule',
+	'CAT-CMP': 'compound',
+	'CAT-MAT': 'material',
+	'CAT-PRD': 'product',
+	'CAT-BLD': 'building',
+};
+
+const LEVEL_CONFIG: Record<string, { label: string; color: string }> = {
+	atom: { label: 'Nguyên tử', color: 'green' },
+	molecule: { label: 'Phân tử', color: 'blue' },
+	compound: { label: 'Hợp chất', color: 'purple' },
+	material: { label: 'Vật liệu', color: 'orange' },
+	product: { label: 'Sản phẩm', color: 'amber' },
+	building: { label: 'Công trình', color: 'indigo' },
+};
+
+const LEVEL_LABEL_VI: Record<string, string> = {
+	atom: 'Lớp nguyên tử',
+	molecule: 'Lớp phân tử',
+	compound: 'Lớp hợp chất',
+	material: 'Lớp vật liệu',
+	product: 'Lớp sản phẩm',
+	building: 'Lớp công trình',
+};
+
+const isVirtual = computed(() => entityType.value in VIRTUAL_CODE_LEVEL);
+const virtualLevel = computed(() => VIRTUAL_CODE_LEVEL[entityType.value] || '');
+
+// Map entity_type -> table_id for DirectusTable (managed entities only)
 const tableIdMap: Record<string, string> = {
 	catalog: 'tbl_meta_catalog',
 	table: 'tbl_table_registry',
@@ -28,8 +59,78 @@ const tableIdMap: Record<string, string> = {
 
 const tableId = computed(() => tableIdMap[entityType.value] || '');
 
-// Fetch catalog entry for this entity type
 const { $directus } = useNuxtApp();
+
+// === VIRTUAL ENTRY: Fetch managed collections for this composition_level ===
+const { data: virtualData } = useAsyncData(
+	`virtual-${entityType.value}`,
+	async () => {
+		if (!isVirtual.value) return null;
+		try {
+			const [catalog, counts] = await Promise.all([
+				$directus.request(
+					readItems('meta_catalog' as any, {
+						fields: ['code', 'name', 'entity_type', 'composition_level'],
+						filter: {
+							identity_class: { _eq: 'managed' },
+							composition_level: { _eq: virtualLevel.value },
+						},
+						sort: ['code'],
+						limit: -1,
+					}),
+				),
+				$directus.request(
+					readItems('v_registry_counts' as any, {
+						fields: ['cat_code', 'record_count', 'orphan_count'],
+						limit: -1,
+					}),
+				),
+			]);
+
+			const countMap = new Map<string, { record_count: number; orphan_count: number }>();
+			for (const c of counts as any[]) {
+				countMap.set(c.cat_code, { record_count: c.record_count || 0, orphan_count: c.orphan_count || 0 });
+			}
+
+			const items = (catalog as any[]).map((c, idx) => {
+				const cnt = countMap.get(c.code) || { record_count: 0, orphan_count: 0 };
+				return {
+					stt: idx + 1,
+					code: c.code,
+					name: c.name,
+					entity_type: c.entity_type,
+					record_count: cnt.record_count,
+					orphan_count: cnt.orphan_count,
+				};
+			});
+
+			const totalRecords = items.reduce((s, i) => s + i.record_count, 0);
+			const totalOrphans = items.reduce((s, i) => s + i.orphan_count, 0);
+
+			return { items, totalRecords, totalOrphans, count: items.length };
+		} catch {
+			return null;
+		}
+	},
+	{ default: () => null },
+);
+
+const virtualColumns = [
+	{ key: 'stt', label: 'STT' },
+	{ key: 'code', label: 'Code' },
+	{ key: 'name', label: 'Tên' },
+	{ key: 'record_count', label: 'Số lượng' },
+	{ key: 'orphan_count', label: 'Mồ côi' },
+];
+
+const router = useRouter();
+function onVirtualRowClick(row: any) {
+	if (row.entity_type) {
+		router.push(`/knowledge/registries/${row.entity_type}`);
+	}
+}
+
+// === MANAGED ENTITY: Fetch catalog entry ===
 const { data: catalogEntry } = useAsyncData(
 	`catalog-${entityType.value}`,
 	() =>
@@ -42,48 +143,6 @@ const { data: catalogEntry } = useAsyncData(
 		),
 	{ transform: (items: any[]) => items?.[0] || null },
 );
-
-// Crosscheck for THIS entity type
-const { data: crosscheck } = useAsyncData(
-	`crosscheck-${entityType.value}`,
-	async () => {
-		try {
-			const clItems = await $directus.request(
-				readItems('registry_changelog' as any, {
-					fields: ['action'],
-					filter: { entity_type: { _eq: entityType.value } },
-					limit: -1,
-				}),
-			);
-			let created = 0;
-			let deleted = 0;
-			for (const e of clItems as any[]) {
-				if ((e.action || '').includes('create')) created++;
-				else if ((e.action || '').includes('delete')) deleted++;
-			}
-			return { created, deleted };
-		} catch {
-			return null;
-		}
-	},
-	{ default: () => null },
-);
-
-const crosscheckResult = computed(() => {
-	if (!catalogEntry.value || !crosscheck.value) return null;
-	const baseline = catalogEntry.value.baseline_count || 0;
-	const xuoi = catalogEntry.value.actual_count || 0;
-	if (baseline <= 0) return { xuoi, baseline: 0, created: crosscheck.value.created, deleted: crosscheck.value.deleted, nguoc: null, status: 'no_baseline' as const };
-	const nguoc = baseline + crosscheck.value.created - crosscheck.value.deleted;
-	return {
-		xuoi,
-		baseline,
-		created: crosscheck.value.created,
-		deleted: crosscheck.value.deleted,
-		nguoc,
-		status: (xuoi === nguoc ? 'match' : 'mismatch') as 'match' | 'mismatch',
-	};
-});
 
 // Issues for THIS entity type
 function formatTime(ts: string) {
@@ -102,6 +161,7 @@ function formatTime(ts: string) {
 const { data: entityIssues } = useAsyncData(
 	`issues-${entityType.value}`,
 	async () => {
+		if (isVirtual.value) return [];
 		try {
 			return (await $directus.request(
 				readItems('system_issues' as any, {
@@ -141,7 +201,10 @@ definePageMeta({
 });
 
 useHead({
-	title: computed(() => catalogEntry.value?.name || 'Registry'),
+	title: computed(() => {
+		if (isVirtual.value) return LEVEL_LABEL_VI[virtualLevel.value] || entityType.value;
+		return catalogEntry.value?.name || 'Registry';
+	}),
 });
 </script>
 
@@ -155,126 +218,176 @@ useHead({
 				&larr; Danh mục hệ thống
 			</NuxtLink>
 
-			<div class="flex items-center gap-3">
-				<h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-					{{ catalogEntry?.name || entityType }}
-				</h1>
-				<span
-					v-if="catalogEntry?.status"
-					class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium capitalize"
-					:class="{
-						'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300': catalogEntry.status === 'active',
-						'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300': catalogEntry.status === 'planned',
-					}"
-				>
-					{{ catalogEntry.status }}
-				</span>
-				<span
-					v-if="catalogEntry?.record_count != null"
-					class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300"
-				>
-					{{ catalogEntry.record_count }} items
-				</span>
+			<!-- === VIRTUAL ENTRY HEADER === -->
+			<template v-if="isVirtual">
+				<div class="flex items-center gap-3">
+					<h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+						{{ LEVEL_LABEL_VI[virtualLevel] }}
+					</h1>
+					<UBadge
+						:color="(LEVEL_CONFIG[virtualLevel]?.color as any) || 'gray'"
+						variant="subtle"
+					>
+						{{ LEVEL_CONFIG[virtualLevel]?.label || virtualLevel }}
+					</UBadge>
+				</div>
+				<p v-if="virtualData" class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+					{{ entityType }} — {{ virtualData.count }} loại, {{ virtualData.totalRecords }} thực thể
+				</p>
+			</template>
+
+			<!-- === MANAGED ENTRY HEADER === -->
+			<template v-else>
+				<div class="flex items-center gap-3">
+					<h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+						{{ catalogEntry?.name || entityType }}
+					</h1>
+					<span
+						v-if="catalogEntry?.status"
+						class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium capitalize"
+						:class="{
+							'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300': catalogEntry.status === 'active',
+							'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300': catalogEntry.status === 'planned',
+						}"
+					>
+						{{ catalogEntry.status }}
+					</span>
+					<span
+						v-if="catalogEntry?.record_count != null"
+						class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+					>
+						{{ catalogEntry.record_count }} items
+					</span>
+				</div>
+				<p v-if="catalogEntry?.code" class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+					{{ catalogEntry.code }}
+					<template v-if="catalogEntry?.source_model">
+						&middot;
+						{{ catalogEntry.source_model === 'A' ? 'Model A — Directus SSOT' : 'Model B — File scan' }}
+					</template>
+				</p>
+			</template>
+		</div>
+
+		<!-- === VIRTUAL: Lớp 2 — danh sách collections thuộc lớp === -->
+		<template v-if="isVirtual">
+			<template v-if="virtualData && virtualData.items.length > 0">
+				<UTable :columns="virtualColumns" :rows="virtualData.items" @select="onVirtualRowClick">
+					<template #cell-stt="{ row }">
+						<span class="text-xs text-gray-400">{{ row.stt }}</span>
+					</template>
+					<template #cell-code="{ row }">
+						<span class="font-mono text-xs">{{ row.code }}</span>
+					</template>
+					<template #cell-name="{ row }">
+						<NuxtLink
+							:to="`/knowledge/registries/${row.entity_type}`"
+							class="text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
+							@click.stop
+						>
+							{{ row.name }}
+						</NuxtLink>
+					</template>
+					<template #cell-record_count="{ row }">
+						<span class="font-medium">{{ row.record_count }}</span>
+					</template>
+					<template #cell-orphan_count="{ row }">
+						<span
+							v-if="row.orphan_count > 0"
+							class="font-medium text-amber-600 dark:text-amber-400"
+						>{{ row.orphan_count }}</span>
+						<span v-else class="text-gray-400">0</span>
+					</template>
+				</UTable>
+			</template>
+			<div
+				v-else
+				class="rounded-lg border border-gray-200 bg-gray-50 p-6 text-center text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400"
+			>
+				Chưa có thực thể nào thuộc lớp này.
 			</div>
 
-			<p v-if="catalogEntry?.code" class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-				{{ catalogEntry.code }}
-				<template v-if="catalogEntry?.source_model">
-					&middot;
-					{{ catalogEntry.source_model === 'A' ? 'Model A — Directus SSOT' : 'Model B — File scan' }}
-				</template>
-			</p>
-		</div>
-
-		<SharedDirectusTable
-			v-if="tableId"
-			:table-id="tableId"
-			:row-link="(item: any) => `/knowledge/registries/${entityType}/${item.code || item.process_code || item.table_id || item.id}`"
-		>
-			<template #cell-status="{ value }">
-				<span
-					class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium capitalize"
-					:class="{
-						'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300': value === 'active' || value === 'published',
-						'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300': value === 'planned' || value === 'draft',
-						'bg-gray-100 text-gray-700 dark:bg-gray-700/50 dark:text-gray-300': value === 'deprecated' || value === 'retired',
-					}"
-				>
-					{{ value }}
-				</span>
-			</template>
-			<template #cell-has_note="{ value }">
-				<span :class="value ? 'text-emerald-600' : 'text-red-500'">
-					{{ value ? 'Yes' : 'No' }}
-				</span>
-			</template>
-		</SharedDirectusTable>
-
-		<div
-			v-else
-			class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
-		>
-			Chưa có bảng registry cho loại "{{ entityType }}". Vui lòng liên hệ admin.
-		</div>
-
-		<!-- Kiểm chứng ngược cho entity type này -->
-		<div v-if="crosscheckResult" class="mt-8">
-			<h2 class="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">Kiểm chứng ngược</h2>
-			<UCard>
-				<div class="flex items-center gap-6">
-					<div class="text-sm">
-						<span class="text-gray-500 dark:text-gray-400">Xuôi (live):</span>
-						<span class="ml-1 font-semibold">{{ crosscheckResult.xuoi }}</span>
+			<!-- Lớp 3 — Quan hệ CHỨA -->
+			<div v-if="virtualData" class="mt-8">
+				<h2 class="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">Quan hệ</h2>
+				<div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+					<div class="flex items-start gap-2">
+						<UBadge color="blue" variant="subtle" size="xs">CHỨA</UBadge>
+						<div v-if="virtualData.items.length > 0" class="flex flex-wrap gap-2">
+							<NuxtLink
+								v-for="item in virtualData.items"
+								:key="item.code"
+								:to="`/knowledge/registries/${item.entity_type}`"
+								class="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
+							>
+								<span class="font-mono text-xs">{{ item.code }}</span>
+								{{ item.name }}
+							</NuxtLink>
+						</div>
+						<span v-else class="text-sm text-gray-400">Không có thực thể</span>
 					</div>
-					<div class="text-sm">
-						<span class="text-gray-500 dark:text-gray-400">Baseline:</span>
-						<span v-if="crosscheckResult.baseline > 0" class="ml-1 font-semibold">{{ crosscheckResult.baseline }}</span>
-						<span v-else class="ml-1 text-gray-300 dark:text-gray-600">—</span>
-					</div>
-					<div class="text-sm">
-						<span class="text-gray-500 dark:text-gray-400">+Tạo:</span>
-						<span class="ml-1 font-semibold text-emerald-600 dark:text-emerald-400">{{ crosscheckResult.created }}</span>
-					</div>
-					<div class="text-sm">
-						<span class="text-gray-500 dark:text-gray-400">-Xoá:</span>
-						<span class="ml-1 font-semibold text-red-600 dark:text-red-400">{{ crosscheckResult.deleted }}</span>
-					</div>
-					<div class="text-sm">
-						<span class="text-gray-500 dark:text-gray-400">Ngược:</span>
-						<span v-if="crosscheckResult.nguoc !== null" class="ml-1 font-semibold">{{ crosscheckResult.nguoc }}</span>
-						<span v-else class="ml-1 text-gray-300 dark:text-gray-600">—</span>
-					</div>
-					<div>
-						<UBadge v-if="crosscheckResult.status === 'match'" color="green" variant="subtle" size="sm">KHỚP</UBadge>
-						<UBadge v-else-if="crosscheckResult.status === 'mismatch'" color="red" variant="subtle" size="sm">
-							LỆCH {{ (crosscheckResult.xuoi - (crosscheckResult.nguoc ?? 0)) > 0 ? '+' : '' }}{{ crosscheckResult.xuoi - (crosscheckResult.nguoc ?? 0) }}
-						</UBadge>
-						<UBadge v-else color="gray" variant="subtle" size="sm">Chưa baseline</UBadge>
+					<div class="mt-3 flex items-start gap-2">
+						<UBadge color="gray" variant="subtle" size="xs">THUỘC</UBadge>
+						<span class="text-sm text-gray-400">Không (đây là lớp tổng hợp cao nhất cho {{ LEVEL_CONFIG[virtualLevel]?.label || virtualLevel }})</span>
 					</div>
 				</div>
-			</UCard>
-		</div>
+			</div>
+		</template>
 
-		<!-- Vấn đề hệ thống cho entity type này -->
-		<div v-if="entityIssues && entityIssues.length > 0" class="mt-8">
-			<h2 class="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">
-				Vấn đề
-				<UBadge color="red" variant="subtle" size="xs" class="ml-2">{{ entityIssues.length }}</UBadge>
-			</h2>
-			<UTable :rows="issueRows" :columns="issueColumns">
-				<template #cell-severity="{ row }">
-					<UBadge
-						:color="row.severity === 'nghiêm_trọng' ? 'red' : row.severity === 'cảnh_báo' ? 'yellow' : 'blue'"
-						variant="subtle"
-						size="xs"
+		<!-- === MANAGED: DirectusTable + crosscheck + issues === -->
+		<template v-else>
+			<SharedDirectusTable
+				v-if="tableId"
+				:table-id="tableId"
+				:row-link="(item: any) => `/knowledge/registries/${entityType}/${item.code || item.process_code || item.table_id || item.id}`"
+			>
+				<template #cell-status="{ value }">
+					<span
+						class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium capitalize"
+						:class="{
+							'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300': value === 'active' || value === 'published',
+							'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300': value === 'planned' || value === 'draft',
+							'bg-gray-100 text-gray-700 dark:bg-gray-700/50 dark:text-gray-300': value === 'deprecated' || value === 'retired',
+						}"
 					>
-						{{ row.severity === 'nghiêm_trọng' ? 'Nghiêm trọng' : row.severity === 'cảnh_báo' ? 'Cảnh báo' : 'Thông tin' }}
-					</UBadge>
+						{{ value }}
+					</span>
 				</template>
-				<template #cell-time="{ row }">
-					<span class="text-gray-500 dark:text-gray-400">{{ row.time }}</span>
+				<template #cell-has_note="{ value }">
+					<span :class="value ? 'text-emerald-600' : 'text-red-500'">
+						{{ value ? 'Yes' : 'No' }}
+					</span>
 				</template>
-			</UTable>
-		</div>
+			</SharedDirectusTable>
+
+			<div
+				v-else
+				class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
+			>
+				Chưa có bảng registry cho loại "{{ entityType }}". Vui lòng liên hệ admin.
+			</div>
+
+			<!-- Vấn đề hệ thống cho entity type này -->
+			<div v-if="entityIssues && entityIssues.length > 0" class="mt-8">
+				<h2 class="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">
+					Vấn đề
+					<UBadge color="red" variant="subtle" size="xs" class="ml-2">{{ entityIssues.length }}</UBadge>
+				</h2>
+				<UTable :rows="issueRows" :columns="issueColumns">
+					<template #cell-severity="{ row }">
+						<UBadge
+							:color="row.severity === 'nghiêm_trọng' ? 'red' : row.severity === 'cảnh_báo' ? 'yellow' : 'blue'"
+							variant="subtle"
+							size="xs"
+						>
+							{{ row.severity === 'nghiêm_trọng' ? 'Nghiêm trọng' : row.severity === 'cảnh_báo' ? 'Cảnh báo' : 'Thông tin' }}
+						</UBadge>
+					</template>
+					<template #cell-time="{ row }">
+						<span class="text-gray-500 dark:text-gray-400">{{ row.time }}</span>
+					</template>
+				</UTable>
+			</div>
+		</template>
 	</div>
 </template>

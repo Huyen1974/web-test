@@ -3,13 +3,27 @@ import { readItems } from '@directus/sdk';
 
 definePageMeta({
 	title: 'Danh mục hệ thống',
-	description: 'Meta-Catalog — Danh mục sống 3 tầng',
+	description: 'Meta-Catalog — Danh mục sống 3 lớp',
 });
 
-function getRegistryLink(item: any) {
-	if (!item?.entity_type) return '/knowledge/registries';
-	if (item.entity_type === 'all') return '/knowledge/registries/all';
-	return `/knowledge/registries/${item.entity_type}`;
+// Virtual code → composition_level mapping
+const VIRTUAL_CODE_LEVEL: Record<string, string> = {
+	'CAT-ALL': 'atom',
+	'CAT-MOL': 'molecule',
+	'CAT-CMP': 'compound',
+	'CAT-MAT': 'material',
+	'CAT-PRD': 'product',
+	'CAT-BLD': 'building',
+};
+
+function getRowLink(row: any): string {
+	if (row._type === 'summary' && row._virtualCode) {
+		return `/knowledge/registries/${row._virtualCode}`;
+	}
+	if (row._type === 'detail' && row.entity_type) {
+		return `/knowledge/registries/${row.entity_type}`;
+	}
+	return '/knowledge/registries';
 }
 
 function formatAction(action: string) {
@@ -42,12 +56,12 @@ const { $directus } = useNuxtApp();
 
 // Composition level labels + colors
 const LEVEL_CONFIG: Record<string, { label: string; color: string }> = {
-	atom: { label: 'Atom', color: 'green' },
-	molecule: { label: 'Molecule', color: 'blue' },
-	compound: { label: 'Compound', color: 'purple' },
-	material: { label: 'Material', color: 'orange' },
-	product: { label: 'Product', color: 'amber' },
-	building: { label: 'Building', color: 'indigo' },
+	atom: { label: 'Nguyên tử', color: 'green' },
+	molecule: { label: 'Phân tử', color: 'blue' },
+	compound: { label: 'Hợp chất', color: 'purple' },
+	material: { label: 'Vật liệu', color: 'orange' },
+	product: { label: 'Sản phẩm', color: 'amber' },
+	building: { label: 'Công trình', color: 'indigo' },
 };
 
 const LEVEL_LABEL_VI: Record<string, string> = {
@@ -58,6 +72,12 @@ const LEVEL_LABEL_VI: Record<string, string> = {
 	product: 'Tổng sản phẩm',
 	building: 'Tổng công trình',
 };
+
+// Reverse lookup: level → virtual code
+const LEVEL_TO_VIRTUAL: Record<string, string> = {};
+for (const [code, level] of Object.entries(VIRTUAL_CODE_LEVEL)) {
+	LEVEL_TO_VIRTUAL[level] = code;
+}
 
 // Fetch v_registry_counts + meta_catalog to build unified table
 const { data: registryData } = useAsyncData(
@@ -97,7 +117,7 @@ const { data: registryData } = useAsyncData(
 					composition_level: r.composition_level || 'atom',
 					record_count: r.record_count || 0,
 					orphan_count: r.orphan_count || 0,
-					verified: true, // Trigger-maintained = always in sync
+					verified: true,
 				});
 			}
 
@@ -108,7 +128,8 @@ const { data: registryData } = useAsyncData(
 				const levelDetails = details.filter((d) => d.composition_level === level);
 				summaries.push({
 					_type: 'summary',
-					code: '—',
+					_virtualCode: LEVEL_TO_VIRTUAL[level] || '',
+					code: LEVEL_TO_VIRTUAL[level] || '—',
 					name: LEVEL_LABEL_VI[level] || level,
 					entity_type: '',
 					composition_level: level,
@@ -134,28 +155,33 @@ const { data: registryData } = useAsyncData(
 	{ default: () => ({ summaries: [], details: [] }) },
 );
 
-// UTable columns
+// UTable columns — STT first, "Lớp" instead of "Tầng"
 const columns = [
+	{ key: 'stt', label: 'STT' },
 	{ key: 'code', label: 'Code' },
 	{ key: 'name', label: 'Tên' },
-	{ key: 'composition_level', label: 'Tầng' },
+	{ key: 'composition_level', label: 'Lớp' },
 	{ key: 'record_count', label: 'Số lượng' },
 	{ key: 'orphan_count', label: 'Mồ côi' },
 	{ key: 'verified', label: 'Xác minh' },
 ];
 
-// Combined rows: summaries first, then details
+// Combined rows: summaries first, then details, with STT
 const tableRows = computed(() => {
 	const data = registryData.value;
 	if (!data) return [];
-	return [...data.summaries, ...data.details];
+	return [...data.summaries, ...data.details].map((row, idx) => ({
+		...row,
+		stt: idx + 1,
+	}));
 });
 
 // Row click → navigate to detail page
 const router = useRouter();
 function onRowClick(row: any) {
-	if (row._type === 'detail' && row.entity_type) {
-		router.push(getRegistryLink(row));
+	const link = getRowLink(row);
+	if (link !== '/knowledge/registries') {
+		router.push(link);
 	}
 }
 
@@ -264,26 +290,32 @@ const changelogRows = computed(() =>
 
 		<!-- Unified registry table: summaries + details -->
 		<UTable :columns="columns" :rows="tableRows" @select="onRowClick">
+			<template #cell-stt="{ row }">
+				<span class="text-xs text-gray-400">{{ row.stt }}</span>
+			</template>
 			<template #cell-code="{ row }">
-				<span
-					v-if="row._type === 'summary'"
-					class="font-medium text-gray-400"
-				>—</span>
+				<NuxtLink
+					v-if="row._type === 'summary' && row._virtualCode"
+					:to="`/knowledge/registries/${row._virtualCode}`"
+					class="font-mono text-xs font-medium text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
+					@click.stop
+				>{{ row.code }}</NuxtLink>
 				<span v-else class="font-mono text-xs">{{ row.code }}</span>
 			</template>
 			<template #cell-name="{ row }">
-				<span
-					v-if="row._type === 'summary'"
-					class="font-semibold text-gray-900 dark:text-white"
-				>{{ row.name }}</span>
 				<NuxtLink
-					v-else
-					:to="getRegistryLink(row)"
+					v-if="row._type === 'summary' && row._virtualCode"
+					:to="`/knowledge/registries/${row._virtualCode}`"
+					class="font-semibold text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
+					@click.stop
+				>{{ row.name }}</NuxtLink>
+				<NuxtLink
+					v-else-if="row._type === 'detail' && row.entity_type"
+					:to="getRowLink(row)"
 					class="text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
 					@click.stop
-				>
-					{{ row.name }}
-				</NuxtLink>
+				>{{ row.name }}</NuxtLink>
+				<span v-else>{{ row.name }}</span>
 			</template>
 			<template #cell-composition_level="{ row }">
 				<UBadge
