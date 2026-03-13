@@ -220,6 +220,9 @@ useHead({
 
 			<!-- === VIRTUAL ENTRY HEADER === -->
 			<template v-if="isVirtual">
+				<div class="mb-2">
+					<UBadge color="primary" variant="solid" size="sm">LAYER 2</UBadge>
+				</div>
 				<div class="flex items-center gap-3">
 					<h1 class="text-3xl font-bold text-gray-900 dark:text-white">
 						{{ LEVEL_LABEL_VI[virtualLevel] }}
@@ -238,6 +241,9 @@ useHead({
 
 			<!-- === MANAGED ENTRY HEADER === -->
 			<template v-else>
+				<div class="mb-2">
+					<UBadge color="primary" variant="solid" size="sm">LAYER 3</UBadge>
+				</div>
 				<div class="flex items-center gap-3">
 					<h1 class="text-3xl font-bold text-gray-900 dark:text-white">
 						{{ catalogEntry?.name || entityType }}
@@ -307,31 +313,6 @@ useHead({
 				Chưa có thực thể nào thuộc lớp này.
 			</div>
 
-			<!-- Lớp 3 — Quan hệ CHỨA -->
-			<div v-if="virtualData" class="mt-8">
-				<h2 class="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">Quan hệ</h2>
-				<div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-					<div class="flex items-start gap-2">
-						<UBadge color="blue" variant="subtle" size="xs">CHỨA</UBadge>
-						<div v-if="virtualData.items.length > 0" class="flex flex-wrap gap-2">
-							<NuxtLink
-								v-for="item in virtualData.items"
-								:key="item.code"
-								:to="`/knowledge/registries/${item.entity_type}`"
-								class="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
-							>
-								<span class="font-mono text-xs">{{ item.code }}</span>
-								{{ item.name }}
-							</NuxtLink>
-						</div>
-						<span v-else class="text-sm text-gray-400">Không có thực thể</span>
-					</div>
-					<div class="mt-3 flex items-start gap-2">
-						<UBadge color="gray" variant="subtle" size="xs">THUỘC</UBadge>
-						<span class="text-sm text-gray-400">Không (đây là lớp tổng hợp cao nhất cho {{ LEVEL_CONFIG[virtualLevel]?.label || virtualLevel }})</span>
-					</div>
-				</div>
-			</div>
 		</template>
 
 		<!-- === MANAGED: DirectusTable + crosscheck + issues === -->
