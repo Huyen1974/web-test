@@ -40,29 +40,42 @@ function formatMinuteDisplay(minuteKey: string) {
 
 const { $directus } = useNuxtApp();
 
-// Fetch summary stats from PG-backed v_registry_summary table
-const { data: summary } = useAsyncData(
-	'registry-summary',
+// Composition level config
+const LEVEL_CONFIG: Record<string, { label: string; color: 'green' | 'blue' | 'purple' | 'orange' | 'amber' | 'indigo' }> = {
+	atom: { label: 'Atom', color: 'green' },
+	molecule: { label: 'Molecule', color: 'blue' },
+	compound: { label: 'Compound', color: 'purple' },
+	material: { label: 'Material', color: 'orange' },
+	product: { label: 'Product', color: 'amber' },
+	building: { label: 'Building', color: 'indigo' },
+};
+
+// Fetch summary by composition_level from meta_catalog (managed items only)
+const { data: levelSummary } = useAsyncData(
+	'registry-level-summary',
 	async () => {
 		try {
 			const items = await $directus.request(
-				readItems('v_registry_summary' as any, {
-					fields: ['total_atoms', 'total_types', 'total_orphans'],
-					limit: 1,
+				readItems('meta_catalog' as any, {
+					fields: ['composition_level', 'record_count'],
+					filter: { identity_class: { _eq: 'managed' } },
+					limit: -1,
 				}),
 			);
-			const row = (items as any[])?.[0];
-			if (!row) return null;
-			return {
-				totalAtoms: row.total_atoms || 0,
-				totalCategories: row.total_types || 0,
-				totalOrphans: row.total_orphans || 0,
-			};
+			const levels = ['atom', 'molecule', 'compound', 'material', 'product', 'building'];
+			return levels.map((level) => {
+				const levelItems = (items as any[]).filter((i) => i.composition_level === level);
+				return {
+					level,
+					count: levelItems.length,
+					totalRecords: levelItems.reduce((sum: number, i: any) => sum + (i.record_count || 0), 0),
+				};
+			});
 		} catch {
-			return null;
+			return [];
 		}
 	},
-	{ default: () => null },
+	{ default: () => [] },
 );
 
 // Fetch recent changelog entries grouped by MINUTE
@@ -236,24 +249,21 @@ const { data: alertCount } = useAsyncData(
 			</p>
 		</div>
 
-		<!-- Summary stats -->
-		<div v-if="summary" class="mb-6 grid grid-cols-3 gap-4">
-			<div class="rounded-lg border border-gray-200 bg-white p-4 text-center dark:border-gray-700 dark:bg-gray-800">
-				<div class="text-3xl font-bold text-primary-600 dark:text-primary-400">{{ summary.totalAtoms }}</div>
-				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">Tổng nguyên tử</div>
-			</div>
-			<div class="rounded-lg border border-gray-200 bg-white p-4 text-center dark:border-gray-700 dark:bg-gray-800">
-				<div class="text-3xl font-bold text-gray-900 dark:text-white">{{ summary.totalCategories }}</div>
-				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">loại nguyên tử</div>
-			</div>
-			<div class="rounded-lg border border-gray-200 bg-white p-4 text-center dark:border-gray-700 dark:bg-gray-800">
-				<div
-					class="text-3xl font-bold"
-					:class="summary.totalOrphans > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'"
-				>
-					{{ summary.totalOrphans }}
+		<!-- Summary by composition level -->
+		<div v-if="levelSummary.length" class="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+			<div
+				v-for="ls in levelSummary"
+				:key="ls.level"
+				class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
+			>
+				<div class="mb-2 flex items-center justify-between">
+					<UBadge :color="LEVEL_CONFIG[ls.level]?.color || 'gray'" variant="subtle" size="xs">
+						{{ LEVEL_CONFIG[ls.level]?.label || ls.level }}
+					</UBadge>
+					<span class="text-xs text-gray-400">{{ ls.count }} loại</span>
 				</div>
-				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">mồ côi (thực)</div>
+				<div class="text-2xl font-bold text-gray-900 dark:text-white">{{ ls.totalRecords }}</div>
+				<div class="mt-1 text-xs text-gray-500 dark:text-gray-400">bản ghi</div>
 			</div>
 		</div>
 
@@ -272,6 +282,7 @@ const { data: alertCount } = useAsyncData(
 
 		<SharedDirectusTable
 			table-id="tbl_meta_catalog"
+			:filters="{ identity_class: { _eq: 'managed' } }"
 			:row-link="(item: any) => getRegistryLink(item)"
 		>
 			<template #cell-record_count="{ value, item }">
