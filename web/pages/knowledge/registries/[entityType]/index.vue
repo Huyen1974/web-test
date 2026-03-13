@@ -81,19 +81,20 @@ const { data: virtualData } = useAsyncData(
 				),
 				$directus.request(
 					readItems('v_registry_counts' as any, {
-						fields: ['cat_code', 'record_count', 'orphan_count'],
+						fields: ['cat_code', 'record_count', 'orphan_count', 'prev_count'],
 						limit: -1,
 					}),
 				),
 			]);
 
-			const countMap = new Map<string, { record_count: number; orphan_count: number }>();
+			const countMap = new Map<string, { record_count: number; orphan_count: number; prev_count: number }>();
 			for (const c of counts as any[]) {
-				countMap.set(c.cat_code, { record_count: c.record_count || 0, orphan_count: c.orphan_count || 0 });
+				countMap.set(c.cat_code, { record_count: c.record_count || 0, orphan_count: c.orphan_count || 0, prev_count: c.prev_count || 0 });
 			}
 
 			const items = (catalog as any[]).map((c, idx) => {
-				const cnt = countMap.get(c.code) || { record_count: 0, orphan_count: 0 };
+				const cnt = countMap.get(c.code) || { record_count: 0, orphan_count: 0, prev_count: 0 };
+				const delta = cnt.record_count - cnt.prev_count;
 				return {
 					stt: idx + 1,
 					code: c.code,
@@ -101,6 +102,8 @@ const { data: virtualData } = useAsyncData(
 					entity_type: c.entity_type,
 					record_count: cnt.record_count,
 					orphan_count: cnt.orphan_count,
+					delta_plus: delta > 0 ? delta : 0,
+					delta_minus: delta < 0 ? delta : 0,
 				};
 			});
 
@@ -120,6 +123,8 @@ const virtualColumns = [
 	{ key: 'code', label: 'Code' },
 	{ key: 'name', label: 'Tên' },
 	{ key: 'record_count', label: 'Số lượng' },
+	{ key: 'delta_plus', label: '+' },
+	{ key: 'delta_minus', label: '-' },
 	{ key: 'orphan_count', label: 'Mồ côi' },
 ];
 
@@ -296,6 +301,12 @@ useHead({
 					</template>
 					<template #cell-record_count="{ row }">
 						<span class="font-medium">{{ row.record_count }}</span>
+					</template>
+					<template #cell-delta_plus="{ row }">
+						<span v-if="row.delta_plus > 0" class="font-medium text-emerald-600 dark:text-emerald-400">+{{ row.delta_plus }}</span>
+					</template>
+					<template #cell-delta_minus="{ row }">
+						<span v-if="row.delta_minus < 0" class="font-medium text-red-600 dark:text-red-400">{{ row.delta_minus }}</span>
 					</template>
 					<template #cell-orphan_count="{ row }">
 						<span

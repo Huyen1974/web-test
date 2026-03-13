@@ -140,7 +140,7 @@ const { data: registryData } = useAsyncData(
 			const [counts, catalog] = await Promise.all([
 				$directus.request(
 					readItems('v_registry_counts' as any, {
-						fields: ['cat_code', 'entity_type', 'record_count', 'orphan_count', 'composition_level'],
+						fields: ['cat_code', 'entity_type', 'record_count', 'orphan_count', 'prev_count', 'composition_level'],
 						limit: -1,
 					}),
 				),
@@ -162,6 +162,7 @@ const { data: registryData } = useAsyncData(
 			const details: any[] = [];
 			for (const r of counts as any[]) {
 				const cat = catalogMap.get(r.cat_code);
+				const delta = (r.record_count || 0) - (r.prev_count || 0);
 				details.push({
 					_type: 'detail',
 					code: r.cat_code,
@@ -170,6 +171,8 @@ const { data: registryData } = useAsyncData(
 					composition_level: r.composition_level || 'atom',
 					record_count: r.record_count || 0,
 					orphan_count: r.orphan_count || 0,
+					delta_plus: delta > 0 ? delta : 0,
+					delta_minus: delta < 0 ? delta : 0,
 					verified: true,
 				});
 			}
@@ -179,6 +182,8 @@ const { data: registryData } = useAsyncData(
 			const summaries: any[] = [];
 			for (const level of levels) {
 				const levelDetails = details.filter((d) => d.composition_level === level);
+				const sumPlus = levelDetails.reduce((s: number, d: any) => s + d.delta_plus, 0);
+				const sumMinus = levelDetails.reduce((s: number, d: any) => s + d.delta_minus, 0);
 				summaries.push({
 					_type: 'summary',
 					_virtualCode: LEVEL_TO_VIRTUAL[level] || '',
@@ -188,6 +193,8 @@ const { data: registryData } = useAsyncData(
 					composition_level: level,
 					record_count: levelDetails.reduce((s: number, d: any) => s + d.record_count, 0),
 					orphan_count: levelDetails.reduce((s: number, d: any) => s + d.orphan_count, 0),
+					delta_plus: sumPlus,
+					delta_minus: sumMinus,
 					verified: levelDetails.every((d: any) => d.verified),
 				});
 			}
@@ -215,6 +222,8 @@ const columns = [
 	{ key: 'name', label: 'Tên' },
 	{ key: 'composition_level', label: 'Lớp' },
 	{ key: 'record_count', label: 'Số lượng' },
+	{ key: 'delta_plus', label: '+' },
+	{ key: 'delta_minus', label: '-' },
 	{ key: 'orphan_count', label: 'Mồ côi' },
 	{ key: 'verified', label: 'Xác minh' },
 ];
@@ -387,6 +396,12 @@ const changelogRows = computed(() =>
 					:class="row._type === 'summary' ? 'font-bold text-gray-900 dark:text-white' : 'font-medium'"
 				>{{ row.record_count }}</span>
 			</template>
+			<template #cell-delta_plus="{ row }">
+				<span v-if="row.delta_plus > 0" class="font-medium text-emerald-600 dark:text-emerald-400">+{{ row.delta_plus }}</span>
+			</template>
+			<template #cell-delta_minus="{ row }">
+				<span v-if="row.delta_minus < 0" class="font-medium text-red-600 dark:text-red-400">{{ row.delta_minus }}</span>
+			</template>
 			<template #cell-orphan_count="{ row }">
 				<span
 					v-if="row.orphan_count > 0"
@@ -427,7 +442,15 @@ const changelogRows = computed(() =>
 
 		<!-- Nhật ký thay đổi gần đây -->
 		<div v-if="recentChanges && recentChanges.length > 0" class="mt-10">
-			<h2 class="mb-4 text-xl font-semibold text-gray-900 dark:text-white">Nhật ký thay đổi gần đây</h2>
+			<div class="mb-4 flex items-center justify-between">
+				<h2 class="text-xl font-semibold text-gray-900 dark:text-white">Nhật ký thay đổi gần đây</h2>
+				<NuxtLink
+					to="/knowledge/registries/changelog"
+					class="text-sm text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
+				>
+					Xem nhật ký thay đổi &rarr;
+				</NuxtLink>
+			</div>
 			<div class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
 				<!-- TABLE-EXCEPTION: UTable does not support expandable/collapsible detail rows -->
 				<table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">

@@ -77,6 +77,61 @@ const pageUrl = computed(() => {
 	return item.value.page_url || item.value.url || item.value.script_path || null;
 });
 
+// === LAYER 5: 2-directional dependency queries ===
+const RELATION_LABELS: Record<string, { forward: string; reverse: string }> = {
+	depends_on: { forward: 'Phụ thuộc', reverse: 'Được dùng bởi' },
+	belongs_to: { forward: 'Thuộc về', reverse: 'Chứa' },
+	contains: { forward: 'Chứa', reverse: 'Thuộc về' },
+	used_by: { forward: 'Được dùng bởi', reverse: 'Phụ thuộc' },
+	peers: { forward: 'Cùng nhóm', reverse: 'Cùng nhóm' },
+	similar: { forward: 'Tương tự', reverse: 'Tương tự' },
+};
+
+const entityCode = computed(() => item.value?.code || item.value?.process_code || item.value?.table_id || itemId.value);
+
+const { data: dependencies } = useAsyncData(
+	`deps-${entityType.value}-${itemId.value}`,
+	async () => {
+		const code = entityCode.value;
+		if (!code) return { forward: [], reverse: [] };
+		try {
+			const [fwd, rev] = await Promise.all([
+				$directus.request(
+					readItems('entity_dependencies' as any, {
+						filter: { source_code: { _eq: code } },
+						fields: ['target_code', 'target_type', 'relation_type'],
+						limit: 50,
+					}),
+				),
+				$directus.request(
+					readItems('entity_dependencies' as any, {
+						filter: { target_code: { _eq: code } },
+						fields: ['source_code', 'source_type', 'relation_type'],
+						limit: 50,
+					}),
+				),
+			]);
+			return {
+				forward: (fwd as any[]).map((d) => ({
+					code: d.target_code,
+					type: d.target_type,
+					label: RELATION_LABELS[d.relation_type]?.forward || d.relation_type,
+					link: d.target_type ? `/knowledge/registries/${d.target_type}/${d.target_code}` : null,
+				})),
+				reverse: (rev as any[]).map((d) => ({
+					code: d.source_code,
+					type: d.source_type,
+					label: RELATION_LABELS[d.relation_type]?.reverse || d.relation_type,
+					link: d.source_type ? `/knowledge/registries/${d.source_type}/${d.source_code}` : null,
+				})),
+			};
+		} catch {
+			return { forward: [], reverse: [] };
+		}
+	},
+	{ default: () => ({ forward: [], reverse: [] }) },
+);
+
 definePageMeta({ title: 'Chi tiết' });
 
 useHead({
@@ -143,40 +198,49 @@ useHead({
 				</UCard>
 			</section>
 
-			<!-- Layer 5 — Quan hệ -->
+			<!-- Layer 5 — Quan hệ 2 hướng -->
 			<div class="mb-2 mt-4">
 				<UBadge color="primary" variant="solid" size="sm">LAYER 5 — QUAN HỆ</UBadge>
 			</div>
 
-			<!-- 2. Cấu trúc -->
-			<section>
-				<h2 class="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">Cấu trúc</h2>
-				<div v-if="relationSections.length" class="space-y-4">
-					<RegistriesSectionRelation v-for="s in relationSections" :key="s.id" :item="item" :config="s" />
-				</div>
-				<UCard v-else>
-					<p class="text-sm text-gray-400 dark:text-gray-500">Chưa có dữ liệu</p>
-				</UCard>
-			</section>
+			<div v-if="dependencies.forward.length > 0 || dependencies.reverse.length > 0" class="space-y-6">
+				<!-- Tôi dùng ai? -->
+				<section v-if="dependencies.forward.length > 0">
+					<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">Tôi dùng ai?</h3>
+					<div class="space-y-1">
+						<div v-for="dep in dependencies.forward" :key="`fwd-${dep.code}`" class="flex items-center gap-2 text-sm">
+							<span class="text-gray-400">&rarr;</span>
+							<NuxtLink
+								v-if="dep.link"
+								:to="dep.link"
+								class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
+							>{{ dep.code }}</NuxtLink>
+							<span v-else class="font-mono text-xs">{{ dep.code }}</span>
+							<UBadge color="gray" variant="subtle" size="xs">{{ dep.label }}</UBadge>
+						</div>
+					</div>
+				</section>
 
-			<!-- 3. Phụ thuộc -->
-			<section>
-				<h2 class="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">Phụ thuộc</h2>
-				<div v-if="dependencySections.length" class="space-y-4">
-					<RegistriesSectionDependency v-for="s in dependencySections" :key="s.id" :item="item" :config="s" :entity-type="entityType" />
-				</div>
-				<UCard v-else>
-					<p class="text-sm text-gray-400 dark:text-gray-500">Chưa có dữ liệu</p>
-				</UCard>
-			</section>
-
-			<!-- 4. Liên quan -->
-			<section>
-				<h2 class="mb-3 text-lg font-semibold text-gray-800 dark:text-gray-200">Liên quan</h2>
-				<UCard>
-					<p class="text-sm text-gray-400 dark:text-gray-500">Chưa có dữ liệu</p>
-				</UCard>
-			</section>
+				<!-- Ai dùng tôi? -->
+				<section v-if="dependencies.reverse.length > 0">
+					<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">Ai dùng tôi?</h3>
+					<div class="space-y-1">
+						<div v-for="dep in dependencies.reverse" :key="`rev-${dep.code}`" class="flex items-center gap-2 text-sm">
+							<span class="text-gray-400">&rarr;</span>
+							<NuxtLink
+								v-if="dep.link"
+								:to="dep.link"
+								class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
+							>{{ dep.code }}</NuxtLink>
+							<span v-else class="font-mono text-xs">{{ dep.code }}</span>
+							<UBadge color="gray" variant="subtle" size="xs">{{ dep.label }}</UBadge>
+						</div>
+					</div>
+				</section>
+			</div>
+			<div v-else class="rounded-lg border border-gray-200 bg-gray-50 p-4 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+				Chưa có dữ liệu quan hệ.
+			</div>
 		</div>
 
 		<!-- Discovery mode: auto-discover relations for entity types without config -->
