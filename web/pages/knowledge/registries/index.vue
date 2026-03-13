@@ -253,7 +253,7 @@ const { data: alertCount } = useAsyncData(
 				>
 					{{ summary.totalOrphans }}
 				</div>
-				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">mồ côi</div>
+				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">mồ côi (thực)</div>
 			</div>
 		</div>
 

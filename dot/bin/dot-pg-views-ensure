@@ -3,7 +3,7 @@
 # =============================================================================
 # dot-pg-views-ensure — Tạo PostgreSQL tables + refresh function cho registry counting
 # =============================================================================
-# VERSION: 3.0.0
+# VERSION: 4.0.0
 # CHANGELOG:
 #   v1.0.0 (2026-03-12): Initial version — tried VIEWs (Directus can't introspect)
 #   v2.0.0 (2026-03-12): Switch to tables + PG function refresh_registry_counts()
@@ -13,6 +13,10 @@
 #     - count_c: count WHERE code IS NOT NULL (entities có PREFIX-NNN)
 #     - cross_check: KHỚP/LỆCH (|count_a - count_b| ≤ 1)
 #     - orphan_count = count_a - count_c
+#   v4.0.0 (2026-03-12): Stabilize orphan counts + ANALYZE
+#     - ANALYZE tất cả tables trước khi đọc pg_stat (cross-check chính xác)
+#     - total_orphans trong summary = chỉ real orphans (exclude changelog, system_issues)
+#     - Per-row orphan_count giữ nguyên (chính xác per type)
 # =============================================================================
 
 set -euo pipefail
@@ -20,7 +24,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="3.0.0"
+VERSION="4.0.0"
 VPS_HOST="38.242.240.89"
 VPS_KEY="${HOME}/.ssh/contabo_vps"
 PG_CONTAINER="postgres"
@@ -121,16 +125,37 @@ CREATE TABLE IF NOT EXISTS v_registry_summary (
 );
 
 -- =============================================================================
--- refresh_registry_counts(): 3 phương pháp đếm độc lập (6÷3=2)
+-- refresh_registry_counts() v4: ANALYZE + orphan classification
 --   count_a (record_count) = SELECT count(*) trực tiếp
---   count_b = pg_stat_user_tables n_live_tup
+--   count_b = pg_stat_user_tables n_live_tup (after ANALYZE)
 --   count_c = count WHERE code IS NOT NULL (có PREFIX-NNN)
 --   cross_check = KHỚP nếu |count_a - count_b| ≤ 1
+--   total_orphans = real orphans only (exclude changelog, system_issues)
 -- =============================================================================
 CREATE OR REPLACE FUNCTION refresh_registry_counts() RETURNS void AS $$
 DECLARE
   r RECORD;
 BEGIN
+  -- ANALYZE all registry tables for accurate pg_stat n_live_tup
+  ANALYZE meta_catalog;
+  ANALYZE table_registry;
+  ANALYZE modules;
+  ANALYZE workflows;
+  ANALYZE workflow_steps;
+  ANALYZE workflow_change_requests;
+  ANALYZE dot_tools;
+  ANALYZE ui_pages;
+  ANALYZE collection_registry;
+  ANALYZE tasks;
+  ANALYZE agents;
+  ANALYZE checkpoint_types;
+  ANALYZE checkpoint_sets;
+  ANALYZE entity_dependencies;
+  ANALYZE table_proposals;
+  ANALYZE checkpoint_instances;
+  ANALYZE registry_changelog;
+  ANALYZE system_issues;
+
   TRUNCATE v_registry_counts;
   INSERT INTO v_registry_counts (id, cat_code, entity_type, record_count, orphan_count, count_b, count_c, cross_check)
   SELECT row_number() OVER ()::int, sub.cat_code, sub.entity_type, sub.count_a, sub.orphan_count, 0, sub.count_c, ''
@@ -155,7 +180,7 @@ BEGIN
     UNION ALL SELECT 'CAT-017', 'system_issue', count(*)::int, count(*) FILTER (WHERE code IS NULL OR code = '')::int, count(*) FILTER (WHERE code IS NOT NULL AND code != '')::int FROM system_issues
   ) sub;
 
-  -- Update count_b from pg_stat_user_tables
+  -- Update count_b from pg_stat_user_tables (now accurate after ANALYZE)
   FOR r IN SELECT id, entity_type FROM v_registry_counts
   LOOP
     UPDATE v_registry_counts SET count_b = COALESCE((
@@ -178,9 +203,12 @@ BEGIN
   UPDATE v_registry_counts SET cross_check =
     CASE WHEN abs(record_count - count_b) <= 1 THEN 'KHỚP' ELSE 'LỆCH' END;
 
+  -- Summary: total_orphans excludes log-type records (changelog, system_issues)
+  -- These collections have NULL code by design, not real orphans
   DELETE FROM v_registry_summary;
   INSERT INTO v_registry_summary (id, total_atoms, total_types, total_orphans)
-  SELECT 1, SUM(record_count)::int, COUNT(*)::int, SUM(orphan_count)::int
+  SELECT 1, SUM(record_count)::int, COUNT(*)::int,
+    SUM(CASE WHEN entity_type NOT IN ('changelog', 'system_issue') THEN orphan_count ELSE 0 END)::int
   FROM v_registry_counts;
 END;
 $$ LANGUAGE plpgsql;
