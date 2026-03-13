@@ -1,0 +1,261 @@
+#!/usr/bin/env bash
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-*trigger* — no existing tool]
+# =============================================================================
+# dot-pg-triggers-ensure — PG triggers sinh code (PREFIX-NNN) tự động
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-03-13): Initial — 16 atom collections
+#     - Add code column to 4 tables missing it (wcr, tasks, table_proposals, checkpoint_instances)
+#     - CREATE SEQUENCE + FUNCTION + TRIGGER cho mỗi collection
+#     - Fix orphans: UPDATE existing records thiếu code
+#     - Idempotent: IF NOT EXISTS / OR REPLACE throughout
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+for arg in "$@"; do
+  case "$arg" in
+    --help|-h)
+      echo "dot-pg-triggers-ensure v${VERSION} — PG triggers sinh code tự động"
+      echo ""
+      echo "Usage: dot-pg-triggers-ensure [--cloud]"
+      echo ""
+      echo "Creates sequences, functions, and triggers for 16 atom collections."
+      echo "Also fixes existing records missing code (orphans)."
+      exit 0
+      ;;
+  esac
+done
+
+init_environment "$@"
+
+echo "========================================="
+echo "DOT Tool: PG Triggers Ensure v${VERSION}"
+echo "========================================="
+print_environment_banner "$@"
+
+# =============================================================================
+# STEP 1: Add code column to tables that lack it
+# =============================================================================
+log_info "Step 1: Ensure code column exists on all 16 atom tables..."
+
+ADD_COLS_SQL=$(cat <<'ENDSQL'
+ALTER TABLE workflow_change_requests ADD COLUMN IF NOT EXISTS code text;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS code text;
+ALTER TABLE table_proposals ADD COLUMN IF NOT EXISTS code text;
+ALTER TABLE checkpoint_instances ADD COLUMN IF NOT EXISTS code text;
+ENDSQL
+)
+
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+  "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB}" <<< "$ADD_COLS_SQL"
+
+if [[ $? -eq 0 ]]; then
+  log_ok "Code columns ensured"
+else
+  log_warn "Some columns may already exist"
+fi
+
+# =============================================================================
+# STEP 2: Create sequences + trigger functions + triggers
+# =============================================================================
+log_info "Step 2: Create sequences + triggers for 16 collections..."
+
+# Config: table_name, code_field, prefix, pad_width
+# Derived from actual data in production
+TRIGGER_SQL=$(cat <<'ENDSQL'
+-- =============================================================================
+-- Auto-ID triggers for 16 atom collections
+-- Pattern: BEFORE INSERT → IF code IS NULL → assign PREFIX-NNN from sequence
+-- Idempotent: CREATE OR REPLACE / IF NOT EXISTS
+-- =============================================================================
+
+DO $block$
+DECLARE
+  cfg RECORD;
+  max_num int;
+  seq_name text;
+  func_name text;
+  trig_name text;
+  sql_text text;
+BEGIN
+  FOR cfg IN
+    SELECT * FROM (VALUES
+      ('meta_catalog',            'code',         'CAT',  3),
+      ('table_registry',          'table_id',     'TBL',  3),
+      ('modules',                 'code',         'MOD',  3),
+      ('workflows',               'process_code', 'WF',   3),
+      ('workflow_steps',          'code',         'ND',   4),
+      ('workflow_change_requests','code',         'WCR',  3),
+      ('dot_tools',               'code',         'DOT',  3),
+      ('ui_pages',                'code',         'PG',   3),
+      ('collection_registry',     'code',         'COL',  3),
+      ('tasks',                   'code',         'TSK',  3),
+      ('agents',                  'code',         'AGT',  3),
+      ('checkpoint_types',        'code',         'CP',   3),
+      ('checkpoint_sets',         'code',         'CPS',  3),
+      ('entity_dependencies',     'code',         'DEP',  4),
+      ('table_proposals',         'code',         'TP',   3),
+      ('checkpoint_instances',    'code',         'CPI',  3)
+    ) AS t(tbl, code_field, prefix, pad)
+  LOOP
+    seq_name  := 'seq_' || cfg.tbl || '_code';
+    func_name := 'gen_code_' || cfg.tbl;
+    trig_name := 'trg_auto_code_' || cfg.tbl;
+
+    -- Find current max code number to initialize sequence correctly
+    EXECUTE format(
+      'SELECT COALESCE(MAX(
+        CASE WHEN %I ~ (''^\s*'' || %L || ''-[0-9]+$'')
+          THEN CAST(regexp_replace(%I, ''^.*-'', '''') AS int)
+          ELSE 0
+        END
+      ), 0) FROM %I',
+      cfg.code_field, cfg.prefix, cfg.code_field, cfg.tbl
+    ) INTO max_num;
+
+    -- Create or reset sequence
+    EXECUTE format('DROP SEQUENCE IF EXISTS %I', seq_name);
+    EXECUTE format('CREATE SEQUENCE %I START WITH %s', seq_name, max_num + 1);
+
+    -- Create trigger function
+    EXECUTE format($f$
+      CREATE OR REPLACE FUNCTION %I() RETURNS trigger AS $fn$
+      BEGIN
+        IF NEW.%I IS NULL OR NEW.%I = '' THEN
+          NEW.%I := %L || '-' || lpad(nextval(%L)::text, %s, '0');
+        END IF;
+        RETURN NEW;
+      END;
+      $fn$ LANGUAGE plpgsql;
+    $f$, func_name, cfg.code_field, cfg.code_field, cfg.code_field, cfg.prefix, seq_name, cfg.pad);
+
+    -- Create trigger (drop first to ensure idempotent)
+    EXECUTE format('DROP TRIGGER IF EXISTS %I ON %I', trig_name, cfg.tbl);
+    EXECUTE format(
+      'CREATE TRIGGER %I BEFORE INSERT ON %I FOR EACH ROW EXECUTE FUNCTION %I()',
+      trig_name, cfg.tbl, func_name
+    );
+
+    RAISE NOTICE 'Created trigger % on % (seq starts at %)', trig_name, cfg.tbl, max_num + 1;
+  END LOOP;
+END;
+$block$;
+ENDSQL
+)
+
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+  "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB}" <<< "$TRIGGER_SQL"
+
+if [[ $? -eq 0 ]]; then
+  log_ok "Triggers created"
+else
+  log_err "Failed to create triggers"
+  exit 1
+fi
+
+# =============================================================================
+# STEP 3: Fix existing orphans (records with NULL/empty code)
+# =============================================================================
+log_info "Step 3: Fix existing orphans..."
+
+FIX_SQL=$(cat <<'ENDSQL'
+DO $block$
+DECLARE
+  cfg RECORD;
+  seq_name text;
+  fix_count int;
+  total_fixed int := 0;
+BEGIN
+  FOR cfg IN
+    SELECT * FROM (VALUES
+      ('meta_catalog',            'code',         'CAT',  3),
+      ('table_registry',          'table_id',     'TBL',  3),
+      ('modules',                 'code',         'MOD',  3),
+      ('workflows',               'process_code', 'WF',   3),
+      ('workflow_steps',          'code',         'ND',   4),
+      ('workflow_change_requests','code',         'WCR',  3),
+      ('dot_tools',               'code',         'DOT',  3),
+      ('ui_pages',                'code',         'PG',   3),
+      ('collection_registry',     'code',         'COL',  3),
+      ('tasks',                   'code',         'TSK',  3),
+      ('agents',                  'code',         'AGT',  3),
+      ('checkpoint_types',        'code',         'CP',   3),
+      ('checkpoint_sets',         'code',         'CPS',  3),
+      ('entity_dependencies',     'code',         'DEP',  4),
+      ('table_proposals',         'code',         'TP',   3),
+      ('checkpoint_instances',    'code',         'CPI',  3)
+    ) AS t(tbl, code_field, prefix, pad)
+  LOOP
+    seq_name := 'seq_' || cfg.tbl || '_code';
+
+    EXECUTE format(
+      'UPDATE %I SET %I = %L || ''-'' || lpad(nextval(%L)::text, %s, ''0'')
+       WHERE %I IS NULL OR %I = ''''',
+      cfg.tbl, cfg.code_field, cfg.prefix, seq_name, cfg.pad,
+      cfg.code_field, cfg.code_field
+    );
+    GET DIAGNOSTICS fix_count = ROW_COUNT;
+
+    IF fix_count > 0 THEN
+      RAISE NOTICE 'Fixed % orphans in %', fix_count, cfg.tbl;
+      total_fixed := total_fixed + fix_count;
+    END IF;
+  END LOOP;
+
+  RAISE NOTICE 'Total orphans fixed: %', total_fixed;
+END;
+$block$;
+ENDSQL
+)
+
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+  "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB}" <<< "$FIX_SQL"
+
+if [[ $? -eq 0 ]]; then
+  log_ok "Orphan fix complete"
+else
+  log_warn "Some orphan fixes may have failed"
+fi
+
+# =============================================================================
+# STEP 4: Refresh registry counts to reflect fixes
+# =============================================================================
+log_info "Step 4: Refresh registry counts..."
+
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+  "docker exec ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -c 'SELECT refresh_registry_counts();'"
+
+log_ok "Registry counts refreshed"
+
+# =============================================================================
+# STEP 5: Verify
+# =============================================================================
+log_info "Step 5: Verify..."
+
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+  "docker exec ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -c 'SELECT cat_code, entity_type, record_count, orphan_count, cross_check FROM v_registry_counts ORDER BY id;'"
+
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+  "docker exec ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -c 'SELECT * FROM v_registry_summary;'"
+
+echo ""
+echo "========================================="
+echo "DOT Tool: PG Triggers Ensure — HOÀN TẤT"
+echo "========================================="
