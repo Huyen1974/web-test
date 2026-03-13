@@ -1,6 +1,8 @@
 # =============================================================================
 # LOCAL DEVELOPMENT DOCKER COMPOSE
 # Connects to production Cloud SQL and GCS for real data
+# NOTE: VPS migrated from MySQL to PostgreSQL (S115, 2026-03-13).
+#       Local dev still uses Cloud SQL MySQL proxy — update when Cloud SQL migrates.
 # =============================================================================
 # Usage:
 #   ./dot/bin/dot-local-up   - Start all services
