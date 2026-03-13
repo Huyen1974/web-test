@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { readItems, aggregate } from '@directus/sdk';
+import { readItems } from '@directus/sdk';
 
 definePageMeta({
 	title: 'Danh mục hệ thống',
@@ -22,7 +22,7 @@ function formatAction(action: string) {
 
 function formatMinuteKey(ts: string) {
 	if (!ts) return '';
-	return ts.slice(0, 16); // "2026-03-10T08:44" — minute precision
+	return ts.slice(0, 16);
 }
 
 function formatMinuteDisplay(minuteKey: string) {
@@ -40,8 +40,8 @@ function formatMinuteDisplay(minuteKey: string) {
 
 const { $directus } = useNuxtApp();
 
-// Composition level config
-const LEVEL_CONFIG: Record<string, { label: string; color: 'green' | 'blue' | 'purple' | 'orange' | 'amber' | 'indigo' }> = {
+// Composition level labels + colors
+const LEVEL_CONFIG: Record<string, { label: string; color: string }> = {
 	atom: { label: 'Atom', color: 'green' },
 	molecule: { label: 'Molecule', color: 'blue' },
 	compound: { label: 'Compound', color: 'purple' },
@@ -50,33 +50,114 @@ const LEVEL_CONFIG: Record<string, { label: string; color: 'green' | 'blue' | 'p
 	building: { label: 'Building', color: 'indigo' },
 };
 
-// Fetch summary by composition_level from meta_catalog (managed items only)
-const { data: levelSummary } = useAsyncData(
-	'registry-level-summary',
+const LEVEL_LABEL_VI: Record<string, string> = {
+	atom: 'Tổng nguyên tử',
+	molecule: 'Tổng phân tử',
+	compound: 'Tổng hợp chất',
+	material: 'Tổng vật liệu',
+	product: 'Tổng sản phẩm',
+	building: 'Tổng công trình',
+};
+
+// Fetch v_registry_counts + meta_catalog to build unified table
+const { data: registryData } = useAsyncData(
+	'registry-unified',
 	async () => {
 		try {
-			const items = await $directus.request(
-				readItems('meta_catalog' as any, {
-					fields: ['composition_level', 'record_count'],
-					filter: { identity_class: { _eq: 'managed' } },
-					limit: -1,
-				}),
-			);
+			const [counts, catalog] = await Promise.all([
+				$directus.request(
+					readItems('v_registry_counts' as any, {
+						fields: ['cat_code', 'entity_type', 'record_count', 'orphan_count', 'composition_level'],
+						limit: -1,
+					}),
+				),
+				$directus.request(
+					readItems('meta_catalog' as any, {
+						fields: ['code', 'name', 'entity_type', 'composition_level', 'identity_class'],
+						filter: { identity_class: { _eq: 'managed' } },
+						limit: -1,
+					}),
+				),
+			]);
+
+			const catalogMap = new Map<string, any>();
+			for (const c of catalog as any[]) {
+				catalogMap.set(c.code, c);
+			}
+
+			// Build detail rows
+			const details: any[] = [];
+			for (const r of counts as any[]) {
+				const cat = catalogMap.get(r.cat_code);
+				details.push({
+					_type: 'detail',
+					code: r.cat_code,
+					name: cat?.name || r.entity_type,
+					entity_type: r.entity_type,
+					composition_level: r.composition_level || 'atom',
+					record_count: r.record_count || 0,
+					orphan_count: r.orphan_count || 0,
+					verified: true, // Trigger-maintained = always in sync
+				});
+			}
+
+			// Build summary rows per composition_level
 			const levels = ['atom', 'molecule', 'compound', 'material', 'product', 'building'];
-			return levels.map((level) => {
-				const levelItems = (items as any[]).filter((i) => i.composition_level === level);
-				return {
-					level,
-					count: levelItems.length,
-					totalRecords: levelItems.reduce((sum: number, i: any) => sum + (i.record_count || 0), 0),
-				};
+			const summaries: any[] = [];
+			for (const level of levels) {
+				const levelDetails = details.filter((d) => d.composition_level === level);
+				summaries.push({
+					_type: 'summary',
+					code: '—',
+					name: LEVEL_LABEL_VI[level] || level,
+					entity_type: '',
+					composition_level: level,
+					record_count: levelDetails.reduce((s: number, d: any) => s + d.record_count, 0),
+					orphan_count: levelDetails.reduce((s: number, d: any) => s + d.orphan_count, 0),
+					verified: levelDetails.every((d: any) => d.verified),
+				});
+			}
+
+			// Sort details by composition_level then code
+			details.sort((a, b) => {
+				const li = levels.indexOf(a.composition_level);
+				const ri = levels.indexOf(b.composition_level);
+				if (li !== ri) return li - ri;
+				return a.code.localeCompare(b.code);
 			});
+
+			return { summaries, details };
 		} catch {
-			return [];
+			return { summaries: [], details: [] };
 		}
 	},
-	{ default: () => [] },
+	{ default: () => ({ summaries: [], details: [] }) },
 );
+
+// UTable columns
+const columns = [
+	{ key: 'code', label: 'Code' },
+	{ key: 'name', label: 'Tên' },
+	{ key: 'composition_level', label: 'Tầng' },
+	{ key: 'record_count', label: 'Số lượng' },
+	{ key: 'orphan_count', label: 'Mồ côi' },
+	{ key: 'verified', label: 'Xác minh' },
+];
+
+// Combined rows: summaries first, then details
+const tableRows = computed(() => {
+	const data = registryData.value;
+	if (!data) return [];
+	return [...data.summaries, ...data.details];
+});
+
+// Row click → navigate to detail page
+const router = useRouter();
+function onRowClick(row: any) {
+	if (row._type === 'detail' && row.entity_type) {
+		router.push(getRegistryLink(row));
+	}
+}
 
 // Fetch recent changelog entries grouped by MINUTE
 const { data: recentChanges } = useAsyncData(
@@ -90,7 +171,6 @@ const { data: recentChanges } = useAsyncData(
 					limit: 200,
 				}),
 			);
-			// Group by minute
 			const minuteGroups = new Map<
 				string,
 				{
@@ -132,7 +212,6 @@ const { data: recentChanges } = useAsyncData(
 	{ default: () => null },
 );
 
-// Expanded minute rows tracking
 const expandedMinutes = ref<Set<string>>(new Set());
 
 function toggleMinute(mk: string) {
@@ -141,11 +220,9 @@ function toggleMinute(mk: string) {
 	} else {
 		expandedMinutes.value.add(mk);
 	}
-	// Force reactivity
 	expandedMinutes.value = new Set(expandedMinutes.value);
 }
 
-// UTable config for changelog
 const changelogColumns = [
 	{ key: 'time', label: 'Thời gian' },
 	{ key: 'types', label: 'Loại' },
@@ -168,70 +245,6 @@ const changelogRows = computed(() =>
 		isExpanded: expandedMinutes.value.has(g.minuteKey),
 	})),
 );
-
-// PG-based crosscheck: fetch v_registry_counts for independent verification
-const { data: pgCrosscheck } = useAsyncData(
-	'registry-crosscheck-pg',
-	async () => {
-		try {
-			const items = await $directus.request(
-				readItems('v_registry_counts' as any, {
-					fields: ['cat_code', 'entity_type', 'record_count', 'count_b', 'count_c', 'cross_check'],
-					limit: -1,
-				}),
-			);
-			const map: Record<string, { count_a: number; count_b: number; count_c: number; cross_check: string }> = {};
-			for (const r of items as any[]) {
-				map[r.entity_type] = {
-					count_a: r.record_count || 0,
-					count_b: r.count_b || 0,
-					count_c: r.count_c || 0,
-					cross_check: r.cross_check || '',
-				};
-			}
-			return map;
-		} catch {
-			return {};
-		}
-	},
-	{ default: () => ({}) },
-);
-
-function getCrosscheckStatus(item: any): { label: string; color: string } {
-	const et = item?.entity_type || '';
-	const pg = (pgCrosscheck.value as any)?.[et];
-	if (!pg) return { label: '—', color: 'gray' };
-	if (pg.cross_check === 'KHỚP') {
-		return { label: `✅ ${pg.count_a}=${pg.count_b}`, color: 'green' };
-	}
-	const delta = pg.count_a - pg.count_b;
-	return { label: `❌ lệch ${delta > 0 ? '+' : ''}${delta}`, color: 'red' };
-}
-
-// Count unresolved alerts
-const { data: alertCount } = useAsyncData(
-	'registry-alerts',
-	async () => {
-		try {
-			const result = await $directus.request(
-				aggregate('registry_changelog' as any, {
-					aggregate: { countDistinct: 'id' },
-					query: {
-						filter: {
-							alert_level: { _in: ['warning', 'critical'] },
-							resolved: { _eq: false },
-						},
-					},
-				}),
-			);
-			const count = (result as any)?.[0]?.countDistinct?.id;
-			return count ? parseInt(count) : 0;
-		} catch {
-			return 0;
-		}
-	},
-	{ default: () => 0 },
-);
 </script>
 
 <template>
@@ -245,103 +258,66 @@ const { data: alertCount } = useAsyncData(
 			</NuxtLink>
 			<h1 class="text-3xl font-bold text-gray-900 dark:text-white">Danh mục hệ thống</h1>
 			<p class="mt-2 text-gray-600 dark:text-gray-400">
-				Meta-Catalog — Danh mục sống 3 tầng. Click vào số lượng hoặc tên để xem chi tiết.
+				Meta-Catalog — Danh mục sống, đếm realtime bằng PG trigger. Click vào tên để xem chi tiết.
 			</p>
 		</div>
 
-		<!-- Summary by composition level -->
-		<div v-if="levelSummary.length" class="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-			<div
-				v-for="ls in levelSummary"
-				:key="ls.level"
-				class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
-			>
-				<div class="mb-2 flex items-center justify-between">
-					<UBadge :color="LEVEL_CONFIG[ls.level]?.color || 'gray'" variant="subtle" size="xs">
-						{{ LEVEL_CONFIG[ls.level]?.label || ls.level }}
-					</UBadge>
-					<span class="text-xs text-gray-400">{{ ls.count }} loại</span>
-				</div>
-				<div class="text-2xl font-bold text-gray-900 dark:text-white">{{ ls.totalRecords }}</div>
-				<div class="mt-1 text-xs text-gray-500 dark:text-gray-400">bản ghi</div>
-			</div>
-		</div>
-
-		<!-- Alert banner -->
-		<div
-			v-if="alertCount && alertCount > 0"
-			class="mb-6 rounded-lg border border-red-300 bg-red-50 px-4 py-3 dark:border-red-700 dark:bg-red-900/20"
-		>
-			<div class="flex items-center gap-2">
-				<UIcon name="i-heroicons-exclamation-triangle" class="h-5 w-5 text-red-600 dark:text-red-400" />
-				<span class="font-medium text-red-800 dark:text-red-200">
-					{{ alertCount }} cảnh báo chưa xử lý
-				</span>
-			</div>
-		</div>
-
-		<SharedDirectusTable
-			table-id="tbl_meta_catalog"
-			:filters="{ identity_class: { _eq: 'managed' } }"
-			:row-link="(item: any) => getRegistryLink(item)"
-		>
-			<template #cell-record_count="{ value, item }">
+		<!-- Unified registry table: summaries + details -->
+		<UTable :columns="columns" :rows="tableRows" @select="onRowClick">
+			<template #cell-code="{ row }">
+				<span
+					v-if="row._type === 'summary'"
+					class="font-medium text-gray-400"
+				>—</span>
+				<span v-else class="font-mono text-xs">{{ row.code }}</span>
+			</template>
+			<template #cell-name="{ row }">
+				<span
+					v-if="row._type === 'summary'"
+					class="font-semibold text-gray-900 dark:text-white"
+				>{{ row.name }}</span>
 				<NuxtLink
-					:to="getRegistryLink(item)"
-					class="inline-flex items-center gap-1 font-semibold text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
+					v-else
+					:to="getRegistryLink(row)"
+					class="text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
 					@click.stop
 				>
-					{{ value ?? 0 }}
-					<UIcon name="i-heroicons-arrow-right-20-solid" class="h-3.5 w-3.5" />
+					{{ row.name }}
 				</NuxtLink>
 			</template>
-			<template #cell-source_model="{ value }">
-				<span
-					class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
-					:class="{
-						'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300': value === 'A',
-						'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300': value === 'B',
-					}"
-				>
-					{{ value === 'A' ? 'A — Directus' : 'B — File scan' }}
-				</span>
-			</template>
-			<template #cell-status="{ value }">
-				<span
-					class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium capitalize"
-					:class="{
-						'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300': value === 'active',
-						'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300': value === 'planned',
-						'bg-gray-100 text-gray-700 dark:bg-gray-700/50 dark:text-gray-300': value === 'deprecated',
-					}"
-				>
-					{{ value }}
-				</span>
-			</template>
-			<template #cell-baseline_count="{ item }">
-				<span class="text-xs" :class="getCrosscheckStatus(item).color === 'green' ? 'text-emerald-600 dark:text-emerald-400' : getCrosscheckStatus(item).color === 'red' ? 'text-red-600 dark:text-red-400' : 'text-gray-400'">
-					{{ getCrosscheckStatus(item).label }}
-				</span>
-			</template>
-			<template #cell-atom_group="{ value }">
+			<template #cell-composition_level="{ row }">
 				<UBadge
-					v-if="value"
-					:color="value === 'cấu_trúc' ? 'blue' : value === 'quy_trình' ? 'purple' : value === 'công_cụ' ? 'green' : value === 'dữ_liệu' ? 'orange' : 'gray'"
+					:color="(LEVEL_CONFIG[row.composition_level]?.color as any) || 'gray'"
 					variant="subtle"
 					size="xs"
 				>
-					{{ value === 'cấu_trúc' ? 'Cấu trúc' : value === 'quy_trình' ? 'Quy trình' : value === 'công_cụ' ? 'Công cụ' : value === 'dữ_liệu' ? 'Dữ liệu' : 'Giám sát' }}
+					{{ LEVEL_CONFIG[row.composition_level]?.label || row.composition_level }}
 				</UBadge>
-				<span v-else class="text-gray-300 dark:text-gray-600">—</span>
 			</template>
-		</SharedDirectusTable>
+			<template #cell-record_count="{ row }">
+				<span
+					:class="row._type === 'summary' ? 'font-bold text-gray-900 dark:text-white' : 'font-medium'"
+				>{{ row.record_count }}</span>
+			</template>
+			<template #cell-orphan_count="{ row }">
+				<span
+					v-if="row.orphan_count > 0"
+					class="font-medium text-amber-600 dark:text-amber-400"
+				>{{ row.orphan_count }}</span>
+				<span v-else class="text-gray-400">0</span>
+			</template>
+			<template #cell-verified="{ row }">
+				<span v-if="row.verified">✅</span>
+				<span v-else>❌</span>
+			</template>
+		</UTable>
 
 		<!-- Nhật ký thay đổi gần đây -->
 		<div v-if="recentChanges && recentChanges.length > 0" class="mt-10">
 			<h2 class="mb-4 text-xl font-semibold text-gray-900 dark:text-white">Nhật ký thay đổi gần đây</h2>
 			<div class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
 				<!-- TABLE-EXCEPTION: UTable does not support expandable/collapsible detail rows -->
-			<table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+				<table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
 					<thead class="bg-gray-50 dark:bg-gray-800">
 						<tr>
 							<th v-for="col in changelogColumns" :key="col.key" class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
@@ -374,7 +350,6 @@ const { data: alertCount } = useAsyncData(
 								</td>
 								<td class="px-3 py-2 text-sm font-medium text-gray-900 dark:text-white">{{ row.total }}</td>
 							</tr>
-							<!-- Expanded detail rows -->
 							<tr v-if="row.isExpanded">
 								<td colspan="6" class="bg-gray-50 px-6 py-2 dark:bg-gray-800/50">
 									<div class="space-y-1">
