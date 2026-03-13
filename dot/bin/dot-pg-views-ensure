@@ -3,20 +3,16 @@
 # =============================================================================
 # dot-pg-views-ensure — Tạo PostgreSQL tables + refresh function cho registry counting
 # =============================================================================
-# VERSION: 4.0.0
+# VERSION: 5.0.0
 # CHANGELOG:
 #   v1.0.0 (2026-03-12): Initial version — tried VIEWs (Directus can't introspect)
 #   v2.0.0 (2026-03-12): Switch to tables + PG function refresh_registry_counts()
-#   v3.0.0 (2026-03-12): 3 phương pháp đếm độc lập (6÷3=2)
-#     - count_a: SELECT count(*) trực tiếp
-#     - count_b: pg_stat_user_tables n_live_tup (PG system stats)
-#     - count_c: count WHERE code IS NOT NULL (entities có PREFIX-NNN)
-#     - cross_check: KHỚP/LỆCH (|count_a - count_b| ≤ 1)
-#     - orphan_count = count_a - count_c
-#   v4.0.0 (2026-03-12): Stabilize orphan counts + ANALYZE
-#     - ANALYZE tất cả tables trước khi đọc pg_stat (cross-check chính xác)
-#     - total_orphans trong summary = chỉ real orphans (exclude changelog, system_issues)
-#     - Per-row orphan_count giữ nguyên (chính xác per type)
+#   v3.0.0 (2026-03-12): 3 phương pháp đếm độc lập
+#   v4.0.0 (2026-03-12): ANALYZE + exclude changelog/system_issues from total_orphans
+#   v5.0.0 (2026-03-13): Summary chỉ đếm 16 nguyên tử (exclude status='log')
+#     - v_registry_counts vẫn giữ 18 rows (all types including log)
+#     - v_registry_summary chỉ tổng hợp 16 atom types (WHERE entity_type NOT IN changelog, system_issue)
+#     - total_types = 16, total_atoms = sum of 16, total_orphans = orphans of 16 only
 # =============================================================================
 
 set -euo pipefail
@@ -24,7 +20,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="4.0.0"
+VERSION="5.0.0"
 VPS_HOST="38.242.240.89"
 VPS_KEY="${HOME}/.ssh/contabo_vps"
 PG_CONTAINER="postgres"
@@ -203,13 +199,12 @@ BEGIN
   UPDATE v_registry_counts SET cross_check =
     CASE WHEN abs(record_count - count_b) <= 1 THEN 'KHỚP' ELSE 'LỆCH' END;
 
-  -- Summary: total_orphans excludes log-type records (changelog, system_issues)
-  -- These collections have NULL code by design, not real orphans
+  -- Summary: only 16 atom types (exclude changelog + system_issue = status='log')
   DELETE FROM v_registry_summary;
   INSERT INTO v_registry_summary (id, total_atoms, total_types, total_orphans)
-  SELECT 1, SUM(record_count)::int, COUNT(*)::int,
-    SUM(CASE WHEN entity_type NOT IN ('changelog', 'system_issue') THEN orphan_count ELSE 0 END)::int
-  FROM v_registry_counts;
+  SELECT 1, SUM(record_count)::int, COUNT(*)::int, SUM(orphan_count)::int
+  FROM v_registry_counts
+  WHERE entity_type NOT IN ('changelog', 'system_issue');
 END;
 $$ LANGUAGE plpgsql;
 

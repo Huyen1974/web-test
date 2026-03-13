@@ -244,7 +244,7 @@ const { data: alertCount } = useAsyncData(
 			</div>
 			<div class="rounded-lg border border-gray-200 bg-white p-4 text-center dark:border-gray-700 dark:bg-gray-800">
 				<div class="text-3xl font-bold text-gray-900 dark:text-white">{{ summary.totalCategories }}</div>
-				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">loại thực thể (+ 2 tổng hợp)</div>
+				<div class="mt-1 text-sm text-gray-500 dark:text-gray-400">loại nguyên tử</div>
 			</div>
 			<div class="rounded-lg border border-gray-200 bg-white p-4 text-center dark:border-gray-700 dark:bg-gray-800">
 				<div
