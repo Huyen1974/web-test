@@ -101,6 +101,9 @@ useHead({
 				<span class="text-gray-900 dark:text-white">{{ item?.code || item?.process_code || item?.name || itemId }}</span>
 			</div>
 
+			<div class="mb-2">
+				<UBadge color="primary" variant="solid" size="sm">LAYER 4</UBadge>
+			</div>
 			<div class="flex items-center gap-4">
 				<h1 class="text-3xl font-bold text-gray-900 dark:text-white">
 					{{ item?.name || item?.title || item?.code || `Item #${itemId}` }}
@@ -139,6 +142,11 @@ useHead({
 					<p class="text-sm text-gray-400 dark:text-gray-500">Chưa có dữ liệu</p>
 				</UCard>
 			</section>
+
+			<!-- Layer 5 — Quan hệ -->
+			<div class="mb-2 mt-4">
+				<UBadge color="primary" variant="solid" size="sm">LAYER 5 — QUAN HỆ</UBadge>
+			</div>
 
 			<!-- 2. Cấu trúc -->
 			<section>
