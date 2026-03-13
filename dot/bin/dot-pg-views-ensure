@@ -3,14 +3,13 @@
 # =============================================================================
 # dot-pg-views-ensure — Tạo PostgreSQL tables + refresh function cho registry counting
 # =============================================================================
-# VERSION: 6.0.0
+# VERSION: 7.0.0
 # CHANGELOG:
 #   v1–5: see git history
-#   v6.0.0 (2026-03-13): CHỈ đếm 16 nguyên tử (meta_catalog status='active'|'published')
-#     - Loại hoàn toàn CAT-016 changelog + CAT-017 system_issue khỏi UNION ALL
-#     - v_registry_counts = 16 rows (chỉ atom types)
-#     - v_registry_summary = SUM trực tiếp, không cần WHERE filter
-#     - KHÔNG ghi đè meta_catalog.status
+#   v6.0.0 (2026-03-13): CHỈ đếm 16 nguyên tử, loại CAT-016/017 khỏi UNION ALL
+#   v7.0.0 (2026-03-13): Thêm composition_level breakdown vào v_registry_summary
+#     - v_registry_counts thêm column composition_level (JOIN meta_catalog)
+#     - v_registry_summary thêm count_atom, count_molecule, count_compound
 # =============================================================================
 
 set -euo pipefail
@@ -18,7 +17,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="6.0.0"
+VERSION="7.0.0"
 VPS_HOST="38.242.240.89"
 VPS_KEY="${HOME}/.ssh/contabo_vps"
 PG_CONTAINER="postgres"
@@ -110,6 +109,7 @@ CREATE TABLE IF NOT EXISTS v_registry_counts (
 ALTER TABLE v_registry_counts ADD COLUMN IF NOT EXISTS count_b int NOT NULL DEFAULT 0;
 ALTER TABLE v_registry_counts ADD COLUMN IF NOT EXISTS count_c int NOT NULL DEFAULT 0;
 ALTER TABLE v_registry_counts ADD COLUMN IF NOT EXISTS cross_check text NOT NULL DEFAULT '';
+ALTER TABLE v_registry_counts ADD COLUMN IF NOT EXISTS composition_level text NOT NULL DEFAULT 'atom';
 
 CREATE TABLE IF NOT EXISTS v_registry_summary (
   id serial PRIMARY KEY,
@@ -117,14 +117,18 @@ CREATE TABLE IF NOT EXISTS v_registry_summary (
   total_types int NOT NULL DEFAULT 0,
   total_orphans int NOT NULL DEFAULT 0
 );
+ALTER TABLE v_registry_summary ADD COLUMN IF NOT EXISTS count_atom int NOT NULL DEFAULT 0;
+ALTER TABLE v_registry_summary ADD COLUMN IF NOT EXISTS count_molecule int NOT NULL DEFAULT 0;
+ALTER TABLE v_registry_summary ADD COLUMN IF NOT EXISTS count_compound int NOT NULL DEFAULT 0;
 
 -- =============================================================================
--- refresh_registry_counts() v4: ANALYZE + orphan classification
+-- refresh_registry_counts() v7: composition_level from meta_catalog
 --   count_a (record_count) = SELECT count(*) trực tiếp
 --   count_b = pg_stat_user_tables n_live_tup (after ANALYZE)
 --   count_c = count WHERE code IS NOT NULL (có PREFIX-NNN)
+--   composition_level = JOIN meta_catalog.composition_level
 --   cross_check = KHỚP nếu |count_a - count_b| ≤ 1
---   total_orphans = real orphans only (exclude changelog, system_issues)
+--   summary: total + per-level breakdown (atom/molecule/compound)
 -- =============================================================================
 CREATE OR REPLACE FUNCTION refresh_registry_counts() RETURNS void AS $$
 DECLARE
@@ -192,10 +196,20 @@ BEGIN
   UPDATE v_registry_counts SET cross_check =
     CASE WHEN abs(record_count - count_b) <= 1 THEN 'KHỚP' ELSE 'LỆCH' END;
 
-  -- Summary: all rows are atoms (16 types, no log types in table)
+  -- Update composition_level from meta_catalog (JOIN on cat_code)
+  UPDATE v_registry_counts rc SET composition_level = COALESCE(mc.composition_level, 'atom')
+  FROM meta_catalog mc WHERE mc.code = rc.cat_code;
+
+  -- Summary: total + per-level breakdown
   DELETE FROM v_registry_summary;
-  INSERT INTO v_registry_summary (id, total_atoms, total_types, total_orphans)
-  SELECT 1, SUM(record_count)::int, COUNT(*)::int, SUM(orphan_count)::int
+  INSERT INTO v_registry_summary (id, total_atoms, total_types, total_orphans, count_atom, count_molecule, count_compound)
+  SELECT 1,
+    SUM(record_count)::int,
+    COUNT(*)::int,
+    SUM(orphan_count)::int,
+    COALESCE(SUM(record_count) FILTER (WHERE composition_level = 'atom'), 0)::int,
+    COALESCE(SUM(record_count) FILTER (WHERE composition_level = 'molecule'), 0)::int,
+    COALESCE(SUM(record_count) FILTER (WHERE composition_level = 'compound'), 0)::int
   FROM v_registry_counts;
 END;
 $$ LANGUAGE plpgsql;
