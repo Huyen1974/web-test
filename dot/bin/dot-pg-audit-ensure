@@ -1,0 +1,232 @@
+#!/usr/bin/env bash
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-*audit* — dot-layer-integrity-audit exists but is different scope]
+# =============================================================================
+# dot-pg-audit-ensure — PG functions: audit_relationships + audit_dead_links
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-03-14): Initial — 2 audit functions for DOT scanning
+#     - audit_relationships(): find entities without any relationship data
+#     - audit_dead_links(): find dependencies pointing to deleted entities
+#     - Both return SETOF with scan_id, entity_code, entity_type, issue_description, severity
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+for arg in "$@"; do
+  case "$arg" in
+    --help|-h)
+      echo "dot-pg-audit-ensure v${VERSION} — PG audit functions for DOT scanning"
+      echo ""
+      echo "Usage: dot-pg-audit-ensure [--cloud]"
+      echo ""
+      echo "Creates 2 PG functions:"
+      echo "  audit_relationships() — entities without any relationship data"
+      echo "  audit_dead_links()    — dependencies pointing to deleted entities"
+      exit 0
+      ;;
+  esac
+done
+
+init_environment "$@"
+
+echo "========================================="
+echo "DOT Tool: PG Audit Ensure v${VERSION}"
+echo "========================================="
+print_environment_banner "$@"
+
+# =============================================================================
+# STEP 1: Create audit_relationships()
+# =============================================================================
+log_info "Step 1: Create audit_relationships()..."
+
+AUDIT_REL_SQL=$(cat <<'ENDSQL'
+-- =============================================================================
+-- audit_relationships() — Find entities WITHOUT any relationship data
+-- For EACH managed entity (from all 16 managed collections):
+--   Check: has AT LEAST 1 row in entity_dependencies (source or target)?
+--   No → report: "[CODE] — Chưa có dữ liệu quan hệ"
+-- =============================================================================
+DROP TYPE IF EXISTS audit_result CASCADE;
+CREATE TYPE audit_result AS (
+  scan_id int,
+  entity_code text,
+  entity_type text,
+  issue_description text,
+  severity text
+);
+
+CREATE OR REPLACE FUNCTION audit_relationships()
+RETURNS SETOF audit_result AS $$
+DECLARE
+  cfg RECORD;
+  r RECORD;
+  seq int := 0;
+BEGIN
+  FOR cfg IN
+    SELECT * FROM (VALUES
+      ('meta_catalog',            'code',         'catalog'),
+      ('table_registry',          'table_id',     'table'),
+      ('modules',                 'code',         'module'),
+      ('workflows',               'process_code', 'workflow'),
+      ('workflow_steps',          'code',         'workflow_step'),
+      ('workflow_change_requests','code',         'wcr'),
+      ('dot_tools',               'code',         'dot_tool'),
+      ('ui_pages',                'code',         'page'),
+      ('collection_registry',     'code',         'collection'),
+      ('tasks',                   'code',         'task'),
+      ('agents',                  'code',         'agent'),
+      ('checkpoint_types',        'code',         'checkpoint_type'),
+      ('checkpoint_sets',         'code',         'checkpoint_set'),
+      ('entity_dependencies',     'code',         'entity_dependency'),
+      ('table_proposals',         'code',         'table_proposal'),
+      ('checkpoint_instances',    'code',         'checkpoint_instance')
+    ) AS t(tbl, code_field, etype)
+  LOOP
+    FOR r IN EXECUTE format(
+      'SELECT %I AS ecode FROM %I WHERE %I IS NOT NULL AND %I != ''''
+       AND %I NOT IN (
+         SELECT source_code FROM entity_dependencies WHERE source_code IS NOT NULL
+         UNION
+         SELECT target_code FROM entity_dependencies WHERE target_code IS NOT NULL
+       )',
+      cfg.code_field, cfg.tbl, cfg.code_field, cfg.code_field, cfg.code_field
+    )
+    LOOP
+      seq := seq + 1;
+      RETURN NEXT (seq, r.ecode, cfg.etype,
+        r.ecode || ' — Chưa có dữ liệu quan hệ',
+        'warning')::audit_result;
+    END LOOP;
+  END LOOP;
+  RETURN;
+END;
+$$ LANGUAGE plpgsql;
+ENDSQL
+)
+
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+  "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB}" <<< "$AUDIT_REL_SQL"
+
+if [[ $? -eq 0 ]]; then
+  log_ok "audit_relationships() created"
+else
+  log_err "Failed to create audit_relationships()"
+  exit 1
+fi
+
+# =============================================================================
+# STEP 2: Create audit_dead_links()
+# =============================================================================
+log_info "Step 2: Create audit_dead_links()..."
+
+AUDIT_DEAD_SQL=$(cat <<'ENDSQL'
+-- =============================================================================
+-- audit_dead_links() — Find dependencies pointing to DELETED entities
+-- For EACH row in entity_dependencies:
+--   Check: source_code/target_code exists in managed collections?
+--   No → report: "Quan hệ [source]→[target] — target không tồn tại"
+-- =============================================================================
+CREATE OR REPLACE FUNCTION audit_dead_links()
+RETURNS SETOF audit_result AS $$
+DECLARE
+  dep RECORD;
+  seq int := 0;
+  found boolean;
+BEGIN
+  -- Build a temp table of ALL known entity codes for fast lookup
+  CREATE TEMP TABLE IF NOT EXISTS _all_codes (code text PRIMARY KEY) ON COMMIT DROP;
+  TRUNCATE _all_codes;
+
+  INSERT INTO _all_codes (code)
+    SELECT code FROM meta_catalog WHERE code IS NOT NULL AND code != ''
+    UNION SELECT table_id FROM table_registry WHERE table_id IS NOT NULL AND table_id != ''
+    UNION SELECT code FROM modules WHERE code IS NOT NULL AND code != ''
+    UNION SELECT process_code FROM workflows WHERE process_code IS NOT NULL AND process_code != ''
+    UNION SELECT code FROM workflow_steps WHERE code IS NOT NULL AND code != ''
+    UNION SELECT code FROM workflow_change_requests WHERE code IS NOT NULL AND code != ''
+    UNION SELECT code FROM dot_tools WHERE code IS NOT NULL AND code != ''
+    UNION SELECT code FROM ui_pages WHERE code IS NOT NULL AND code != ''
+    UNION SELECT code FROM collection_registry WHERE code IS NOT NULL AND code != ''
+    UNION SELECT code FROM tasks WHERE code IS NOT NULL AND code != ''
+    UNION SELECT code FROM agents WHERE code IS NOT NULL AND code != ''
+    UNION SELECT code FROM checkpoint_types WHERE code IS NOT NULL AND code != ''
+    UNION SELECT code FROM checkpoint_sets WHERE code IS NOT NULL AND code != ''
+    UNION SELECT code FROM entity_dependencies WHERE code IS NOT NULL AND code != ''
+    UNION SELECT code FROM table_proposals WHERE code IS NOT NULL AND code != ''
+    UNION SELECT code FROM checkpoint_instances WHERE code IS NOT NULL AND code != ''
+  ON CONFLICT DO NOTHING;
+
+  FOR dep IN
+    SELECT id, source_code, source_type, target_code, target_type
+    FROM entity_dependencies
+    WHERE source_code IS NOT NULL AND target_code IS NOT NULL
+  LOOP
+    -- Check source exists
+    SELECT EXISTS(SELECT 1 FROM _all_codes WHERE code = dep.source_code) INTO found;
+    IF NOT found THEN
+      seq := seq + 1;
+      RETURN NEXT (seq, dep.source_code, dep.source_type,
+        'Quan hệ ' || dep.source_code || '→' || dep.target_code || ' — source không tồn tại',
+        'error')::audit_result;
+    END IF;
+
+    -- Check target exists
+    SELECT EXISTS(SELECT 1 FROM _all_codes WHERE code = dep.target_code) INTO found;
+    IF NOT found THEN
+      seq := seq + 1;
+      RETURN NEXT (seq, dep.target_code, dep.target_type,
+        'Quan hệ ' || dep.source_code || '→' || dep.target_code || ' — target không tồn tại',
+        'error')::audit_result;
+    END IF;
+  END LOOP;
+
+  RETURN;
+END;
+$$ LANGUAGE plpgsql;
+ENDSQL
+)
+
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+  "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB}" <<< "$AUDIT_DEAD_SQL"
+
+if [[ $? -eq 0 ]]; then
+  log_ok "audit_dead_links() created"
+else
+  log_err "Failed to create audit_dead_links()"
+  exit 1
+fi
+
+# =============================================================================
+# STEP 3: Verify
+# =============================================================================
+log_info "Step 3: Verify functions..."
+
+echo ""
+echo "--- audit_relationships() sample ---"
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+  "docker exec ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -c 'SELECT count(*) AS entities_without_relations FROM audit_relationships();'"
+
+echo ""
+echo "--- audit_dead_links() sample ---"
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+  "docker exec ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -c 'SELECT count(*) AS dead_links FROM audit_dead_links();'"
+
+echo ""
+echo "========================================="
+echo "DOT Tool: PG Audit Ensure — HOÀN TẤT"
+echo "========================================="

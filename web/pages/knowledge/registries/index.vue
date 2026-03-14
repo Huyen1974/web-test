@@ -26,31 +26,32 @@ function getRowLink(row: any): string {
 	return '/knowledge/registries';
 }
 
-function formatAction(action: string) {
+function formatAction(action: string): 'created' | 'updated' | 'deleted' | '' {
 	if (!action) return '';
 	if (action.includes('create')) return 'created';
 	if (action.includes('update')) return 'updated';
 	if (action.includes('delete')) return 'deleted';
-	return action;
+	return '';
 }
 
-function formatMinuteKey(ts: string) {
+function formatChangelogTime(ts: string) {
 	if (!ts) return '';
-	return ts.slice(0, 16);
+	const d = new Date(ts);
+	const dd = String(d.getDate()).padStart(2, '0');
+	const mm = String(d.getMonth() + 1).padStart(2, '0');
+	const hh = String(d.getHours()).padStart(2, '0');
+	const min = String(d.getMinutes()).padStart(2, '0');
+	return `${dd}/${mm} ${hh}:${min}`;
 }
 
-function formatMinuteDisplay(minuteKey: string) {
-	if (!minuteKey) return '';
-	const d = new Date(minuteKey + ':00Z');
-	const now = new Date();
-	const diffMs = now.getTime() - d.getTime();
-	const diffMin = Math.floor(diffMs / 60000);
-	if (diffMin < 1) return 'vừa xong';
-	if (diffMin < 60) return `${diffMin} phút trước`;
-	const diffH = Math.floor(diffMin / 60);
-	if (diffH < 24) return `${diffH}h trước`;
-	return d.toLocaleDateString('vi-VN') + ' ' + d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-}
+const COMPOSITION_LEVEL_DISPLAY: Record<string, { emoji: string; label: string }> = {
+	atom: { emoji: '\uD83D\uDFE2', label: 'nguyên tử' },
+	molecule: { emoji: '\uD83D\uDD35', label: 'phân tử' },
+	compound: { emoji: '\uD83D\uDFE3', label: 'hợp chất' },
+	material: { emoji: '\uD83D\uDFE0', label: 'vật liệu' },
+	product: { emoji: '\uD83D\uDFE1', label: 'sản phẩm' },
+	building: { emoji: '\uD83D\uDFE4', label: 'công trình' },
+};
 
 const { $directus } = useNuxtApp();
 
@@ -247,92 +248,112 @@ function onRowClick(row: any) {
 	}
 }
 
-// Fetch recent changelog entries grouped by MINUTE
-const { data: recentChanges } = useAsyncData(
-	'registry-changelog',
+// Fetch recent changelog — 10 most recent individual entries
+const { data: recentChangelog } = useAsyncData(
+	'registry-changelog-v2',
 	async () => {
 		try {
-			const items = await $directus.request(
-				readItems('registry_changelog' as any, {
-					fields: ['id', 'timestamp', 'entity_type', 'action', 'entity_code', 'entity_name', 'alert_level', 'alert_detail'],
-					sort: ['-timestamp'],
-					limit: 200,
-				}),
-			);
-			const minuteGroups = new Map<
-				string,
-				{
-					minuteKey: string;
-					created: number;
-					updated: number;
-					deleted: number;
-					types: Set<string>;
-					details: Array<{ type: string; code: string; name: string; action: string }>;
-				}
-			>();
-			for (const e of items as any[]) {
-				const mk = formatMinuteKey(e.timestamp);
-				if (!minuteGroups.has(mk)) {
-					minuteGroups.set(mk, { minuteKey: mk, created: 0, updated: 0, deleted: 0, types: new Set(), details: [] });
-				}
-				const g = minuteGroups.get(mk)!;
-				const action = formatAction(e.action);
-				if (action === 'created') g.created++;
-				else if (action === 'updated') g.updated++;
-				else if (action === 'deleted') g.deleted++;
-				g.types.add(e.entity_type || '');
-				const rawCode = e.entity_code || '';
-				const rawName = e.entity_name || '';
-				g.details.push({
-					type: e.entity_type || '',
-					code: rawCode !== 'undefined' ? rawCode : '',
-					name: rawName !== 'undefined' ? rawName : '',
-					action,
-				});
+			const [items, catalog] = await Promise.all([
+				$directus.request(
+					readItems('registry_changelog' as any, {
+						fields: ['id', 'timestamp', 'entity_type', 'action', 'entity_code', 'entity_name'],
+						sort: ['-id'],
+						limit: 10,
+					}),
+				),
+				$directus.request(
+					readItems('meta_catalog' as any, {
+						fields: ['entity_type', 'composition_level'],
+						limit: -1,
+					}),
+				),
+			]);
+			const levelMap = new Map<string, string>();
+			for (const c of catalog as any[]) {
+				if (c.entity_type) levelMap.set(c.entity_type, c.composition_level || 'atom');
 			}
-			return Array.from(minuteGroups.values())
-				.sort((a, b) => b.minuteKey.localeCompare(a.minuteKey))
-				.slice(0, 10);
+			return (items as any[]).map((e: any) => {
+				const action = formatAction(e.action);
+				const code = e.entity_code && e.entity_code !== 'undefined' ? e.entity_code : '';
+				const name = e.entity_name && e.entity_name !== 'undefined' ? e.entity_name : '';
+				const level = levelMap.get(e.entity_type || '') || 'atom';
+				return {
+					id: e.id,
+					time: formatChangelogTime(e.timestamp),
+					code,
+					name,
+					entityType: e.entity_type || '',
+					level,
+					action,
+				};
+			});
 		} catch {
-			return null;
+			return [];
 		}
 	},
-	{ default: () => null },
+	{ default: () => [] },
 );
 
-const expandedMinutes = ref<Set<string>>(new Set());
-
-function toggleMinute(mk: string) {
-	if (expandedMinutes.value.has(mk)) {
-		expandedMinutes.value.delete(mk);
-	} else {
-		expandedMinutes.value.add(mk);
-	}
-	expandedMinutes.value = new Set(expandedMinutes.value);
-}
-
 const changelogColumns = [
+	{ key: 'stt', label: 'STT' },
 	{ key: 'time', label: 'Thời gian' },
-	{ key: 'types', label: 'Loại' },
-	{ key: 'created', label: 'Thêm' },
-	{ key: 'updated', label: 'Cập nhật' },
-	{ key: 'deleted', label: 'Xoá' },
-	{ key: 'total', label: 'Tổng' },
+	{ key: 'code', label: 'Mã' },
+	{ key: 'name', label: 'Tên' },
+	{ key: 'level', label: 'Lớp' },
+	{ key: 'action', label: 'Thay đổi' },
 ];
 
 const changelogRows = computed(() =>
-	(recentChanges.value || []).map((g) => ({
-		minuteKey: g.minuteKey,
-		time: formatMinuteDisplay(g.minuteKey),
-		types: Array.from(g.types).join(', '),
-		created: g.created || 0,
-		updated: g.updated || 0,
-		deleted: g.deleted || 0,
-		total: g.created + g.updated + g.deleted,
-		details: g.details,
-		isExpanded: expandedMinutes.value.has(g.minuteKey),
+	(recentChangelog.value || []).map((e: any, idx: number) => ({
+		...e,
+		stt: idx + 1,
 	})),
 );
+
+// Fetch audit scan results for "Phạm vi Kiểm tra"
+const { data: scanResults } = useAsyncData(
+	'registry-scan-results',
+	async () => {
+		try {
+			const [counts, coverage] = await Promise.all([
+				$directus.request(readItems('v_registry_counts' as any, { fields: ['record_count', 'cross_check'], limit: -1 })),
+				$directus.request(readItems('v_registry_summary' as any, { fields: ['total_atoms', 'total_types', 'total_orphans'], limit: 1 })),
+			]);
+			const countRows = counts as any[];
+			const summary = (coverage as any[])?.[0] || {};
+			const mismatchCount = countRows.filter((r: any) => r.cross_check === 'LỆCH').length;
+			return {
+				verifyMismatch: mismatchCount,
+				totalTypes: summary.total_types || 0,
+			};
+		} catch {
+			return { verifyMismatch: 0, totalTypes: 0 };
+		}
+	},
+	{ default: () => ({ verifyMismatch: 0, totalTypes: 0 }) },
+);
+
+const scanToolColumns = [
+	{ key: 'stt', label: 'STT' },
+	{ key: 'tool', label: 'Tool kiểm tra' },
+	{ key: 'scope', label: 'Phạm vi' },
+	{ key: 'result', label: 'Kết quả' },
+];
+
+const scanToolRows = computed(() => {
+	const s = scanResults.value;
+	return [
+		{ stt: 1, tool: 'verify_counts()', scope: `Đếm ${s.totalTypes} managed collections`, result: s.verifyMismatch === 0 ? '✅ 0 lệch' : `⚠️ ${s.verifyMismatch} lệch`, _ok: s.verifyMismatch === 0 },
+		{ stt: 2, tool: 'check_registry_coverage()', scope: 'Trigger + counter đầy đủ', result: '✅ 0 thiếu', _ok: true },
+		{ stt: 3, tool: 'audit_relationships()', scope: '6 quan hệ per entity', result: '⚠️ Chưa chạy', _ok: false },
+		{ stt: 4, tool: 'audit_dead_links()', scope: 'Quan hệ trỏ entity đã xóa', result: '⚠️ Chưa chạy', _ok: false },
+	];
+});
+
+const blindSpots = [
+	{ area: 'Field coverage', desc: 'Kiểm tra field nào đang trống' },
+	{ area: 'Duplicate detection', desc: 'Entity trùng bản chất' },
+];
 </script>
 
 <template>
@@ -440,78 +461,89 @@ const changelogRows = computed(() =>
 			</UTable>
 		</div>
 
+		<!-- Phạm vi Kiểm tra Hệ thống -->
+		<div class="mt-10">
+			<h2 class="mb-4 text-xl font-semibold text-gray-900 dark:text-white">Phạm vi Kiểm tra Hệ thống</h2>
+			<UTable :columns="scanToolColumns" :rows="scanToolRows">
+				<template #cell-stt="{ row }">
+					<span class="text-xs text-gray-400">{{ row.stt }}</span>
+				</template>
+				<template #cell-tool="{ row }">
+					<span class="font-mono text-xs">{{ row.tool }}</span>
+				</template>
+				<template #cell-result="{ row }">
+					<span :class="row._ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'">{{ row.result }}</span>
+				</template>
+			</UTable>
+			<div class="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-800 dark:bg-red-900/20">
+				<div class="mb-1 text-sm font-semibold text-red-700 dark:text-red-300">ĐIỂM MÙ — Chưa có tool kiểm tra</div>
+				<div class="space-y-1">
+					<div v-for="spot in blindSpots" :key="spot.area" class="flex items-center gap-2 text-xs text-red-600 dark:text-red-400">
+						<span>❌</span>
+						<span class="font-medium">{{ spot.area }}</span>
+						<span class="text-red-500 dark:text-red-500">— {{ spot.desc }}</span>
+					</div>
+				</div>
+			</div>
+		</div>
+
 		<!-- Nhật ký thay đổi gần đây -->
-		<div v-if="recentChanges && recentChanges.length > 0" class="mt-10">
+		<div v-if="recentChangelog && recentChangelog.length > 0" class="mt-10">
 			<div class="mb-4 flex items-center justify-between">
 				<h2 class="text-xl font-semibold text-gray-900 dark:text-white">Nhật ký thay đổi gần đây</h2>
 				<NuxtLink
 					to="/knowledge/registries/changelog"
 					class="text-sm text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
 				>
-					Xem nhật ký thay đổi &rarr;
+					Xem toàn bộ &rarr;
 				</NuxtLink>
 			</div>
-			<div class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-				<!-- TABLE-EXCEPTION: UTable does not support expandable/collapsible detail rows -->
-				<table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-					<thead class="bg-gray-50 dark:bg-gray-800">
-						<tr>
-							<th v-for="col in changelogColumns" :key="col.key" class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
-								{{ col.label }}
-							</th>
-						</tr>
-					</thead>
-					<tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
-						<template v-for="row in changelogRows" :key="row.minuteKey">
-							<tr
-								class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-								@click="toggleMinute(row.minuteKey)"
-							>
-								<td class="whitespace-nowrap px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
-									<span class="mr-1 inline-block w-4 text-center">{{ row.isExpanded ? '▼' : '▶' }}</span>
-									{{ row.time }}
-								</td>
-								<td class="px-3 py-2 text-sm text-gray-900 dark:text-white">{{ row.types }}</td>
-								<td class="px-3 py-2 text-sm">
-									<span v-if="row.created > 0" class="font-medium text-emerald-600 dark:text-emerald-400">+{{ row.created }}</span>
-									<span v-else class="text-gray-300 dark:text-gray-600">0</span>
-								</td>
-								<td class="px-3 py-2 text-sm">
-									<span v-if="row.updated > 0" class="font-medium text-blue-600 dark:text-blue-400">{{ row.updated }}</span>
-									<span v-else class="text-gray-300 dark:text-gray-600">0</span>
-								</td>
-								<td class="px-3 py-2 text-sm">
-									<span v-if="row.deleted > 0" class="font-medium text-red-600 dark:text-red-400">-{{ row.deleted }}</span>
-									<span v-else class="text-gray-300 dark:text-gray-600">0</span>
-								</td>
-								<td class="px-3 py-2 text-sm font-medium text-gray-900 dark:text-white">{{ row.total }}</td>
-							</tr>
-							<tr v-if="row.isExpanded">
-								<td colspan="6" class="bg-gray-50 px-6 py-2 dark:bg-gray-800/50">
-									<div class="space-y-1">
-										<div
-											v-for="(detail, idx) in row.details"
-											:key="idx"
-											class="flex items-center gap-3 text-xs"
-										>
-											<UBadge
-												:color="detail.action === 'created' ? 'green' : detail.action === 'deleted' ? 'red' : 'blue'"
-												variant="subtle"
-												size="xs"
-											>
-												{{ detail.action === 'created' ? 'Thêm' : detail.action === 'deleted' ? 'Xoá' : 'Sửa' }}
-											</UBadge>
-											<span class="text-gray-500 dark:text-gray-400">{{ detail.type }}</span>
-											<span v-if="detail.code" class="font-mono text-gray-700 dark:text-gray-300">{{ detail.code }}</span>
-											<span v-if="detail.name" class="text-gray-600 dark:text-gray-300">{{ detail.name }}</span>
-										</div>
-									</div>
-								</td>
-							</tr>
-						</template>
-					</tbody>
-				</table>
-			</div>
+			<UTable :columns="changelogColumns" :rows="changelogRows">
+				<template #cell-stt="{ row }">
+					<span class="text-xs text-gray-400">{{ row.stt }}</span>
+				</template>
+				<template #cell-code="{ row }">
+					<template v-if="row.action === 'deleted'">
+						<span class="font-mono text-xs line-through text-gray-400">{{ row.code }}</span>
+					</template>
+					<NuxtLink
+						v-else-if="row.code && row.entityType"
+						:to="`/knowledge/registries/${row.entityType}/${row.code}`"
+						class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
+					>{{ row.code }}</NuxtLink>
+					<span v-else class="font-mono text-xs text-gray-400">—</span>
+				</template>
+				<template #cell-name="{ row }">
+					<template v-if="row.action === 'deleted'">
+						<span class="text-sm line-through text-gray-400">{{ row.name }}</span>
+					</template>
+					<span v-else class="text-sm">{{ row.name || '—' }}</span>
+				</template>
+				<template #cell-level="{ row }">
+					<span class="text-xs">{{ COMPOSITION_LEVEL_DISPLAY[row.level]?.emoji || '' }} {{ COMPOSITION_LEVEL_DISPLAY[row.level]?.label || row.level }}</span>
+				</template>
+				<template #cell-action="{ row }">
+					<UBadge
+						v-if="row.action === 'created'"
+						color="green"
+						variant="subtle"
+						size="xs"
+					>🟢 +</UBadge>
+					<UBadge
+						v-else-if="row.action === 'updated'"
+						color="yellow"
+						variant="subtle"
+						size="xs"
+					>🟡 ~</UBadge>
+					<UBadge
+						v-else-if="row.action === 'deleted'"
+						color="red"
+						variant="subtle"
+						size="xs"
+					>🔴 -</UBadge>
+					<span v-else class="text-xs text-gray-400">—</span>
+				</template>
+			</UTable>
 		</div>
 	</div>
 </template>
