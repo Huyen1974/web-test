@@ -98,19 +98,19 @@ BEGIN
     ) AS t(tbl, code_field, etype)
   LOOP
     FOR r IN EXECUTE format(
-      'SELECT %I AS ecode FROM %I WHERE %I IS NOT NULL AND %I != ''''
-       AND %I NOT IN (
-         SELECT source_code FROM entity_dependencies WHERE source_code IS NOT NULL
+      'SELECT %I::text AS ecode FROM %I WHERE %I IS NOT NULL AND %I != ''''
+       AND %I::text NOT IN (
+         SELECT source_code::text FROM entity_dependencies WHERE source_code IS NOT NULL
          UNION
-         SELECT target_code FROM entity_dependencies WHERE target_code IS NOT NULL
+         SELECT target_code::text FROM entity_dependencies WHERE target_code IS NOT NULL
        )',
       cfg.code_field, cfg.tbl, cfg.code_field, cfg.code_field, cfg.code_field
     )
     LOOP
       seq := seq + 1;
-      RETURN NEXT (seq, r.ecode, cfg.etype,
-        r.ecode || ' — Chưa có dữ liệu quan hệ',
-        'warning')::audit_result;
+      RETURN NEXT (seq, r.ecode::text, cfg.etype::text,
+        (r.ecode || ' — Chưa có dữ liệu quan hệ')::text,
+        'warning'::text)::audit_result;
     END LOOP;
   END LOOP;
   RETURN;
@@ -153,22 +153,22 @@ BEGIN
   TRUNCATE _all_codes;
 
   INSERT INTO _all_codes (code)
-    SELECT code FROM meta_catalog WHERE code IS NOT NULL AND code != ''
-    UNION SELECT table_id FROM table_registry WHERE table_id IS NOT NULL AND table_id != ''
-    UNION SELECT code FROM modules WHERE code IS NOT NULL AND code != ''
-    UNION SELECT process_code FROM workflows WHERE process_code IS NOT NULL AND process_code != ''
-    UNION SELECT code FROM workflow_steps WHERE code IS NOT NULL AND code != ''
-    UNION SELECT code FROM workflow_change_requests WHERE code IS NOT NULL AND code != ''
-    UNION SELECT code FROM dot_tools WHERE code IS NOT NULL AND code != ''
-    UNION SELECT code FROM ui_pages WHERE code IS NOT NULL AND code != ''
-    UNION SELECT code FROM collection_registry WHERE code IS NOT NULL AND code != ''
-    UNION SELECT code FROM tasks WHERE code IS NOT NULL AND code != ''
-    UNION SELECT code FROM agents WHERE code IS NOT NULL AND code != ''
-    UNION SELECT code FROM checkpoint_types WHERE code IS NOT NULL AND code != ''
-    UNION SELECT code FROM checkpoint_sets WHERE code IS NOT NULL AND code != ''
-    UNION SELECT code FROM entity_dependencies WHERE code IS NOT NULL AND code != ''
-    UNION SELECT code FROM table_proposals WHERE code IS NOT NULL AND code != ''
-    UNION SELECT code FROM checkpoint_instances WHERE code IS NOT NULL AND code != ''
+    SELECT code::text FROM meta_catalog WHERE code IS NOT NULL AND code != ''
+    UNION SELECT table_id::text FROM table_registry WHERE table_id IS NOT NULL AND table_id != ''
+    UNION SELECT code::text FROM modules WHERE code IS NOT NULL AND code != ''
+    UNION SELECT process_code::text FROM workflows WHERE process_code IS NOT NULL AND process_code != ''
+    UNION SELECT code::text FROM workflow_steps WHERE code IS NOT NULL AND code != ''
+    UNION SELECT code::text FROM workflow_change_requests WHERE code IS NOT NULL AND code != ''
+    UNION SELECT code::text FROM dot_tools WHERE code IS NOT NULL AND code != ''
+    UNION SELECT code::text FROM ui_pages WHERE code IS NOT NULL AND code != ''
+    UNION SELECT code::text FROM collection_registry WHERE code IS NOT NULL AND code != ''
+    UNION SELECT code::text FROM tasks WHERE code IS NOT NULL AND code != ''
+    UNION SELECT code::text FROM agents WHERE code IS NOT NULL AND code != ''
+    UNION SELECT code::text FROM checkpoint_types WHERE code IS NOT NULL AND code != ''
+    UNION SELECT code::text FROM checkpoint_sets WHERE code IS NOT NULL AND code != ''
+    UNION SELECT code::text FROM entity_dependencies WHERE code IS NOT NULL AND code != ''
+    UNION SELECT code::text FROM table_proposals WHERE code IS NOT NULL AND code != ''
+    UNION SELECT code::text FROM checkpoint_instances WHERE code IS NOT NULL AND code != ''
   ON CONFLICT DO NOTHING;
 
   FOR dep IN
@@ -177,21 +177,21 @@ BEGIN
     WHERE source_code IS NOT NULL AND target_code IS NOT NULL
   LOOP
     -- Check source exists
-    SELECT EXISTS(SELECT 1 FROM _all_codes WHERE code = dep.source_code) INTO found;
+    SELECT EXISTS(SELECT 1 FROM _all_codes WHERE code = dep.source_code::text) INTO found;
     IF NOT found THEN
       seq := seq + 1;
-      RETURN NEXT (seq, dep.source_code, dep.source_type,
-        'Quan hệ ' || dep.source_code || '→' || dep.target_code || ' — source không tồn tại',
-        'error')::audit_result;
+      RETURN NEXT (seq, dep.source_code::text, dep.source_type::text,
+        ('Quan hệ ' || dep.source_code || '→' || dep.target_code || ' — source không tồn tại')::text,
+        'error'::text)::audit_result;
     END IF;
 
     -- Check target exists
-    SELECT EXISTS(SELECT 1 FROM _all_codes WHERE code = dep.target_code) INTO found;
+    SELECT EXISTS(SELECT 1 FROM _all_codes WHERE code = dep.target_code::text) INTO found;
     IF NOT found THEN
       seq := seq + 1;
-      RETURN NEXT (seq, dep.target_code, dep.target_type,
-        'Quan hệ ' || dep.source_code || '→' || dep.target_code || ' — target không tồn tại',
-        'error')::audit_result;
+      RETURN NEXT (seq, dep.target_code::text, dep.target_type::text,
+        ('Quan hệ ' || dep.source_code || '→' || dep.target_code || ' — target không tồn tại')::text,
+        'error'::text)::audit_result;
     END IF;
   END LOOP;
 
