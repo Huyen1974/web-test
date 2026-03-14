@@ -68,34 +68,38 @@ const isDiscoveryMode = computed(() => sections.value.length === 0);
 
 // Group sections into 4 categories for config mode
 const fieldsSections = computed(() => sections.value.filter((s) => s.type === 'fields'));
-const relationSections = computed(() => sections.value.filter((s) => s.type === 'relation'));
-const dependencySections = computed(() => sections.value.filter((s) => s.type === 'dependency'));
-
 // Detect page_url for "Xem trang thực tế" button
 const pageUrl = computed(() => {
 	if (!item.value) return null;
 	return item.value.page_url || item.value.url || item.value.script_path || null;
 });
 
-// === LAYER 5: 2-directional dependency queries ===
-const RELATION_LABELS: Record<string, { forward: string; reverse: string }> = {
-	depends_on: { forward: 'Phụ thuộc', reverse: 'Được dùng bởi' },
-	belongs_to: { forward: 'Thuộc về', reverse: 'Chứa' },
-	contains: { forward: 'Chứa', reverse: 'Thuộc về' },
-	used_by: { forward: 'Được dùng bởi', reverse: 'Phụ thuộc' },
-	peers: { forward: 'Cùng nhóm', reverse: 'Cùng nhóm' },
-	similar: { forward: 'Tương tự', reverse: 'Tương tự' },
-};
-
+// === LAYER 5: 6 consistent relationship headings ===
 const entityCode = computed(() => item.value?.code || item.value?.process_code || item.value?.table_id || itemId.value);
 
-const { data: dependencies } = useAsyncData(
-	`deps-${entityType.value}-${itemId.value}`,
+interface DepItem {
+	code: string;
+	type: string;
+	name?: string;
+	link: string | null;
+}
+
+interface Layer5Data {
+	belongsTo: DepItem[];
+	contains: DepItem[];
+	dependsOn: DepItem[];
+	usedBy: DepItem[];
+	peers: DepItem[];
+}
+
+const { data: layer5 } = useAsyncData(
+	`layer5-${entityType.value}-${itemId.value}`,
 	async () => {
 		const code = entityCode.value;
-		if (!code) return { forward: [], reverse: [] };
+		const result: Layer5Data = { belongsTo: [], contains: [], dependsOn: [], usedBy: [], peers: [] };
+		if (!code) return result;
 		try {
-			const [fwd, rev] = await Promise.all([
+			const [fwd, rev, peerItems] = await Promise.all([
 				$directus.request(
 					readItems('entity_dependencies' as any, {
 						filter: { source_code: { _eq: code } },
@@ -110,27 +114,71 @@ const { data: dependencies } = useAsyncData(
 						limit: 50,
 					}),
 				),
+				// Peers: same collection, exclude self
+				(async () => {
+					let col = collectionMap[entityType.value];
+					if (!col) col = catalogEntry.value?.registry_collection || '';
+					if (!col) return [];
+					const cf = getCodeField(entityType.value);
+					try {
+						return await $directus.request(
+							readItems(col as any, {
+								filter: { [cf]: { _neq: code } },
+								fields: ['id', 'code', 'name', 'title', 'process_code', 'table_id'],
+								limit: 10,
+								sort: [cf],
+							}),
+						);
+					} catch {
+						return [];
+					}
+				})(),
 			]);
-			return {
-				forward: (fwd as any[]).map((d) => ({
+
+			for (const d of fwd as any[]) {
+				const dep: DepItem = {
 					code: d.target_code,
 					type: d.target_type,
-					label: RELATION_LABELS[d.relation_type]?.forward || d.relation_type,
 					link: d.target_type ? `/knowledge/registries/${d.target_type}/${d.target_code}` : null,
-				})),
-				reverse: (rev as any[]).map((d) => ({
+				};
+				if (d.relation_type === 'belongs_to') result.belongsTo.push(dep);
+				else if (d.relation_type === 'contains') result.contains.push(dep);
+				else if (d.relation_type === 'depends_on') result.dependsOn.push(dep);
+			}
+
+			for (const d of rev as any[]) {
+				const dep: DepItem = {
 					code: d.source_code,
 					type: d.source_type,
-					label: RELATION_LABELS[d.relation_type]?.reverse || d.relation_type,
 					link: d.source_type ? `/knowledge/registries/${d.source_type}/${d.source_code}` : null,
-				})),
-			};
+				};
+				if (d.relation_type === 'depends_on') result.usedBy.push(dep);
+				else if (d.relation_type === 'belongs_to') result.contains.push(dep);
+				else if (d.relation_type === 'contains') result.belongsTo.push(dep);
+			}
+
+			result.peers = (peerItems as any[]).map((p: any) => {
+				const pCode = p.code || p.process_code || p.table_id || `#${p.id}`;
+				return {
+					code: pCode,
+					type: entityType.value,
+					name: p.name || p.title || '',
+					link: `/knowledge/registries/${entityType.value}/${pCode}`,
+				};
+			});
+
+			return result;
 		} catch {
-			return { forward: [], reverse: [] };
+			return result;
 		}
 	},
-	{ default: () => ({ forward: [], reverse: [] }) },
+	{ default: () => ({ belongsTo: [], contains: [], dependsOn: [], usedBy: [], peers: [] }) },
 );
+
+const peerTotal = computed(() => {
+	// Estimate total peers from collection count (will show "và X khác..." if >10)
+	return layer5.value.peers.length;
+});
 
 definePageMeta({ title: 'Chi tiết' });
 
@@ -198,48 +246,86 @@ useHead({
 				</UCard>
 			</section>
 
-			<!-- Layer 5 — Quan hệ 2 hướng -->
+			<!-- Layer 5 — 6 Quan hệ nhất quán -->
 			<div class="mb-2 mt-4">
 				<UBadge color="primary" variant="solid" size="sm">LAYER 5 — QUAN HỆ</UBadge>
 			</div>
 
-			<div v-if="dependencies.forward.length > 0 || dependencies.reverse.length > 0" class="space-y-6">
-				<!-- Tôi dùng ai? -->
-				<section v-if="dependencies.forward.length > 0">
-					<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">Tôi dùng ai?</h3>
-					<div class="space-y-1">
-						<div v-for="dep in dependencies.forward" :key="`fwd-${dep.code}`" class="flex items-center gap-2 text-sm">
+			<div class="space-y-4">
+				<!-- 1. Tôi thuộc ai? -->
+				<section>
+					<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">1. Tôi thuộc ai?</h3>
+					<div v-if="layer5.belongsTo.length > 0" class="space-y-1">
+						<div v-for="dep in layer5.belongsTo" :key="`bt-${dep.code}`" class="flex items-center gap-2 text-sm">
 							<span class="text-gray-400">&rarr;</span>
-							<NuxtLink
-								v-if="dep.link"
-								:to="dep.link"
-								class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
-							>{{ dep.code }}</NuxtLink>
-							<span v-else class="font-mono text-xs">{{ dep.code }}</span>
-							<UBadge color="gray" variant="subtle" size="xs">{{ dep.label }}</UBadge>
+							<NuxtLink v-if="dep.link" :to="dep.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ dep.code }}</NuxtLink>
+							<span v-else class="font-mono text-xs line-through text-gray-400">{{ dep.code }}</span>
 						</div>
 					</div>
+					<p v-else class="text-sm text-gray-400 dark:text-gray-500 italic">(trống)</p>
 				</section>
 
-				<!-- Ai dùng tôi? -->
-				<section v-if="dependencies.reverse.length > 0">
-					<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">Ai dùng tôi?</h3>
-					<div class="space-y-1">
-						<div v-for="dep in dependencies.reverse" :key="`rev-${dep.code}`" class="flex items-center gap-2 text-sm">
+				<!-- 2. Tôi chứa gì? -->
+				<section>
+					<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">2. Tôi chứa gì?</h3>
+					<div v-if="layer5.contains.length > 0" class="space-y-1">
+						<div v-for="dep in layer5.contains" :key="`ct-${dep.code}`" class="flex items-center gap-2 text-sm">
 							<span class="text-gray-400">&rarr;</span>
-							<NuxtLink
-								v-if="dep.link"
-								:to="dep.link"
-								class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
-							>{{ dep.code }}</NuxtLink>
-							<span v-else class="font-mono text-xs">{{ dep.code }}</span>
-							<UBadge color="gray" variant="subtle" size="xs">{{ dep.label }}</UBadge>
+							<NuxtLink v-if="dep.link" :to="dep.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ dep.code }}</NuxtLink>
+							<span v-else class="font-mono text-xs line-through text-gray-400">{{ dep.code }}</span>
 						</div>
 					</div>
+					<p v-else class="text-sm text-gray-400 dark:text-gray-500 italic">(trống)</p>
 				</section>
-			</div>
-			<div v-else class="rounded-lg border border-gray-200 bg-gray-50 p-4 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
-				Chưa có dữ liệu quan hệ.
+
+				<!-- 3. Tôi dùng ai? -->
+				<section>
+					<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">3. Tôi dùng ai?</h3>
+					<div v-if="layer5.dependsOn.length > 0" class="space-y-1">
+						<div v-for="dep in layer5.dependsOn" :key="`do-${dep.code}`" class="flex items-center gap-2 text-sm">
+							<span class="text-gray-400">&rarr;</span>
+							<NuxtLink v-if="dep.link" :to="dep.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ dep.code }}</NuxtLink>
+							<span v-else class="font-mono text-xs line-through text-gray-400">{{ dep.code }}</span>
+						</div>
+					</div>
+					<p v-else class="text-sm text-gray-400 dark:text-gray-500 italic">(trống)</p>
+				</section>
+
+				<!-- 4. Ai dùng tôi? -->
+				<section>
+					<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">4. Ai dùng tôi?</h3>
+					<div v-if="layer5.usedBy.length > 0" class="space-y-1">
+						<div v-for="dep in layer5.usedBy" :key="`ub-${dep.code}`" class="flex items-center gap-2 text-sm">
+							<span class="text-gray-400">&rarr;</span>
+							<NuxtLink v-if="dep.link" :to="dep.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ dep.code }}</NuxtLink>
+							<span v-else class="font-mono text-xs line-through text-gray-400">{{ dep.code }}</span>
+						</div>
+					</div>
+					<p v-else class="text-sm text-gray-400 dark:text-gray-500 italic">(trống)</p>
+				</section>
+
+				<!-- 5. Cùng nhóm -->
+				<section>
+					<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">5. Cùng nhóm</h3>
+					<div v-if="layer5.peers.length > 0" class="flex flex-wrap gap-2">
+						<NuxtLink
+							v-for="peer in layer5.peers"
+							:key="`peer-${peer.code}`"
+							:to="peer.link!"
+							class="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs hover:border-primary-300 hover:bg-primary-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-primary-600 dark:hover:bg-primary-900/20"
+						>
+							<span class="font-mono text-primary-600 dark:text-primary-400">{{ peer.code }}</span>
+							<span v-if="peer.name" class="text-gray-500 dark:text-gray-400">{{ peer.name }}</span>
+						</NuxtLink>
+					</div>
+					<p v-else class="text-sm text-gray-400 dark:text-gray-500 italic">(trống)</p>
+				</section>
+
+				<!-- 6. Tương tự -->
+				<section>
+					<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">6. Tương tự</h3>
+					<p class="text-sm text-gray-400 dark:text-gray-500 italic">(trống)</p>
+				</section>
 			</div>
 		</div>
 
