@@ -267,6 +267,75 @@ const peerRows = computed(() => {
 	}));
 });
 
+// === 6 HEADINGS: Compute items for each heading ===
+const belongsToItems = computed(() => {
+	const items: Array<{ code: string; label: string; link: string | null }> = [];
+	// From M2O parent records
+	for (const rel of m2oRelations.value) {
+		const parent = parentRecords.value?.[rel.field];
+		if (parent) {
+			const code = getParentCode(parent);
+			items.push({
+				code,
+				label: getParentDisplay(parent),
+				link: rel.entityType && code ? `/knowledge/registries/${rel.entityType}/${code}` : null,
+			});
+		}
+	}
+	// From entity_dependencies belongs_to
+	for (const dep of (deps.value as any[] || [])) {
+		if (dep.source_code === itemCode.value && dep.relation_type === 'belongs_to') {
+			items.push({ code: dep.target_code, label: dep.target_code, link: dep.target_type ? `/knowledge/registries/${dep.target_type}/${dep.target_code}` : null });
+		}
+		if (dep.target_code === itemCode.value && dep.relation_type === 'contains') {
+			items.push({ code: dep.source_code, label: dep.source_code, link: dep.source_type ? `/knowledge/registries/${dep.source_type}/${dep.source_code}` : null });
+		}
+	}
+	return items;
+});
+
+const containsItems = computed(() => {
+	const items: Array<{ code: string; label: string; count?: number }> = [];
+	// From O2M child records
+	for (const [field, children] of Object.entries(childRecords.value || {})) {
+		if (children && (children as any[]).length > 0) {
+			const rel = o2mRelations.value.find((r: RelationInfo) => r.field === field);
+			items.push({
+				code: field,
+				label: getChildLabel(String(field), rel?.relatedCollection || ''),
+				count: (children as any[]).length,
+			});
+		}
+	}
+	// From entity_dependencies contains
+	for (const dep of (deps.value as any[] || [])) {
+		if (dep.source_code === itemCode.value && dep.relation_type === 'contains') {
+			items.push({ code: dep.target_code, label: dep.target_code });
+		}
+	}
+	return items;
+});
+
+const dependsOnItems = computed(() => {
+	const items: Array<{ code: string; link: string | null }> = [];
+	for (const dep of (deps.value as any[] || [])) {
+		if (dep.source_code === itemCode.value && dep.relation_type === 'depends_on') {
+			items.push({ code: dep.target_code, link: dep.target_type ? `/knowledge/registries/${dep.target_type}/${dep.target_code}` : null });
+		}
+	}
+	return items;
+});
+
+const usedByItems = computed(() => {
+	const items: Array<{ code: string; link: string | null }> = [];
+	for (const dep of (deps.value as any[] || [])) {
+		if (dep.target_code === itemCode.value && dep.relation_type === 'depends_on') {
+			items.push({ code: dep.source_code, link: dep.source_type ? `/knowledge/registries/${dep.source_type}/${dep.source_code}` : null });
+		}
+	}
+	return items;
+});
+
 // Helper: get display name for a parent record
 function getParentDisplay(record: any): string {
 	return record?.name || record?.title || record?.code || record?.process_code || `#${record?.id}`;
@@ -329,112 +398,80 @@ function getChildColumns(items: any[]): { key: string; label: string }[] {
 			</NuxtLink>
 		</div>
 
-		<!-- BELONGS_TO: Parent records -->
-		<UCard
-			v-for="rel in m2oRelations"
-			:key="rel.field"
-			v-show="parentRecords?.[rel.field]"
-		>
-			<template #header>
-				<h3 class="text-base font-semibold text-gray-900 dark:text-white">
-					Thuộc về: {{ rel.relatedCollection.replace(/_/g, ' ') }}
-				</h3>
-			</template>
-			<div v-if="parentRecords?.[rel.field]" class="flex items-center gap-3">
-				<NuxtLink
-					v-if="rel.entityType && getParentCode(parentRecords[rel.field])"
-					:to="`/knowledge/registries/${rel.entityType}/${getParentCode(parentRecords[rel.field])}`"
-					class="font-medium text-primary-600 hover:text-primary-800 dark:text-primary-400 hover:underline"
-				>
-					{{ getParentDisplay(parentRecords[rel.field]) }}
-				</NuxtLink>
-				<span v-else class="text-sm text-gray-900 dark:text-white">
-					{{ getParentDisplay(parentRecords[rel.field]) }}
-				</span>
-			</div>
-		</UCard>
+		<!-- LAYER 5 — 6 Quan hệ nhất quán -->
+		<div class="mb-2 mt-4">
+			<UBadge color="primary" variant="solid" size="sm">LAYER 5 — QUAN HỆ</UBadge>
+		</div>
 
-		<!-- CONTAINS: Child records -->
-		<UCard
-			v-for="(items, field) in childRecords"
-			:key="field"
-			v-show="items && items.length > 0"
-		>
-			<template #header>
-				<div class="flex items-center gap-2">
-					<h3 class="text-base font-semibold text-gray-900 dark:text-white">
-						Chứa: {{ getChildLabel(String(field), o2mRelations.find(r => r.field === field)?.relatedCollection || '') }}
-					</h3>
-					<UBadge color="gray" variant="subtle" size="xs">{{ items.length }}</UBadge>
+		<div class="space-y-4">
+			<!-- 1. Tôi thuộc ai? -->
+			<section>
+				<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">1. Tôi thuộc ai?</h3>
+				<div v-if="belongsToItems.length > 0" class="space-y-1">
+					<div v-for="p in belongsToItems" :key="`bt-${p.code}`" class="flex items-center gap-2 text-sm">
+						<span class="text-gray-400">&rarr;</span>
+						<NuxtLink v-if="p.link" :to="p.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ p.label }}</NuxtLink>
+						<span v-else class="font-mono text-xs text-gray-400">{{ p.label }}</span>
+					</div>
 				</div>
-			</template>
-			<UTable
-				:columns="getChildColumns(items)"
-				:rows="items"
-				:ui="{ td: { padding: 'py-2 px-3' }, th: { padding: 'py-2 px-3' } }"
-			/>
-		</UCard>
+			</section>
 
-		<!-- USED_BY: Entity dependencies -->
-		<UCard v-if="depRows.length > 0">
-			<template #header>
-				<div class="flex items-center gap-2">
-					<h3 class="text-base font-semibold text-gray-900 dark:text-white">Liên kết</h3>
-					<UBadge color="gray" variant="subtle" size="xs">{{ depRows.length }}</UBadge>
+			<!-- 2. Tôi chứa gì? -->
+			<section>
+				<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">2. Tôi chứa gì?</h3>
+				<div v-if="containsItems.length > 0" class="space-y-1">
+					<div v-for="c in containsItems" :key="`ct-${c.code}`" class="flex items-center gap-2 text-sm">
+						<span class="text-gray-400">&rarr;</span>
+						<span class="font-mono text-xs">{{ c.label }}</span>
+						<UBadge v-if="c.count" color="gray" variant="subtle" size="xs">{{ c.count }}</UBadge>
+					</div>
 				</div>
-			</template>
-			<UTable :columns="depColumns" :rows="depRows" :ui="{ td: { padding: 'py-2 px-3' }, th: { padding: 'py-2 px-3' } }">
-				<template #cell-code="{ row }">
+			</section>
+
+			<!-- 3. Tôi dùng ai? -->
+			<section>
+				<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">3. Tôi dùng ai?</h3>
+				<div v-if="dependsOnItems.length > 0" class="space-y-1">
+					<div v-for="dep in dependsOnItems" :key="`do-${dep.code}`" class="flex items-center gap-2 text-sm">
+						<span class="text-gray-400">&rarr;</span>
+						<NuxtLink v-if="dep.link" :to="dep.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ dep.code }}</NuxtLink>
+						<span v-else class="font-mono text-xs text-gray-400">{{ dep.code }}</span>
+					</div>
+				</div>
+			</section>
+
+			<!-- 4. Ai dùng tôi? -->
+			<section>
+				<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">4. Ai dùng tôi?</h3>
+				<div v-if="usedByItems.length > 0" class="space-y-1">
+					<div v-for="dep in usedByItems" :key="`ub-${dep.code}`" class="flex items-center gap-2 text-sm">
+						<span class="text-gray-400">&rarr;</span>
+						<NuxtLink v-if="dep.link" :to="dep.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ dep.code }}</NuxtLink>
+						<span v-else class="font-mono text-xs text-gray-400">{{ dep.code }}</span>
+					</div>
+				</div>
+			</section>
+
+			<!-- 5. Cùng nhóm -->
+			<section>
+				<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">5. Cùng nhóm</h3>
+				<div v-if="peerRows.length > 0" class="flex flex-wrap gap-2">
 					<NuxtLink
-						:to="`/knowledge/registries/${row._entityType}/${row.code}`"
-						class="font-medium text-primary-600 hover:text-primary-800 dark:text-primary-400 hover:underline"
+						v-for="peer in peerRows"
+						:key="peer._code"
+						:to="`/knowledge/registries/${entityType}/${peer._code}`"
+						class="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs hover:border-primary-300 hover:bg-primary-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-primary-600 dark:hover:bg-primary-900/20"
 					>
-						{{ row.code }}
+						<span class="font-mono text-primary-600 dark:text-primary-400">{{ peer.code_display }}</span>
+						<span v-if="peer.name_display" class="text-gray-500 dark:text-gray-400">{{ peer.name_display }}</span>
 					</NuxtLink>
-				</template>
-			</UTable>
-		</UCard>
-
-		<!-- TRANSITIVE: Indirect relations -->
-		<UCard v-if="transitiveRows.length > 0">
-			<template #header>
-				<div class="flex items-center gap-2">
-					<h3 class="text-base font-semibold text-gray-900 dark:text-white">Liên quan gián tiếp</h3>
-					<UBadge color="gray" variant="subtle" size="xs">{{ transitiveRows.length }}</UBadge>
 				</div>
-			</template>
-			<UTable :columns="transitiveColumns" :rows="transitiveRows" :ui="{ td: { padding: 'py-2 px-3' }, th: { padding: 'py-2 px-3' } }">
-				<template #cell-code="{ row }">
-					<NuxtLink
-						:to="`/knowledge/registries/${row._entityType}/${row.code}`"
-						class="font-medium text-primary-600 hover:text-primary-800 dark:text-primary-400 hover:underline"
-					>
-						{{ row.code }}
-					</NuxtLink>
-				</template>
-			</UTable>
-		</UCard>
+			</section>
 
-		<!-- PEERS: Same collection, same group -->
-		<UCard v-if="peerRows.length > 0">
-			<template #header>
-				<div class="flex items-center gap-2">
-					<h3 class="text-base font-semibold text-gray-900 dark:text-white">Cùng nhóm</h3>
-					<UBadge v-if="peerGroupLabel" color="primary" variant="subtle" size="xs">{{ peerGroupLabel }}</UBadge>
-					<UBadge color="gray" variant="subtle" size="xs">{{ peerRows.length }}</UBadge>
-				</div>
-			</template>
-			<div class="flex flex-wrap gap-2 p-1">
-				<NuxtLink
-					v-for="peer in peerRows"
-					:key="peer._code"
-					:to="`/knowledge/registries/${entityType}/${peer._code}`"
-					class="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-sm hover:border-primary-300 hover:bg-primary-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-primary-600 dark:hover:bg-primary-900/20"
-				>
-					<span class="font-medium text-primary-600 dark:text-primary-400">{{ peer.code_display }}</span>
-					<span v-if="peer.name_display" class="text-gray-500 dark:text-gray-400">{{ peer.name_display }}</span>
-				</NuxtLink>
-			</div>
-		</UCard>
+			<!-- 6. Tương tự -->
+			<section>
+				<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">6. Tương tự</h3>
+			</section>
+		</div>
 	</div>
 </template>

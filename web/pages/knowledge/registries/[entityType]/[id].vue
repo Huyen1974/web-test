@@ -262,8 +262,7 @@ useHead({
 							<span v-else class="font-mono text-xs line-through text-gray-400">{{ dep.code }}</span>
 						</div>
 					</div>
-					<p v-else class="text-sm text-gray-400 dark:text-gray-500 italic">(trống)</p>
-				</section>
+									</section>
 
 				<!-- 2. Tôi chứa gì? -->
 				<section>
@@ -275,8 +274,7 @@ useHead({
 							<span v-else class="font-mono text-xs line-through text-gray-400">{{ dep.code }}</span>
 						</div>
 					</div>
-					<p v-else class="text-sm text-gray-400 dark:text-gray-500 italic">(trống)</p>
-				</section>
+									</section>
 
 				<!-- 3. Tôi dùng ai? -->
 				<section>
@@ -288,8 +286,7 @@ useHead({
 							<span v-else class="font-mono text-xs line-through text-gray-400">{{ dep.code }}</span>
 						</div>
 					</div>
-					<p v-else class="text-sm text-gray-400 dark:text-gray-500 italic">(trống)</p>
-				</section>
+									</section>
 
 				<!-- 4. Ai dùng tôi? -->
 				<section>
@@ -301,8 +298,7 @@ useHead({
 							<span v-else class="font-mono text-xs line-through text-gray-400">{{ dep.code }}</span>
 						</div>
 					</div>
-					<p v-else class="text-sm text-gray-400 dark:text-gray-500 italic">(trống)</p>
-				</section>
+									</section>
 
 				<!-- 5. Cùng nhóm -->
 				<section>
@@ -318,8 +314,7 @@ useHead({
 							<span v-if="peer.name" class="text-gray-500 dark:text-gray-400">{{ peer.name }}</span>
 						</NuxtLink>
 					</div>
-					<p v-else class="text-sm text-gray-400 dark:text-gray-500 italic">(trống)</p>
-				</section>
+									</section>
 
 				<!-- 6. Tương tự -->
 				<section>

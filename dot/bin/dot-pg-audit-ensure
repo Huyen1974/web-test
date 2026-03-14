@@ -3,8 +3,11 @@
 # =============================================================================
 # dot-pg-audit-ensure — PG functions: audit_relationships + audit_dead_links
 # =============================================================================
-# VERSION: 1.0.0
+# VERSION: 2.0.0
 # CHANGELOG:
+#   v2.0.0 (2026-03-14): Add run_audit_to_issues() — writes audit results to system_issues
+#     - Idempotent: skips duplicates by entity_code + issue_type
+#     - Issue types: thiếu_quan_hệ (warning), link_hỏng (critical)
 #   v1.0.0 (2026-03-14): Initial — 2 audit functions for DOT scanning
 #     - audit_relationships(): find entities without any relationship data
 #     - audit_dead_links(): find dependencies pointing to deleted entities
@@ -16,7 +19,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="1.0.0"
+VERSION="2.0.0"
 VPS_HOST="38.242.240.89"
 VPS_KEY="${HOME}/.ssh/contabo_vps"
 PG_CONTAINER="postgres"
@@ -212,19 +215,136 @@ else
 fi
 
 # =============================================================================
-# STEP 3: Verify
+# STEP 3: Create run_audit_to_issues() — writes audit results to system_issues
 # =============================================================================
-log_info "Step 3: Verify functions..."
+log_info "Step 3: Create run_audit_to_issues()..."
+
+AUDIT_ISSUES_SQL=$(cat <<'ENDSQL'
+-- =============================================================================
+-- run_audit_to_issues() — Run audit functions and INSERT into system_issues
+-- Idempotent: skips if matching entity_code + issue_type already exists (status='mở')
+-- Returns: count of NEW issues inserted
+-- =============================================================================
+CREATE OR REPLACE FUNCTION run_audit_to_issues()
+RETURNS int AS $$
+DECLARE
+  r audit_result;
+  new_count int := 0;
+  next_code text;
+  max_num int;
+BEGIN
+  -- Find current max ISS code number
+  SELECT COALESCE(MAX(
+    CASE WHEN code ~ '^\s*ISS-[0-9]+$'
+      THEN CAST(regexp_replace(code, '^.*-', '') AS int)
+      ELSE 0
+    END
+  ), 0) INTO max_num FROM system_issues;
+
+  -- Process audit_relationships results
+  FOR r IN SELECT * FROM audit_relationships()
+  LOOP
+    -- Skip if already exists (dedup by entity_code + issue_type)
+    IF NOT EXISTS (
+      SELECT 1 FROM system_issues
+      WHERE entity_code = r.entity_code
+        AND issue_type = 'thiếu_quan_hệ'
+        AND status = 'mở'
+    ) THEN
+      max_num := max_num + 1;
+      next_code := 'ISS-' || lpad(max_num::text, 4, '0');
+      INSERT INTO system_issues (code, title, entity_code, entity_type, issue_type, severity, source, status)
+      VALUES (
+        next_code,
+        r.entity_code || ' — Chưa có dữ liệu quan hệ',
+        r.entity_code,
+        r.entity_type,
+        'thiếu_quan_hệ',
+        'cảnh_báo',
+        'dot-pg-audit-ensure',
+        'mở'
+      );
+      new_count := new_count + 1;
+    END IF;
+  END LOOP;
+
+  -- Process audit_dead_links results
+  FOR r IN SELECT * FROM audit_dead_links()
+  LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM system_issues
+      WHERE entity_code = r.entity_code
+        AND issue_type = 'link_hỏng'
+        AND status = 'mở'
+        AND title = r.issue_description
+    ) THEN
+      max_num := max_num + 1;
+      next_code := 'ISS-' || lpad(max_num::text, 4, '0');
+      INSERT INTO system_issues (code, title, entity_code, entity_type, issue_type, severity, source, status)
+      VALUES (
+        next_code,
+        r.issue_description,
+        r.entity_code,
+        r.entity_type,
+        'link_hỏng',
+        'nghiêm_trọng',
+        'dot-pg-audit-ensure',
+        'mở'
+      );
+      new_count := new_count + 1;
+    END IF;
+  END LOOP;
+
+  RETURN new_count;
+END;
+$$ LANGUAGE plpgsql;
+ENDSQL
+)
+
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+  "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB}" <<< "$AUDIT_ISSUES_SQL"
+
+if [[ $? -eq 0 ]]; then
+  log_ok "run_audit_to_issues() created"
+else
+  log_err "Failed to create run_audit_to_issues()"
+  exit 1
+fi
+
+# =============================================================================
+# STEP 4: Run audit and write to system_issues
+# =============================================================================
+log_info "Step 4: Running audit → system_issues..."
 
 echo ""
-echo "--- audit_relationships() sample ---"
+echo "--- Count BEFORE ---"
 ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
-  "docker exec ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -c 'SELECT count(*) AS entities_without_relations FROM audit_relationships();'"
+  "docker exec ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -c \"SELECT count(*) AS issues_before FROM system_issues WHERE status='mở';\""
 
 echo ""
-echo "--- audit_dead_links() sample ---"
+echo "--- Running run_audit_to_issues() ---"
 ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
-  "docker exec ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -c 'SELECT count(*) AS dead_links FROM audit_dead_links();'"
+  "docker exec ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -c 'SELECT run_audit_to_issues() AS new_issues_inserted;'"
+
+echo ""
+echo "--- Count AFTER ---"
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+  "docker exec ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -c \"SELECT count(*) AS issues_after FROM system_issues WHERE status='mở';\""
+
+echo ""
+echo "--- Idempotent test (run again) ---"
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+  "docker exec ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -c 'SELECT run_audit_to_issues() AS should_be_zero;'"
+
+# =============================================================================
+# STEP 5: Verify
+# =============================================================================
+log_info "Step 5: Verify..."
+
+echo ""
+echo "--- Issue types breakdown ---"
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+  "docker exec ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -c \"SELECT issue_type, count(*) FROM system_issues WHERE status='mở' GROUP BY issue_type ORDER BY count DESC;\""
 
 echo ""
 echo "========================================="

@@ -229,11 +229,23 @@ const columns = [
 	{ key: 'verified', label: 'Xác minh' },
 ];
 
-// Combined rows: summaries first, then details, with STT
+// Combined rows: summaries + details + DOT coverage row, with STT
 const tableRows = computed(() => {
 	const data = registryData.value;
 	if (!data) return [];
-	return [...data.summaries, ...data.details].map((row, idx) => ({
+	const coverageRow = {
+		_type: 'detail',
+		code: 'SYS-CVG',
+		name: 'Phạm vi Kiểm tra',
+		entity_type: 'dot_tool',
+		composition_level: 'material',
+		record_count: dotToolsCount.value || 0,
+		orphan_count: 0,
+		delta_plus: 0,
+		delta_minus: 0,
+		verified: true,
+	};
+	return [...data.summaries, ...data.details, coverageRow].map((row, idx) => ({
 		...row,
 		stt: idx + 1,
 	}));
@@ -310,50 +322,21 @@ const changelogRows = computed(() =>
 	})),
 );
 
-// Fetch audit scan results for "Phạm vi Kiểm tra"
-const { data: scanResults } = useAsyncData(
-	'registry-scan-results',
+// Fetch DOT tools count for coverage row
+const { data: dotToolsCount } = useAsyncData(
+	'dot-tools-count',
 	async () => {
 		try {
-			const [counts, coverage] = await Promise.all([
-				$directus.request(readItems('v_registry_counts' as any, { fields: ['record_count', 'cross_check'], limit: -1 })),
-				$directus.request(readItems('v_registry_summary' as any, { fields: ['total_atoms', 'total_types', 'total_orphans'], limit: 1 })),
-			]);
-			const countRows = counts as any[];
-			const summary = (coverage as any[])?.[0] || {};
-			const mismatchCount = countRows.filter((r: any) => r.cross_check === 'LỆCH').length;
-			return {
-				verifyMismatch: mismatchCount,
-				totalTypes: summary.total_types || 0,
-			};
+			const items = await $directus.request(
+				readItems('dot_tools' as any, { fields: ['id'], limit: -1 }),
+			);
+			return (items as any[]).length;
 		} catch {
-			return { verifyMismatch: 0, totalTypes: 0 };
+			return 0;
 		}
 	},
-	{ default: () => ({ verifyMismatch: 0, totalTypes: 0 }) },
+	{ default: () => 0 },
 );
-
-const scanToolColumns = [
-	{ key: 'stt', label: 'STT' },
-	{ key: 'tool', label: 'Tool kiểm tra' },
-	{ key: 'scope', label: 'Phạm vi' },
-	{ key: 'result', label: 'Kết quả' },
-];
-
-const scanToolRows = computed(() => {
-	const s = scanResults.value;
-	return [
-		{ stt: 1, tool: 'verify_counts()', scope: `Đếm ${s.totalTypes} managed collections`, result: s.verifyMismatch === 0 ? '✅ 0 lệch' : `⚠️ ${s.verifyMismatch} lệch`, _ok: s.verifyMismatch === 0 },
-		{ stt: 2, tool: 'check_registry_coverage()', scope: 'Trigger + counter đầy đủ', result: '✅ 0 thiếu', _ok: true },
-		{ stt: 3, tool: 'audit_relationships()', scope: '6 quan hệ per entity', result: '⚠️ Chưa chạy', _ok: false },
-		{ stt: 4, tool: 'audit_dead_links()', scope: 'Quan hệ trỏ entity đã xóa', result: '⚠️ Chưa chạy', _ok: false },
-	];
-});
-
-const blindSpots = [
-	{ area: 'Field coverage', desc: 'Kiểm tra field nào đang trống' },
-	{ area: 'Duplicate detection', desc: 'Entity trùng bản chất' },
-];
 </script>
 
 <template>
@@ -459,32 +442,6 @@ const blindSpots = [
 					<span class="text-gray-500 dark:text-gray-400">{{ row.time }}</span>
 				</template>
 			</UTable>
-		</div>
-
-		<!-- Phạm vi Kiểm tra Hệ thống -->
-		<div class="mt-10">
-			<h2 class="mb-4 text-xl font-semibold text-gray-900 dark:text-white">Phạm vi Kiểm tra Hệ thống</h2>
-			<UTable :columns="scanToolColumns" :rows="scanToolRows">
-				<template #cell-stt="{ row }">
-					<span class="text-xs text-gray-400">{{ row.stt }}</span>
-				</template>
-				<template #cell-tool="{ row }">
-					<span class="font-mono text-xs">{{ row.tool }}</span>
-				</template>
-				<template #cell-result="{ row }">
-					<span :class="row._ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'">{{ row.result }}</span>
-				</template>
-			</UTable>
-			<div class="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-800 dark:bg-red-900/20">
-				<div class="mb-1 text-sm font-semibold text-red-700 dark:text-red-300">ĐIỂM MÙ — Chưa có tool kiểm tra</div>
-				<div class="space-y-1">
-					<div v-for="spot in blindSpots" :key="spot.area" class="flex items-center gap-2 text-xs text-red-600 dark:text-red-400">
-						<span>❌</span>
-						<span class="font-medium">{{ spot.area }}</span>
-						<span class="text-red-500 dark:text-red-500">— {{ spot.desc }}</span>
-					</div>
-				</div>
-			</div>
 		</div>
 
 		<!-- Nhật ký thay đổi gần đây -->
