@@ -319,7 +319,6 @@ useHead({
 				<!-- 6. Tương tự -->
 				<section>
 					<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">6. Tương tự</h3>
-					<p class="text-sm text-gray-400 dark:text-gray-500 italic">(trống)</p>
 				</section>
 			</div>
 		</div>
