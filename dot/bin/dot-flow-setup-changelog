@@ -484,6 +484,11 @@ COLLECTIONS=(
   "entity_dependencies   entity_dependency    code            source_code"
   "table_proposals       table_proposal       code            name"
   "system_issues         system_issue         code            title"
+  "taxonomy_facets       taxonomy_facet       code            name"
+  "taxonomy              taxonomy_label       code            name"
+  "taxonomy_matrix       taxonomy_matrix      id              requirement"
+  "entity_labels         entity_label         id              label_code"
+  "label_rules           label_rule           id              name"
 )
 
 TOTAL_COLS=${#COLLECTIONS[@]}

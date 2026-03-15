@@ -21,6 +21,9 @@ function getRowLink(row: any): string {
 	if (row._type === 'summary' && row._virtualCode) {
 		return `/knowledge/registries/${row._virtualCode}`;
 	}
+	if (row._type === 'detail' && row.entity_type === 'taxonomy_label') {
+		return '/knowledge/registries/taxonomy';
+	}
 	if (row._type === 'detail' && row.entity_type) {
 		return `/knowledge/registries/${row.entity_type}`;
 	}
@@ -56,25 +59,7 @@ const COMPOSITION_LEVEL_DISPLAY: Record<string, { emoji: string; label: string }
 
 const { $directus } = useNuxtApp();
 
-// Fetch taxonomy label count for "Nhãn hệ thống" row
-const { data: taxonomyCount } = useAsyncData(
-	'taxonomy-label-count',
-	async () => {
-		try {
-			const items = await $directus.request(
-				readItems('taxonomy' as any, {
-					fields: ['id'],
-					filter: { status: { _eq: 'active' } },
-					limit: -1,
-				}),
-			);
-			return (items as any[]).length;
-		} catch {
-			return 0;
-		}
-	},
-	{ default: () => 0 },
-);
+// taxonomy count now comes from v_registry_counts (CAT-018) — same as other collections
 
 // Composition level labels + colors
 const LEVEL_CONFIG: Record<string, { label: string; color: string }> = {
@@ -213,20 +198,7 @@ const tableRows = computed(() => {
 		delta_minus: 0,
 		verified: true,
 	};
-	const taxonomyRow = {
-		_type: 'detail',
-		_link: '/knowledge/registries/taxonomy',
-		code: 'SYS-LBL',
-		name: 'Nhãn hệ thống',
-		entity_type: '',
-		composition_level: 'material',
-		record_count: taxonomyCount.value || 0,
-		orphan_count: 0,
-		delta_plus: 0,
-		delta_minus: 0,
-		verified: true,
-	};
-	return [...data.summaries, ...data.details, coverageRow, taxonomyRow].map((row, idx) => ({
+	return [...data.summaries, ...data.details, coverageRow].map((row, idx) => ({
 		...row,
 		stt: idx + 1,
 	}));
