@@ -273,6 +273,44 @@ jobs:
           if [ $FAILED -ne 0 ]; then echo "::error::CHECK 8 FAILED — AD↔Directus sync gap too large"; exit 1; fi
           echo "CHECK 8: PASS"
 
+      - name: "CHECK 9 — Registry Count Integrity"
+        run: |
+          echo "=== CHECK 9: Registry Count Integrity ==="
+          FAILED=0
+
+          # verify_counts() via Directus SQL (public v_registry_counts)
+          echo -n "Registry counts........ "
+          COUNTS=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/items/v_registry_counts?fields=cat_code,record_count,orphan_count&limit=-1" 2>/dev/null)
+          TOTAL=$(echo "$COUNTS" | jq '.data | length' 2>/dev/null || echo "0")
+
+          if [ "$TOTAL" -ge 15 ] 2>/dev/null; then
+            echo "OK ($TOTAL collections tracked)"
+          else
+            echo "FAIL ($TOTAL collections — expected >=15)"
+            FAILED=1
+          fi
+
+          # Check DOT tools count > 100
+          echo -n "DOT tools count........ "
+          DOT_COUNT=$(echo "$COUNTS" | jq '[.data[] | select(.cat_code == "CAT-006")] | .[0].record_count // 0' 2>/dev/null || echo "0")
+          if [ "$DOT_COUNT" -ge 100 ] 2>/dev/null; then
+            echo "OK ($DOT_COUNT)"
+          else
+            echo "WARN ($DOT_COUNT — expected >=100)"
+          fi
+
+          # Check taxonomy labels exist
+          echo -n "Taxonomy labels........ "
+          TAX_COUNT=$(echo "$COUNTS" | jq '[.data[] | select(.cat_code == "CAT-018")] | .[0].record_count // 0' 2>/dev/null || echo "0")
+          if [ "$TAX_COUNT" -ge 50 ] 2>/dev/null; then
+            echo "OK ($TAX_COUNT)"
+          else
+            echo "WARN ($TAX_COUNT — expected >=50)"
+          fi
+
+          if [ $FAILED -ne 0 ]; then echo "::error::CHECK 9 FAILED — registry count integrity issue"; exit 1; fi
+          echo "CHECK 9: PASS"
+
       - name: Summary
         if: always()
         run: |
@@ -280,7 +318,7 @@ jobs:
           echo "========================================"
           echo "  HEALTH CHECK COMPLETE"
           echo "========================================"
-          echo "  Checks: Services, Data, Content, Cache, Search, Flows, Structure, Sync"
+          echo "  Checks: Services, Data, Content, Cache, Search, Flows, Structure, Sync, Registry"
           echo "  VPS: $VPS_AGENT_DATA_URL"
           echo "  Web: $WEBSITE_URL"
           echo "========================================"

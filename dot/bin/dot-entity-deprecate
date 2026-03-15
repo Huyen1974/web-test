@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-entity-deprecate — Deprecate entity + warn dependents
+# =============================================================================
+# VERSION: 1.0.0
+# CHECKED-NO-DUPLICATE: [đã grep dot/bin/dot-entity-*, dot-*deprecate* — không có]
+# Calls PG function deprecate_entity(code) which:
+# 1. Updates status='deprecated' on the entity's collection
+# 2. Queries entity_dependencies for dependents
+# 3. Creates system_issue if dependents found
+# =============================================================================
+
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+main() {
+  local entity_code="${1:-}"
+  if [[ -z "$entity_code" || "$entity_code" == "--"* ]]; then
+    echo "Usage: dot-entity-deprecate <ENTITY_CODE> [--cloud|--local]"
+    echo "Example: dot-entity-deprecate DOT-042 --cloud"
+    exit 1
+  fi
+  shift || true
+  init_environment "$@"
+
+  echo "[INFO] Deprecating entity: $entity_code"
+
+  local result
+  if [[ "$(detect_environment "$@")" == "local" ]]; then
+    result=$(docker compose exec -T postgres psql -U directus -d directus -t -c \
+      "SELECT action, detail FROM deprecate_entity('$entity_code');")
+  else
+    result=$(ssh -i ~/.ssh/contabo_vps -o ConnectTimeout=10 root@38.242.240.89 \
+      "cd /opt/incomex/docker && docker compose exec -T postgres psql -U directus -d directus -t -c \"SELECT action, detail FROM deprecate_entity('$entity_code');\"")
+  fi
+
+  echo "$result"
+  if echo "$result" | grep -q "not_found"; then
+    echo "[WARN] Entity not found in any managed collection"
+    exit 1
+  fi
+  echo "[OK] Entity $entity_code deprecated"
+}
+
+main "$@"
