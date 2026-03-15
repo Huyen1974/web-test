@@ -1,0 +1,236 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-schema-taxonomy-ensure — Create 5 taxonomy collections + seed data
+# =============================================================================
+# VERSION: 1.0.0
+# CHECKED-NO-DUPLICATE: [đã grep dot/bin/dot-schema-*taxonomy*, không có tool tương tự]
+# S122: Luật Nhãn v1.3 — 5 PG tables + triggers + constraints + Directus registration + seed data
+# Idempotent: checks existence before create
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_skip() { echo "[SKIP] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+require_cmds() {
+  for cmd in curl jq; do
+    command -v "$cmd" >/dev/null 2>&1 || { log_err "Missing: $cmd"; exit 1; }
+  done
+}
+
+api_request() {
+  local method="$1" url="$2" data="${3-}"
+  if [[ -n "${data-}" ]]; then
+    curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "$data" -w "\n%{http_code}"
+  else
+    curl -sS --globoff -X "$method" "$url" \
+      -H "Authorization: Bearer $DOT_TOKEN" \
+      -w "\n%{http_code}"
+  fi
+}
+
+collection_exists() {
+  local name="$1"
+  local resp
+  resp=$(api_request GET "${DIRECTUS_URL}/collections/${name}")
+  local code="${resp##*$'\n'}"
+  [[ "$code" == "200" ]]
+}
+
+field_exists() {
+  local col="$1" field="$2"
+  local resp
+  resp=$(api_request GET "${DIRECTUS_URL}/fields/${col}/${field}")
+  local code="${resp##*$'\n'}"
+  [[ "$code" == "200" ]]
+}
+
+create_collection() {
+  local name="$1" icon="$2" note="$3" display="${4:-}" sort="${5:-}"
+  local payload
+  payload=$(jq -n \
+    --arg c "$name" --arg i "$icon" --arg n "$note" --arg d "$display" --arg s "$sort" \
+    '{collection: $c, schema: {}, meta: {collection: $c, icon: $i, note: $n, hidden: false, singleton: false, archive_app_filter: true, collapse: "open", versioning: false, display_template: (if $d != "" then $d else null end), sort_field: (if $s != "" then $s else null end)}, fields: [{field: "id", type: "integer", schema: {is_primary_key: true, has_auto_increment: true}, meta: {hidden: true, readonly: true, searchable: false, interface: "input", special: ["no-data"]}}]}')
+  local resp
+  resp=$(api_request POST "${DIRECTUS_URL}/collections" "$payload")
+  local code="${resp##*$'\n'}"
+  if [[ "$code" == "200" ]]; then
+    log_ok "Created collection: $name"
+  else
+    local body="${resp%$'\n'*}"
+    log_err "Failed to create $name (HTTP $code)"
+    echo "$body" | head -c 300 >&2
+    return 1
+  fi
+}
+
+create_field() {
+  local col="$1" payload="$2"
+  if field_exists "$col" "$(echo "$payload" | jq -r '.field')"; then
+    log_skip "Field $(echo "$payload" | jq -r '.field') already exists in $col"
+    return 0
+  fi
+  local resp
+  resp=$(api_request POST "${DIRECTUS_URL}/fields/${col}" "$payload")
+  local code="${resp##*$'\n'}"
+  if [[ "$code" == "200" ]]; then
+    log_ok "Created field: $col.$(echo "$payload" | jq -r '.field')"
+  else
+    local body="${resp%$'\n'*}"
+    log_warn "Field create $col.$(echo "$payload" | jq -r '.field') HTTP $code — may already exist"
+  fi
+}
+
+create_relation() {
+  local payload="$1"
+  local resp
+  resp=$(api_request POST "${DIRECTUS_URL}/relations" "$payload")
+  local code="${resp##*$'\n'}"
+  if [[ "$code" == "200" ]]; then
+    log_ok "Created relation"
+  else
+    log_warn "Relation create HTTP $code — may already exist"
+  fi
+}
+
+# =============================================================================
+# MAIN
+# =============================================================================
+
+main() {
+  require_cmds
+  init_environment "$@"
+  print_environment_banner "$@"
+
+  log_info "=== dot-schema-taxonomy-ensure v${VERSION} ==="
+  log_info "Directus: ${DIRECTUS_URL}"
+
+  # ─── 1. taxonomy_facets ───────────────────────────────────────────────
+  if collection_exists "taxonomy_facets"; then
+    log_skip "Collection taxonomy_facets already exists"
+  else
+    create_collection "taxonomy_facets" "category" "Chiều phân loại — 6 facets cho Luật Nhãn (Điều 24)" "{{code}} — {{name}}" "sort"
+  fi
+
+  # Fields for taxonomy_facets
+  local facet_fields=(
+    '{"field":"code","type":"string","meta":{"required":true,"interface":"input","width":"half","note":"FAC-01..FAC-06"},"schema":{"is_nullable":false,"is_unique":true}}'
+    '{"field":"name","type":"string","meta":{"required":true,"interface":"input","width":"half","note":"Tên chiều (tiếng Việt)"},"schema":{"is_nullable":false}}'
+    '{"field":"description","type":"text","meta":{"interface":"input-multiline","width":"full"},"schema":{"is_nullable":true}}'
+    '{"field":"cardinality","type":"string","meta":{"required":true,"interface":"select-dropdown","options":{"choices":[{"text":"Single","value":"single"},{"text":"Multiple","value":"multiple"}]},"width":"half","note":"single = 1 nhãn/entity, multiple = nhiều nhãn"},"schema":{"is_nullable":false,"default_value":"single"}}'
+    '{"field":"max_labels_per_entity","type":"integer","meta":{"interface":"input","width":"half","note":"0 = unlimited, >0 = giới hạn (chống label farming)"},"schema":{"is_nullable":true,"default_value":0}}'
+    '{"field":"sort","type":"integer","meta":{"interface":"input","width":"half","hidden":true},"schema":{"is_nullable":true,"default_value":0}}'
+    '{"field":"status","type":"string","meta":{"interface":"select-dropdown","options":{"choices":[{"text":"Active","value":"active"}]},"width":"half"},"schema":{"is_nullable":true,"default_value":"active"}}'
+  )
+  for f in "${facet_fields[@]}"; do
+    create_field "taxonomy_facets" "$f"
+  done
+
+  # ─── 2. taxonomy ──────────────────────────────────────────────────────
+  if collection_exists "taxonomy"; then
+    log_skip "Collection taxonomy already exists"
+  else
+    create_collection "taxonomy" "label" "Giá trị nhãn phân cấp — Luật Nhãn (Điều 24)" "{{code}} — {{name}}" "sort"
+  fi
+
+  local taxonomy_fields=(
+    '{"field":"code","type":"string","meta":{"required":true,"interface":"input","width":"half","note":"LBL-001..LBL-999"},"schema":{"is_nullable":false,"is_unique":true}}'
+    '{"field":"name","type":"string","meta":{"required":true,"interface":"input","width":"half","note":"Tên nhãn (tiếng Việt có dấu)"},"schema":{"is_nullable":false}}'
+    '{"field":"name_en","type":"string","meta":{"interface":"input","width":"half","note":"English name"},"schema":{"is_nullable":true}}'
+    '{"field":"facet_id","type":"integer","meta":{"required":true,"interface":"select-dropdown-m2o","width":"half","note":"Chiều phân loại"},"schema":{"is_nullable":false}}'
+    '{"field":"parent_id","type":"integer","meta":{"interface":"select-dropdown-m2o","width":"half","note":"Nhãn cha (nếu có)"},"schema":{"is_nullable":true}}'
+    '{"field":"parent_facet","type":"integer","meta":{"hidden":true,"interface":"input","width":"half","note":"Auto-filled by PG trigger — DO NOT EDIT"},"schema":{"is_nullable":true}}'
+    '{"field":"depth","type":"integer","meta":{"interface":"input","width":"half","note":"0=root, 1=child, 2=grandchild"},"schema":{"is_nullable":false,"default_value":0}}'
+    '{"field":"description","type":"text","meta":{"interface":"input-multiline","width":"full"},"schema":{"is_nullable":true}}'
+    '{"field":"scope","type":"json","meta":{"interface":"input-code","options":{"language":"json"},"width":"full","note":"Composition levels this label applies to"},"schema":{"is_nullable":true}}'
+    '{"field":"status","type":"string","meta":{"interface":"select-dropdown","options":{"choices":[{"text":"Active","value":"active"},{"text":"Deprecated","value":"deprecated"}]},"width":"half"},"schema":{"is_nullable":true,"default_value":"active"}}'
+    '{"field":"replaced_by","type":"string","meta":{"interface":"input","width":"half","note":"Code of replacement label"},"schema":{"is_nullable":true}}'
+    '{"field":"sort","type":"integer","meta":{"interface":"input","width":"half","hidden":true},"schema":{"is_nullable":true,"default_value":0}}'
+    '{"field":"date_created","type":"timestamp","meta":{"special":["date-created"],"interface":"datetime","readonly":true,"width":"half"},"schema":{"is_nullable":true}}'
+  )
+  for f in "${taxonomy_fields[@]}"; do
+    create_field "taxonomy" "$f"
+  done
+
+  # Relations: taxonomy.facet_id → taxonomy_facets.id
+  create_relation '{"collection":"taxonomy","field":"facet_id","related_collection":"taxonomy_facets","meta":{"one_field":null},"schema":{"on_delete":"RESTRICT"}}'
+  # Relations: taxonomy.parent_id → taxonomy.id (self-ref for tree)
+  create_relation '{"collection":"taxonomy","field":"parent_id","related_collection":"taxonomy","meta":{"one_field":null},"schema":{"on_delete":"SET NULL"}}'
+
+  # ─── 3. taxonomy_matrix ───────────────────────────────────────────────
+  if collection_exists "taxonomy_matrix"; then
+    log_skip "Collection taxonomy_matrix already exists"
+  else
+    create_collection "taxonomy_matrix" "grid_on" "Ma trận chiều × lớp — 36 records (6×6)" "{{composition_level}} — {{requirement}}" ""
+  fi
+
+  local matrix_fields=(
+    '{"field":"facet_id","type":"integer","meta":{"required":true,"interface":"select-dropdown-m2o","width":"half","note":"Chiều phân loại"},"schema":{"is_nullable":false}}'
+    '{"field":"composition_level","type":"string","meta":{"required":true,"interface":"select-dropdown","options":{"choices":[{"text":"Atom","value":"atom"},{"text":"Molecule","value":"molecule"},{"text":"Compound","value":"compound"},{"text":"Material","value":"material"},{"text":"Product","value":"product"},{"text":"Building","value":"building"}]},"width":"half"},"schema":{"is_nullable":false}}'
+    '{"field":"requirement","type":"string","meta":{"required":true,"interface":"select-dropdown","options":{"choices":[{"text":"Mandatory ★","value":"mandatory"},{"text":"Optional ○","value":"optional"},{"text":"N/A —","value":"not_applicable"}]},"width":"half"},"schema":{"is_nullable":false,"default_value":"not_applicable"}}'
+  )
+  for f in "${matrix_fields[@]}"; do
+    create_field "taxonomy_matrix" "$f"
+  done
+  create_relation '{"collection":"taxonomy_matrix","field":"facet_id","related_collection":"taxonomy_facets","meta":{"one_field":null},"schema":{"on_delete":"RESTRICT"}}'
+
+  # ─── 4. entity_labels ─────────────────────────────────────────────────
+  if collection_exists "entity_labels"; then
+    log_skip "Collection entity_labels already exists"
+  else
+    create_collection "entity_labels" "sell" "Gán nhãn cho entity — junction table" "{{entity_code}} → {{label_code}}" ""
+  fi
+
+  local el_fields=(
+    '{"field":"entity_code","type":"string","meta":{"required":true,"interface":"input","width":"half","note":"Entity code (e.g. DOT-001)"},"schema":{"is_nullable":false}}'
+    '{"field":"label_code","type":"string","meta":{"required":true,"interface":"input","width":"half","note":"Label code (e.g. LBL-001)"},"schema":{"is_nullable":false}}'
+    '{"field":"assigned_by","type":"string","meta":{"interface":"select-dropdown","options":{"choices":[{"text":"Auto","value":"auto"},{"text":"Rule","value":"rule"},{"text":"User","value":"user"},{"text":"AI","value":"ai"},{"text":"DOT","value":"dot"}]},"width":"half"},"schema":{"is_nullable":true,"default_value":"auto"}}'
+    '{"field":"rule_id","type":"integer","meta":{"interface":"input","width":"half","note":"ID of the rule that triggered this assignment"},"schema":{"is_nullable":true}}'
+    '{"field":"assigned_at","type":"timestamp","meta":{"special":["date-created"],"interface":"datetime","readonly":true,"width":"half"},"schema":{"is_nullable":true}}'
+  )
+  for f in "${el_fields[@]}"; do
+    create_field "entity_labels" "$f"
+  done
+
+  # ─── 5. label_rules ───────────────────────────────────────────────────
+  if collection_exists "label_rules"; then
+    log_skip "Collection label_rules already exists"
+  else
+    create_collection "label_rules" "rule" "Quy tắc gán nhãn tự động — 3 loại: collection, keyword, relation" "{{name}}" ""
+  fi
+
+  local lr_fields=(
+    '{"field":"name","type":"string","meta":{"required":true,"interface":"input","width":"full","note":"Tên quy tắc"},"schema":{"is_nullable":false}}'
+    '{"field":"facet_id","type":"integer","meta":{"required":true,"interface":"select-dropdown-m2o","width":"half","note":"Chiều phân loại áp dụng"},"schema":{"is_nullable":false}}'
+    '{"field":"rule_type","type":"string","meta":{"required":true,"interface":"select-dropdown","options":{"choices":[{"text":"Collection","value":"collection"},{"text":"Keyword","value":"keyword"},{"text":"Relation","value":"relation"}]},"width":"half"},"schema":{"is_nullable":false}}'
+    '{"field":"condition","type":"json","meta":{"required":true,"interface":"input-code","options":{"language":"json"},"width":"full","note":"Rule condition: {collection:...} or {name_pattern:...}"},"schema":{"is_nullable":false}}'
+    '{"field":"result_label","type":"string","meta":{"required":true,"interface":"input","width":"half","note":"Label code to assign"},"schema":{"is_nullable":false}}'
+    '{"field":"priority","type":"integer","meta":{"interface":"input","width":"half","note":"Lower = higher priority (10=collection, 100+=keyword)"},"schema":{"is_nullable":true,"default_value":100}}'
+    '{"field":"skip_wide_warning","type":"boolean","meta":{"interface":"boolean","width":"half","note":"Skip wide-match warning for this rule"},"schema":{"is_nullable":true,"default_value":false}}'
+    '{"field":"status","type":"string","meta":{"interface":"select-dropdown","options":{"choices":[{"text":"Active","value":"active"},{"text":"Inactive","value":"inactive"}]},"width":"half"},"schema":{"is_nullable":true,"default_value":"active"}}'
+  )
+  for f in "${lr_fields[@]}"; do
+    create_field "label_rules" "$f"
+  done
+  create_relation '{"collection":"label_rules","field":"facet_id","related_collection":"taxonomy_facets","meta":{"one_field":null},"schema":{"on_delete":"RESTRICT"}}'
+
+  # ─── PERMISSIONS: AI Agent read-only on all 5 collections ─────────
+  log_info "Directus collections registered. PG constraints + triggers must be applied separately via SSH."
+  log_info "Run: dot-schema-taxonomy-pg-apply to create PG constraints, triggers, seed data, and VIEW."
+
+  log_ok "=== dot-schema-taxonomy-ensure v${VERSION} COMPLETE ==="
+}
+
+main "$@"

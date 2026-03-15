@@ -55,58 +55,8 @@ const COMPOSITION_LEVEL_DISPLAY: Record<string, { emoji: string; label: string }
 
 const { $directus } = useNuxtApp();
 
-// Fetch system issues for Layer 1 summary
-const { data: systemIssues } = useAsyncData(
-	'registry-issues-summary',
-	async () => {
-		try {
-			return (await $directus.request(
-				readItems('system_issues' as any, {
-					fields: ['id', 'code', 'title', 'issue_type', 'severity', 'entity_type', 'detected_at'],
-					filter: { status: { _in: ['mở', 'đang_xử_lý'] } },
-					sort: ['-detected_at'],
-					limit: 10,
-				}),
-			)) as any[];
-		} catch {
-			return [];
-		}
-	},
-	{ default: () => [] },
-);
-
-const issuesSummaryColumns = [
-	{ key: 'stt', label: 'STT' },
-	{ key: 'code', label: 'Mã' },
-	{ key: 'title', label: 'Mô tả' },
-	{ key: 'entity_type', label: 'Loại' },
-	{ key: 'severity', label: 'Mức độ' },
-	{ key: 'time', label: 'Thời gian' },
-];
-
-function formatIssueTime(ts: string) {
-	if (!ts) return '';
-	const d = new Date(ts);
-	const now = new Date();
-	const diffMs = now.getTime() - d.getTime();
-	const diffMin = Math.floor(diffMs / 60000);
-	if (diffMin < 1) return 'vừa xong';
-	if (diffMin < 60) return `${diffMin} phút trước`;
-	const diffH = Math.floor(diffMin / 60);
-	if (diffH < 24) return `${diffH}h trước`;
-	return d.toLocaleDateString('vi-VN');
-}
-
-const issuesSummaryRows = computed(() =>
-	(systemIssues.value || []).map((i: any, idx: number) => ({
-		stt: idx + 1,
-		code: i.code || '—',
-		title: i.title,
-		entity_type: i.entity_type || '—',
-		severity: i.severity,
-		time: formatIssueTime(i.detected_at),
-	})),
-);
+// system_issues count now shown in the main registry table (CAT-017)
+// with status='open' filter — no separate section needed
 
 // Composition level labels + colors
 const LEVEL_CONFIG: Record<string, { label: string; color: string }> = {
@@ -418,31 +368,6 @@ const { data: dotToolsCount } = useAsyncData(
 				<span v-else>❌</span>
 			</template>
 		</UTable>
-
-		<!-- Vấn đề hệ thống -->
-		<div v-if="issuesSummaryRows.length > 0" class="mt-10">
-			<h2 class="mb-4 text-xl font-semibold text-gray-900 dark:text-white">
-				Vấn đề hệ thống
-				<UBadge color="red" variant="subtle" size="xs" class="ml-2">{{ issuesSummaryRows.length }}</UBadge>
-			</h2>
-			<UTable :columns="issuesSummaryColumns" :rows="issuesSummaryRows">
-				<template #cell-stt="{ row }">
-					<span class="text-xs text-gray-400">{{ row.stt }}</span>
-				</template>
-				<template #cell-severity="{ row }">
-					<UBadge
-						:color="row.severity === 'nghiêm_trọng' ? 'red' : row.severity === 'cảnh_báo' ? 'yellow' : 'blue'"
-						variant="subtle"
-						size="xs"
-					>
-						{{ row.severity === 'nghiêm_trọng' ? 'Nghiêm trọng' : row.severity === 'cảnh_báo' ? 'Cảnh báo' : 'Thông tin' }}
-					</UBadge>
-				</template>
-				<template #cell-time="{ row }">
-					<span class="text-gray-500 dark:text-gray-400">{{ row.time }}</span>
-				</template>
-			</UTable>
-		</div>
 
 		<!-- Nhật ký thay đổi gần đây -->
 		<div v-if="recentChangelog && recentChangelog.length > 0" class="mt-10">
