@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # =============================================================================
-# dot-label-trigger-setup — Generate + execute auto-label triggers per table
+# dot-label-trigger-setup — Create fn_auto_label_assignment + triggers per table
 # =============================================================================
-# VERSION: 1.0.0
+# VERSION: 2.0.0
 # CHECKED-NO-DUPLICATE: [đã grep dot/bin/dot-label*, không có tool tương tự]
-# S123: Reads information_schema.columns per managed table and creates
-# appropriate trigger DDL per Luật Nhãn v1.3 Section V.3
-# Idempotent: DROP TRIGGER IF EXISTS before CREATE
+# S124: Creates/updates fn_auto_label_assignment (data-driven code_column from
+# v_registry_counts) + generates trigger DDL per managed table based on
+# information_schema.columns. Covers ALL managed tables including those
+# with non-standard code fields (process_code, table_id).
+# Idempotent: CREATE OR REPLACE + DROP TRIGGER IF EXISTS
 # =============================================================================
 
 set -euo pipefail
@@ -14,7 +16,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="1.0.0"
+VERSION="2.0.0"
 
 log_info() { echo "[INFO] $1"; }
 log_ok()   { echo "[OK]   $1"; }
@@ -37,45 +39,139 @@ main() {
 
   log_info "=== dot-label-trigger-setup v${VERSION} ==="
 
-  # Ensure fn_auto_label_assignment exists
-  run_pg "SELECT proname FROM pg_proc WHERE proname='fn_auto_label_assignment';" | grep -q fn_auto_label_assignment || {
-    log_err "fn_auto_label_assignment() not found. Run dot-schema-taxonomy-pg-apply first."
-    exit 1
-  }
+  # Step 1: Create/update fn_auto_label_assignment (data-driven code_column)
+  log_info "Creating fn_auto_label_assignment (data-driven code_column)..."
+  run_pg "$(cat <<'EOSQL'
+CREATE OR REPLACE FUNCTION fn_auto_label_assignment()
+RETURNS trigger AS $$
+DECLARE
+  v_entity_code text;
+  v_collection text;
+  v_code_column text;
+  v_row jsonb;
+  v_name text;
+  v_desc text;
+  v_facet_max smallint;
+  v_current_count integer;
+  r label_rules%ROWTYPE;
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF (to_jsonb(NEW)->>'name') IS NOT DISTINCT FROM (to_jsonb(OLD)->>'name')
+       AND (to_jsonb(NEW)->>'description') IS NOT DISTINCT FROM (to_jsonb(OLD)->>'description')
+       AND (to_jsonb(NEW)->>'title') IS NOT DISTINCT FROM (to_jsonb(OLD)->>'title') THEN
+      RETURN NEW;
+    END IF;
+  END IF;
 
-  # Generate and execute triggers per managed table
+  v_collection := TG_TABLE_NAME;
+  v_row := to_jsonb(NEW);
+
+  -- Read code_column from v_registry_counts (data-driven, not hardcoded)
+  SELECT vrc.code_column INTO v_code_column
+  FROM v_registry_counts vrc
+  JOIN meta_catalog mc ON mc.code = vrc.cat_code
+  WHERE mc.registry_collection = v_collection
+  LIMIT 1;
+
+  v_code_column := COALESCE(v_code_column, 'code');
+  v_entity_code := v_row->>v_code_column;
+  IF v_entity_code IS NULL THEN RETURN NEW; END IF;
+
+  v_name := COALESCE(v_row->>'name', v_row->>'title', '');
+  v_desc := COALESCE(v_row->>'description', '');
+
+  FOR r IN
+    SELECT * FROM label_rules WHERE status = 'active' ORDER BY priority ASC
+  LOOP
+    SELECT max_labels_per_entity INTO v_facet_max
+    FROM taxonomy_facets WHERE id = r.facet_id;
+    IF v_facet_max > 0 THEN
+      SELECT COUNT(*) INTO v_current_count
+      FROM entity_labels el JOIN taxonomy t ON el.label_code = t.code
+      WHERE el.entity_code = v_entity_code AND t.facet_id = r.facet_id;
+      IF v_current_count >= v_facet_max THEN
+        CONTINUE;
+      END IF;
+    END IF;
+
+    IF r.rule_type = 'collection'
+       AND r.condition->>'collection' = v_collection THEN
+      INSERT INTO entity_labels(entity_code, label_code, assigned_by, rule_id)
+      VALUES (v_entity_code, r.result_label, 'rule', r.id)
+      ON CONFLICT (entity_code, label_code) DO NOTHING;
+    END IF;
+
+    IF r.rule_type = 'keyword'
+       AND (v_name ~* (r.condition->>'name_pattern')
+            OR v_desc ~* (r.condition->>'name_pattern')) THEN
+      INSERT INTO entity_labels(entity_code, label_code, assigned_by, rule_id)
+      VALUES (v_entity_code, r.result_label, 'rule', r.id)
+      ON CONFLICT (entity_code, label_code) DO NOTHING;
+    END IF;
+  END LOOP;
+
+  RETURN NEW;
+END; $$ LANGUAGE plpgsql;
+EOSQL
+  )"
+  log_ok "fn_auto_label_assignment created/updated"
+
+  # Step 2: Generate triggers per managed table
+  log_info "Generating triggers per managed table..."
   run_pg "$(cat <<'EOSQL'
 DO $$
 DECLARE
   tbl RECORD;
   has_name boolean;
   has_desc boolean;
+  has_title boolean;
+  v_code_col text;
   trigger_ddl text;
+  update_cols text;
   cnt integer := 0;
 BEGIN
   FOR tbl IN
-    SELECT DISTINCT mc.registry_collection AS tname
+    SELECT DISTINCT mc.registry_collection AS tname, vrc.code_column AS code_col
     FROM meta_catalog mc
+    JOIN v_registry_counts vrc ON vrc.cat_code = mc.code
     WHERE mc.registry_collection IS NOT NULL
       AND mc.registry_collection != ''
       AND mc.registry_collection != '_uncategorized'
       AND mc.registry_collection != 'comments'
       AND mc.code NOT IN ('CAT-ALL','CAT-MOL','CAT-CMP','CAT-MAT','CAT-PRD','CAT-BLD','CAT-999')
-      AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name=mc.registry_collection AND column_name='code')
+      AND EXISTS (SELECT 1 FROM information_schema.columns
+                  WHERE table_name=mc.registry_collection AND column_name=vrc.code_column)
   LOOP
     SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name=tbl.tname AND column_name='name') INTO has_name;
     SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name=tbl.tname AND column_name='description') INTO has_desc;
+    SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name=tbl.tname AND column_name='title') INTO has_title;
+
     EXECUTE format('DROP TRIGGER IF EXISTS trg_label_assign_%I ON %I', tbl.tname, tbl.tname);
+
+    -- Build UPDATE OF columns list
     IF has_name AND has_desc THEN
-      trigger_ddl := format('CREATE TRIGGER trg_label_assign_%I AFTER INSERT OR UPDATE OF name, description ON %I FOR EACH ROW EXECUTE FUNCTION fn_auto_label_assignment()', tbl.tname, tbl.tname);
+      update_cols := 'name, description';
     ELSIF has_name THEN
-      trigger_ddl := format('CREATE TRIGGER trg_label_assign_%I AFTER INSERT OR UPDATE OF name ON %I FOR EACH ROW EXECUTE FUNCTION fn_auto_label_assignment()', tbl.tname, tbl.tname);
+      update_cols := 'name';
+    ELSIF has_title AND has_desc THEN
+      update_cols := 'title, description';
+    ELSIF has_title THEN
+      update_cols := 'title';
+    ELSIF has_desc THEN
+      update_cols := 'description';
+    ELSE
+      update_cols := '';
+    END IF;
+
+    IF update_cols != '' THEN
+      trigger_ddl := format('CREATE TRIGGER trg_label_assign_%I AFTER INSERT OR UPDATE OF %s ON %I FOR EACH ROW EXECUTE FUNCTION fn_auto_label_assignment()', tbl.tname, update_cols, tbl.tname);
     ELSE
       trigger_ddl := format('CREATE TRIGGER trg_label_assign_%I AFTER INSERT ON %I FOR EACH ROW EXECUTE FUNCTION fn_auto_label_assignment()', tbl.tname, tbl.tname);
     END IF;
+
     EXECUTE trigger_ddl;
     cnt := cnt + 1;
-    RAISE NOTICE 'Trigger for %: name=%, desc=%', tbl.tname, has_name, has_desc;
+    RAISE NOTICE 'Trigger for % (code_col=%): update_cols=[%]', tbl.tname, tbl.code_col, update_cols;
   END LOOP;
   RAISE NOTICE 'Total: % triggers created', cnt;
 END $$;
@@ -83,6 +179,7 @@ EOSQL
   )"
 
   # Verify
+  log_info "Verifying triggers..."
   run_pg "SELECT tgname, tgrelid::regclass FROM pg_trigger WHERE tgfoid = 'fn_auto_label_assignment'::regproc ORDER BY tgrelid::regclass::text;"
 
   log_ok "=== dot-label-trigger-setup v${VERSION} COMPLETE ==="
