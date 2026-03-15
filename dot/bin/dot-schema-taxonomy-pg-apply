@@ -1,0 +1,517 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-schema-taxonomy-pg-apply — PG constraints + triggers + seed data + VIEW
+# =============================================================================
+# VERSION: 1.0.0
+# S122: Applied AFTER dot-schema-taxonomy-ensure (Directus registration)
+# Creates: constraints, triggers, functions, indexes, seed data, v_all_entity_codes VIEW
+# Also: system_issues status lifecycle (D1) + v_registry_counts entry
+# Idempotent: uses IF NOT EXISTS / CREATE OR REPLACE / ON CONFLICT
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+# =============================================================================
+# PG CONNECTION
+# =============================================================================
+
+run_pg() {
+  local sql="$1"
+  if [[ "$(detect_environment "${FLAG:-}")" == "local" ]]; then
+    docker compose exec -T postgres psql -U directus -d directus -c "$sql"
+  else
+    ssh -i ~/.ssh/contabo_vps -o ConnectTimeout=10 root@38.242.240.89 \
+      "cd /opt/incomex/docker && docker compose exec -T postgres psql -U directus -d directus -c $(printf '%q' "$sql")"
+  fi
+}
+
+run_pg_file() {
+  local sql="$1"
+  if [[ "$(detect_environment "${FLAG:-}")" == "local" ]]; then
+    echo "$sql" | docker compose exec -T postgres psql -U directus -d directus
+  else
+    echo "$sql" | ssh -i ~/.ssh/contabo_vps -o ConnectTimeout=10 root@38.242.240.89 \
+      "cd /opt/incomex/docker && docker compose exec -T postgres psql -U directus -d directus"
+  fi
+}
+
+# =============================================================================
+# MAIN
+# =============================================================================
+
+main() {
+  local FLAG="${1:-}"
+  init_environment "$@"
+  print_environment_banner "$@"
+
+  log_info "=== dot-schema-taxonomy-pg-apply v${VERSION} ==="
+
+  # ─── D1: system_issues status lifecycle ─────────────────────────────
+  log_info "--- D1: system_issues status lifecycle ---"
+
+  run_pg_file "$(cat <<'EOSQL'
+-- Migrate status values: 'mở' → 'open'
+UPDATE system_issues SET status = 'open' WHERE status = 'mở' OR status IS NULL;
+
+-- Add CHECK constraint (idempotent)
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'chk_system_issues_status'
+  ) THEN
+    ALTER TABLE system_issues ADD CONSTRAINT chk_system_issues_status
+      CHECK (status IN ('open','resolved','archived'));
+  END IF;
+END $$;
+
+-- Partial index for open issues (idempotent)
+CREATE INDEX IF NOT EXISTS idx_issues_open ON system_issues(status) WHERE status = 'open';
+EOSQL
+  )"
+  log_ok "D1: system_issues status lifecycle applied"
+
+  # Add system_issues to v_registry_counts if not present
+  run_pg_file "$(cat <<'EOSQL'
+INSERT INTO v_registry_counts (cat_code, entity_type, record_count, orphan_count, composition_level, code_column, prev_count)
+SELECT 'CAT-017', 'system_issue',
+  (SELECT COUNT(*) FROM system_issues WHERE status = 'open'),
+  (SELECT COUNT(*) FROM system_issues WHERE code IS NULL OR btrim(code) = ''),
+  'atom', 'code', 0
+WHERE NOT EXISTS (SELECT 1 FROM v_registry_counts WHERE cat_code = 'CAT-017');
+EOSQL
+  )"
+
+  # Create count trigger for system_issues (counting only open issues)
+  run_pg_file "$(cat <<'EOSQL'
+CREATE OR REPLACE FUNCTION refresh_registry_count_issues()
+RETURNS trigger AS $$
+BEGIN
+  UPDATE v_registry_counts SET
+    prev_count = record_count,
+    record_count = (SELECT COUNT(*) FROM system_issues WHERE status = 'open'),
+    orphan_count = (SELECT COUNT(*) FROM system_issues WHERE code IS NULL OR btrim(code) = '')
+  WHERE cat_code = 'CAT-017';
+  RETURN NULL;
+END; $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_count_system_issues ON system_issues;
+CREATE TRIGGER trg_count_system_issues
+  AFTER INSERT OR UPDATE OR DELETE ON system_issues
+  FOR EACH STATEMENT
+  EXECUTE FUNCTION refresh_registry_count_issues();
+EOSQL
+  )"
+  log_ok "D1: system_issues count trigger created"
+
+  # ─── D2: PG constraints + triggers for taxonomy tables ──────────────
+  log_info "--- D2: PG constraints + triggers ---"
+
+  # Constraints for taxonomy table
+  run_pg_file "$(cat <<'EOSQL'
+-- Add CHECK constraints (idempotent via DO block)
+DO $$ BEGIN
+  -- depth check
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'taxonomy_depth_check') THEN
+    ALTER TABLE taxonomy ADD CONSTRAINT taxonomy_depth_check CHECK (depth >= 0 AND depth <= 2);
+  END IF;
+
+  -- root/non-root parent check
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_root_no_parent') THEN
+    ALTER TABLE taxonomy ADD CONSTRAINT chk_root_no_parent CHECK (
+      (depth = 0 AND parent_id IS NULL AND parent_facet IS NULL)
+      OR (depth > 0 AND parent_id IS NOT NULL AND parent_facet IS NOT NULL)
+    );
+  END IF;
+
+  -- Composite FK same-facet: unique constraint
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_taxonomy_id_facet') THEN
+    ALTER TABLE taxonomy ADD CONSTRAINT uq_taxonomy_id_facet UNIQUE (id, facet_id);
+  END IF;
+
+  -- Composite FK: parent must be same facet
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_taxonomy_parent_same_facet') THEN
+    ALTER TABLE taxonomy ADD CONSTRAINT fk_taxonomy_parent_same_facet
+      FOREIGN KEY (parent_id, parent_facet) REFERENCES taxonomy(id, facet_id);
+  END IF;
+
+  -- parent_facet must match facet_id
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_parent_facet_match') THEN
+    ALTER TABLE taxonomy ADD CONSTRAINT chk_parent_facet_match CHECK (parent_facet = facet_id);
+  END IF;
+
+  -- replaced_by constraints
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_replaced_by_not_self') THEN
+    ALTER TABLE taxonomy ADD CONSTRAINT chk_replaced_by_not_self CHECK (replaced_by != code);
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_replaced_by') THEN
+    ALTER TABLE taxonomy ADD CONSTRAINT fk_replaced_by FOREIGN KEY (replaced_by) REFERENCES taxonomy(code);
+  END IF;
+
+  -- status check
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'taxonomy_status_check') THEN
+    ALTER TABLE taxonomy ADD CONSTRAINT taxonomy_status_check CHECK (status IN ('active','deprecated'));
+  END IF;
+END $$;
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_taxonomy_facet_parent_sort ON taxonomy(facet_id, parent_id, sort);
+CREATE INDEX IF NOT EXISTS idx_taxonomy_depth ON taxonomy(depth);
+
+-- taxonomy_facets constraints
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'taxonomy_facets_cardinality_check') THEN
+    ALTER TABLE taxonomy_facets ADD CONSTRAINT taxonomy_facets_cardinality_check
+      CHECK (cardinality IN ('single','multiple'));
+  END IF;
+END $$;
+
+-- taxonomy_matrix constraints
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'taxonomy_matrix_requirement_check') THEN
+    ALTER TABLE taxonomy_matrix ADD CONSTRAINT taxonomy_matrix_requirement_check
+      CHECK (requirement IN ('mandatory','optional','not_applicable'));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'taxonomy_matrix_facet_level_unique') THEN
+    ALTER TABLE taxonomy_matrix ADD CONSTRAINT taxonomy_matrix_facet_level_unique UNIQUE (facet_id, composition_level);
+  END IF;
+END $$;
+
+-- entity_labels constraints
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'entity_labels_assigned_by_check') THEN
+    ALTER TABLE entity_labels ADD CONSTRAINT entity_labels_assigned_by_check
+      CHECK (assigned_by IN ('auto','rule','user','ai','dot'));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'entity_labels_unique') THEN
+    ALTER TABLE entity_labels ADD CONSTRAINT entity_labels_unique UNIQUE (entity_code, label_code);
+  END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS idx_el_entity ON entity_labels(entity_code);
+CREATE INDEX IF NOT EXISTS idx_el_label ON entity_labels(label_code);
+
+-- label_rules constraints
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'label_rules_rule_type_check') THEN
+    ALTER TABLE label_rules ADD CONSTRAINT label_rules_rule_type_check
+      CHECK (rule_type IN ('collection','keyword','relation'));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'label_rules_condition_object_check') THEN
+    ALTER TABLE label_rules ADD CONSTRAINT label_rules_condition_object_check
+      CHECK (jsonb_typeof(condition) = 'object');
+  END IF;
+END $$;
+EOSQL
+  )"
+  log_ok "D2: PG constraints applied"
+
+  # Triggers (CREATE OR REPLACE = idempotent)
+  run_pg_file "$(cat <<'EOSQL'
+-- Auto-fill parent_facet trigger
+CREATE OR REPLACE FUNCTION fn_taxonomy_auto_fill_parent_facet()
+RETURNS trigger AS $$
+BEGIN
+  IF NEW.parent_id IS NOT NULL THEN
+    NEW.parent_facet := NEW.facet_id;
+  ELSE
+    NEW.parent_facet := NULL;
+  END IF;
+  RETURN NEW;
+END; $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_taxonomy_fill_parent_facet ON taxonomy;
+CREATE TRIGGER trg_taxonomy_fill_parent_facet
+  BEFORE INSERT OR UPDATE ON taxonomy FOR EACH ROW
+  EXECUTE FUNCTION fn_taxonomy_auto_fill_parent_facet();
+
+-- Cycle detection trigger
+CREATE OR REPLACE FUNCTION chk_no_cycle() RETURNS trigger AS $$
+DECLARE v_current integer; v_depth integer := 0;
+BEGIN
+  IF NEW.parent_id IS NULL THEN RETURN NEW; END IF;
+  v_current := NEW.parent_id;
+  WHILE v_current IS NOT NULL AND v_depth < 5 LOOP
+    IF v_current = NEW.id THEN
+      RAISE EXCEPTION 'Cycle detected in taxonomy tree';
+    END IF;
+    SELECT parent_id INTO v_current FROM taxonomy WHERE id = v_current;
+    v_depth := v_depth + 1;
+  END LOOP;
+  RETURN NEW;
+END; $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_taxonomy_no_cycle ON taxonomy;
+CREATE TRIGGER trg_taxonomy_no_cycle
+  BEFORE INSERT OR UPDATE ON taxonomy FOR EACH ROW
+  EXECUTE FUNCTION chk_no_cycle();
+
+-- replaced_by validation trigger
+CREATE OR REPLACE FUNCTION chk_replaced_by_valid() RETURNS trigger AS $$
+DECLARE v_target_facet integer; v_chain text; v_depth integer := 0;
+BEGIN
+  IF NEW.replaced_by IS NULL THEN RETURN NEW; END IF;
+  SELECT facet_id INTO v_target_facet FROM taxonomy WHERE code = NEW.replaced_by;
+  IF v_target_facet != NEW.facet_id THEN
+    RAISE EXCEPTION 'replaced_by must point to same facet';
+  END IF;
+  v_chain := NEW.replaced_by;
+  WHILE v_chain IS NOT NULL AND v_depth < 5 LOOP
+    IF v_chain = NEW.code THEN RAISE EXCEPTION 'Replacement cycle detected'; END IF;
+    SELECT replaced_by INTO v_chain FROM taxonomy WHERE code = v_chain;
+    v_depth := v_depth + 1;
+  END LOOP;
+  RETURN NEW;
+END; $$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_taxonomy_replaced_by ON taxonomy;
+CREATE TRIGGER trg_taxonomy_replaced_by
+  BEFORE INSERT OR UPDATE ON taxonomy FOR EACH ROW
+  EXECUTE FUNCTION chk_replaced_by_valid();
+EOSQL
+  )"
+  log_ok "D2: PG triggers applied"
+
+  # ─── D3: Seed data ─────────────────────────────────────────────────
+  log_info "--- D3: Seed data ---"
+
+  # Insert facets (idempotent via ON CONFLICT)
+  run_pg_file "$(cat <<'EOSQL'
+INSERT INTO taxonomy_facets (code, name, description, cardinality, max_labels_per_entity, sort) VALUES
+('FAC-01', 'Chuyên môn gì?', 'Entity thuộc lĩnh vực chuyên môn nào? Cấu trúc cha-con 3 tầng.', 'multiple', 3, 1),
+('FAC-02', 'Vai trò hệ thống?', 'Entity đóng vai trò gì trong hệ thống?', 'single', 0, 2),
+('FAC-03', 'Hành động gì?', 'Entity làm gì hoặc phục vụ cho hành động gì?', 'multiple', 0, 3),
+('FAC-04', 'Phạm vi tác động?', 'Entity ảnh hưởng đến đâu?', 'single', 0, 4),
+('FAC-05', 'Giai đoạn?', 'Entity đang ở giai đoạn nào trong vòng đời?', 'single', 0, 5),
+('FAC-06', 'Phục vụ ai?', 'Entity phục vụ cho đối tượng nào?', 'multiple', 0, 6)
+ON CONFLICT (code) DO NOTHING;
+EOSQL
+  )"
+  log_ok "D3: 6 facets inserted"
+
+  # Insert taxonomy labels — Chiều 1 parents (depth=0)
+  run_pg_file "$(cat <<'EOSQL'
+INSERT INTO taxonomy (code, name, name_en, facet_id, depth, scope, description, sort) VALUES
+('LBL-001', 'Hạ tầng & vận hành', 'Infrastructure & Operations', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), 0, '{atom,molecule,compound,material,product,building}', 'Server, Docker, CI/CD, deploy, monitoring, mạng', 1),
+('LBL-002', 'Dữ liệu & lưu trữ', 'Data & Storage', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), 0, '{atom,molecule,compound,material,product,building}', 'PostgreSQL, Directus, Qdrant, files, backup, migration', 2),
+('LBL-003', 'Giao diện & trải nghiệm', 'UI & Experience', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), 0, '{atom,molecule,compound,material,product,building}', 'Pages, components, tables, layouts, navigation, forms', 3),
+('LBL-004', 'Quy trình & điều phối', 'Workflow & Orchestration', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), 0, '{atom,molecule,compound,material,product,building}', 'Workflows, steps, approvals, state machine, tasks', 4),
+('LBL-005', 'Kiểm tra & giám sát', 'QA & Monitoring', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), 0, '{atom,molecule,compound,material,product,building}', 'DOT tools kiểm tra, health check, audit, scan, verify', 5),
+('LBL-006', 'Tích hợp AI', 'AI Integration', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), 0, '{atom,molecule,compound,material,product,building}', 'AI agents, bridges, gateways, MCP, LLM connections', 6),
+('LBL-007', 'Bảo mật & quyền', 'Security & Permissions', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), 0, '{atom,molecule,compound,material,product,building}', 'Permissions, auth, tokens, roles, secrets', 7),
+('LBL-008', 'Nghiệp vụ', 'Business', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), 0, '{material,product,building}', 'Quy trình kinh doanh, khách hàng, đại lý, CTV', 8)
+ON CONFLICT (code) DO NOTHING;
+EOSQL
+  )"
+  log_ok "D3: 8 parent labels (Chiều 1) inserted"
+
+  # Insert taxonomy labels — Chiều 1 children (depth=1)
+  run_pg_file "$(cat <<'EOSQL'
+INSERT INTO taxonomy (code, name, name_en, facet_id, parent_id, depth, scope, description, sort) VALUES
+('LBL-011', 'Server & VPS', 'Server & VPS', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), (SELECT id FROM taxonomy WHERE code='LBL-001'), 1, '{atom,molecule,compound}', 'Contabo, nginx, OS, network config', 1),
+('LBL-012', 'Docker & container', 'Docker & Containers', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), (SELECT id FROM taxonomy WHERE code='LBL-001'), 1, '{atom,molecule,compound}', 'Docker compose, images, volumes, networking', 2),
+('LBL-013', 'CI/CD & deploy', 'CI/CD & Deploy', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), (SELECT id FROM taxonomy WHERE code='LBL-001'), 1, '{atom,molecule,compound}', 'GitHub Actions, deploy workflows, SSH push', 3),
+('LBL-014', 'Giám sát hệ thống', 'System Monitoring', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), (SELECT id FROM taxonomy WHERE code='LBL-001'), 1, '{atom,molecule,compound}', 'Health check, uptime, logs, alerts', 4),
+('LBL-021', 'PostgreSQL', 'PostgreSQL', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), (SELECT id FROM taxonomy WHERE code='LBL-002'), 1, '{atom,molecule,compound}', 'Tables, views, triggers, functions, CTE', 1),
+('LBL-022', 'Directus', 'Directus', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), (SELECT id FROM taxonomy WHERE code='LBL-002'), 1, '{atom,molecule,compound}', 'Collections, fields, flows, permissions, API', 2),
+('LBL-023', 'Vector & Qdrant', 'Vector & Qdrant', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), (SELECT id FROM taxonomy WHERE code='LBL-002'), 1, '{atom,molecule,compound}', 'Embeddings, vector search, RAG', 3),
+('LBL-024', 'Files & backup', 'Files & Backup', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), (SELECT id FROM taxonomy WHERE code='LBL-002'), 1, '{atom,molecule,compound}', 'Local storage, backup scripts, restore', 4),
+('LBL-031', 'Trang & route', 'Pages & Routes', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), (SELECT id FROM taxonomy WHERE code='LBL-003'), 1, '{atom,molecule,compound}', 'Nuxt pages, navigation, routing', 1),
+('LBL-032', 'Bảng & danh sách', 'Tables & Lists', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), (SELECT id FROM taxonomy WHERE code='LBL-003'), 1, '{atom,molecule,compound}', 'DirectusTable, UTable, data display', 2),
+('LBL-033', 'Biểu mẫu & nhập liệu', 'Forms & Inputs', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), (SELECT id FROM taxonomy WHERE code='LBL-003'), 1, '{atom,molecule,compound}', 'UForm, UInput, data entry', 3),
+('LBL-041', 'Workflow & steps', 'Workflows & Steps', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), (SELECT id FROM taxonomy WHERE code='LBL-004'), 1, '{atom,molecule,compound}', 'Workflow definitions, nodes, transitions', 1),
+('LBL-042', 'Checkpoint & xác minh', 'Checkpoints & Verification', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), (SELECT id FROM taxonomy WHERE code='LBL-004'), 1, '{atom,molecule,compound}', 'Checkpoint types, sets, instances, verification', 2),
+('LBL-043', 'Task & phân công', 'Tasks & Assignment', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), (SELECT id FROM taxonomy WHERE code='LBL-004'), 1, '{atom,molecule,compound}', 'Task management, AI tasks, assignments', 3),
+('LBL-051', 'Đếm & xác minh', 'Counting & Verification', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), (SELECT id FROM taxonomy WHERE code='LBL-005'), 1, '{atom,molecule,compound}', 'verify_counts, crosscheck, record counting', 1),
+('LBL-052', 'Quét mồ côi', 'Orphan Scanning', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), (SELECT id FROM taxonomy WHERE code='LBL-005'), 1, '{atom,molecule,compound}', 'dot-orphan-scan, entity_code validation', 2),
+('LBL-053', 'Kiểm tra quan hệ', 'Relationship Auditing', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), (SELECT id FROM taxonomy WHERE code='LBL-005'), 1, '{atom,molecule,compound}', 'audit_relationships, dead links, dependency scan', 3),
+('LBL-061', 'AI Agent & bridge', 'AI Agents & Bridges', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), (SELECT id FROM taxonomy WHERE code='LBL-006'), 1, '{atom,molecule,compound}', 'Claude, GPT, Gemini, MCP connections', 1),
+('LBL-062', 'AI Gateway & config', 'AI Gateway & Config', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), (SELECT id FROM taxonomy WHERE code='LBL-006'), 1, '{atom,molecule,compound}', 'Gateway setup, tokens, API keys', 2),
+('LBL-071', 'Quyền & vai trò', 'Permissions & Roles', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), (SELECT id FROM taxonomy WHERE code='LBL-007'), 1, '{atom,molecule,compound}', 'Directus roles, collection permissions, field access', 1),
+('LBL-072', 'Xác thực & token', 'Auth & Tokens', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), (SELECT id FROM taxonomy WHERE code='LBL-007'), 1, '{atom,molecule,compound}', 'Secret Manager, API keys, refresh tokens', 2)
+ON CONFLICT (code) DO NOTHING;
+EOSQL
+  )"
+  log_ok "D3: 22 child labels (Chiều 1) inserted"
+
+  # Insert taxonomy labels — Chiều 2-6 (flat, depth=0)
+  run_pg_file "$(cat <<'EOSQL'
+-- Chiều 2: Vai trò (FAC-02)
+INSERT INTO taxonomy (code, name, name_en, facet_id, depth, scope, description, sort) VALUES
+('LBL-101', 'Cấu trúc', 'Structure', (SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 0, '{atom,molecule}', 'Tạo nên bộ khung: collections, fields, tables', 1),
+('LBL-102', 'Nội dung', 'Content', (SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 0, '{atom,molecule}', 'Chứa dữ liệu nghiệp vụ: records, comments', 2),
+('LBL-103', 'Quy tắc', 'Rules', (SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 0, '{atom,molecule,compound}', 'Định nghĩa cách làm: workflows, checkpoints', 3),
+('LBL-104', 'Công cụ', 'Tool', (SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 0, '{atom,molecule}', 'Thực thi hành động: DOT tools, scripts', 4),
+('LBL-105', 'Giám sát', 'Monitoring', (SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 0, '{atom,molecule}', 'Phát hiện vấn đề: issues, audits', 5),
+-- Chiều 3: Hành động (FAC-03)
+('LBL-201', 'Tạo mới', 'Create', (SELECT id FROM taxonomy_facets WHERE code='FAC-03'), 0, '{atom,molecule,compound}', 'Tạo entities, records, configs mới', 1),
+('LBL-202', 'Đọc / truy vấn', 'Read / Query', (SELECT id FROM taxonomy_facets WHERE code='FAC-03'), 0, '{atom,molecule,compound}', 'Đọc data, query, display, report', 2),
+('LBL-203', 'Kiểm tra / xác minh', 'Check / Verify', (SELECT id FROM taxonomy_facets WHERE code='FAC-03'), 0, '{atom,molecule,compound}', 'Verify, validate, audit, scan, test', 3),
+('LBL-204', 'Cập nhật', 'Update', (SELECT id FROM taxonomy_facets WHERE code='FAC-03'), 0, '{atom,molecule,compound}', 'Update, refresh, migrate, patch, fix', 4),
+('LBL-205', 'Xoá / dọn dẹp', 'Delete / Cleanup', (SELECT id FROM taxonomy_facets WHERE code='FAC-03'), 0, '{atom,molecule,compound}', 'Delete, archive, purge, cleanup', 5),
+('LBL-206', 'Kết nối / tích hợp', 'Connect / Integrate', (SELECT id FROM taxonomy_facets WHERE code='FAC-03'), 0, '{atom,molecule,compound}', 'Sync, connect, bridge, import, export', 6),
+('LBL-207', 'Báo cáo / thông báo', 'Report / Notify', (SELECT id FROM taxonomy_facets WHERE code='FAC-03'), 0, '{atom,molecule,compound}', 'Report, alert, notify, log, summary', 7),
+-- Chiều 4: Phạm vi (FAC-04)
+('LBL-301', '1 entity đơn lẻ', 'Single entity', (SELECT id FROM taxonomy_facets WHERE code='FAC-04'), 0, '{atom,molecule,compound,material,product,building}', 'Chỉ ảnh hưởng chính nó', 1),
+('LBL-302', '1 collection / module', 'Single collection', (SELECT id FROM taxonomy_facets WHERE code='FAC-04'), 0, '{atom,molecule,compound,material,product,building}', 'Ảnh hưởng 1 nhóm entity', 2),
+('LBL-303', 'Nhiều collections', 'Multiple collections', (SELECT id FROM taxonomy_facets WHERE code='FAC-04'), 0, '{atom,molecule,compound,material,product,building}', 'Cross-collection impact', 3),
+('LBL-304', 'Toàn hệ thống', 'System-wide', (SELECT id FROM taxonomy_facets WHERE code='FAC-04'), 0, '{atom,molecule,compound,material,product,building}', 'Ảnh hưởng mọi thứ', 4),
+-- Chiều 5: Giai đoạn (FAC-05)
+('LBL-401', 'Thiết kế', 'Design', (SELECT id FROM taxonomy_facets WHERE code='FAC-05'), 0, '{compound,material,product,building}', 'Đang thiết kế, chưa triển khai', 1),
+('LBL-402', 'Hoạt động', 'Active', (SELECT id FROM taxonomy_facets WHERE code='FAC-05'), 0, '{compound,material,product,building}', 'Đang chạy production', 2),
+('LBL-403', 'Tạm dừng', 'Paused', (SELECT id FROM taxonomy_facets WHERE code='FAC-05'), 0, '{compound,material,product,building}', 'Có nhưng đang tắt', 3),
+('LBL-404', 'Ngưng sử dụng', 'Deprecated', (SELECT id FROM taxonomy_facets WHERE code='FAC-05'), 0, '{compound,material,product,building}', 'Deprecated, chờ retire', 4),
+-- Chiều 6: Phục vụ ai (FAC-06)
+('LBL-501', 'Hệ thống nội bộ', 'Internal System', (SELECT id FROM taxonomy_facets WHERE code='FAC-06'), 0, '{atom,molecule,compound,material,product,building}', 'Phục vụ vận hành hệ thống: infra, CI/CD, monitoring', 1),
+('LBL-502', 'Nhà phát triển', 'Developer', (SELECT id FROM taxonomy_facets WHERE code='FAC-06'), 0, '{atom,molecule,compound,material,product,building}', 'Phục vụ dev/AI agent: tools, APIs, docs kỹ thuật', 2),
+('LBL-503', 'Quản trị viên', 'Administrator', (SELECT id FROM taxonomy_facets WHERE code='FAC-06'), 0, '{atom,molecule,compound,material,product,building}', 'Phục vụ admin: settings, permissions, dashboards', 3),
+('LBL-504', 'Người dùng cuối', 'End User', (SELECT id FROM taxonomy_facets WHERE code='FAC-06'), 0, '{atom,molecule,compound,material,product,building}', 'Nhân viên TRONG tổ chức dùng hàng ngày: forms, workflows, tasks', 4),
+('LBL-505', 'Khách hàng', 'Customer', (SELECT id FROM taxonomy_facets WHERE code='FAC-06'), 0, '{atom,molecule,compound,material,product,building}', 'Người NGOÀI tổ chức: khách hàng, người mua', 5),
+('LBL-506', 'Đối tác / Cộng tác viên', 'Partner / Collaborator', (SELECT id FROM taxonomy_facets WHERE code='FAC-06'), 0, '{atom,molecule,compound,material,product,building}', 'Người NGOÀI tổ chức hợp tác: đại lý, CTV, nhà cung cấp', 6)
+ON CONFLICT (code) DO NOTHING;
+EOSQL
+  )"
+  log_ok "D3: 26 flat labels (Chiều 2-6) inserted"
+
+  # Insert taxonomy_matrix (36 records)
+  run_pg_file "$(cat <<'EOSQL'
+INSERT INTO taxonomy_matrix (facet_id, composition_level, requirement) VALUES
+((SELECT id FROM taxonomy_facets WHERE code='FAC-01'), 'atom', 'mandatory'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-01'), 'molecule', 'mandatory'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-01'), 'compound', 'mandatory'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-01'), 'material', 'mandatory'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-01'), 'product', 'mandatory'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-01'), 'building', 'mandatory'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 'atom', 'mandatory'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 'molecule', 'mandatory'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 'compound', 'optional'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 'material', 'not_applicable'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 'product', 'not_applicable'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 'building', 'not_applicable'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-03'), 'atom', 'mandatory'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-03'), 'molecule', 'optional'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-03'), 'compound', 'optional'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-03'), 'material', 'not_applicable'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-03'), 'product', 'not_applicable'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-03'), 'building', 'not_applicable'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-04'), 'atom', 'optional'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-04'), 'molecule', 'optional'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-04'), 'compound', 'mandatory'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-04'), 'material', 'mandatory'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-04'), 'product', 'mandatory'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-04'), 'building', 'mandatory'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-05'), 'atom', 'not_applicable'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-05'), 'molecule', 'not_applicable'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-05'), 'compound', 'optional'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-05'), 'material', 'mandatory'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-05'), 'product', 'mandatory'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-05'), 'building', 'mandatory'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-06'), 'atom', 'optional'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-06'), 'molecule', 'optional'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-06'), 'compound', 'optional'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-06'), 'material', 'mandatory'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-06'), 'product', 'mandatory'),
+((SELECT id FROM taxonomy_facets WHERE code='FAC-06'), 'building', 'mandatory')
+ON CONFLICT (facet_id, composition_level) DO NOTHING;
+EOSQL
+  )"
+  log_ok "D3: 36 matrix records inserted"
+
+  # Insert label_rules — collection rules
+  run_pg_file "$(cat <<'EOSQL'
+INSERT INTO label_rules (name, facet_id, rule_type, condition, result_label, priority) VALUES
+('DOT tools → Công cụ', (SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 'collection', '{"collection":"dot_tools"}', 'LBL-104', 10),
+('DOT tools → Kiểm tra', (SELECT id FROM taxonomy_facets WHERE code='FAC-03'), 'collection', '{"collection":"dot_tools"}', 'LBL-203', 10),
+('Workflows → Quy tắc', (SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 'collection', '{"collection":"workflows"}', 'LBL-103', 10),
+('Workflows → Toàn hệ thống', (SELECT id FROM taxonomy_facets WHERE code='FAC-04'), 'collection', '{"collection":"workflows"}', 'LBL-304', 10),
+('Checkpoint types → Quy tắc', (SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 'collection', '{"collection":"checkpoint_types"}', 'LBL-103', 10),
+('System issues → Giám sát', (SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 'collection', '{"collection":"system_issues"}', 'LBL-105', 10),
+('Entity deps → Cấu trúc', (SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 'collection', '{"collection":"entity_dependencies"}', 'LBL-101', 10),
+('Comments → Nội dung', (SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 'collection', '{"collection":"task_comments"}', 'LBL-102', 10),
+('Modules → Cấu trúc', (SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 'collection', '{"collection":"modules"}', 'LBL-101', 10),
+('UI pages → Cấu trúc', (SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 'collection', '{"collection":"ui_pages"}', 'LBL-101', 10),
+('Collection registry → Cấu trúc', (SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 'collection', '{"collection":"collection_registry"}', 'LBL-101', 10),
+('Tasks → Nội dung', (SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 'collection', '{"collection":"tasks"}', 'LBL-102', 10),
+('Agents → Công cụ', (SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 'collection', '{"collection":"agents"}', 'LBL-104', 10),
+('Table registry → Cấu trúc', (SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 'collection', '{"collection":"table_registry"}', 'LBL-101', 10),
+('Checkpoint sets → Quy tắc', (SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 'collection', '{"collection":"checkpoint_sets"}', 'LBL-103', 10),
+('WCR → Nội dung', (SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 'collection', '{"collection":"workflow_change_requests"}', 'LBL-102', 10),
+('Workflow steps → Quy tắc', (SELECT id FROM taxonomy_facets WHERE code='FAC-02'), 'collection', '{"collection":"workflow_steps"}', 'LBL-103', 10)
+ON CONFLICT DO NOTHING;
+EOSQL
+  )"
+  log_ok "D3: 17 collection rules inserted"
+
+  # Insert label_rules — keyword rules
+  run_pg_file "$(cat <<'EOSQL'
+INSERT INTO label_rules (name, facet_id, rule_type, condition, result_label, priority, skip_wide_warning) VALUES
+('KW: Hạ tầng', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), 'keyword', '{"name_pattern":"health|docker|vps|deploy|nginx|server|contabo"}', 'LBL-011', 100, false),
+('KW: CI/CD', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), 'keyword', '{"name_pattern":"ci|cd|github.action|deploy|pipeline"}', 'LBL-013', 110, false),
+('KW: PostgreSQL', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), 'keyword', '{"name_pattern":"pg|postgres|sql|trigger|view|cte|function"}', 'LBL-021', 120, false),
+('KW: Directus', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), 'keyword', '{"name_pattern":"directus|collection|field|flow|permission"}', 'LBL-022', 130, true),
+('KW: Giao diện', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), 'keyword', '{"name_pattern":"page|ui|table|registry|nav|layout|component"}', 'LBL-031', 140, true),
+('KW: Workflow', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), 'keyword', '{"name_pattern":"workflow|step|process|approve|node"}', 'LBL-041', 150, false),
+('KW: Checkpoint', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), 'keyword', '{"name_pattern":"check|verify|ensure|audit|scan|validate"}', 'LBL-051', 160, true),
+('KW: AI', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), 'keyword', '{"name_pattern":"ai|agent|bridge|gateway|mcp|llm|gemini|gpt"}', 'LBL-061', 170, false),
+('KW: Bảo mật', (SELECT id FROM taxonomy_facets WHERE code='FAC-01'), 'keyword', '{"name_pattern":"permission|auth|role|token|secret|security"}', 'LBL-071', 180, false),
+('KW: Tạo mới', (SELECT id FROM taxonomy_facets WHERE code='FAC-03'), 'keyword', '{"name_pattern":"create|setup|init|generate|new|bootstrap"}', 'LBL-201', 200, false),
+('KW: Kết nối', (SELECT id FROM taxonomy_facets WHERE code='FAC-03'), 'keyword', '{"name_pattern":"sync|connect|bridge|import|export|migrate"}', 'LBL-206', 210, false),
+('KW: Báo cáo', (SELECT id FROM taxonomy_facets WHERE code='FAC-03'), 'keyword', '{"name_pattern":"report|alert|notify|log|summary|status"}', 'LBL-207', 220, false),
+('KW: Xoá/dọn', (SELECT id FROM taxonomy_facets WHERE code='FAC-03'), 'keyword', '{"name_pattern":"delete|clean|remove|archive|purge|retire"}', 'LBL-205', 230, false),
+('KW: Cập nhật', (SELECT id FROM taxonomy_facets WHERE code='FAC-03'), 'keyword', '{"name_pattern":"update|refresh|patch|fix|upgrade"}', 'LBL-204', 240, false),
+('KW: Đọc/query', (SELECT id FROM taxonomy_facets WHERE code='FAC-03'), 'keyword', '{"name_pattern":"read|query|fetch|get|list|search|find"}', 'LBL-202', 250, false)
+ON CONFLICT DO NOTHING;
+EOSQL
+  )"
+  log_ok "D3: 15 keyword rules inserted"
+
+  # ─── D4: v_all_entity_codes VIEW ────────────────────────────────────
+  log_info "--- D4: v_all_entity_codes VIEW ---"
+
+  run_pg_file "$(cat <<'EOSQL'
+CREATE OR REPLACE VIEW v_all_entity_codes AS
+  SELECT code FROM dot_tools WHERE code IS NOT NULL
+  UNION ALL SELECT code FROM workflows WHERE code IS NOT NULL
+  UNION ALL SELECT code FROM checkpoint_types WHERE code IS NOT NULL
+  UNION ALL SELECT code FROM modules WHERE code IS NOT NULL
+  UNION ALL SELECT code FROM tasks WHERE code IS NOT NULL
+  UNION ALL SELECT code FROM agents WHERE code IS NOT NULL
+  UNION ALL SELECT code FROM ui_pages WHERE code IS NOT NULL
+  UNION ALL SELECT code FROM collection_registry WHERE code IS NOT NULL
+  UNION ALL SELECT code FROM table_registry WHERE code IS NOT NULL
+  UNION ALL SELECT code FROM entity_dependencies WHERE code IS NOT NULL
+  UNION ALL SELECT code FROM workflow_steps WHERE code IS NOT NULL
+  UNION ALL SELECT code FROM checkpoint_sets WHERE code IS NOT NULL
+  UNION ALL SELECT code FROM workflow_change_requests WHERE code IS NOT NULL
+  UNION ALL SELECT code FROM system_issues WHERE code IS NOT NULL
+  UNION ALL SELECT code FROM meta_catalog WHERE code IS NOT NULL
+  UNION ALL SELECT code FROM taxonomy WHERE code IS NOT NULL;
+EOSQL
+  )"
+  log_ok "D4: v_all_entity_codes VIEW created"
+
+  # ─── VERIFICATION ──────────────────────────────────────────────────
+  log_info "--- VERIFICATION ---"
+
+  run_pg "SELECT 'taxonomy_facets' AS tbl, COUNT(*) FROM taxonomy_facets UNION ALL SELECT 'taxonomy', COUNT(*) FROM taxonomy UNION ALL SELECT 'taxonomy_matrix', COUNT(*) FROM taxonomy_matrix UNION ALL SELECT 'label_rules', COUNT(*) FROM label_rules UNION ALL SELECT 'entity_labels', COUNT(*) FROM entity_labels UNION ALL SELECT 'v_all_entity_codes', COUNT(*) FROM v_all_entity_codes;"
+
+  # Test parent_facet auto-fill
+  log_info "Testing parent_facet auto-fill..."
+  run_pg "SELECT code, parent_id, parent_facet, facet_id FROM taxonomy WHERE depth = 1 LIMIT 3;"
+
+  # Test system_issues status
+  log_info "Testing system_issues status..."
+  run_pg "SELECT status, COUNT(*) FROM system_issues GROUP BY status;"
+
+  log_ok "=== dot-schema-taxonomy-pg-apply v${VERSION} COMPLETE ==="
+}
+
+main "$@"
