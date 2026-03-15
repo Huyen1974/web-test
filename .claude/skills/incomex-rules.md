@@ -20,14 +20,17 @@ search_knowledge("current state system")
 
 Đọc xong mới bắt đầu. Không đọc = không làm.
 
-## ASSEMBLY GATE — 5 CÂU HỎI BẮT BUỘC TRƯỚC KHI CODE
+## ASSEMBLY GATE — 6 CÂU HỎI BẮT BUỘC TRƯỚC KHI CODE
 
 Trước khi viết BẤT KỲ dòng code nào, DỪNG LẠI và trả lời:
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│ ASSEMBLY GATE — Không qua = KHÔNG ĐƯỢC CODE              │
+│ ASSEMBLY GATE v2 — Không qua = KHÔNG ĐƯỢC CODE           │
 ├──────────────────────────────────────────────────────────┤
+│ 0. PostgreSQL đã có sẵn (VIEW/FUNCTION/TRIGGER/CTE)?    │
+│    Kiểm tra: psql \df, \dv, pg_trigger — dùng PG trước  │
+│                                                          │
 │ 1. Nuxt UI đã có component cho việc này chưa?            │
 │    Tìm trong: UTable, UTimeline, UStepper, UModal,       │
 │    UCheckbox, UTabs, UBadge, UTooltip, UPopover,         │
@@ -50,6 +53,39 @@ Trước khi viết BẤT KỲ dòng code nào, DỪNG LẠI và trả lời:
 ```
 
 GHI câu trả lời vào ĐẦU báo cáo/output. Không có Assembly Gate = reject.
+
+## NGUYÊN TẮC FIX GỐC
+
+Khi phát hiện data bất thường:
+1. **LIỆT KÊ** — bao nhiêu, loại gì, từ đâu
+2. **ĐIỀU TRA** — tại sao xảy ra (root cause)
+3. **PHÂN LOẠI** — cũ/mới, nghiêm trọng/nhẹ
+4. **FIX QUY TRÌNH** — sửa process để không tái diễn
+5. **MỚI DỌN** — chỉ dọn data SAU KHI hiểu gốc
+
+**KHÔNG BAO GIỜ xoá/sửa data để số đẹp mà chưa điều tra.**
+**KHÔNG BAO GIỜ nới threshold để health check xanh mà chưa fix gốc.**
+
+## COLLECTION CREATION CHECKLIST — 8 BƯỚC BẮT BUỘC
+
+Khi tạo collection MỚI trong Directus/PG, PHẢI hoàn thành TẤT CẢ:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ COLLECTION CREATION CHECKLIST — Thiếu = ĐIỂM MÙ         │
+├─────────────────────────────────────────────────────────┤
+│ 1. PG table tạo xong (Directus API hoặc ALTER TABLE)   │
+│ 2. meta_catalog entry (CAT-NNN, name, entity_type...)   │
+│ 3. v_registry_counts entry + code_column đúng           │
+│ 4. PG TRIGGER đếm (trg_count_xxx) → refresh counts     │
+│ 5. Changelog flows (3: create + update + delete)        │
+│ 6. AI Agent READ permission                             │
+│ 7. v_all_entity_codes VIEW cập nhật (nếu managed)      │
+│ 8. Auto-label trigger (trg_label_assign_xxx)            │
+└─────────────────────────────────────────────────────────┘
+```
+
+Chạy `dot-coverage-inspector` sau khi tạo → 0 blind spots.
 
 ## QUY TẮC CỤ THỂ
 
@@ -128,7 +164,7 @@ Nội dung bắt buộc: Assembly Gate answers + changes + verify results (PASS/
 ## KIỂM TRA TRƯỚC KHI BÁO CÁO "COMPLETE"
 
 ```
-[ ] Assembly Gate 5 câu đã trả lời?
+[ ] Assembly Gate 6 câu đã trả lời (bao gồm câu 0 PostgreSQL)?
 [ ] Không có custom <table>/<tr>/<thead> mới?
 [ ] 2 mũ đã chạy hết (không dừng giữa)?
 [ ] Verify trực quan trên production PASS?
