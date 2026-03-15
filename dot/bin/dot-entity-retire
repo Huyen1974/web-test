@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-entity-retire — Retire deprecated entity (blocks if dependents exist)
+# =============================================================================
+# VERSION: 1.0.0
+# CHECKED-NO-DUPLICATE: [đã grep dot/bin/dot-entity-*, dot-*retire* — không có]
+# Calls PG function retire_entity(code) which:
+# 1. Checks entity_dependencies — BLOCKS if dependents exist
+# 2. Updates status='retired' only if 0 dependents
+# =============================================================================
+
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+main() {
+  local entity_code="${1:-}"
+  if [[ -z "$entity_code" || "$entity_code" == "--"* ]]; then
+    echo "Usage: dot-entity-retire <ENTITY_CODE> [--cloud|--local]"
+    echo "Example: dot-entity-retire DOT-042 --cloud"
+    exit 1
+  fi
+  shift || true
+  init_environment "$@"
+
+  echo "[INFO] Retiring entity: $entity_code"
+
+  local result
+  if [[ "$(detect_environment "$@")" == "local" ]]; then
+    result=$(docker compose exec -T postgres psql -U directus -d directus -t -c \
+      "SELECT action, detail FROM retire_entity('$entity_code');")
+  else
+    result=$(ssh -i ~/.ssh/contabo_vps -o ConnectTimeout=10 root@38.242.240.89 \
+      "cd /opt/incomex/docker && docker compose exec -T postgres psql -U directus -d directus -t -c \"SELECT action, detail FROM retire_entity('$entity_code');\"")
+  fi
+
+  echo "$result"
+  if echo "$result" | grep -q "blocked"; then
+    echo "[BLOCKED] Cannot retire — dependents still exist. Migrate first."
+    exit 1
+  fi
+  echo "[OK] Entity $entity_code retired"
+}
+
+main "$@"
