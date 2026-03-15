@@ -13,6 +13,7 @@ env:
   VPS_DIRECTUS_URL: "https://directus.incomexsaigoncorp.vn"
   VPS_AGENT_DATA_URL: "https://vps.incomexsaigoncorp.vn/api"
   WEBSITE_URL: "https://vps.incomexsaigoncorp.vn"
+  AGENT_DATA_API_KEY: ${{ secrets.AGENT_DATA_API_KEY }}
 
 jobs:
   health-check:
@@ -152,6 +153,7 @@ jobs:
           echo -n "Search query........... "
           RESULT=$(curl -s --max-time 30 -X POST "$VPS_AGENT_DATA_URL/chat" \
             -H 'Content-Type: application/json' \
+            -H "X-API-Key: $AGENT_DATA_API_KEY" \
             -d '{"message":"kiến trúc hệ thống"}' 2>/dev/null)
 
           # Strip ANSI codes and parse
@@ -216,7 +218,7 @@ jobs:
           ALLOWED=$(jq -r '.allowed | join(" ")' .sync-allowed-folders.json 2>/dev/null || echo "current-state current-tasks dev ops other")
 
           # Get all document IDs and extract top-level folders
-          DOCS=$(curl -s --max-time 15 "$VPS_AGENT_DATA_URL/kb/list" 2>/dev/null)
+          DOCS=$(curl -s --max-time 15 -H "X-API-Key: $AGENT_DATA_API_KEY" "$VPS_AGENT_DATA_URL/kb/list" 2>/dev/null)
           FOLDERS=$(echo "$DOCS" | jq -r '
             [.items[] | .document_id // "" |
               select(startswith("knowledge/")) |
@@ -250,7 +252,7 @@ jobs:
           FAILED=0
 
           # Count non-folder knowledge docs in Agent Data
-          AD_LIST=$(curl -s --max-time 15 "$VPS_AGENT_DATA_URL/kb/list" 2>/dev/null)
+          AD_LIST=$(curl -s --max-time 15 -H "X-API-Key: $AGENT_DATA_API_KEY" "$VPS_AGENT_DATA_URL/kb/list" 2>/dev/null)
           AD_COUNT=$(echo "$AD_LIST" | jq '[.items[] | select(.document_id // "" | startswith("knowledge/")) | select(.is_folder != true)] | length' 2>/dev/null || echo "0")
 
           # Count non-folder knowledge docs in Directus
