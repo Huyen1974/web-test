@@ -169,34 +169,41 @@ jobs:
           if [ $FAILED -ne 0 ]; then echo "::error::CHECK 5 FAILED — vector search broken"; exit 1; fi
           echo "CHECK 5: PASS"
 
-      - name: "CHECK 6 — Directus Flows"
+      - name: "CHECK 6 — Directus Health"
         run: |
-          echo "=== CHECK 6: Directus Flows ==="
+          echo "=== CHECK 6: Directus Health ==="
           FAILED=0
 
-          # Count active flows (public access to /flows)
-          FLOWS=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/flows" 2>/dev/null)
-          ACTIVE=$(echo "$FLOWS" | jq '[.data[] | select(.status == "active")] | length' 2>/dev/null || echo "0")
-          TOTAL=$(echo "$FLOWS" | jq '.data | length' 2>/dev/null || echo "0")
-
-          echo -n "Active flows........... "
-          if [ "$ACTIVE" -ge 5 ] 2>/dev/null; then
-            echo "OK ($ACTIVE active / $TOTAL total)"
+          # Directus server health (public endpoint, no auth needed)
+          echo -n "Directus server........ "
+          DX_HEALTH=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/server/health" 2>/dev/null)
+          DX_STATUS=$(echo "$DX_HEALTH" | jq -r '.status // "unknown"' 2>/dev/null)
+          if [ "$DX_STATUS" = "ok" ]; then
+            echo "OK"
           else
-            echo "WARN ($ACTIVE active — expected >=5)"
-          fi
-
-          # Check no Cloud Run URLs in flow operations
-          echo -n "Cloud Run URLs......... "
-          CR_COUNT=$(echo "$FLOWS" | jq '[.data[].operations[]?.options // {} | tostring] | map(select(test("run.app"))) | length' 2>/dev/null || echo "0")
-          if [ "$CR_COUNT" = "0" ]; then
-            echo "CLEAN (0 found)"
-          else
-            echo "FAIL ($CR_COUNT flows still have Cloud Run URLs)"
+            echo "FAIL ($DX_STATUS)"
             FAILED=1
           fi
 
-          if [ $FAILED -ne 0 ]; then echo "::error::CHECK 6 FAILED — Directus flow issue"; exit 1; fi
+          # Verify public collections accessible (SSR needs these)
+          echo -n "Public collections...... "
+          PUB_COUNT=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/items/v_registry_counts?limit=1" 2>/dev/null | jq '.data | length' 2>/dev/null || echo "0")
+          if [ "$PUB_COUNT" -ge 1 ] 2>/dev/null; then
+            echo "OK (v_registry_counts accessible)"
+          else
+            echo "WARN (v_registry_counts not accessible)"
+          fi
+
+          # Verify flows NOT publicly accessible (security)
+          echo -n "Flows secured.......... "
+          FLOW_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$VPS_DIRECTUS_URL/flows" 2>/dev/null)
+          if [ "$FLOW_CODE" = "403" ] || [ "$FLOW_CODE" = "401" ]; then
+            echo "OK (HTTP $FLOW_CODE — properly secured)"
+          else
+            echo "WARN (HTTP $FLOW_CODE — flows may be publicly accessible)"
+          fi
+
+          if [ $FAILED -ne 0 ]; then echo "::error::CHECK 6 FAILED — Directus health issue"; exit 1; fi
           echo "CHECK 6: PASS"
 
       - name: "CHECK 7 — Knowledge Structure Validation"
