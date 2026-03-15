@@ -171,7 +171,7 @@ const { data: entityIssues } = useAsyncData(
 			return (await $directus.request(
 				readItems('system_issues' as any, {
 					fields: ['id', 'code', 'title', 'issue_type', 'severity', 'source', 'detected_at'],
-					filter: { entity_type: { _eq: entityType.value }, status: { _in: ['mở', 'đang_xử_lý'] } },
+					filter: { entity_type: { _eq: entityType.value }, status: { _eq: 'open' } },
 					sort: ['-detected_at'],
 					limit: 20,
 				}),

@@ -107,6 +107,17 @@ jobs:
           remote_user: root
           remote_key: ${{ secrets.VPS_SSH_KEY }}
 
+      # --- Deploy DOT scripts to VPS ---
+      - name: Rsync DOT scripts to VPS
+        uses: burnett01/rsync-deployments@7.0.1
+        with:
+          switches: -avz --chmod=F755
+          path: dot/bin/
+          remote_path: /opt/incomex/dot/bin/
+          remote_host: ${{ secrets.VPS_HOST }}
+          remote_user: root
+          remote_key: ${{ secrets.VPS_SSH_KEY }}
+
       # --- Count Model B catalog sources (filesystem) ---
       - name: Count catalog sources
         id: catalog
