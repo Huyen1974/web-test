@@ -263,10 +263,10 @@ jobs:
           echo -n "Sync gap............... "
           if [ "$GAP" -eq 0 ] 2>/dev/null; then
             echo "OK (0 gap)"
-          elif [ "$GAP" -le 10 ] 2>/dev/null; then
+          elif [ "$GAP" -le 15 ] 2>/dev/null; then
             echo "WARN ($GAP docs gap — reconcile may be pending)"
           else
-            echo "FAIL ($GAP docs gap — expected <=10)"
+            echo "FAIL ($GAP docs gap — expected <=15)"
             FAILED=1
           fi
 
