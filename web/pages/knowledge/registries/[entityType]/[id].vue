@@ -175,10 +175,110 @@ const { data: layer5 } = useAsyncData(
 	{ default: () => ({ belongsTo: [], contains: [], dependsOn: [], usedBy: [], peers: [] }) },
 );
 
-const peerTotal = computed(() => {
-	// Estimate total peers from collection count (will show "và X khác..." if >10)
-	return layer5.value.peers.length;
+// === TAXONOMY LABELS: fetch entity labels per facet ===
+const { data: entityLabels } = useAsyncData(
+	`entity-labels-${entityType.value}-${itemId.value}`,
+	async () => {
+		const code = entityCode.value;
+		if (!code) return { labels: [], facets: [] };
+		try {
+			const [labels, facets] = await Promise.all([
+				$directus.request(
+					readItems('entity_labels' as any, {
+						filter: { entity_code: { _eq: code } },
+						fields: ['label_code', 'assigned_by'],
+						limit: -1,
+					}),
+				),
+				$directus.request(
+					readItems('taxonomy_facets' as any, {
+						fields: ['id', 'code', 'name'],
+						sort: ['sort'],
+						limit: -1,
+					}),
+				),
+			]);
+			// Fetch taxonomy details for the label codes
+			const labelCodes = (labels as any[]).map((l: any) => l.label_code);
+			if (labelCodes.length === 0) return { labels: [], facets: facets as any[] };
+			const taxonomy = await $directus.request(
+				readItems('taxonomy' as any, {
+					filter: { code: { _in: labelCodes } },
+					fields: ['code', 'name', 'facet_id'],
+					limit: -1,
+				}),
+			);
+			const taxMap = new Map<string, any>();
+			for (const t of taxonomy as any[]) taxMap.set(t.code, t);
+
+			const enriched = (labels as any[]).map((l: any) => ({
+				...l,
+				taxonomy: taxMap.get(l.label_code),
+			}));
+			return { labels: enriched, facets: facets as any[] };
+		} catch {
+			return { labels: [], facets: [] };
+		}
+	},
+	{ default: () => ({ labels: [], facets: [] }) },
+);
+
+// Group labels by facet
+const labelsByFacet = computed(() => {
+	const groups = new Map<number, Array<{ code: string; name: string; assigned_by: string }>>();
+	for (const l of entityLabels.value.labels) {
+		const t = l.taxonomy;
+		if (!t) continue;
+		if (!groups.has(t.facet_id)) groups.set(t.facet_id, []);
+		groups.get(t.facet_id)!.push({ code: l.label_code, name: t.name, assigned_by: l.assigned_by });
+	}
+	return groups;
 });
+
+// === CÙNG NHÓM: scored union per-facet domain (FAC-01) ===
+const { data: sameGroup } = useAsyncData(
+	`same-group-${entityType.value}-${itemId.value}`,
+	async () => {
+		const code = entityCode.value;
+		if (!code) return [];
+		try {
+			// Get this entity's domain labels (FAC-01)
+			const myLabels = entityLabels.value.labels
+				.filter((l: any) => l.taxonomy?.facet_id && entityLabels.value.facets.find((f: any) => f.id === l.taxonomy.facet_id && f.code === 'FAC-01'))
+				.map((l: any) => l.label_code);
+			if (myLabels.length === 0) return [];
+
+			// Find other entities sharing these labels
+			const sharedLabels = await $directus.request(
+				readItems('entity_labels' as any, {
+					filter: {
+						label_code: { _in: myLabels },
+						entity_code: { _neq: code },
+					},
+					fields: ['entity_code', 'label_code'],
+					limit: -1,
+				}),
+			);
+
+			// Score: count shared labels per entity
+			const scores = new Map<string, number>();
+			for (const sl of sharedLabels as any[]) {
+				scores.set(sl.entity_code, (scores.get(sl.entity_code) || 0) + 1);
+			}
+
+			// Sort by score desc, take top 20
+			return Array.from(scores.entries())
+				.sort((a, b) => b[1] - a[1])
+				.slice(0, 20)
+				.map(([ec, count]) => ({ entity_code: ec, shared_labels: count }));
+		} catch {
+			return [];
+		}
+	},
+	{ default: () => [] },
+);
+
+const peerTotal = computed(() => layer5.value.peers.length);
 
 definePageMeta({ title: 'Chi tiết' });
 
@@ -246,6 +346,30 @@ useHead({
 				</UCard>
 			</section>
 
+			<!-- Taxonomy Labels (ĐẦU VÀO) -->
+			<section v-if="entityLabels.labels.length > 0">
+				<div class="mb-2 mt-4">
+					<UBadge color="indigo" variant="solid" size="sm">NHÃN PHÂN LOẠI</UBadge>
+				</div>
+				<div class="space-y-3">
+					<div v-for="facet in entityLabels.facets" :key="facet.id">
+						<template v-if="labelsByFacet.get(facet.id)?.length">
+							<h3 class="mb-1 text-sm font-medium text-gray-600 dark:text-gray-400">{{ facet.name }}</h3>
+							<div class="flex flex-wrap gap-1.5">
+								<span
+									v-for="label in labelsByFacet.get(facet.id)"
+									:key="label.code"
+									class="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs dark:border-indigo-700 dark:bg-indigo-900/20"
+								>
+									<span class="font-medium text-indigo-700 dark:text-indigo-300">{{ label.name }}</span>
+									<span v-if="label.assigned_by === 'rule'" class="text-gray-400">[auto]</span>
+								</span>
+							</div>
+						</template>
+					</div>
+				</div>
+			</section>
+
 			<!-- Layer 5 — 6 Quan hệ nhất quán -->
 			<div class="mb-2 mt-4">
 				<UBadge color="primary" variant="solid" size="sm">LAYER 5 — QUAN HỆ</UBadge>
@@ -300,21 +424,20 @@ useHead({
 					</div>
 									</section>
 
-				<!-- 5. Cùng nhóm -->
+				<!-- 5. Cùng nhóm (scored union per-facet domain) -->
 				<section>
 					<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">5. Cùng nhóm</h3>
-					<div v-if="layer5.peers.length > 0" class="flex flex-wrap gap-2">
-						<NuxtLink
-							v-for="peer in layer5.peers"
-							:key="`peer-${peer.code}`"
-							:to="peer.link!"
+					<div v-if="sameGroup.length > 0" class="flex flex-wrap gap-2">
+						<span
+							v-for="sg in sameGroup"
+							:key="`sg-${sg.entity_code}`"
 							class="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs hover:border-primary-300 hover:bg-primary-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-primary-600 dark:hover:bg-primary-900/20"
 						>
-							<span class="font-mono text-primary-600 dark:text-primary-400">{{ peer.code }}</span>
-							<span v-if="peer.name" class="text-gray-500 dark:text-gray-400">{{ peer.name }}</span>
-						</NuxtLink>
+							<span class="font-mono text-primary-600 dark:text-primary-400">{{ sg.entity_code }}</span>
+							<UBadge color="gray" variant="subtle" size="xs">{{ sg.shared_labels }}</UBadge>
+						</span>
 					</div>
-									</section>
+				</section>
 
 				<!-- 6. Tương tự -->
 				<section>
