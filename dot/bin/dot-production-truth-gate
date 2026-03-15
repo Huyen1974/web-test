@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-production-truth-gate — Verify production NUMBERS after deploy
+# =============================================================================
+# VERSION: 1.0.0
+# CHECKED-NO-DUPLICATE: [đã grep dot/bin/dot-*truth*, dot-*verify*, dot-*gate* — không có]
+# S124: Runs AFTER deploy. Curls production → parses HTML → checks SPECIFIC
+# numbers (not just HTTP 200). Agent PHẢI chạy sau mỗi deploy.
+# Idempotent, read-only.
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+NUXT_URL=""
+PASS=0
+FAIL=0
+WARN=0
+
+log_pass() { echo "[PASS] $1"; PASS=$((PASS + 1)); }
+log_fail() { echo "[FAIL] $1"; FAIL=$((FAIL + 1)); }
+log_warn() { echo "[WARN] $1"; WARN=$((WARN + 1)); }
+
+main() {
+  init_environment "$@"
+  NUXT_URL=$(get_nuxt_url "$@")
+
+  echo "============================================================"
+  echo "  Production Truth Gate v${VERSION}"
+  echo "  URL: ${NUXT_URL}"
+  echo "============================================================"
+  echo ""
+
+  # --- CHECK 1: Layer 1 page loads ---
+  echo "--- CHECK 1: Layer 1 page ---"
+  local body http_code
+  body=$(curl -s --max-time 20 "${NUXT_URL}/knowledge/registries" 2>/dev/null)
+  http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${NUXT_URL}/knowledge/registries")
+
+  if [[ "$http_code" == "200" ]]; then
+    log_pass "Layer 1 HTTP 200"
+  else
+    log_fail "Layer 1 HTTP $http_code (expected 200)"
+  fi
+
+  # --- CHECK 2: Layer 1 has table rows with counts > 0 ---
+  echo "--- CHECK 2: Registry counts > 0 ---"
+  local cat006_count
+  cat006_count=$(echo "$body" | python3 -c "
+import sys, re
+html = sys.stdin.read()
+idx = html.find('CAT-006')
+if idx > -1:
+    nums = re.findall(r'>(\d+)<', html[idx:idx+500])
+    print(nums[0] if nums else '0')
+else:
+    print('0')
+" 2>/dev/null)
+
+  if [[ "$cat006_count" -gt 0 ]] 2>/dev/null; then
+    log_pass "CAT-006 (DOT tools) count = $cat006_count"
+  else
+    log_fail "CAT-006 (DOT tools) count = $cat006_count (expected > 0)"
+  fi
+
+  # --- CHECK 3: Taxonomy (CAT-018) has count ---
+  echo "--- CHECK 3: Taxonomy count ---"
+  local cat018_count
+  cat018_count=$(echo "$body" | python3 -c "
+import sys, re
+html = sys.stdin.read()
+idx = html.find('CAT-018')
+if idx > -1:
+    nums = re.findall(r'>(\d+)<', html[idx:idx+500])
+    print(nums[0] if nums else '0')
+else:
+    idx2 = html.find('Nhãn hệ thống')
+    if idx2 > -1:
+        nums = re.findall(r'>(\d+)<', html[idx2:idx2+300])
+        print(nums[0] if nums else '0')
+    else:
+        print('0')
+" 2>/dev/null)
+
+  if [[ "$cat018_count" -gt 0 ]] 2>/dev/null; then
+    log_pass "Taxonomy labels count = $cat018_count"
+  else
+    log_fail "Taxonomy labels count = $cat018_count (expected > 0)"
+  fi
+
+  # --- CHECK 4: verify_counts() via PG ---
+  echo "--- CHECK 4: verify_counts() ---"
+  local mismatch_count
+  if [[ "$(detect_environment "$@")" == "local" ]]; then
+    mismatch_count=$(docker compose exec -T postgres psql -U directus -d directus -t -c \
+      "SELECT COUNT(*) FROM verify_counts() WHERE status != 'OK';" 2>/dev/null | tr -d ' ')
+  else
+    mismatch_count=$(ssh -i ~/.ssh/contabo_vps -o ConnectTimeout=10 root@38.242.240.89 \
+      "cd /opt/incomex/docker && docker compose exec -T postgres psql -U directus -d directus -t -c \"SELECT COUNT(*) FROM verify_counts() WHERE status != 'OK';\"" 2>/dev/null | tr -d ' ')
+  fi
+
+  if [[ "$mismatch_count" == "0" ]]; then
+    log_pass "verify_counts() = 0 mismatches"
+  else
+    log_fail "verify_counts() = $mismatch_count mismatches (expected 0)"
+  fi
+
+  # --- CHECK 5: Entity detail page loads ---
+  echo "--- CHECK 5: Entity detail page ---"
+  local detail_code
+  detail_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "${NUXT_URL}/knowledge/registries/dot_tool/DOT-001")
+  if [[ "$detail_code" == "200" ]]; then
+    log_pass "Entity detail DOT-001 HTTP 200"
+  else
+    log_fail "Entity detail DOT-001 HTTP $detail_code"
+  fi
+
+  # --- CHECK 6: Taxonomy matrix page ---
+  echo "--- CHECK 6: Taxonomy matrix ---"
+  local matrix_code
+  matrix_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "${NUXT_URL}/knowledge/registries/taxonomy")
+  if [[ "$matrix_code" == "200" ]]; then
+    log_pass "Taxonomy matrix page HTTP 200"
+  else
+    log_fail "Taxonomy matrix page HTTP $matrix_code"
+  fi
+
+  # --- SUMMARY ---
+  echo ""
+  echo "============================================================"
+  echo "  RESULTS: $PASS PASS, $FAIL FAIL, $WARN WARN"
+  echo "============================================================"
+
+  if [[ $FAIL -gt 0 ]]; then
+    echo "  ❌ PRODUCTION TRUTH GATE: FAILED"
+    exit 1
+  else
+    echo "  ✅ PRODUCTION TRUTH GATE: PASSED"
+  fi
+}
+
+main "$@"

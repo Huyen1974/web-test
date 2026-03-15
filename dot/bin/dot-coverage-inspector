@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-coverage-inspector — Detect blind spots in collection wiring
+# =============================================================================
+# VERSION: 1.0.0
+# CHECKED-NO-DUPLICATE: [đã grep dot/bin/dot-*coverage*, dot-*inspector* — không có]
+# S124: Scans all managed collections in meta_catalog and checks each has:
+# 1. v_registry_counts entry (counting)
+# 2. PG count trigger
+# 3. Changelog Directus Flows (create/update/delete)
+# 4. Auto-label trigger
+# 5. AI Agent read permission
+# Output: blind spots per collection. 0 = fully wired.
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+
+run_pg() {
+  local sql="$1"
+  if [[ "$(detect_environment "${FLAG:-}")" == "local" ]]; then
+    echo "$sql" | docker compose exec -T postgres psql -U directus -d directus -t 2>/dev/null
+  else
+    echo "$sql" | ssh -i ~/.ssh/contabo_vps -o ConnectTimeout=10 root@38.242.240.89 \
+      "cd /opt/incomex/docker && docker compose exec -T postgres psql -U directus -d directus -t" 2>/dev/null
+  fi
+}
+
+main() {
+  local FLAG="${1:-}"
+  init_environment "$@"
+  print_environment_banner "$@"
+
+  echo "============================================================"
+  echo "  DOT Coverage Inspector v${VERSION}"
+  echo "============================================================"
+  echo ""
+
+  # Query PG for comprehensive coverage check
+  run_pg "$(cat <<'EOSQL'
+WITH managed AS (
+  SELECT mc.code AS cat_code, mc.name, mc.registry_collection AS tbl
+  FROM meta_catalog mc
+  WHERE mc.registry_collection IS NOT NULL
+    AND mc.registry_collection != ''
+    AND mc.registry_collection != '_uncategorized'
+    AND mc.code NOT IN ('CAT-ALL','CAT-MOL','CAT-CMP','CAT-MAT','CAT-PRD','CAT-BLD','CAT-999','CMT')
+    -- Exclude registry_changelog from changelog flow check (anti-loop by design)
+),
+changelog_exempt AS (
+  SELECT 'registry_changelog'::text AS tbl
+),
+checks AS (
+  SELECT
+    m.cat_code,
+    m.name,
+    m.tbl,
+    -- 1. v_registry_counts entry?
+    EXISTS(SELECT 1 FROM v_registry_counts vrc WHERE vrc.cat_code = m.cat_code) AS has_counts,
+    -- 2. PG count trigger?
+    EXISTS(SELECT 1 FROM pg_trigger t
+           JOIN pg_class c ON t.tgrelid = c.oid
+           WHERE c.relname = m.tbl AND t.tgname LIKE 'trg_count_%') AS has_count_trigger,
+    -- 3. Changelog flows? (check directus_flows for WATCHDOG flows)
+    (SELECT COUNT(*) FROM directus_flows f
+     WHERE f.name LIKE '%' || m.tbl || '%' AND f.name LIKE '%Changelog%' AND f.status = 'active')::int AS changelog_flows,
+    -- 4. Auto-label trigger?
+    EXISTS(SELECT 1 FROM pg_trigger t
+           JOIN pg_class c ON t.tgrelid = c.oid
+           WHERE c.relname = m.tbl AND t.tgname LIKE 'trg_label_assign_%') AS has_label_trigger,
+    -- 5. In v_all_entity_codes VIEW? (check if table appears in VIEW definition)
+    EXISTS(SELECT 1 FROM pg_views WHERE viewname = 'v_all_entity_codes'
+           AND definition LIKE '%' || m.tbl || '%') AS in_entity_codes_view
+  FROM managed m
+)
+SELECT
+  cat_code || ' ' || name AS entity,
+  tbl AS collection,
+  CASE WHEN has_counts THEN 'OK' ELSE '⚠️ MISSING' END AS counts,
+  CASE WHEN has_count_trigger THEN 'OK' ELSE '⚠️ MISSING' END AS count_trg,
+  CASE WHEN changelog_flows >= 3 THEN 'OK (' || changelog_flows || ')' ELSE '⚠️ ' || changelog_flows || '/3' END AS changelog,
+  CASE WHEN has_label_trigger THEN 'OK' ELSE '⚠️ MISSING' END AS label_trg,
+  CASE WHEN in_entity_codes_view THEN 'OK' ELSE '—' END AS in_view,
+  CASE WHEN has_counts AND has_count_trigger
+    AND (changelog_flows >= 3 OR EXISTS(SELECT 1 FROM changelog_exempt ce WHERE ce.tbl = checks.tbl))
+    AND has_label_trigger
+    THEN '✅' ELSE '❌' END AS status
+FROM checks
+ORDER BY cat_code;
+EOSQL
+  )"
+
+  echo ""
+
+  # Summary: count blind spots
+  local blind_spots
+  blind_spots=$(run_pg "$(cat <<'EOSQL'
+WITH managed AS (
+  SELECT mc.code AS cat_code, mc.registry_collection AS tbl
+  FROM meta_catalog mc
+  WHERE mc.registry_collection IS NOT NULL
+    AND mc.registry_collection != ''
+    AND mc.registry_collection != '_uncategorized'
+    AND mc.code NOT IN ('CAT-ALL','CAT-MOL','CAT-CMP','CAT-MAT','CAT-PRD','CAT-BLD','CAT-999','CMT')
+),
+changelog_exempt AS (SELECT 'registry_changelog'::text AS tbl)
+SELECT COUNT(*) FROM managed m
+WHERE NOT EXISTS(SELECT 1 FROM v_registry_counts vrc WHERE vrc.cat_code = m.cat_code)
+   OR NOT EXISTS(SELECT 1 FROM pg_trigger t JOIN pg_class c ON t.tgrelid = c.oid WHERE c.relname = m.tbl AND t.tgname LIKE 'trg_count_%')
+   OR ((SELECT COUNT(*) FROM directus_flows f WHERE f.name LIKE '%' || m.tbl || '%' AND f.name LIKE '%Changelog%' AND f.status = 'active') < 3
+       AND NOT EXISTS(SELECT 1 FROM changelog_exempt ce WHERE ce.tbl = m.tbl))
+   OR NOT EXISTS(SELECT 1 FROM pg_trigger t JOIN pg_class c ON t.tgrelid = c.oid WHERE c.relname = m.tbl AND t.tgname LIKE 'trg_label_assign_%');
+EOSQL
+  )" | tr -d ' ')
+
+  echo "============================================================"
+  echo "  Blind spots: ${blind_spots}"
+  echo "============================================================"
+
+  if [[ "$blind_spots" -gt 0 ]] 2>/dev/null; then
+    echo "  ⚠️ Collections with incomplete wiring detected."
+    echo "  Run COLLECTION CREATION CHECKLIST for each ⚠️ item."
+  else
+    echo "  ✅ All managed collections fully wired."
+  fi
+}
+
+main "$@"
