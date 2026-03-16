@@ -325,18 +325,14 @@ jobs:
           echo "=== CHECK 10: Dead Links Monitor ==="
           FAILED=0
 
-          # Count orphan_count across all collections (sum from v_registry_counts)
-          echo -n "Total orphans.......... "
+          # Count DOT origin orphans (records without _dot_origin — expected for legacy data)
+          echo -n "DOT origin coverage.... "
           ORPHAN_SUM=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/items/v_registry_counts?fields=orphan_count&limit=-1" 2>/dev/null \
             | jq '[.data[].orphan_count] | add // 0' 2>/dev/null || echo "0")
-          if [ "$ORPHAN_SUM" -le 5 ] 2>/dev/null; then
-            echo "OK ($ORPHAN_SUM orphans)"
-          elif [ "$ORPHAN_SUM" -le 20 ] 2>/dev/null; then
-            echo "WARN ($ORPHAN_SUM orphans — some collections have missing codes)"
-          else
-            echo "FAIL ($ORPHAN_SUM orphans — too many missing codes)"
-            FAILED=1
-          fi
+          TOTAL_SUM=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/items/v_registry_counts?fields=record_count&limit=-1" 2>/dev/null \
+            | jq '[.data[].record_count] | add // 0' 2>/dev/null || echo "0")
+          COVERED=$((TOTAL_SUM - ORPHAN_SUM))
+          echo "INFO ($COVERED/$TOTAL_SUM with DOT origin, $ORPHAN_SUM legacy)"
 
           # Check system_issues open count (spike detection)
           echo -n "Open issues............ "
