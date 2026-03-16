@@ -1,0 +1,374 @@
+#!/usr/bin/env bash
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-*origin* dot/bin/dot-*dot_origin* — no existing tool]
+# =============================================================================
+# dot-schema-dot-origin-ensure — Thêm _dot_origin field + trigger validate
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-03-16): Initial — DOT Origin tracking for orphan detection
+#     - Adds _dot_origin text field to ALL managed collections
+#     - Creates PG trigger to validate DOT code exists in dot_tools
+#     - Updates orphan_count in v_registry_counts to count _dot_origin orphans
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+for arg in "$@"; do
+  case "$arg" in
+    --help|-h)
+      echo "dot-schema-dot-origin-ensure v${VERSION}"
+      echo ""
+      echo "Usage: dot-schema-dot-origin-ensure [--cloud]"
+      echo ""
+      echo "Adds _dot_origin field to all managed collections."
+      echo "Creates validation trigger + updates orphan counting."
+      exit 0
+      ;;
+  esac
+done
+
+init_environment "$@"
+
+echo ""
+echo "========================================="
+echo "DOT Tool: DOT Origin Ensure v${VERSION}"
+echo "========================================="
+print_environment_banner "$@"
+
+TOKEN="${DIRECTUS_TOKEN:-}"
+if [[ -z "$TOKEN" ]]; then
+  log_err "Không thể xác thực với Directus"
+  exit 1
+fi
+
+# =============================================================================
+# STEP 1: Get all managed collections from meta_catalog
+# =============================================================================
+log_info "Step 1: Lấy danh sách managed collections..."
+
+COLLECTIONS=$(curl -sf "${DIRECTUS_URL}/items/meta_catalog?fields=registry_collection&filter[identity_class][_eq]=managed&filter[registry_collection][_nnull]=true&limit=-1" \
+  -H "Authorization: Bearer $TOKEN" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)['data']
+cols = [d['registry_collection'] for d in data if d.get('registry_collection') and d['registry_collection'] != '_uncategorized']
+print(' '.join(cols))
+")
+
+log_info "Collections: ${COLLECTIONS}"
+
+# =============================================================================
+# STEP 2: Add _dot_origin field to each collection via Directus API
+# =============================================================================
+log_info "Step 2: Thêm _dot_origin field vào mỗi collection..."
+
+ADDED=0
+SKIPPED=0
+
+for COL in $COLLECTIONS; do
+  # Check if field exists
+  HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" \
+    "${DIRECTUS_URL}/fields/${COL}/_dot_origin" \
+    -H "Authorization: Bearer $TOKEN")
+
+  if [[ "$HTTP_CODE" == "200" ]]; then
+    log_ok "${COL}/_dot_origin đã tồn tại — skip"
+    SKIPPED=$((SKIPPED + 1))
+    continue
+  fi
+
+  log_info "Tạo ${COL}/_dot_origin..."
+  RESULT=$(curl -sf -X POST "${DIRECTUS_URL}/fields/${COL}" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "field": "_dot_origin",
+      "type": "text",
+      "schema": {
+        "is_nullable": true,
+        "default_value": null
+      },
+      "meta": {
+        "hidden": true,
+        "readonly": false,
+        "note": "DOT tool origin tracking. Format: DOT-NNN|tool-name|date"
+      }
+    }' 2>/dev/null) || {
+    log_err "Lỗi tạo ${COL}/_dot_origin"
+    continue
+  }
+  log_ok "${COL}/_dot_origin ✓"
+  ADDED=$((ADDED + 1))
+done
+
+log_info "Kết quả: ${ADDED} added, ${SKIPPED} skipped"
+
+# =============================================================================
+# STEP 3: Create PG trigger function + triggers via SSH
+# =============================================================================
+log_info "Step 3: Tạo PG trigger validate _dot_origin..."
+
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB}" << 'SQLEOF'
+
+-- Function: validate _dot_origin on INSERT
+CREATE OR REPLACE FUNCTION fn_validate_dot_origin()
+  RETURNS trigger
+  LANGUAGE plpgsql
+AS $function$
+DECLARE
+  dot_code text;
+BEGIN
+  -- Skip if _dot_origin is NULL (legacy record, allowed)
+  IF NEW._dot_origin IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  -- Extract DOT code (part before first '|')
+  dot_code := split_part(NEW._dot_origin, '|', 1);
+
+  -- Skip if already marked SUSPECT
+  IF dot_code LIKE 'SUSPECT:%' THEN
+    RETURN NEW;
+  END IF;
+
+  -- Check DOT code exists in dot_tools
+  IF NOT EXISTS (SELECT 1 FROM dot_tools WHERE code = dot_code) THEN
+    NEW._dot_origin := 'SUSPECT:' || NEW._dot_origin;
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;
+
+SQLEOF
+
+if [[ $? -ne 0 ]]; then
+  log_err "Lỗi tạo fn_validate_dot_origin"
+  exit 1
+fi
+log_ok "fn_validate_dot_origin ✓"
+
+# Create triggers on each managed collection
+log_info "Step 3b: Tạo triggers trên mỗi collection..."
+
+for COL in $COLLECTIONS; do
+  TRIGGER_NAME="trg_validate_dot_origin_${COL}"
+
+  ssh -i "$VPS_KEY" "root@${VPS_HOST}" "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -c \"
+    -- Check if column exists before creating trigger
+    DO \\\$\\\$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='${COL}' AND column_name='_dot_origin') THEN
+        -- Drop existing trigger if any
+        DROP TRIGGER IF EXISTS ${TRIGGER_NAME} ON ${COL};
+        -- Create trigger
+        CREATE TRIGGER ${TRIGGER_NAME}
+          BEFORE INSERT OR UPDATE OF _dot_origin ON ${COL}
+          FOR EACH ROW
+          EXECUTE FUNCTION fn_validate_dot_origin();
+        RAISE NOTICE 'Trigger ${TRIGGER_NAME} created';
+      ELSE
+        RAISE NOTICE 'Column _dot_origin not found on ${COL} — skipping trigger';
+      END IF;
+    END \\\$\\\$;
+  \"" 2>/dev/null
+
+  if [[ $? -eq 0 ]]; then
+    log_ok "Trigger ${TRIGGER_NAME} ✓"
+  else
+    log_warn "Trigger ${TRIGGER_NAME} — có thể lỗi"
+  fi
+done
+
+# =============================================================================
+# STEP 4: Update orphan counting to use _dot_origin
+# =============================================================================
+log_info "Step 4: Cập nhật orphan counting..."
+
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB}" << 'SQLEOF'
+
+-- Update refresh_registry_count() to count _dot_origin orphans
+CREATE OR REPLACE FUNCTION public.refresh_registry_count()
+  RETURNS trigger
+  LANGUAGE plpgsql
+AS $function$
+DECLARE
+  tbl text := TG_TABLE_NAME;
+  cc text;
+  rc bigint;
+  oc bigint;
+  cat_code_val text;
+  has_dot_origin boolean;
+BEGIN
+  SELECT vrc.code_column, vrc.cat_code INTO cc, cat_code_val
+  FROM v_registry_counts vrc
+  JOIN meta_catalog mc ON mc.code = vrc.cat_code
+  WHERE mc.registry_collection = tbl
+  LIMIT 1;
+
+  IF cc IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  UPDATE v_registry_counts SET prev_count = v_registry_counts.record_count
+  FROM meta_catalog mc
+  WHERE mc.code = v_registry_counts.cat_code
+    AND mc.registry_collection != tbl;
+
+  EXECUTE format('SELECT count(*) FROM %I', tbl) INTO rc;
+
+  -- Check if table has _dot_origin column
+  SELECT EXISTS(
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = tbl AND column_name = '_dot_origin'
+  ) INTO has_dot_origin;
+
+  IF has_dot_origin THEN
+    -- Orphan = no _dot_origin OR _dot_origin starts with SUSPECT:
+    EXECUTE format(
+      'SELECT count(*) FROM %I WHERE _dot_origin IS NULL OR _dot_origin LIKE ''SUSPECT:%%''',
+      tbl
+    ) INTO oc;
+  ELSE
+    -- Fallback: orphan = missing code
+    EXECUTE format(
+      'SELECT count(*) FROM %I WHERE %I IS NULL OR btrim(%I) = ''''',
+      tbl, cc, cc
+    ) INTO oc;
+  END IF;
+
+  UPDATE v_registry_counts SET record_count = rc, orphan_count = oc
+  FROM meta_catalog mc
+  WHERE mc.code = v_registry_counts.cat_code
+    AND mc.registry_collection = tbl;
+
+  -- Sync to meta_catalog
+  IF pg_trigger_depth() <= 1 THEN
+    UPDATE meta_catalog SET record_count = rc
+    WHERE code = cat_code_val;
+  END IF;
+
+  RETURN NULL;
+END;
+$function$;
+
+-- Also update verify_counts() to use _dot_origin for orphan detection
+CREATE OR REPLACE FUNCTION public.verify_counts()
+  RETURNS TABLE(cat_code text, collection_name text, stored_record bigint, live_record bigint, stored_orphan bigint, live_orphan bigint, status text)
+  LANGUAGE plpgsql
+AS $function$
+DECLARE
+  r RECORD;
+  tbl text;
+  cc text;
+  lr bigint;
+  lo bigint;
+  has_dot_origin boolean;
+BEGIN
+  FOR r IN
+    SELECT vrc.cat_code AS vcat, mc.registry_collection, vrc.code_column,
+           vrc.record_count AS sr, vrc.orphan_count AS so
+    FROM v_registry_counts vrc
+    JOIN meta_catalog mc ON mc.code = vrc.cat_code
+    WHERE mc.registry_collection IS NOT NULL
+      AND mc.registry_collection != ''
+      AND mc.registry_collection != '_uncategorized'
+      AND to_regclass('public.' || mc.registry_collection) IS NOT NULL
+  LOOP
+    tbl := r.registry_collection;
+    cc := r.code_column;
+
+    EXECUTE format('SELECT count(*) FROM %I', tbl) INTO lr;
+
+    -- Check for _dot_origin column
+    SELECT EXISTS(
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = tbl AND column_name = '_dot_origin'
+    ) INTO has_dot_origin;
+
+    IF has_dot_origin THEN
+      EXECUTE format(
+        'SELECT count(*) FROM %I WHERE _dot_origin IS NULL OR _dot_origin LIKE ''SUSPECT:%%''',
+        tbl
+      ) INTO lo;
+    ELSE
+      EXECUTE format(
+        'SELECT count(*) FROM %I WHERE %I IS NULL OR btrim(%I) = ''''',
+        tbl, cc, cc
+      ) INTO lo;
+    END IF;
+
+    cat_code := r.vcat;
+    collection_name := tbl;
+    stored_record := r.sr;
+    live_record := lr;
+    stored_orphan := r.so;
+    live_orphan := lo;
+
+    IF r.sr = lr AND r.so = lo THEN
+      status := 'OK';
+    ELSE
+      status := 'MISMATCH';
+    END IF;
+
+    RETURN NEXT;
+  END LOOP;
+END;
+$function$;
+
+SQLEOF
+
+if [[ $? -ne 0 ]]; then
+  log_err "Lỗi cập nhật counting functions"
+  exit 1
+fi
+log_ok "Counting functions updated ✓"
+
+# =============================================================================
+# STEP 5: Force refresh orphan counts
+# =============================================================================
+log_info "Step 5: Refresh orphan counts..."
+
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -c \"
+  SELECT refresh_registry_counts();
+\""
+
+log_ok "Orphan counts refreshed ✓"
+
+# =============================================================================
+# STEP 6: Verify
+# =============================================================================
+log_info "Step 6: Verify..."
+
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -c \"
+  -- Check _dot_origin field exists on all managed collections
+  SELECT mc.registry_collection,
+         EXISTS(SELECT 1 FROM information_schema.columns
+                WHERE table_name=mc.registry_collection
+                AND column_name='_dot_origin') AS has_field
+  FROM meta_catalog mc
+  WHERE mc.identity_class='managed'
+  AND mc.registry_collection IS NOT NULL
+  AND mc.registry_collection != ''
+  AND mc.registry_collection != '_uncategorized'
+  ORDER BY mc.code;
+\""
+
+echo ""
+echo "========================================="
+echo "DOT Origin Ensure — COMPLETE v${VERSION}"
+echo "========================================="
