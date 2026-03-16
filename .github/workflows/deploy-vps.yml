@@ -107,13 +107,23 @@ jobs:
           remote_user: root
           remote_key: ${{ secrets.VPS_SSH_KEY }}
 
-      # --- Deploy DOT scripts to VPS ---
+      # --- Deploy DOT scripts + config to VPS ---
       - name: Rsync DOT scripts to VPS
         uses: burnett01/rsync-deployments@7.0.1
         with:
           switches: -avz --chmod=F755
           path: dot/bin/
           remote_path: /opt/incomex/dot/bin/
+          remote_host: ${{ secrets.VPS_HOST }}
+          remote_user: root
+          remote_key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Rsync DOT config to VPS
+        uses: burnett01/rsync-deployments@7.0.1
+        with:
+          switches: -avz --chmod=F644
+          path: dot/config/
+          remote_path: /opt/incomex/dot/config/
           remote_host: ${{ secrets.VPS_HOST }}
           remote_user: root
           remote_key: ${{ secrets.VPS_SSH_KEY }}
