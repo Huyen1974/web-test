@@ -320,6 +320,37 @@ jobs:
           if [ $FAILED -ne 0 ]; then echo "::error::CHECK 9 FAILED — registry count integrity issue"; exit 1; fi
           echo "CHECK 9: PASS"
 
+      - name: "CHECK 10 — Dead Links Monitor"
+        run: |
+          echo "=== CHECK 10: Dead Links Monitor ==="
+          FAILED=0
+
+          # Count orphan_count across all collections (sum from v_registry_counts)
+          echo -n "Total orphans.......... "
+          ORPHAN_SUM=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/items/v_registry_counts?fields=orphan_count&limit=-1" 2>/dev/null \
+            | jq '[.data[].orphan_count] | add // 0' 2>/dev/null || echo "0")
+          if [ "$ORPHAN_SUM" -le 5 ] 2>/dev/null; then
+            echo "OK ($ORPHAN_SUM orphans)"
+          elif [ "$ORPHAN_SUM" -le 20 ] 2>/dev/null; then
+            echo "WARN ($ORPHAN_SUM orphans — some collections have missing codes)"
+          else
+            echo "FAIL ($ORPHAN_SUM orphans — too many missing codes)"
+            FAILED=1
+          fi
+
+          # Check system_issues open count (spike detection)
+          echo -n "Open issues............ "
+          ISS_COUNT=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/items/v_registry_counts?fields=record_count&filter%5Bcat_code%5D%5B_eq%5D=CAT-017&limit=1" 2>/dev/null \
+            | jq '.data[0].record_count // 0' 2>/dev/null || echo "0")
+          if [ "$ISS_COUNT" -le 1000 ] 2>/dev/null; then
+            echo "OK ($ISS_COUNT open)"
+          else
+            echo "WARN ($ISS_COUNT open — may need triage)"
+          fi
+
+          if [ $FAILED -ne 0 ]; then echo "::error::CHECK 10 FAILED — data quality issue"; exit 1; fi
+          echo "CHECK 10: PASS"
+
       - name: Summary
         if: always()
         run: |
@@ -327,7 +358,7 @@ jobs:
           echo "========================================"
           echo "  HEALTH CHECK COMPLETE"
           echo "========================================"
-          echo "  Checks: Services, Data, Content, Cache, Search, Flows, Structure, Sync, Registry"
+          echo "  Checks: Services, Data, Content, Cache, Search, Flows, Structure, Sync, Registry, Quality"
           echo "  VPS: $VPS_AGENT_DATA_URL"
           echo "  Web: $WEBSITE_URL"
           echo "========================================"
