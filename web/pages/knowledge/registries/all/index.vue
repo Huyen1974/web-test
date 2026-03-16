@@ -39,7 +39,7 @@ const { data: catalogEntries } = useAsyncData(
 		$directus.request(
 			readItems('meta_catalog' as any, {
 				fields: ['entity_type', 'name', 'registry_collection', 'atom_group', 'status'],
-				filter: { status: { _in: ['active', 'published'] } },
+				filter: { identity_class: { _eq: 'managed' } },
 				limit: -1,
 			}),
 		),
@@ -80,7 +80,7 @@ const { data: allAtoms, status: loadStatus } = useAsyncData(
 		const entries = (await $directus.request(
 			readItems('meta_catalog' as any, {
 				fields: ['entity_type', 'name', 'registry_collection', 'atom_group', 'status'],
-				filter: { status: { _in: ['active', 'published'] } },
+				filter: { identity_class: { _eq: 'managed' } },
 				limit: -1,
 			}),
 		)) as any[];
