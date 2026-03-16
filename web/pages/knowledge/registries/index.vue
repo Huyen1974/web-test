@@ -101,7 +101,7 @@ const { data: registryData } = useAsyncData(
 				$directus.request(
 					readItems('meta_catalog' as any, {
 						fields: ['code', 'name', 'entity_type', 'composition_level', 'identity_class'],
-						filter: { identity_class: { _eq: 'managed' } },
+						filter: { identity_class: { _in: ['managed', 'log'] } },
 						limit: -1,
 					}),
 				),
@@ -112,12 +112,14 @@ const { data: registryData } = useAsyncData(
 				catalogMap.set(c.code, c);
 			}
 
-			// Build detail rows
-			const details: any[] = [];
+			// Build detail rows — separate managed vs log
+			const managedDetails: any[] = [];
+			const logDetails: any[] = [];
 			for (const r of counts as any[]) {
 				const cat = catalogMap.get(r.cat_code);
+				const identityClass = cat?.identity_class || 'managed';
 				const delta = (r.record_count || 0) - (r.prev_count || 0);
-				details.push({
+				const row = {
 					_type: 'detail',
 					code: r.cat_code,
 					name: cat?.name || r.entity_type,
@@ -128,14 +130,19 @@ const { data: registryData } = useAsyncData(
 					delta_plus: delta > 0 ? delta : 0,
 					delta_minus: delta < 0 ? delta : 0,
 					verified: true,
-				});
+				};
+				if (identityClass === 'log') {
+					logDetails.push(row);
+				} else {
+					managedDetails.push(row);
+				}
 			}
 
-			// Build summary rows per composition_level
+			// Build summary rows per composition_level — ONLY from managed details
 			const levels = ['atom', 'molecule', 'compound', 'material', 'product', 'building'];
 			const summaries: any[] = [];
 			for (const level of levels) {
-				const levelDetails = details.filter((d) => d.composition_level === level);
+				const levelDetails = managedDetails.filter((d) => d.composition_level === level);
 				const sumPlus = levelDetails.reduce((s: number, d: any) => s + d.delta_plus, 0);
 				const sumMinus = levelDetails.reduce((s: number, d: any) => s + d.delta_minus, 0);
 				summaries.push({
@@ -153,20 +160,20 @@ const { data: registryData } = useAsyncData(
 				});
 			}
 
-			// Sort details by composition_level then code
-			details.sort((a, b) => {
+			// Sort managed details by composition_level then code
+			managedDetails.sort((a, b) => {
 				const li = levels.indexOf(a.composition_level);
 				const ri = levels.indexOf(b.composition_level);
 				if (li !== ri) return li - ri;
 				return a.code.localeCompare(b.code);
 			});
 
-			return { summaries, details };
+			return { summaries, details: managedDetails, logs: logDetails };
 		} catch {
-			return { summaries: [], details: [] };
+			return { summaries: [], details: [], logs: [] };
 		}
 	},
-	{ default: () => ({ summaries: [], details: [] }) },
+	{ default: () => ({ summaries: [], details: [], logs: [] }) },
 );
 
 // UTable columns — STT first, "Lớp" instead of "Tầng"
@@ -257,6 +264,19 @@ const { data: recentChangelog } = useAsyncData(
 		}
 	},
 	{ default: () => [] },
+);
+
+const logColumns = [
+	{ key: 'code', label: 'Code' },
+	{ key: 'name', label: 'Tên' },
+	{ key: 'record_count', label: 'Số lượng' },
+	{ key: 'orphan_count', label: 'Mồ côi' },
+];
+
+const logRows = computed(() =>
+	(registryData.value?.logs || []).map((row: any) => ({
+		...row,
+	})),
 );
 
 const changelogColumns = [
@@ -371,6 +391,29 @@ const { data: dotToolsCount } = useAsyncData(
 				<span v-else>❌</span>
 			</template>
 		</UTable>
+
+		<!-- Nhật ký hệ thống — Log entries tách riêng -->
+		<div v-if="registryData.logs && registryData.logs.length > 0" class="mt-10">
+			<h2 class="mb-4 text-xl font-semibold text-gray-900 dark:text-white">Nhật ký hệ thống</h2>
+			<UTable :columns="logColumns" :rows="logRows">
+				<template #cell-name="{ row }">
+					<NuxtLink
+						v-if="row.entity_type"
+						:to="`/knowledge/registries/${row.entity_type}`"
+						class="text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
+						@click.stop
+					>{{ row.name }}</NuxtLink>
+					<span v-else>{{ row.name }}</span>
+				</template>
+				<template #cell-record_count="{ row }">
+					<span class="font-medium">{{ row.record_count }}</span>
+				</template>
+				<template #cell-orphan_count="{ row }">
+					<span v-if="row.orphan_count > 0" class="font-medium text-amber-600 dark:text-amber-400">{{ row.orphan_count }}</span>
+					<span v-else class="text-gray-400">0</span>
+				</template>
+			</UTable>
+		</div>
 
 		<!-- Nhật ký thay đổi gần đây -->
 		<div v-if="recentChangelog && recentChangelog.length > 0" class="mt-10">
