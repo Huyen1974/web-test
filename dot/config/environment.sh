@@ -79,7 +79,7 @@ detect_environment() {
 
 get_directus_url() {
     local env
-    env=$(detect_environment "$1")
+    env=$(detect_environment "${1:-}")
     if [[ "$env" == "local" ]]; then
         echo "$LOCAL_DIRECTUS_URL"
     else
@@ -89,7 +89,7 @@ get_directus_url() {
 
 get_nuxt_url() {
     local env
-    env=$(detect_environment "$1")
+    env=$(detect_environment "${1:-}")
     if [[ "$env" == "local" ]]; then
         echo "$LOCAL_NUXT_URL"
     else
