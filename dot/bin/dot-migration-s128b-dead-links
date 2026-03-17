@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-migration-s128b-dead-links — One-time cleanup: dead links in entity_dependencies
+# =============================================================================
+# VERSION: 1.0.0
+#
+# Dead links = entity_dependencies where source_code or target_code does NOT
+# exist in v_all_entity_codes (union of all entity code columns).
+#
+# Root cause: dependency scanner created refs using collection/table NAMES
+# (e.g., "tasks", "workflows") instead of entity CODES (e.g., "CAT-009").
+# Also: process_codes (QT-TEST-60), raw column refs (workflows.task_id).
+#
+# Safe to delete: all are scanner artifacts, regenerable with correct codes.
+#
+# Usage:
+#   dot-migration-s128b-dead-links [--cloud|--local] [--dry-run]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-migration-s128b-dead-links v${VERSION} — Cleanup dead links in entity_dependencies
+
+Deletes entity_dependencies where source_code or target_code does not
+exist in the known entity code namespace (all code columns across
+managed collections).
+
+Usage:
+  dot-migration-s128b-dead-links [--cloud|--local] [--dry-run]
+
+EOF
+  show_environment_help
+}
+
+run_pg() {
+  ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+    "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB}" <<< "$1"
+}
+
+run_pg_val() {
+  ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+    "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A" <<< "$1" | tr -d '[:space:]'
+}
+
+ENTITY_CODES_QUERY="(
+  SELECT code FROM meta_catalog WHERE code IS NOT NULL
+  UNION SELECT code FROM dot_tools WHERE code IS NOT NULL
+  UNION SELECT code FROM agents WHERE code IS NOT NULL
+  UNION SELECT code FROM checkpoint_types WHERE code IS NOT NULL
+  UNION SELECT code FROM collection_registry WHERE code IS NOT NULL
+  UNION SELECT code FROM modules WHERE code IS NOT NULL
+  UNION SELECT code FROM workflow_steps WHERE code IS NOT NULL
+  UNION SELECT code FROM ui_pages WHERE code IS NOT NULL
+  UNION SELECT table_id FROM table_registry WHERE table_id IS NOT NULL
+  UNION SELECT process_code FROM workflows WHERE process_code IS NOT NULL
+  UNION SELECT code FROM checkpoint_sets WHERE code IS NOT NULL
+  UNION SELECT code FROM checkpoint_instances WHERE code IS NOT NULL
+  UNION SELECT code FROM tasks WHERE code IS NOT NULL
+  UNION SELECT code FROM system_issues WHERE code IS NOT NULL
+  UNION SELECT code FROM taxonomy WHERE code IS NOT NULL
+  UNION SELECT code FROM entity_dependencies WHERE code IS NOT NULL
+)"
+
+main() {
+  local DRY_RUN=false
+
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h) show_help; exit 0 ;;
+      --dry-run) DRY_RUN=true ;;
+    esac
+  done
+
+  init_environment "$@"
+
+  echo ""
+  echo "======================================================="
+  echo "  DOT Migration: S128-B Dead Links Cleanup v${VERSION}"
+  echo "======================================================="
+  print_environment_banner "$@"
+
+  # Count dead links before
+  local before
+  before=$(run_pg_val "
+    SELECT COUNT(*) FROM entity_dependencies ed
+    WHERE ed.source_code NOT IN ${ENTITY_CODES_QUERY}
+       OR ed.target_code NOT IN ${ENTITY_CODES_QUERY};
+  ")
+  local total
+  total=$(run_pg_val "SELECT COUNT(*) FROM entity_dependencies;")
+
+  log_info "Total entity_dependencies: ${total}"
+  log_info "Dead links (before): ${before}"
+  echo ""
+
+  if [[ "$before" == "0" ]]; then
+    log_ok "No dead links found — nothing to do"
+    echo ""
+    echo "======================================================="
+    echo "  DOT Migration: S128-B Dead Links — COMPLETE"
+    echo "======================================================="
+    return 0
+  fi
+
+  # Classify
+  log_info "Classifying dead links..."
+  run_pg "
+    SELECT 'source_missing' as type, ed.source_code as bad_code, COUNT(*) as cnt
+    FROM entity_dependencies ed
+    WHERE ed.source_code NOT IN ${ENTITY_CODES_QUERY}
+    GROUP BY ed.source_code
+    UNION ALL
+    SELECT 'target_missing', ed.target_code, COUNT(*)
+    FROM entity_dependencies ed
+    WHERE ed.target_code NOT IN ${ENTITY_CODES_QUERY}
+    GROUP BY ed.target_code
+    ORDER BY cnt DESC;
+  "
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log_info "DRY RUN — would delete ${before} dead links"
+    return 0
+  fi
+
+  # Delete dead links
+  log_info "Deleting ${before} dead links..."
+  run_pg "
+    DELETE FROM entity_dependencies
+    WHERE source_code NOT IN ${ENTITY_CODES_QUERY}
+       OR target_code NOT IN ${ENTITY_CODES_QUERY};
+  "
+
+  # Verify
+  local after
+  after=$(run_pg_val "
+    SELECT COUNT(*) FROM entity_dependencies ed
+    WHERE ed.source_code NOT IN ${ENTITY_CODES_QUERY}
+       OR ed.target_code NOT IN ${ENTITY_CODES_QUERY};
+  ")
+  local remaining
+  remaining=$(run_pg_val "SELECT COUNT(*) FROM entity_dependencies;")
+
+  echo ""
+  log_ok "Dead links (after): ${after}"
+  log_ok "Remaining valid dependencies: ${remaining}"
+  log_ok "Deleted: $((total - remaining))"
+
+  # Refresh counts
+  log_info "Refreshing registry counts..."
+  run_pg "SELECT refresh_registry_counts();" > /dev/null 2>&1 || true
+
+  echo ""
+  echo "======================================================="
+  echo "  DOT Migration: S128-B Dead Links — COMPLETE"
+  echo "======================================================="
+}
+
+main "$@"
