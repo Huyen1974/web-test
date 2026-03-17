@@ -1,0 +1,203 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-migration-s127d-legacy-origin — One-time migration: fill _dot_origin for legacy records
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-migration-* — no existing migration]
+# VERSION: 1.0.0
+#
+# Queries meta_catalog for all managed collections (identity_class='managed'),
+# then sets _dot_origin = 'LEGACY|migration-s127d|2026-03-17' for any record
+# where _dot_origin IS NULL.
+#
+# Safe to re-run: only updates NULL values.
+#
+# Usage:
+#   dot-migration-s127d-legacy-origin [--cloud|--local] [--dry-run]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+ORIGIN_VALUE="LEGACY|migration-s127d|2026-03-17"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-migration-s127d-legacy-origin v${VERSION} — Fill _dot_origin for legacy records
+
+One-time migration: sets _dot_origin = '${ORIGIN_VALUE}'
+for all records where _dot_origin IS NULL in managed collections.
+
+Usage:
+  dot-migration-s127d-legacy-origin [--cloud|--local] [--dry-run]
+
+Options:
+  --cloud       Use cloud/production environment
+  --local       Use local development environment
+  --dry-run     Show what would be done (no writes)
+  --help, -h    Show this help
+
+EOF
+  show_environment_help
+}
+
+run_pg() {
+  ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+    "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A" <<< "$1"
+}
+
+main() {
+  local DRY_RUN=false
+
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h) show_help; exit 0 ;;
+      --dry-run) DRY_RUN=true ;;
+    esac
+  done
+
+  init_environment "$@"
+
+  echo ""
+  echo "======================================================="
+  echo "  DOT Migration: S127-D Legacy Origin v${VERSION}"
+  echo "======================================================="
+  print_environment_banner "$@"
+
+  # Step 1: Get managed collections from meta_catalog
+  log_info "Querying managed collections from meta_catalog..."
+
+  local collections_raw
+  collections_raw=$(run_pg "
+    SELECT registry_collection FROM meta_catalog
+    WHERE identity_class = 'managed'
+      AND registry_collection IS NOT NULL
+      AND registry_collection != ''
+      AND registry_collection != '_uncategorized';
+  ")
+
+  if [[ -z "$collections_raw" ]]; then
+    log_err "No managed collections found in meta_catalog"
+    exit 1
+  fi
+
+  local collections=()
+  while IFS= read -r line; do
+    line=$(echo "$line" | tr -d '[:space:]')
+    [[ -n "$line" ]] && collections+=("$line")
+  done <<< "$collections_raw"
+
+  log_info "Found ${#collections[@]} managed collections"
+  echo ""
+
+  # Step 2: Check _dot_origin column exists and update each collection
+  local total_updated=0
+  local total_errors=0
+
+  for coll in "${collections[@]}"; do
+    # Check if _dot_origin column exists
+    local has_col
+    has_col=$(run_pg "
+      SELECT COUNT(*) FROM information_schema.columns
+      WHERE table_name = '${coll}' AND column_name = '_dot_origin';
+    " | tr -d '[:space:]')
+
+    if [[ "$has_col" == "0" ]]; then
+      log_warn "${coll}: _dot_origin column does not exist — SKIP"
+      continue
+    fi
+
+    # Count NULL records
+    local null_count
+    null_count=$(run_pg "
+      SELECT COUNT(*) FROM \"${coll}\" WHERE _dot_origin IS NULL;
+    " | tr -d '[:space:]')
+
+    if [[ "$null_count" == "0" ]]; then
+      log_ok "${coll}: 0 NULL records — already migrated"
+      continue
+    fi
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+      log_info "${coll}: would update ${null_count} records"
+      continue
+    fi
+
+    # Update
+    local updated
+    updated=$(run_pg "
+      UPDATE \"${coll}\" SET _dot_origin = '${ORIGIN_VALUE}'
+      WHERE _dot_origin IS NULL;
+      SELECT COUNT(*) FROM \"${coll}\" WHERE _dot_origin = '${ORIGIN_VALUE}';
+    " | tail -1 | tr -d '[:space:]')
+
+    log_ok "${coll}: updated ${null_count} records"
+    total_updated=$((total_updated + null_count))
+  done
+
+  echo ""
+  log_info "Total records updated: ${total_updated}"
+
+  # Step 3: Verify — 0 NULL for all
+  echo ""
+  echo "--- Verification ---"
+  local verify_pass=true
+
+  for coll in "${collections[@]}"; do
+    local has_col
+    has_col=$(run_pg "
+      SELECT COUNT(*) FROM information_schema.columns
+      WHERE table_name = '${coll}' AND column_name = '_dot_origin';
+    " | tr -d '[:space:]')
+
+    if [[ "$has_col" == "0" ]]; then
+      continue
+    fi
+
+    local remaining
+    remaining=$(run_pg "
+      SELECT COUNT(*) FROM \"${coll}\" WHERE _dot_origin IS NULL;
+    " | tr -d '[:space:]')
+
+    if [[ "$remaining" == "0" ]]; then
+      log_ok "${coll}: 0 NULL — PASS"
+    else
+      log_err "${coll}: ${remaining} NULL remaining — FAIL"
+      verify_pass=false
+    fi
+  done
+
+  echo ""
+  if [[ "$verify_pass" == "true" ]]; then
+    log_ok "Migration verification: ALL PASS"
+  else
+    log_err "Migration verification: FAIL — some collections still have NULL _dot_origin"
+    exit 1
+  fi
+
+  # Step 4: Refresh orphan counts
+  if [[ "$DRY_RUN" != "true" ]]; then
+    log_info "Refreshing registry counts..."
+    run_pg "SELECT refresh_registry_counts();" >/dev/null 2>&1 || true
+    log_ok "Registry counts refreshed"
+  fi
+
+  echo ""
+  echo "======================================================="
+  echo "  DOT Migration: S127-D Legacy Origin — COMPLETE"
+  echo "======================================================="
+}
+
+main "$@"

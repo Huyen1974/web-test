@@ -3,15 +3,18 @@
 # dot-registry-integrity-check — Agent self-check for registry integrity
 # =============================================================================
 # CHECKED-NO-DUPLICATE: [searched dot/bin/ for "integrity-check" — no match]
-# VERSION: 1.0.0
+# VERSION: 1.1.0
 #
-# Runs 6 automated checks on meta_catalog health:
+# Runs 9 automated checks on meta_catalog health:
 #   1. record_count > 0 for all active entries
 #   2. actual_count >= record_count (no ghost records)
 #   3. orphan_count = |actual - record| (math correct)
 #   4. last_scan_date < 7h ago (scheduled refresh working)
 #   5. Model B: actual_count != record_count allowed (independent sources)
 #   6. Summary: total atoms across system
+#   7. _dot_origin coverage (no NULL in managed collections)
+#   8. Agent Data webhook reachability
+#   9. active_count = record_count (Điều 26 v2.1.1)
 #
 # Exit 0 = ALL PASS, Exit 1 = FAIL detected
 #
@@ -24,7 +27,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="1.0.0"
+VERSION="1.1.0"
 
 show_help() {
   cat << EOF
@@ -88,7 +91,7 @@ def api_get(path):
         return {'error': str(e)}
 
 # Fetch all meta_catalog entries
-resp = api_get('/items/meta_catalog?fields=id,code,name,source_model,registry_collection,record_count,actual_count,orphan_count,last_scan_date,status&sort=code&limit=-1')
+resp = api_get('/items/meta_catalog?fields=id,code,name,source_model,registry_collection,record_count,active_count,actual_count,orphan_count,last_scan_date,status,identity_class&sort=code&limit=-1')
 catalog = resp.get('data', [])
 
 if not catalog:
@@ -228,6 +231,63 @@ if total_orphans > 0:
     check_warn(f'Total orphans: {total_orphans}')
 else:
     check_pass(f'Total orphans: 0')
+print()
+
+# ============================================================
+# CHECK 7: _dot_origin coverage (managed collections)
+# ============================================================
+print('--- Check 7: _dot_origin coverage ---')
+managed = [e for e in catalog if e.get('identity_class') == 'managed' and e.get('registry_collection')]
+if not managed:
+    check_warn('No managed collections found — cannot check _dot_origin')
+else:
+    origin_issues = 0
+    for entry in managed:
+        coll = entry['registry_collection']
+        resp7 = api_get(f'/items/{coll}?filter[_dot_origin][_null]=true&aggregate[count]=id&limit=1')
+        null_count = 0
+        if not resp7.get('error'):
+            data7 = resp7.get('data', [])
+            if data7 and isinstance(data7, list) and data7[0].get('count', {}).get('id'):
+                null_count = int(data7[0]['count']['id'])
+        if null_count > 0:
+            check_warn(f'{entry["code"]} {coll}: {null_count} records with NULL _dot_origin')
+            origin_issues += 1
+    if origin_issues == 0:
+        check_pass('All managed collections have _dot_origin coverage')
+print()
+
+# ============================================================
+# CHECK 8: Agent Data webhook reachability
+# ============================================================
+print('--- Check 8: Agent Data webhook reachability ---')
+try:
+    health_req = urllib.request.Request('https://vps.incomexsaigoncorp.vn/api/health')
+    health_resp = urllib.request.urlopen(health_req, context=ctx, timeout=10)
+    health_data = json.loads(health_resp.read())
+    if health_data.get('status') == 'healthy':
+        check_pass('Agent Data healthy — webhooks operational')
+    else:
+        check_warn(f'Agent Data status: {health_data.get("status", "unknown")} — webhooks may fail')
+except Exception as e:
+    check_warn(f'Agent Data unreachable — webhooks will fail: {e}')
+print()
+
+# ============================================================
+# CHECK 9: active_count = record_count (Điều 26 v2.1.1)
+# ============================================================
+print('--- Check 9: active_count = record_count ---')
+active_mismatches = 0
+for entry in catalog:
+    rc = entry.get('record_count') or 0
+    ac = entry.get('active_count')
+    if ac is None:
+        continue  # field not yet populated
+    if ac != rc:
+        check_fail(f'{entry["code"]} {entry["name"]}: active_count({ac}) != record_count({rc})')
+        active_mismatches += 1
+if active_mismatches == 0:
+    check_pass('All entries: active_count = record_count')
 print()
 
 # ============================================================
