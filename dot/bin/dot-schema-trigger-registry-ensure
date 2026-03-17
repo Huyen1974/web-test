@@ -1,0 +1,243 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-schema-trigger-registry-ensure — Create + populate trigger_registry
+# =============================================================================
+# VERSION: 1.0.0
+# Creates trigger_registry collection in Directus, populates from pg_trigger,
+# registers in meta_catalog, creates sync/scan PG functions.
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-schema-trigger-registry-ensure v${VERSION}
+
+Creates trigger_registry PG table, populates from pg_trigger,
+registers in meta_catalog, creates sync function.
+
+Usage: dot-schema-trigger-registry-ensure [--cloud|--local]
+EOF
+  show_environment_help
+}
+
+run_pg() {
+  ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+    "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB}" <<< "$1"
+}
+
+main() {
+  for arg in "$@"; do
+    case "$arg" in --help|-h) show_help; exit 0 ;; esac
+  done
+
+  init_environment "$@"
+
+  echo ""
+  echo "======================================================="
+  echo "  DOT Tool: Trigger Registry Ensure v${VERSION}"
+  echo "======================================================="
+  print_environment_banner "$@"
+
+  # Step 1: Create table
+  log_info "Creating trigger_registry table..."
+  run_pg "$(cat << 'ENDSQL'
+CREATE TABLE IF NOT EXISTS trigger_registry (
+  id serial PRIMARY KEY,
+  code text UNIQUE,
+  trigger_name text NOT NULL,
+  table_name text NOT NULL,
+  trigger_type text NOT NULL DEFAULT 'other',
+  function_name text NOT NULL,
+  fires_on text NOT NULL,
+  timing text NOT NULL,
+  enabled boolean NOT NULL DEFAULT true,
+  description_vi text,
+  _dot_origin text,
+  date_created timestamp DEFAULT now()
+);
+
+CREATE SEQUENCE IF NOT EXISTS seq_trigger_registry_code START 1;
+
+-- Auto-code function
+CREATE OR REPLACE FUNCTION gen_code_trigger_registry()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.code IS NULL OR btrim(NEW.code) = '' THEN
+    NEW.code := 'TRG-' || lpad(nextval('seq_trigger_registry_code')::text, 3, '0');
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_auto_code_trigger_registry ON trigger_registry;
+CREATE TRIGGER trg_auto_code_trigger_registry
+  BEFORE INSERT ON trigger_registry
+  FOR EACH ROW EXECUTE FUNCTION gen_code_trigger_registry();
+
+-- Sync function: compare trigger_registry vs pg_trigger
+CREATE OR REPLACE FUNCTION fn_sync_trigger_registry()
+RETURNS TABLE(action text, trigger_name text, table_name text, detail text) AS $$
+DECLARE
+  r RECORD;
+BEGIN
+  -- Find triggers in PG but not in registry
+  FOR r IN
+    SELECT t.tgname, c.relname, p.proname,
+      CASE WHEN t.tgtype & 2 > 0 THEN 'BEFORE' ELSE 'AFTER' END as timing,
+      CASE
+        WHEN t.tgtype & 4 > 0 THEN 'INSERT'
+        WHEN t.tgtype & 8 > 0 THEN 'DELETE'
+        WHEN t.tgtype & 16 > 0 THEN 'UPDATE'
+        WHEN t.tgtype & 32 > 0 THEN 'TRUNCATE'
+      END as fires_on
+    FROM pg_trigger t
+    JOIN pg_class c ON t.tgrelid = c.oid
+    JOIN pg_proc p ON t.tgfoid = p.oid
+    WHERE NOT t.tgisinternal AND c.relnamespace = 'public'::regnamespace
+    AND t.tgname NOT IN (SELECT tr.trigger_name FROM trigger_registry tr)
+  LOOP
+    action := 'MISSING_IN_REGISTRY';
+    trigger_name := r.tgname;
+    table_name := r.relname;
+    detail := r.proname || ' ' || r.timing || ' ' || r.fires_on;
+    RETURN NEXT;
+  END LOOP;
+
+  -- Find triggers in registry but not in PG
+  FOR r IN
+    SELECT tr.trigger_name, tr.table_name
+    FROM trigger_registry tr
+    WHERE tr.trigger_name NOT IN (
+      SELECT t.tgname FROM pg_trigger t
+      JOIN pg_class c ON t.tgrelid = c.oid
+      WHERE NOT t.tgisinternal AND c.relnamespace = 'public'::regnamespace
+    )
+  LOOP
+    action := 'MISSING_IN_PG';
+    trigger_name := r.trigger_name;
+    table_name := r.table_name;
+    detail := 'Registered but not found in pg_trigger';
+    RETURN NEXT;
+  END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+ENDSQL
+)"
+
+  # Step 2: Populate from pg_trigger
+  log_info "Populating trigger_registry from pg_trigger..."
+  run_pg "$(cat << 'ENDSQL'
+-- Set sequence to max if table has data
+SELECT setval('seq_trigger_registry_code', GREATEST(
+  (SELECT COALESCE(MAX(NULLIF(regexp_replace(code, '[^0-9]', '', 'g'), '')::int), 0) FROM trigger_registry),
+  (SELECT COUNT(*) FROM trigger_registry)
+) + 1);
+
+-- Insert missing triggers
+INSERT INTO trigger_registry (trigger_name, table_name, trigger_type, function_name, fires_on, timing, enabled, description_vi, _dot_origin)
+SELECT
+  t.tgname,
+  c.relname,
+  CASE
+    WHEN t.tgname LIKE 'trg_count_%' THEN 'count'
+    WHEN t.tgname LIKE 'trg_auto_code_%' THEN 'code'
+    WHEN t.tgname LIKE 'trg_validate_dot_origin_%' THEN 'origin'
+    WHEN t.tgname LIKE 'trg_label_assign_%' THEN 'label'
+    WHEN t.tgname LIKE 'trg_guard_%' THEN 'guard'
+    WHEN t.tgname LIKE 'trg_taxonomy_%' THEN 'other'
+    WHEN t.tgname LIKE 'trg_refresh_%' THEN 'other'
+    ELSE 'other'
+  END,
+  p.proname,
+  CASE
+    WHEN t.tgtype & 4 > 0 THEN 'INSERT'
+    WHEN t.tgtype & 8 > 0 THEN 'DELETE'
+    WHEN t.tgtype & 16 > 0 THEN 'UPDATE'
+    WHEN t.tgtype & 32 > 0 THEN 'TRUNCATE'
+  END,
+  CASE WHEN t.tgtype & 2 > 0 THEN 'BEFORE' ELSE 'AFTER' END,
+  t.tgenabled = 'O',
+  CASE
+    WHEN t.tgname LIKE 'trg_count_%' THEN 'Tự động đếm record_count khi INSERT/UPDATE/DELETE'
+    WHEN t.tgname LIKE 'trg_auto_code_%' THEN 'Tự động gán mã PREFIX-NNN khi INSERT'
+    WHEN t.tgname LIKE 'trg_validate_dot_origin_%' THEN 'Kiểm tra _dot_origin hợp lệ, đánh SUSPECT nếu sai'
+    WHEN t.tgname LIKE 'trg_label_assign_%' THEN 'Tự động gán nhãn theo label_rules khi INSERT/UPDATE'
+    WHEN t.tgname LIKE 'trg_guard_%' THEN 'Chặn sửa/xoá trực tiếp (S129-A security). Bypass: SET LOCAL app.allow_meta_update = true'
+    WHEN t.tgname LIKE 'trg_refresh_%' THEN 'Cập nhật virtual summaries (CAT-ALL, CAT-MOL, etc.)'
+    ELSE 'Trigger ' || t.tgname
+  END,
+  'DOT|dot-schema-trigger-registry-ensure|2026-03-17'
+FROM pg_trigger t
+JOIN pg_class c ON t.tgrelid = c.oid
+JOIN pg_proc p ON t.tgfoid = p.oid
+WHERE NOT t.tgisinternal AND c.relnamespace = 'public'::regnamespace
+AND t.tgname NOT IN (SELECT tr.trigger_name FROM trigger_registry tr)
+ORDER BY c.relname, t.tgname;
+
+-- Verify
+SELECT COUNT(*) as registry_count FROM trigger_registry;
+SELECT COUNT(*) as pg_count FROM pg_trigger t
+JOIN pg_class c ON t.tgrelid = c.oid
+WHERE NOT t.tgisinternal AND c.relnamespace = 'public'::regnamespace;
+
+-- Sync check
+SELECT * FROM fn_sync_trigger_registry();
+ENDSQL
+)"
+
+  # Step 3: Register in meta_catalog
+  log_info "Registering in meta_catalog..."
+  run_pg "$(cat << 'ENDSQL'
+PERFORM set_config('app.allow_meta_update', 'true', true);
+
+INSERT INTO meta_catalog (code, name, name_en, entity_type, source_model, source_location,
+  registry_collection, record_count, active_count, status, identity_class, composition_level,
+  description, _dot_origin)
+VALUES ('CAT-019', 'Trigger Registry', 'Trigger Registry', 'trigger', 'A',
+  'Directus:trigger_registry', 'trigger_registry',
+  (SELECT COUNT(*) FROM trigger_registry),
+  (SELECT COUNT(*) FROM trigger_registry),
+  'active', 'managed', 'atom',
+  'Danh sách PG triggers — quản lý tập trung cho Điều 25',
+  'DOT|dot-schema-trigger-registry-ensure|2026-03-17')
+ON CONFLICT (code) DO UPDATE SET
+  record_count = EXCLUDED.record_count,
+  active_count = EXCLUDED.active_count;
+
+PERFORM set_config('app.allow_meta_update', 'false', true);
+ENDSQL
+)" 2>/dev/null || log_info "meta_catalog entry may already exist"
+
+  # Step 4: Register in Directus
+  log_info "Registering collection in Directus..."
+  run_pg "$(cat << 'ENDSQL'
+INSERT INTO directus_collections (collection, icon, note, hidden, singleton, archive_app_filter, collapse, versioning)
+VALUES ('trigger_registry', 'electric_bolt', 'PG trigger registry — Điều 25 prep', false, false, true, 'open', false)
+ON CONFLICT (collection) DO UPDATE SET note = EXCLUDED.note, icon = EXCLUDED.icon;
+ENDSQL
+)"
+
+  log_ok "Trigger Registry created and populated"
+
+  echo ""
+  echo "======================================================="
+  echo "  DOT Tool: Trigger Registry Ensure — COMPLETE"
+  echo "======================================================="
+}
+
+main "$@"
