@@ -3,19 +3,20 @@
 # =============================================================================
 # dot-pg-views-ensure — Tạo PostgreSQL tables + refresh function cho registry counting
 # =============================================================================
-# VERSION: 9.0.0
+# VERSION: 10.0.0
 # CHANGELOG:
 #   v1–5: see git history
 #   v6.0.0 (2026-03-13): CHỈ đếm 16 nguyên tử, loại CAT-016/017 khỏi UNION ALL
 #   v7.0.0 (2026-03-13): Thêm composition_level breakdown vào v_registry_summary
-#     - v_registry_counts thêm column composition_level (JOIN meta_catalog)
-#     - v_registry_summary thêm count_atom, count_molecule, count_compound
 #   v8.0.0 (2026-03-17): Điều 26 v2.1.1 — active_count + test_counting_contract()
-#     - v_registry_counts thêm active_count (= record_count, chưa có retired)
-#     - v_registry_summary dùng active_count thay record_count
 #   v9.0.0 (2026-03-17): S128-A — fix critical counting bugs (TD-240/TD-241)
-#     - fn_validate_dot_origin: accept LEGACY| format (was marking as SUSPECT:)
-#     - test_counting_contract: add T6 (0 SUSPECT) + T7 (CAT-ALL <= managed sum)
+#   v10.0.0 (2026-03-17): S129-A — Security hardening (TD-253/TD-255)
+#     - fn_guard_meta_catalog_update/delete: block direct counting field modification
+#     - fn_validate_dot_origin: regex validation (prefix+actor+timestamp)
+#     - fn_refresh_virtual_summaries: fire on active_count change + session var bypass
+#     - test_counting_contract T8: check all triggers enabled
+#     - check_registry_coverage: trigger_disabled detection
+#     - refresh_registry_counts: session var for meta_catalog guard bypass
 #     - meta_catalog.active_count updated from v_registry_counts
 #     - test_counting_contract() PG function for self-test
 # =============================================================================
@@ -25,7 +26,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="9.0.0"
+VERSION="10.0.0"
 VPS_HOST="38.242.240.89"
 VPS_KEY="${HOME}/.ssh/contabo_vps"
 PG_CONTAINER="postgres"
