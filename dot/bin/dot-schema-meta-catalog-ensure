@@ -110,7 +110,7 @@ JSON
       ;;
     active_count)
       cat <<'JSON'
-{"field":"active_count","type":"integer","meta":{"required":false,"interface":"input","width":"half","note":"Active records (excludes retired). Điều 26 v2.1.1"},"schema":{"is_nullable":true,"default_value":0}}
+{"field":"active_count","type":"integer","meta":{"required":false,"readonly":false,"hidden":false,"searchable":false,"interface":"input","width":"half","note":"Active records (excludes retired). Điều 26 v2.1.1"},"schema":{"is_nullable":true,"default_value":0}}
 JSON
       ;;
     actual_count)

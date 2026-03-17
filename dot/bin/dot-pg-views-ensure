@@ -231,6 +231,7 @@ $$ LANGUAGE plpgsql;
 -- =============================================================================
 -- test_counting_contract() — Self-test for counting invariants
 -- =============================================================================
+DROP FUNCTION IF EXISTS test_counting_contract();
 CREATE OR REPLACE FUNCTION test_counting_contract()
 RETURNS TABLE(test_name text, expected text, actual text, status text) AS $$
 BEGIN
@@ -242,24 +243,26 @@ BEGIN
     CASE WHEN (SELECT COUNT(*) FROM v_registry_counts WHERE active_count != record_count) = 0
       THEN 'PASS' ELSE 'FAIL' END;
 
-  -- T2: CAT-ALL.active_count = SUM(active_count) of managed (excl CAT-ALL, CAT-999)
+  -- T2: CAT-ALL.active_count = SUM(active_count) of all managed meta_catalog (excl CAT-ALL, CAT-999)
   RETURN QUERY
-  SELECT 'T2: CAT-ALL active=sum'::text,
-    (SELECT COALESCE(SUM(rc.active_count), 0)::text FROM v_registry_counts rc
-     WHERE rc.cat_code NOT IN ('CAT-ALL', 'CAT-999')),
+  SELECT 'T2: CAT-ALL active=sum(managed)'::text,
+    (SELECT COALESCE(SUM(mc2.active_count), 0)::text FROM meta_catalog mc2
+     WHERE mc2.identity_class = 'managed' AND mc2.code NOT IN ('CAT-ALL', 'CAT-999')),
     (SELECT COALESCE(mc.active_count, 0)::text FROM meta_catalog mc WHERE mc.code = 'CAT-ALL'),
     CASE WHEN (SELECT COALESCE(mc.active_count, 0) FROM meta_catalog mc WHERE mc.code = 'CAT-ALL')
-      = (SELECT COALESCE(SUM(rc.active_count), 0) FROM v_registry_counts rc WHERE rc.cat_code NOT IN ('CAT-ALL', 'CAT-999'))
+      = (SELECT COALESCE(SUM(mc2.active_count), 0) FROM meta_catalog mc2
+         WHERE mc2.identity_class = 'managed' AND mc2.code NOT IN ('CAT-ALL', 'CAT-999'))
       THEN 'PASS' ELSE 'FAIL' END;
 
-  -- T3: CAT-ALL.record_count = SUM(record_count) of managed
+  -- T3: CAT-ALL.record_count = SUM(record_count) of all managed meta_catalog
   RETURN QUERY
-  SELECT 'T3: CAT-ALL record=sum'::text,
-    (SELECT COALESCE(SUM(rc.record_count), 0)::text FROM v_registry_counts rc
-     WHERE rc.cat_code NOT IN ('CAT-ALL', 'CAT-999')),
+  SELECT 'T3: CAT-ALL record=sum(managed)'::text,
+    (SELECT COALESCE(SUM(mc2.record_count), 0)::text FROM meta_catalog mc2
+     WHERE mc2.identity_class = 'managed' AND mc2.code NOT IN ('CAT-ALL', 'CAT-999')),
     (SELECT COALESCE(mc.record_count, 0)::text FROM meta_catalog mc WHERE mc.code = 'CAT-ALL'),
     CASE WHEN (SELECT COALESCE(mc.record_count, 0) FROM meta_catalog mc WHERE mc.code = 'CAT-ALL')
-      = (SELECT COALESCE(SUM(rc.record_count), 0) FROM v_registry_counts rc WHERE rc.cat_code NOT IN ('CAT-ALL', 'CAT-999'))
+      = (SELECT COALESCE(SUM(mc2.record_count), 0) FROM meta_catalog mc2
+         WHERE mc2.identity_class = 'managed' AND mc2.code NOT IN ('CAT-ALL', 'CAT-999'))
       THEN 'PASS' ELSE 'FAIL' END;
 
   -- T4: record_count >= 0 for all
