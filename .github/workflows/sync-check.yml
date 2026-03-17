@@ -320,31 +320,60 @@ jobs:
           if [ $FAILED -ne 0 ]; then echo "::error::CHECK 9 FAILED — registry count integrity issue"; exit 1; fi
           echo "CHECK 9: PASS"
 
-      - name: "CHECK 10 — Dead Links Monitor"
+      - name: "CHECK 10 — Counting Contract + Data Quality"
         run: |
-          echo "=== CHECK 10: Dead Links Monitor ==="
+          echo "=== CHECK 10: Counting Contract + Data Quality ==="
           FAILED=0
 
-          # Count DOT origin orphans (records without _dot_origin — expected for legacy data)
+          # 10a: Counting contract — CAT-ALL = SUM of managed
+          echo -n "CAT-ALL contract....... "
+          MANAGED=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/items/meta_catalog?fields=record_count&filter[identity_class][_eq]=managed&limit=-1" 2>/dev/null \
+            | jq '[.data[].record_count] | add // 0' 2>/dev/null || echo "-1")
+          CAT_ALL=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/items/meta_catalog?fields=record_count&filter[code][_eq]=CAT-ALL&limit=1" 2>/dev/null \
+            | jq '.data[0].record_count // -1' 2>/dev/null || echo "-1")
+          if [ "$MANAGED" = "$CAT_ALL" ] && [ "$MANAGED" != "-1" ] 2>/dev/null; then
+            echo "OK (CAT-ALL=$CAT_ALL = SUM=$MANAGED)"
+          else
+            echo "FAIL (CAT-ALL=$CAT_ALL != SUM=$MANAGED)"
+            FAILED=1
+          fi
+
+          # 10b: Qdrant health (must be "ok", not "degraded")
+          echo -n "Qdrant health.......... "
+          QDRANT_STATUS=$(curl -s --max-time 15 "$VPS_AGENT_DATA_URL/health" 2>/dev/null \
+            | jq -r '.services.qdrant.status // "unknown"' 2>/dev/null || echo "unknown")
+          if [ "$QDRANT_STATUS" = "ok" ]; then
+            echo "OK"
+          else
+            echo "FAIL ($QDRANT_STATUS)"
+            FAILED=1
+          fi
+
+          # 10c: Vector orphans (auto-detect + report)
+          echo -n "Vector orphans......... "
+          AUDIT=$(curl -s -X POST --max-time 30 "$VPS_AGENT_DATA_URL/kb/audit-sync" \
+            -H "X-API-Key: $AGENT_DATA_API_KEY" 2>/dev/null)
+          ORPHAN_V=$(echo "$AUDIT" | jq '.orphan_count // 0' 2>/dev/null || echo "0")
+          GHOST_V=$(echo "$AUDIT" | jq '.ghost_count // 0' 2>/dev/null || echo "0")
+          if [ "$ORPHAN_V" -eq 0 ] 2>/dev/null; then
+            echo "OK (0 orphan vectors, $GHOST_V ghost docs)"
+          elif [ "$ORPHAN_V" -le 5 ] 2>/dev/null; then
+            echo "WARN ($ORPHAN_V orphan vectors — auto-cleanup needed)"
+          else
+            echo "FAIL ($ORPHAN_V orphan vectors)"
+            FAILED=1
+          fi
+
+          # 10d: DOT origin coverage (INFO only)
           echo -n "DOT origin coverage.... "
           ORPHAN_SUM=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/items/v_registry_counts?fields=orphan_count&limit=-1" 2>/dev/null \
             | jq '[.data[].orphan_count] | add // 0' 2>/dev/null || echo "0")
           TOTAL_SUM=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/items/v_registry_counts?fields=record_count&limit=-1" 2>/dev/null \
             | jq '[.data[].record_count] | add // 0' 2>/dev/null || echo "0")
           COVERED=$((TOTAL_SUM - ORPHAN_SUM))
-          echo "INFO ($COVERED/$TOTAL_SUM with DOT origin, $ORPHAN_SUM legacy)"
+          echo "INFO ($COVERED/$TOTAL_SUM with DOT origin)"
 
-          # Check system_issues open count (spike detection)
-          echo -n "Open issues............ "
-          ISS_COUNT=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/items/v_registry_counts?fields=record_count&filter%5Bcat_code%5D%5B_eq%5D=CAT-017&limit=1" 2>/dev/null \
-            | jq '.data[0].record_count // 0' 2>/dev/null || echo "0")
-          if [ "$ISS_COUNT" -le 1000 ] 2>/dev/null; then
-            echo "OK ($ISS_COUNT open)"
-          else
-            echo "WARN ($ISS_COUNT open — may need triage)"
-          fi
-
-          if [ $FAILED -ne 0 ]; then echo "::error::CHECK 10 FAILED — data quality issue"; exit 1; fi
+          if [ $FAILED -ne 0 ]; then echo "::error::CHECK 10 FAILED — counting or data integrity issue"; exit 1; fi
           echo "CHECK 10: PASS"
 
       - name: Summary
