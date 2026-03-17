@@ -3,7 +3,7 @@
 # =============================================================================
 # dot-pg-views-ensure — Tạo PostgreSQL tables + refresh function cho registry counting
 # =============================================================================
-# VERSION: 10.0.0
+# VERSION: 11.0.0
 # CHANGELOG:
 #   v1–5: see git history
 #   v6.0.0 (2026-03-13): CHỈ đếm 16 nguyên tử, loại CAT-016/017 khỏi UNION ALL
@@ -11,6 +11,10 @@
 #   v8.0.0 (2026-03-17): Điều 26 v2.1.1 — active_count + test_counting_contract()
 #   v9.0.0 (2026-03-17): S128-A — fix critical counting bugs (TD-240/TD-241)
 #   v10.0.0 (2026-03-17): S129-A — Security hardening (TD-253/TD-255)
+#   v11.0.0 (2026-03-17): S131-A — Security hardening round 2
+#     - fn_validate_dot_origin: min 3 parts, actor alphanumeric, tighter validation
+#     - Directus: revoke public READ on flows/operations
+#     - SSH: X11Forwarding disabled
 #     - fn_guard_meta_catalog_update/delete: block direct counting field modification
 #     - fn_validate_dot_origin: regex validation (prefix+actor+timestamp)
 #     - fn_refresh_virtual_summaries: fire on active_count change + session var bypass
@@ -26,7 +30,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="10.0.0"
+VERSION="11.0.0"
 VPS_HOST="38.242.240.89"
 VPS_KEY="${HOME}/.ssh/contabo_vps"
 PG_CONTAINER="postgres"
