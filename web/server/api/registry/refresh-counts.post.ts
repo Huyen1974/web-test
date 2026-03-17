@@ -47,7 +47,7 @@ export default defineEventHandler(async (event) => {
 	const catalogResp: any = await $fetch(`${directusUrl}/items/meta_catalog`, {
 		headers,
 		params: {
-			fields: 'id,code,name,source_model,registry_collection,record_count,actual_count,orphan_count',
+			fields: 'id,code,name,source_model,registry_collection,record_count,active_count,actual_count,orphan_count',
 			sort: 'code',
 			limit: -1,
 		},
@@ -106,8 +106,10 @@ export default defineEventHandler(async (event) => {
 		});
 
 		// 3. Build patch based on source_model
+		// Điều 26 v2.1.1: active_count = record_count (chưa có retired)
 		const patch: Record<string, any> = {
 			record_count: newCount,
+			active_count: newCount,
 			last_scan_date: now,
 		};
 
@@ -147,8 +149,11 @@ export default defineEventHandler(async (event) => {
 		// Use freshly-computed counts from this run
 		let freshRecord = 0;
 		let freshActual = 0;
+		let freshActive = 0;
 		for (const r of results) {
 			freshRecord += r.new_count;
+			// Điều 26 v2.1.1: active = record (chưa có retired)
+			freshActive += r.new_count;
 		}
 		// For actual: Model A actual = record, Model B actual from modelBCounts or existing
 		for (const entry of catalog) {
@@ -170,6 +175,7 @@ export default defineEventHandler(async (event) => {
 				headers,
 				body: {
 					record_count: freshRecord,
+					active_count: freshActive,
 					actual_count: freshActual,
 					last_scan_date: now,
 				},

@@ -3,13 +3,18 @@
 # =============================================================================
 # dot-pg-views-ensure — Tạo PostgreSQL tables + refresh function cho registry counting
 # =============================================================================
-# VERSION: 7.0.0
+# VERSION: 8.0.0
 # CHANGELOG:
 #   v1–5: see git history
 #   v6.0.0 (2026-03-13): CHỈ đếm 16 nguyên tử, loại CAT-016/017 khỏi UNION ALL
 #   v7.0.0 (2026-03-13): Thêm composition_level breakdown vào v_registry_summary
 #     - v_registry_counts thêm column composition_level (JOIN meta_catalog)
 #     - v_registry_summary thêm count_atom, count_molecule, count_compound
+#   v8.0.0 (2026-03-17): Điều 26 v2.1.1 — active_count + test_counting_contract()
+#     - v_registry_counts thêm active_count (= record_count, chưa có retired)
+#     - v_registry_summary dùng active_count thay record_count
+#     - meta_catalog.active_count updated from v_registry_counts
+#     - test_counting_contract() PG function for self-test
 # =============================================================================
 
 set -euo pipefail
@@ -17,7 +22,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="7.0.0"
+VERSION="8.0.0"
 VPS_HOST="38.242.240.89"
 VPS_KEY="${HOME}/.ssh/contabo_vps"
 PG_CONTAINER="postgres"
@@ -110,6 +115,7 @@ ALTER TABLE v_registry_counts ADD COLUMN IF NOT EXISTS count_b int NOT NULL DEFA
 ALTER TABLE v_registry_counts ADD COLUMN IF NOT EXISTS count_c int NOT NULL DEFAULT 0;
 ALTER TABLE v_registry_counts ADD COLUMN IF NOT EXISTS cross_check text NOT NULL DEFAULT '';
 ALTER TABLE v_registry_counts ADD COLUMN IF NOT EXISTS composition_level text NOT NULL DEFAULT 'atom';
+ALTER TABLE v_registry_counts ADD COLUMN IF NOT EXISTS active_count int NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS v_registry_summary (
   id serial PRIMARY KEY,
@@ -200,22 +206,86 @@ BEGIN
   UPDATE v_registry_counts rc SET composition_level = COALESCE(mc.composition_level, 'atom')
   FROM meta_catalog mc WHERE mc.code = rc.cat_code;
 
-  -- Summary: total + per-level breakdown
+  -- Điều 26 v2.1.1: active_count = record_count (chưa có retired)
+  -- Khi S128 deploy status field → active_count = COUNT(*) WHERE status != 'retired'
+  UPDATE v_registry_counts SET active_count = record_count;
+
+  -- Update meta_catalog.active_count from v_registry_counts
+  UPDATE meta_catalog mc SET active_count = rc.active_count
+  FROM v_registry_counts rc WHERE mc.code = rc.cat_code;
+
+  -- Summary: total + per-level breakdown (dùng active_count — Điều 26 v2.1.1)
   DELETE FROM v_registry_summary;
   INSERT INTO v_registry_summary (id, total_atoms, total_types, total_orphans, count_atom, count_molecule, count_compound)
   SELECT 1,
-    SUM(record_count)::int,
+    SUM(active_count)::int,
     COUNT(*)::int,
     SUM(orphan_count)::int,
-    COALESCE(SUM(record_count) FILTER (WHERE composition_level = 'atom'), 0)::int,
-    COALESCE(SUM(record_count) FILTER (WHERE composition_level = 'molecule'), 0)::int,
-    COALESCE(SUM(record_count) FILTER (WHERE composition_level = 'compound'), 0)::int
+    COALESCE(SUM(active_count) FILTER (WHERE composition_level = 'atom'), 0)::int,
+    COALESCE(SUM(active_count) FILTER (WHERE composition_level = 'molecule'), 0)::int,
+    COALESCE(SUM(active_count) FILTER (WHERE composition_level = 'compound'), 0)::int
   FROM v_registry_counts;
+END;
+$$ LANGUAGE plpgsql;
+
+-- =============================================================================
+-- test_counting_contract() — Self-test for counting invariants
+-- =============================================================================
+CREATE OR REPLACE FUNCTION test_counting_contract()
+RETURNS TABLE(test_name text, expected text, actual text, status text) AS $$
+BEGIN
+  -- T1: active_count = record_count for all managed (chưa có retired)
+  RETURN QUERY
+  SELECT 'T1: active=record for all'::text,
+    '0 mismatches'::text,
+    (SELECT COUNT(*)::text FROM v_registry_counts WHERE active_count != record_count) || ' mismatches',
+    CASE WHEN (SELECT COUNT(*) FROM v_registry_counts WHERE active_count != record_count) = 0
+      THEN 'PASS' ELSE 'FAIL' END;
+
+  -- T2: CAT-ALL.active_count = SUM(active_count) of managed (excl CAT-ALL, CAT-999)
+  RETURN QUERY
+  SELECT 'T2: CAT-ALL active=sum'::text,
+    (SELECT COALESCE(SUM(rc.active_count), 0)::text FROM v_registry_counts rc
+     WHERE rc.cat_code NOT IN ('CAT-ALL', 'CAT-999')),
+    (SELECT COALESCE(mc.active_count, 0)::text FROM meta_catalog mc WHERE mc.code = 'CAT-ALL'),
+    CASE WHEN (SELECT COALESCE(mc.active_count, 0) FROM meta_catalog mc WHERE mc.code = 'CAT-ALL')
+      = (SELECT COALESCE(SUM(rc.active_count), 0) FROM v_registry_counts rc WHERE rc.cat_code NOT IN ('CAT-ALL', 'CAT-999'))
+      THEN 'PASS' ELSE 'FAIL' END;
+
+  -- T3: CAT-ALL.record_count = SUM(record_count) of managed
+  RETURN QUERY
+  SELECT 'T3: CAT-ALL record=sum'::text,
+    (SELECT COALESCE(SUM(rc.record_count), 0)::text FROM v_registry_counts rc
+     WHERE rc.cat_code NOT IN ('CAT-ALL', 'CAT-999')),
+    (SELECT COALESCE(mc.record_count, 0)::text FROM meta_catalog mc WHERE mc.code = 'CAT-ALL'),
+    CASE WHEN (SELECT COALESCE(mc.record_count, 0) FROM meta_catalog mc WHERE mc.code = 'CAT-ALL')
+      = (SELECT COALESCE(SUM(rc.record_count), 0) FROM v_registry_counts rc WHERE rc.cat_code NOT IN ('CAT-ALL', 'CAT-999'))
+      THEN 'PASS' ELSE 'FAIL' END;
+
+  -- T4: record_count >= 0 for all
+  RETURN QUERY
+  SELECT 'T4: record_count >= 0'::text,
+    '0 negative'::text,
+    (SELECT COUNT(*)::text FROM v_registry_counts WHERE record_count < 0) || ' negative',
+    CASE WHEN (SELECT COUNT(*) FROM v_registry_counts WHERE record_count < 0) = 0
+      THEN 'PASS' ELSE 'FAIL' END;
+
+  -- T5: Per-level sum matches (atom + molecule + compound = total_atoms in summary)
+  RETURN QUERY
+  SELECT 'T5: level sums match'::text,
+    (SELECT total_atoms::text FROM v_registry_summary WHERE id = 1),
+    (SELECT (count_atom + count_molecule + count_compound)::text FROM v_registry_summary WHERE id = 1),
+    CASE WHEN (SELECT total_atoms FROM v_registry_summary WHERE id = 1)
+      = (SELECT count_atom + count_molecule + count_compound FROM v_registry_summary WHERE id = 1)
+      THEN 'PASS' ELSE 'FAIL' END;
 END;
 $$ LANGUAGE plpgsql;
 
 -- Run initial refresh
 SELECT refresh_registry_counts();
+
+-- Run contract tests
+SELECT * FROM test_counting_contract();
 ENDSQL
 )
 
