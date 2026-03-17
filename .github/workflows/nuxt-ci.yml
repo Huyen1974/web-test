@@ -40,3 +40,56 @@ jobs:
         env:
           NUXT_PUBLIC_DIRECTUS_URL: "https://directus.incomexsaigoncorp.vn"
         run: pnpm run build
+
+  counting-contract:
+    name: Counting Contract Check
+    runs-on: ubuntu-latest
+    # Điều 26 v2.1.1 + Điều 0-B §V: CI MUST verify counting invariants
+    steps:
+      - name: Verify Counting Contract
+        run: |
+          echo "=== Counting Contract Check (Điều 26 v2.1.1) ==="
+          FAILED=0
+          DIRECTUS="https://directus.incomexsaigoncorp.vn"
+
+          # 1. CAT-ALL = SUM(managed)
+          echo -n "CAT-ALL contract....... "
+          MANAGED=$(curl -s --globoff --max-time 15 "$DIRECTUS/items/meta_catalog?fields=record_count&filter[identity_class][_eq]=managed&limit=-1" \
+            | jq '[.data[].record_count // 0] | add // 0' 2>/dev/null || echo "-1")
+          CAT_ALL=$(curl -s --globoff --max-time 15 "$DIRECTUS/items/meta_catalog?fields=record_count&filter[code][_eq]=CAT-ALL&limit=1" \
+            | jq '.data[0].record_count // -1' 2>/dev/null || echo "-1")
+
+          if [ "$MANAGED" = "$CAT_ALL" ] && [ "$MANAGED" != "-1" ]; then
+            echo "PASS (CAT-ALL=$CAT_ALL = SUM=$MANAGED)"
+          else
+            echo "FAIL (CAT-ALL=$CAT_ALL != SUM=$MANAGED)"
+            FAILED=1
+          fi
+
+          # 2. All managed have composition_level (count managed with empty/null level)
+          echo -n "Composition levels..... "
+          ALL_MANAGED=$(curl -s --globoff --max-time 15 "$DIRECTUS/items/meta_catalog?fields=code,composition_level&filter[identity_class][_eq]=managed&limit=-1" 2>/dev/null)
+          MISSING=$(echo "$ALL_MANAGED" | jq '[.data[] | select(.composition_level == null or .composition_level == "")] | length' 2>/dev/null || echo "0")
+          if [ "$MISSING" = "0" ]; then
+            echo "PASS (all managed have composition_level)"
+          else
+            echo "FAIL ($MISSING managed entries missing composition_level)"
+            FAILED=1
+          fi
+
+          # 3. Registry coverage: >=15 entries tracked
+          echo -n "Registry coverage...... "
+          TOTAL=$(curl -s --globoff --max-time 15 "$DIRECTUS/items/v_registry_counts?limit=-1" \
+            | jq '.data | length' 2>/dev/null || echo "0")
+          if [ "$TOTAL" -ge 15 ]; then
+            echo "PASS ($TOTAL collections tracked)"
+          else
+            echo "FAIL ($TOTAL collections — expected >=15)"
+            FAILED=1
+          fi
+
+          if [ $FAILED -ne 0 ]; then
+            echo "::error::Counting Contract FAILED — Điều 26 violation"
+            exit 1
+          fi
+          echo "=== Counting Contract: ALL PASS ==="
