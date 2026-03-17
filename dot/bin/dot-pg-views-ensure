@@ -3,7 +3,7 @@
 # =============================================================================
 # dot-pg-views-ensure — Tạo PostgreSQL tables + refresh function cho registry counting
 # =============================================================================
-# VERSION: 8.0.0
+# VERSION: 9.0.0
 # CHANGELOG:
 #   v1–5: see git history
 #   v6.0.0 (2026-03-13): CHỈ đếm 16 nguyên tử, loại CAT-016/017 khỏi UNION ALL
@@ -13,6 +13,9 @@
 #   v8.0.0 (2026-03-17): Điều 26 v2.1.1 — active_count + test_counting_contract()
 #     - v_registry_counts thêm active_count (= record_count, chưa có retired)
 #     - v_registry_summary dùng active_count thay record_count
+#   v9.0.0 (2026-03-17): S128-A — fix critical counting bugs (TD-240/TD-241)
+#     - fn_validate_dot_origin: accept LEGACY| format (was marking as SUSPECT:)
+#     - test_counting_contract: add T6 (0 SUSPECT) + T7 (CAT-ALL <= managed sum)
 #     - meta_catalog.active_count updated from v_registry_counts
 #     - test_counting_contract() PG function for self-test
 # =============================================================================
@@ -22,7 +25,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="8.0.0"
+VERSION="9.0.0"
 VPS_HOST="38.242.240.89"
 VPS_KEY="${HOME}/.ssh/contabo_vps"
 PG_CONTAINER="postgres"
@@ -280,6 +283,62 @@ BEGIN
     (SELECT (count_atom + count_molecule + count_compound)::text FROM v_registry_summary WHERE id = 1),
     CASE WHEN (SELECT total_atoms FROM v_registry_summary WHERE id = 1)
       = (SELECT count_atom + count_molecule + count_compound FROM v_registry_summary WHERE id = 1)
+      THEN 'PASS' ELSE 'FAIL' END;
+
+  -- T6: 0 SUSPECT origins across all managed collections (S128-A)
+  RETURN QUERY
+  SELECT 'T6: 0 SUSPECT origins'::text,
+    '0'::text,
+    (SELECT COALESCE(SUM(cnt), 0)::text FROM (
+      SELECT COUNT(*) as cnt FROM task_comments WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM dot_tools WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM checkpoint_types WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM workflows WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM checkpoint_sets WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM entity_dependencies WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM collection_registry WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM checkpoint_instances WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM taxonomy WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM modules WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM workflow_steps WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM workflow_change_requests WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM agents WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM ui_pages WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM tasks WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM table_registry WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM meta_catalog WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM table_proposals WHERE _dot_origin LIKE 'SUSPECT:%'
+    ) t),
+    CASE WHEN (SELECT COALESCE(SUM(cnt), 0) FROM (
+      SELECT COUNT(*) as cnt FROM task_comments WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM dot_tools WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM checkpoint_types WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM workflows WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM checkpoint_sets WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM entity_dependencies WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM collection_registry WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM checkpoint_instances WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM taxonomy WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM modules WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM workflow_steps WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM workflow_change_requests WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM agents WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM ui_pages WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM tasks WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM table_registry WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM meta_catalog WHERE _dot_origin LIKE 'SUSPECT:%'
+      UNION ALL SELECT COUNT(*) FROM table_proposals WHERE _dot_origin LIKE 'SUSPECT:%'
+    ) t) = 0 THEN 'PASS' ELSE 'FAIL' END;
+
+  -- T7: CAT-ALL never includes log (S128-A)
+  RETURN QUERY
+  SELECT 'T7: CAT-ALL <= managed sum (no log)'::text,
+    'true'::text,
+    CASE WHEN (SELECT record_count FROM meta_catalog WHERE code = 'CAT-ALL')
+      <= (SELECT COALESCE(SUM(record_count), 0) FROM meta_catalog WHERE identity_class = 'managed' AND code NOT IN ('CAT-ALL', 'CAT-999'))
+      THEN 'true' ELSE 'false' END,
+    CASE WHEN (SELECT record_count FROM meta_catalog WHERE code = 'CAT-ALL')
+      <= (SELECT COALESCE(SUM(record_count), 0) FROM meta_catalog WHERE identity_class = 'managed' AND code NOT IN ('CAT-ALL', 'CAT-999'))
       THEN 'PASS' ELSE 'FAIL' END;
 END;
 $$ LANGUAGE plpgsql;
