@@ -1,4 +1,4 @@
-# CLAUDE.md — Web Test (web-test)
+# CLAUDE.md — Web Test (web-test) v1.0
 
 > **⛔ ĐỌC `.claude/skills/incomex-rules.md` TRƯỚC MỌI TÁC VỤ — chứa Hiến pháp Kiến trúc + Operating Rules.**
 > **⛔ FIRST: `search_knowledge('operating rules SSOT')` before any work.**
