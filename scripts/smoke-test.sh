@@ -66,6 +66,15 @@ echo "3. WEBSITE PAGES"
 check "Knowledge Hub"      "https://vps.incomexsaigoncorp.vn/knowledge"            "200" "Knowledge"
 check "Registries"         "https://vps.incomexsaigoncorp.vn/knowledge/registries"  "200" "CAT-"
 
+# Homepage — warn but don't fail (known SSR issue TD-287)
+HP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "https://vps.incomexsaigoncorp.vn/" 2>/dev/null || echo "000")
+if [ "$HP_STATUS" = "200" ]; then
+  echo "  ✓ PASS: Homepage"
+  PASS=$((PASS+1))
+else
+  echo "  ! WARN: Homepage returns $HP_STATUS (TD-287 — SSR catch-all route issue)"
+fi
+
 echo ""
 echo "4. SECURITY — Public WRITE Blocked"
 WRITE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 -X POST \
