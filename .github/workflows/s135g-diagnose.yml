@@ -1,0 +1,70 @@
+name: "S135G: Diagnose + Fix Homepage & Nav"
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose-fix:
+    name: SSH Diagnose + Fix
+    runs-on: ubuntu-latest
+    steps:
+      - name: Diagnose and fix
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
+          command_timeout: 5m
+          script: |
+            set -euo pipefail
+
+            echo "=== 1. Nuxt container env ==="
+            docker exec incomex-nuxt env 2>/dev/null | grep -iE "directus|token|key|secret|internal" | sed 's/=.*/=***/' || echo "(no vars)"
+
+            echo ""
+            echo "=== 2. Nuxt → Directus internal call (homepage query) ==="
+            docker exec incomex-nuxt sh -c 'wget -q -O - "http://directus:8055/items/pages?filter[permalink][_eq]=/&fields=id,title,permalink,status&limit=1" 2>&1 || echo "WGET FAILED"' || echo "EXEC FAILED"
+
+            echo ""
+            echo "=== 3. Nuxt → Directus internal (with token from env) ==="
+            TOKEN=$(docker exec incomex-nuxt printenv NUXT_DIRECTUS_SERVICE_TOKEN 2>/dev/null || echo "")
+            if [ -n "$TOKEN" ]; then
+              echo "Token prefix: ${TOKEN:0:8}..."
+              docker exec incomex-nuxt sh -c "wget -q -O - --header='Authorization: Bearer $TOKEN' 'http://directus:8055/items/pages?filter[permalink][_eq]=/&fields=id,title&limit=1' 2>&1" || echo "AUTH QUERY FAILED"
+            else
+              echo "No NUXT_DIRECTUS_SERVICE_TOKEN set"
+            fi
+
+            echo ""
+            echo "=== 4. Nuxt container logs (last 30, errors only) ==="
+            docker logs --tail 30 incomex-nuxt 2>&1 | grep -iE "error|fail|404|forbidden|reject|ECONNREFUSED|timeout" || echo "(no errors in last 30 lines)"
+
+            echo ""
+            echo "=== 5. Nuxt container creation time ==="
+            docker inspect incomex-nuxt --format='Created: {{.Created}}'
+
+            echo ""
+            echo "=== 6. Navigation junction data ==="
+            docker exec postgres psql -U workflow_admin -d workflow -t -c "SELECT navigation_id, navigation_items_id FROM navigation_navigation_items ORDER BY navigation_id;" 2>/dev/null || echo "Query failed"
+
+            echo ""
+            echo "=== 7. Navigation items data ==="
+            docker exec postgres psql -U workflow_admin -d workflow -t -c "SELECT id, title, type, url FROM navigation_items LIMIT 10;" 2>/dev/null || echo "Query failed"
+
+            echo ""
+            echo "=== 8. Check if Nuxt can reach Directus at all ==="
+            docker exec incomex-nuxt sh -c 'wget -q -O - "http://directus:8055/server/health" 2>&1' || echo "CANNOT REACH DIRECTUS"
+
+            echo ""
+            echo "=== 9. Compare .env DIRECTUS_ADMIN_TOKEN with container ==="
+            ENV_TOKEN=$(grep "^DIRECTUS_ADMIN_TOKEN=" /opt/incomex/docker/.env | cut -d= -f2-)
+            CONTAINER_TOKEN=$(docker exec incomex-nuxt printenv NUXT_DIRECTUS_SERVICE_TOKEN 2>/dev/null || echo "NOT SET")
+            if [ "$ENV_TOKEN" = "$CONTAINER_TOKEN" ]; then
+              echo "MATCH: .env token = container token"
+            else
+              echo "MISMATCH: .env=${ENV_TOKEN:0:8}... container=${CONTAINER_TOKEN:0:8}..."
+              echo "Need to restart Nuxt with updated env"
+            fi
