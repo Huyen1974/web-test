@@ -1,46 +1,108 @@
 #!/usr/bin/env bash
 # =============================================================================
-# dot-entity-deprecate — Deprecate entity + warn dependents
+# dot-entity-deprecate — Deprecate entity via fn_transition_lifecycle
 # =============================================================================
-# VERSION: 1.0.0
+# VERSION: 2.0.0
 # CHECKED-NO-DUPLICATE: [đã grep dot/bin/dot-entity-*, dot-*deprecate* — không có]
-# Calls PG function deprecate_entity(code) which:
-# 1. Updates status='deprecated' on the entity's collection
-# 2. Queries entity_dependencies for dependents
-# 3. Creates system_issue if dependents found
+# Calls fn_transition_lifecycle(collection, id, 'deprecated', reason, 'DOT:dot-entity-deprecate')
+# Logs transition to lifecycle_log automatically.
 # =============================================================================
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/environment.sh"
 
+run_pg() {
+  local sql="$1"
+  if [[ "$(detect_environment "${FLAG:-}")" == "local" ]]; then
+    echo "$sql" | docker compose exec -T postgres psql -U directus -d directus -t 2>/dev/null
+  else
+    echo "$sql" | ssh -i ~/.ssh/contabo_vps -o ConnectTimeout=10 root@38.242.240.89 \
+      "cd /opt/incomex/docker && docker compose exec -T postgres psql -U directus -d directus -t" 2>/dev/null
+  fi
+}
+
 main() {
   local entity_code="${1:-}"
+  local reason="${2:-}"
   if [[ -z "$entity_code" || "$entity_code" == "--"* ]]; then
-    echo "Usage: dot-entity-deprecate <ENTITY_CODE> [--cloud|--local]"
-    echo "Example: dot-entity-deprecate DOT-042 --cloud"
+    echo "Usage: dot-entity-deprecate <ENTITY_CODE> [REASON] [--cloud|--local]"
+    echo "Example: dot-entity-deprecate DOT-042 'Replaced by DOT-099' --cloud"
     exit 1
   fi
   shift || true
+  # Check if next arg is reason (not a flag)
+  if [[ -n "${1:-}" && "${1:-}" != "--"* ]]; then
+    reason="$1"
+    shift || true
+  fi
+  FLAG="${1:-}"
   init_environment "$@"
 
   echo "[INFO] Deprecating entity: $entity_code"
+  echo "[INFO] Reason: ${reason:-none}"
 
-  local result
-  if [[ "$(detect_environment "$@")" == "local" ]]; then
-    result=$(docker compose exec -T postgres psql -U directus -d directus -t -c \
-      "SELECT action, detail FROM deprecate_entity('$entity_code');")
-  else
-    result=$(ssh -i ~/.ssh/contabo_vps -o ConnectTimeout=10 root@38.242.240.89 \
-      "cd /opt/incomex/docker && docker compose exec -T postgres psql -U directus -d directus -t -c \"SELECT action, detail FROM deprecate_entity('$entity_code');\"")
-  fi
+  # Resolve entity code to collection + id
+  local resolve_sql
+  resolve_sql=$(cat <<EOSQL
+SELECT jsonb_build_object('collection', mc.registry_collection, 'id', e.id)
+FROM meta_catalog mc
+CROSS JOIN LATERAL (
+  SELECT id FROM (
+    SELECT id, code AS entity_code FROM agents WHERE code = '${entity_code}'
+    UNION ALL SELECT id, code FROM checkpoint_types WHERE code = '${entity_code}'
+    UNION ALL SELECT id, code FROM checkpoint_sets WHERE code = '${entity_code}'
+    UNION ALL SELECT id, code FROM collection_registry WHERE code = '${entity_code}'
+    UNION ALL SELECT id, code FROM dot_tools WHERE code = '${entity_code}'
+    UNION ALL SELECT id, code FROM meta_catalog WHERE code = '${entity_code}'
+    UNION ALL SELECT id, code FROM modules WHERE code = '${entity_code}'
+    UNION ALL SELECT id, code FROM ui_pages WHERE code = '${entity_code}'
+    UNION ALL SELECT id, table_id AS entity_code FROM table_registry WHERE table_id = '${entity_code}'
+    UNION ALL SELECT id, code FROM tasks WHERE code = '${entity_code}'
+    UNION ALL SELECT id, process_code AS entity_code FROM workflows WHERE process_code = '${entity_code}'
+    UNION ALL SELECT id, code FROM workflow_steps WHERE code = '${entity_code}'
+    UNION ALL SELECT id, code FROM workflow_change_requests WHERE code = '${entity_code}'
+    UNION ALL SELECT id, code FROM trigger_registry WHERE code = '${entity_code}'
+    UNION ALL SELECT id, code FROM system_issues WHERE code = '${entity_code}'
+    UNION ALL SELECT id, code FROM taxonomy WHERE code = '${entity_code}'
+    UNION ALL SELECT id, code FROM entity_dependencies WHERE code = '${entity_code}'
+  ) sub
+  LIMIT 1
+) e
+LIMIT 1;
+EOSQL
+)
 
-  echo "$result"
-  if echo "$result" | grep -q "not_found"; then
-    echo "[WARN] Entity not found in any managed collection"
+  local entity_info
+  entity_info=$(run_pg "$resolve_sql" | tr -d '[:space:]')
+
+  if [[ -z "$entity_info" || "$entity_info" == "" ]]; then
+    echo "[FAIL] Entity $entity_code not found in any managed collection"
     exit 1
   fi
-  echo "[OK] Entity $entity_code deprecated"
+
+  local coll entity_id
+  coll=$(echo "$entity_info" | python3 -c "import sys,json; print(json.loads(sys.stdin.read())['collection'])")
+  entity_id=$(echo "$entity_info" | python3 -c "import sys,json; print(json.loads(sys.stdin.read())['id'])")
+
+  echo "[INFO] Found: collection=$coll, id=$entity_id"
+
+  # Call fn_transition_lifecycle
+  local reason_sql="NULL"
+  [[ -n "$reason" ]] && reason_sql="'${reason//\'/\'\'}'"
+
+  local transition_sql="SELECT fn_transition_lifecycle('${coll}', ${entity_id}, 'deprecated', ${reason_sql}, 'DOT:dot-entity-deprecate');"
+  local result
+  result=$(run_pg "$transition_sql")
+
+  echo "$result"
+
+  if echo "$result" | grep -q '"success": true\|"success":true'; then
+    echo "[OK] Entity $entity_code deprecated successfully"
+  else
+    echo "[FAIL] Transition failed — check output above"
+    exit 1
+  fi
 }
 
 main "$@"

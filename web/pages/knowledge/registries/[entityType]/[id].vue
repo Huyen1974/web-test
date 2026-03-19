@@ -74,106 +74,10 @@ const pageUrl = computed(() => {
 	return item.value.page_url || item.value.url || item.value.script_path || null;
 });
 
-// === LAYER 5: 6 consistent relationship headings ===
+// === LAYER 5: 6 consistent relationship headings from universal_edges ===
 const entityCode = computed(() => item.value?.code || item.value?.process_code || item.value?.table_id || itemId.value);
 
-interface DepItem {
-	code: string;
-	type: string;
-	name?: string;
-	link: string | null;
-}
-
-interface Layer5Data {
-	belongsTo: DepItem[];
-	contains: DepItem[];
-	dependsOn: DepItem[];
-	usedBy: DepItem[];
-	peers: DepItem[];
-}
-
-const { data: layer5 } = useAsyncData(
-	`layer5-${entityType.value}-${itemId.value}`,
-	async () => {
-		const code = entityCode.value;
-		const result: Layer5Data = { belongsTo: [], contains: [], dependsOn: [], usedBy: [], peers: [] };
-		if (!code) return result;
-		try {
-			const [fwd, rev, peerItems] = await Promise.all([
-				$directus.request(
-					readItems('entity_dependencies' as any, {
-						filter: { source_code: { _eq: code } },
-						fields: ['target_code', 'target_type', 'relation_type'],
-						limit: 50,
-					}),
-				),
-				$directus.request(
-					readItems('entity_dependencies' as any, {
-						filter: { target_code: { _eq: code } },
-						fields: ['source_code', 'source_type', 'relation_type'],
-						limit: 50,
-					}),
-				),
-				// Peers: same collection, exclude self
-				(async () => {
-					let col = collectionMap[entityType.value];
-					if (!col) col = catalogEntry.value?.registry_collection || '';
-					if (!col) return [];
-					const cf = getCodeField(entityType.value);
-					try {
-						return await $directus.request(
-							readItems(col as any, {
-								filter: { [cf]: { _neq: code } },
-								fields: ['id', 'code', 'name', 'title', 'process_code', 'table_id'],
-								limit: 10,
-								sort: [cf],
-							}),
-						);
-					} catch {
-						return [];
-					}
-				})(),
-			]);
-
-			for (const d of fwd as any[]) {
-				const dep: DepItem = {
-					code: d.target_code,
-					type: d.target_type,
-					link: d.target_type ? `/knowledge/registries/${d.target_type}/${d.target_code}` : null,
-				};
-				if (d.relation_type === 'belongs_to') result.belongsTo.push(dep);
-				else if (d.relation_type === 'contains') result.contains.push(dep);
-				else if (d.relation_type === 'depends_on') result.dependsOn.push(dep);
-			}
-
-			for (const d of rev as any[]) {
-				const dep: DepItem = {
-					code: d.source_code,
-					type: d.source_type,
-					link: d.source_type ? `/knowledge/registries/${d.source_type}/${d.source_code}` : null,
-				};
-				if (d.relation_type === 'depends_on') result.usedBy.push(dep);
-				else if (d.relation_type === 'belongs_to') result.contains.push(dep);
-				else if (d.relation_type === 'contains') result.belongsTo.push(dep);
-			}
-
-			result.peers = (peerItems as any[]).map((p: any) => {
-				const pCode = p.code || p.process_code || p.table_id || `#${p.id}`;
-				return {
-					code: pCode,
-					type: entityType.value,
-					name: p.name || p.title || '',
-					link: `/knowledge/registries/${entityType.value}/${pCode}`,
-				};
-			});
-
-			return result;
-		} catch {
-			return result;
-		}
-	},
-	{ default: () => ({ belongsTo: [], contains: [], dependsOn: [], usedBy: [], peers: [] }) },
-);
+const { data: layer5 } = useUniversalEdges(`${entityType.value}-${itemId.value}`, entityCode);
 
 // === TAXONOMY LABELS: fetch entity labels per facet ===
 const { data: entityLabels } = useAsyncData(
@@ -278,8 +182,6 @@ const { data: sameGroup } = useAsyncData(
 	{ default: () => [] },
 );
 
-const peerTotal = computed(() => layer5.value.peers.length);
-
 definePageMeta({ title: 'Chi tiết' });
 
 useHead({
@@ -333,7 +235,7 @@ useHead({
 			Không tìm thấy mục hoặc lỗi truy cập.
 		</div>
 
-		<!-- Config mode: 4 grouped sections -->
+		<!-- Config mode: grouped sections -->
 		<div v-else-if="item && sections.length > 0" class="space-y-8">
 			<!-- 1. Thông tin cơ bản -->
 			<section>
@@ -346,7 +248,7 @@ useHead({
 				</UCard>
 			</section>
 
-			<!-- Taxonomy Labels (ĐẦU VÀO) -->
+			<!-- Taxonomy Labels -->
 			<section v-if="entityLabels.labels.length > 0">
 				<div class="mb-2 mt-4">
 					<UBadge color="indigo" variant="solid" size="sm">NHÃN PHÂN LOẠI</UBadge>
@@ -370,64 +272,75 @@ useHead({
 				</div>
 			</section>
 
-			<!-- Layer 5 — 6 Quan hệ nhất quán -->
+			<!-- Layer 5 — 6 Quan hệ nhất quán (from universal_edges) -->
 			<div class="mb-2 mt-4">
 				<UBadge color="primary" variant="solid" size="sm">LAYER 5 — QUAN HỆ</UBadge>
 			</div>
 
 			<div class="space-y-4">
-				<!-- 1. Tôi thuộc ai? -->
+				<!-- 1. Thuộc ai -->
 				<section>
-					<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">1. Tôi thuộc ai?</h3>
+					<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">1. Thuộc ai</h3>
 					<div v-if="layer5.belongsTo.length > 0" class="space-y-1">
-						<div v-for="dep in layer5.belongsTo" :key="`bt-${dep.code}`" class="flex items-center gap-2 text-sm">
+						<div v-for="e in layer5.belongsTo" :key="`bt-${e.code}`" class="flex items-center gap-2 text-sm">
 							<span class="text-gray-400">&rarr;</span>
-							<NuxtLink v-if="dep.link" :to="dep.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ dep.code }}</NuxtLink>
-							<span v-else class="font-mono text-xs line-through text-gray-400">{{ dep.code }}</span>
+							<NuxtLink v-if="e.link" :to="e.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ e.code }}</NuxtLink>
+							<span v-else class="font-mono text-xs text-gray-400">{{ e.code }}</span>
+							<span class="text-xs text-gray-400">({{ e.collection }})</span>
 						</div>
 					</div>
-									</section>
+				</section>
 
-				<!-- 2. Tôi chứa gì? -->
+				<!-- 2. Chứa gì -->
 				<section>
-					<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">2. Tôi chứa gì?</h3>
+					<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">2. Chứa gì</h3>
 					<div v-if="layer5.contains.length > 0" class="space-y-1">
-						<div v-for="dep in layer5.contains" :key="`ct-${dep.code}`" class="flex items-center gap-2 text-sm">
+						<div v-for="e in layer5.contains" :key="`ct-${e.code}`" class="flex items-center gap-2 text-sm">
 							<span class="text-gray-400">&rarr;</span>
-							<NuxtLink v-if="dep.link" :to="dep.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ dep.code }}</NuxtLink>
-							<span v-else class="font-mono text-xs line-through text-gray-400">{{ dep.code }}</span>
+							<NuxtLink v-if="e.link" :to="e.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ e.code }}</NuxtLink>
+							<span v-else class="font-mono text-xs text-gray-400">{{ e.code }}</span>
+							<span class="text-xs text-gray-400">({{ e.collection }})</span>
 						</div>
 					</div>
-									</section>
+				</section>
 
-				<!-- 3. Tôi dùng ai? -->
+				<!-- 3. Dùng ai -->
 				<section>
-					<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">3. Tôi dùng ai?</h3>
-					<div v-if="layer5.dependsOn.length > 0" class="space-y-1">
-						<div v-for="dep in layer5.dependsOn" :key="`do-${dep.code}`" class="flex items-center gap-2 text-sm">
+					<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">3. Dùng ai</h3>
+					<div v-if="layer5.uses.length > 0" class="space-y-1">
+						<div v-for="e in layer5.uses" :key="`us-${e.code}`" class="flex items-center gap-2 text-sm">
 							<span class="text-gray-400">&rarr;</span>
-							<NuxtLink v-if="dep.link" :to="dep.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ dep.code }}</NuxtLink>
-							<span v-else class="font-mono text-xs line-through text-gray-400">{{ dep.code }}</span>
+							<NuxtLink v-if="e.link" :to="e.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ e.code }}</NuxtLink>
+							<span v-else class="font-mono text-xs text-gray-400">{{ e.code }}</span>
+							<span class="text-xs text-gray-400">({{ e.collection }})</span>
 						</div>
 					</div>
-									</section>
+				</section>
 
-				<!-- 4. Ai dùng tôi? -->
+				<!-- 4. Ai dùng tôi -->
 				<section>
-					<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">4. Ai dùng tôi?</h3>
+					<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">4. Ai dùng tôi</h3>
 					<div v-if="layer5.usedBy.length > 0" class="space-y-1">
-						<div v-for="dep in layer5.usedBy" :key="`ub-${dep.code}`" class="flex items-center gap-2 text-sm">
+						<div v-for="e in layer5.usedBy" :key="`ub-${e.code}`" class="flex items-center gap-2 text-sm">
 							<span class="text-gray-400">&rarr;</span>
-							<NuxtLink v-if="dep.link" :to="dep.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ dep.code }}</NuxtLink>
-							<span v-else class="font-mono text-xs line-through text-gray-400">{{ dep.code }}</span>
+							<NuxtLink v-if="e.link" :to="e.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ e.code }}</NuxtLink>
+							<span v-else class="font-mono text-xs text-gray-400">{{ e.code }}</span>
+							<span class="text-xs text-gray-400">({{ e.collection }})</span>
 						</div>
 					</div>
-									</section>
+				</section>
 
-				<!-- 5. Cùng nhóm (scored union per-facet domain) -->
+				<!-- 5. Cùng nhóm -->
 				<section>
 					<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">5. Cùng nhóm</h3>
-					<div v-if="sameGroup.length > 0" class="flex flex-wrap gap-2">
+					<div v-if="layer5.groupWith.length > 0" class="space-y-1">
+						<div v-for="e in layer5.groupWith" :key="`gw-${e.code}`" class="flex items-center gap-2 text-sm">
+							<span class="text-gray-400">&rarr;</span>
+							<NuxtLink v-if="e.link" :to="e.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ e.code }}</NuxtLink>
+							<span v-else class="font-mono text-xs text-gray-400">{{ e.code }}</span>
+						</div>
+					</div>
+					<div v-if="sameGroup.length > 0" class="mt-2 flex flex-wrap gap-2">
 						<span
 							v-for="sg in sameGroup"
 							:key="`sg-${sg.entity_code}`"
@@ -442,6 +355,13 @@ useHead({
 				<!-- 6. Tương tự -->
 				<section>
 					<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">6. Tương tự</h3>
+					<div v-if="layer5.similarTo.length > 0" class="space-y-1">
+						<div v-for="e in layer5.similarTo" :key="`st-${e.code}`" class="flex items-center gap-2 text-sm">
+							<span class="text-gray-400">&rarr;</span>
+							<NuxtLink v-if="e.link" :to="e.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ e.code }}</NuxtLink>
+							<span v-else class="font-mono text-xs text-gray-400">{{ e.code }}</span>
+						</div>
+					</div>
 				</section>
 			</div>
 		</div>

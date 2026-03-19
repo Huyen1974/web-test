@@ -204,6 +204,7 @@ export const sectionConfig: Record<string, SectionConfig[]> = {
 export const prefixMap: Record<string, string> = {
 	CP: 'checkpoint_type',
 	CPS: 'checkpoint_set',
+	CPI: 'checkpoint_instance',
 	WF: 'workflow',
 	ND: 'workflow_step',
 	DOT: 'dot_tool',
@@ -215,6 +216,11 @@ export const prefixMap: Record<string, string> = {
 	WCR: 'wcr',
 	CAT: 'catalog',
 	TD: 'task',
+	TBL: 'table',
+	TRG: 'trigger',
+	CMT: 'comment',
+	ISS: 'system_issue',
+	TAX: 'taxonomy',
 };
 
 /** entityType → collection name mapping */
@@ -232,10 +238,19 @@ export const collectionMap: Record<string, string> = {
 	agent: 'agents',
 	checkpoint_type: 'checkpoint_types',
 	checkpoint_set: 'checkpoint_sets',
+	checkpoint_instance: 'checkpoint_instances',
 	entity_dependency: 'entity_dependencies',
 	changelog: 'registry_changelog',
 	system_issue: 'system_issues',
+	trigger: 'trigger_registry',
+	comment: 'task_comments',
+	taxonomy: 'taxonomy',
 };
+
+/** collection name → entityType (reverse of collectionMap) */
+export const reverseCollectionMap: Record<string, string> = Object.fromEntries(
+	Object.entries(collectionMap).map(([et, col]) => [col, et]),
+);
 
 /** entityType → primary code field (used for URL lookups) */
 export const codeFieldMap: Record<string, string> = {

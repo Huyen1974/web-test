@@ -100,8 +100,11 @@ const { data: childRecords } = useAsyncData(
 	{ default: () => ({}) },
 );
 
-// === RULE 4: USED_BY — query entity_dependencies ===
+// === LAYER 5: universal_edges ===
 const itemCode = computed(() => props.item?.code || props.item?.process_code || props.item?.table_id || '');
+const { data: edges } = useUniversalEdges(`disc-${props.entityType}-${props.item?.id}`, itemCode);
+
+// === LEGACY: entity_dependencies for backward compatibility ===
 
 const { data: deps } = useAsyncData(
 	`discovery-deps-${props.entityType}-${props.item?.id}`,
@@ -398,56 +401,60 @@ function getChildColumns(items: any[]): { key: string; label: string }[] {
 			</NuxtLink>
 		</div>
 
-		<!-- LAYER 5 — 6 Quan hệ nhất quán -->
+		<!-- LAYER 5 — 6 Quan hệ nhất quán (from universal_edges) -->
 		<div class="mb-2 mt-4">
 			<UBadge color="primary" variant="solid" size="sm">LAYER 5 — QUAN HỆ</UBadge>
 		</div>
 
 		<div class="space-y-4">
-			<!-- 1. Tôi thuộc ai? -->
+			<!-- 1. Thuộc ai -->
 			<section>
-				<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">1. Tôi thuộc ai?</h3>
-				<div v-if="belongsToItems.length > 0" class="space-y-1">
-					<div v-for="p in belongsToItems" :key="`bt-${p.code}`" class="flex items-center gap-2 text-sm">
+				<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">1. Thuộc ai</h3>
+				<div v-if="edges.belongsTo.length > 0" class="space-y-1">
+					<div v-for="e in edges.belongsTo" :key="`bt-${e.code}`" class="flex items-center gap-2 text-sm">
 						<span class="text-gray-400">&rarr;</span>
-						<NuxtLink v-if="p.link" :to="p.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ p.label }}</NuxtLink>
-						<span v-else class="font-mono text-xs text-gray-400">{{ p.label }}</span>
+						<NuxtLink v-if="e.link" :to="e.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ e.code }}</NuxtLink>
+						<span v-else class="font-mono text-xs text-gray-400">{{ e.code }}</span>
+						<span class="text-xs text-gray-400">({{ e.collection }})</span>
 					</div>
 				</div>
 			</section>
 
-			<!-- 2. Tôi chứa gì? -->
+			<!-- 2. Chứa gì -->
 			<section>
-				<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">2. Tôi chứa gì?</h3>
-				<div v-if="containsItems.length > 0" class="space-y-1">
-					<div v-for="c in containsItems" :key="`ct-${c.code}`" class="flex items-center gap-2 text-sm">
+				<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">2. Chứa gì</h3>
+				<div v-if="edges.contains.length > 0" class="space-y-1">
+					<div v-for="e in edges.contains" :key="`ct-${e.code}`" class="flex items-center gap-2 text-sm">
 						<span class="text-gray-400">&rarr;</span>
-						<span class="font-mono text-xs">{{ c.label }}</span>
-						<UBadge v-if="c.count" color="gray" variant="subtle" size="xs">{{ c.count }}</UBadge>
+						<NuxtLink v-if="e.link" :to="e.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ e.code }}</NuxtLink>
+						<span v-else class="font-mono text-xs text-gray-400">{{ e.code }}</span>
+						<span class="text-xs text-gray-400">({{ e.collection }})</span>
 					</div>
 				</div>
 			</section>
 
-			<!-- 3. Tôi dùng ai? -->
+			<!-- 3. Dùng ai -->
 			<section>
-				<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">3. Tôi dùng ai?</h3>
-				<div v-if="dependsOnItems.length > 0" class="space-y-1">
-					<div v-for="dep in dependsOnItems" :key="`do-${dep.code}`" class="flex items-center gap-2 text-sm">
+				<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">3. Dùng ai</h3>
+				<div v-if="edges.uses.length > 0" class="space-y-1">
+					<div v-for="e in edges.uses" :key="`us-${e.code}`" class="flex items-center gap-2 text-sm">
 						<span class="text-gray-400">&rarr;</span>
-						<NuxtLink v-if="dep.link" :to="dep.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ dep.code }}</NuxtLink>
-						<span v-else class="font-mono text-xs text-gray-400">{{ dep.code }}</span>
+						<NuxtLink v-if="e.link" :to="e.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ e.code }}</NuxtLink>
+						<span v-else class="font-mono text-xs text-gray-400">{{ e.code }}</span>
+						<span class="text-xs text-gray-400">({{ e.collection }})</span>
 					</div>
 				</div>
 			</section>
 
-			<!-- 4. Ai dùng tôi? -->
+			<!-- 4. Ai dùng tôi -->
 			<section>
-				<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">4. Ai dùng tôi?</h3>
-				<div v-if="usedByItems.length > 0" class="space-y-1">
-					<div v-for="dep in usedByItems" :key="`ub-${dep.code}`" class="flex items-center gap-2 text-sm">
+				<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">4. Ai dùng tôi</h3>
+				<div v-if="edges.usedBy.length > 0" class="space-y-1">
+					<div v-for="e in edges.usedBy" :key="`ub-${e.code}`" class="flex items-center gap-2 text-sm">
 						<span class="text-gray-400">&rarr;</span>
-						<NuxtLink v-if="dep.link" :to="dep.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ dep.code }}</NuxtLink>
-						<span v-else class="font-mono text-xs text-gray-400">{{ dep.code }}</span>
+						<NuxtLink v-if="e.link" :to="e.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ e.code }}</NuxtLink>
+						<span v-else class="font-mono text-xs text-gray-400">{{ e.code }}</span>
+						<span class="text-xs text-gray-400">({{ e.collection }})</span>
 					</div>
 				</div>
 			</section>
@@ -455,7 +462,14 @@ function getChildColumns(items: any[]): { key: string; label: string }[] {
 			<!-- 5. Cùng nhóm -->
 			<section>
 				<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">5. Cùng nhóm</h3>
-				<div v-if="peerRows.length > 0" class="flex flex-wrap gap-2">
+				<div v-if="edges.groupWith.length > 0" class="space-y-1">
+					<div v-for="e in edges.groupWith" :key="`gw-${e.code}`" class="flex items-center gap-2 text-sm">
+						<span class="text-gray-400">&rarr;</span>
+						<NuxtLink v-if="e.link" :to="e.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ e.code }}</NuxtLink>
+						<span v-else class="font-mono text-xs text-gray-400">{{ e.code }}</span>
+					</div>
+				</div>
+				<div v-if="peerRows.length > 0" class="mt-2 flex flex-wrap gap-2">
 					<NuxtLink
 						v-for="peer in peerRows"
 						:key="peer._code"
@@ -471,6 +485,13 @@ function getChildColumns(items: any[]): { key: string; label: string }[] {
 			<!-- 6. Tương tự -->
 			<section>
 				<h3 class="mb-2 text-base font-semibold text-gray-800 dark:text-gray-200">6. Tương tự</h3>
+				<div v-if="edges.similarTo.length > 0" class="space-y-1">
+					<div v-for="e in edges.similarTo" :key="`st-${e.code}`" class="flex items-center gap-2 text-sm">
+						<span class="text-gray-400">&rarr;</span>
+						<NuxtLink v-if="e.link" :to="e.link" class="font-mono text-xs text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200">{{ e.code }}</NuxtLink>
+						<span v-else class="font-mono text-xs text-gray-400">{{ e.code }}</span>
+					</div>
+				</div>
 			</section>
 		</div>
 	</div>
