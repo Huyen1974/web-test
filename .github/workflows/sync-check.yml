@@ -427,6 +427,71 @@ jobs:
             echo "CHECK 11: PASS (INFO — rules engine operational)"
           fi
 
+      - name: "CHECK 12 — PG Data Integrity"
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          echo "=== CHECK 12: PG Data Integrity ==="
+          FAILED=0
+
+          # Query PG via Directus API for key table counts
+          echo -n "meta_catalog count........ "
+          MC_COUNT=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/items/meta_catalog?aggregate%5Bcount%5D=id" 2>/dev/null | jq -r '.data[0].count.id // 0')
+          if [ "$MC_COUNT" -ge 15 ] 2>/dev/null; then
+            echo "OK ($MC_COUNT rows)"
+          else
+            echo "FAIL ($MC_COUNT rows — expected >=15)"
+            FAILED=1
+          fi
+
+          echo -n "v_registry_counts........ "
+          VRC_COUNT=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/items/v_registry_counts?aggregate%5Bcount%5D=id" 2>/dev/null | jq -r '.data[0].count.id // 0')
+          if [ "$VRC_COUNT" -ge 15 ] 2>/dev/null; then
+            echo "OK ($VRC_COUNT rows)"
+          else
+            echo "FAIL ($VRC_COUNT rows — expected >=15)"
+            FAILED=1
+          fi
+
+          echo -n "universal_edges.......... "
+          UE_COUNT=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/items/universal_edges?aggregate%5Bcount%5D=id" 2>/dev/null | jq -r '.data[0].count.id // 0')
+          if [ "$UE_COUNT" -gt 0 ] 2>/dev/null; then
+            echo "OK ($UE_COUNT edges)"
+          else
+            echo "FAIL ($UE_COUNT edges — expected >0)"
+            FAILED=1
+          fi
+
+          echo -n "lifecycle_log............ "
+          LL_COUNT=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/items/lifecycle_log?aggregate%5Bcount%5D=id" 2>/dev/null | jq -r '.data[0].count.id // 0')
+          if [ "$LL_COUNT" -gt 0 ] 2>/dev/null; then
+            echo "OK ($LL_COUNT entries)"
+          else
+            echo "FAIL ($LL_COUNT entries — expected >0)"
+            FAILED=1
+          fi
+
+          echo -n "universal_rule_registry.. "
+          URR_COUNT=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/items/universal_rule_registry?aggregate%5Bcount%5D=id" 2>/dev/null | jq -r '.data[0].count.id // 0')
+          if [ "$URR_COUNT" -eq 10 ] 2>/dev/null; then
+            echo "OK ($URR_COUNT rules)"
+          else
+            echo "WARN ($URR_COUNT rules — expected 10)"
+          fi
+
+          echo -n "Registries page.......... "
+          REG_HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$WEBSITE_URL/knowledge/registries" 2>/dev/null || echo "000")
+          REG_CONTENT=$(curl -s --max-time 15 "$WEBSITE_URL/knowledge/registries" 2>/dev/null | grep -c "CAT-0" || echo "0")
+          if [ "$REG_HTTP" = "200" ] && [ "$REG_CONTENT" -gt 0 ] 2>/dev/null; then
+            echo "OK (HTTP $REG_HTTP, $REG_CONTENT CAT codes)"
+          else
+            echo "FAIL (HTTP $REG_HTTP, $REG_CONTENT CAT codes)"
+            FAILED=1
+          fi
+
+          if [ $FAILED -ne 0 ]; then echo "::error::CHECK 12 FAILED — PG data integrity issue"; exit 1; fi
+          echo "CHECK 12: PASS"
+
       - name: Summary
         if: always()
         run: |
@@ -434,7 +499,7 @@ jobs:
           echo "========================================"
           echo "  HEALTH CHECK COMPLETE"
           echo "========================================"
-          echo "  Checks: Services, Data, Content, Cache, Search, Flows, Structure, Sync, Registry, Quality, Rules"
+          echo "  Checks: Services, Data, Content, Cache, Search, Flows, Structure, Sync, Registry, Quality, Rules, PG-Integrity"
           echo "  VPS: $VPS_AGENT_DATA_URL"
           echo "  Web: $WEBSITE_URL"
           echo "========================================"
