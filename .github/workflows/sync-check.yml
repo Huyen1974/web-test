@@ -376,6 +376,56 @@ jobs:
           if [ $FAILED -ne 0 ]; then echo "::error::CHECK 10 FAILED — counting or data integrity issue"; exit 1; fi
           echo "CHECK 10: PASS"
 
+      - name: "CHECK 11 — Universal Rules Engine"
+        run: |
+          echo "=== CHECK 11: Universal Rules Engine ==="
+
+          # Read latest run from Directus
+          LATEST_RUN=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/items/universal_rule_runs?sort=-id&limit=1" 2>/dev/null)
+          RUN_ID=$(echo "$LATEST_RUN" | jq -r '.data[0].id // 0')
+          RUN_STATUS=$(echo "$LATEST_RUN" | jq -r '.data[0].status // "none"')
+          TOTAL_V=$(echo "$LATEST_RUN" | jq -r '.data[0].total_violations // -1')
+          TRIGGERED=$(echo "$LATEST_RUN" | jq -r '.data[0].triggered_by // "unknown"')
+
+          if [ "$RUN_ID" = "0" ] || [ "$RUN_STATUS" = "none" ]; then
+            echo "  ⚠ No rule runs found — engine not yet triggered"
+            echo "CHECK 11: WARN (no data)"
+          else
+            echo "  Latest run: #$RUN_ID ($RUN_STATUS) — $TOTAL_V violations — by $TRIGGERED"
+            echo ""
+
+            # Read per-rule results
+            RESULTS=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/items/universal_rule_run_results?filter[run_id][_eq]=$RUN_ID&sort=rule_number" 2>/dev/null)
+            RULE_NAMES=$(curl -s --max-time 15 "$VPS_DIRECTUS_URL/items/universal_rule_registry?sort=rule_number&fields=rule_number,rule_name,is_blocking" 2>/dev/null)
+
+            BLOCKING_VIOLATIONS=0
+            for i in $(seq 0 9); do
+              RNUM=$(echo "$RESULTS" | jq -r ".data[$i].rule_number // \"\"")
+              if [ -z "$RNUM" ]; then continue; fi
+              VFOUND=$(echo "$RESULTS" | jq -r ".data[$i].violations_found // 0")
+              SEV=$(echo "$RESULTS" | jq -r ".data[$i].severity // \"\"")
+              RNAME=$(echo "$RULE_NAMES" | jq -r ".data[] | select(.rule_number == $RNUM) | .rule_name // \"Rule $RNUM\"")
+              BLOCKING=$(echo "$RULE_NAMES" | jq -r ".data[] | select(.rule_number == $RNUM) | .is_blocking // false")
+
+              if [ "$VFOUND" = "0" ]; then
+                echo "  ✓ Rule $RNUM ($RNAME): 0 violations"
+              elif [ "$BLOCKING" = "true" ] && [ "$VFOUND" -gt 0 ] 2>/dev/null; then
+                echo "  ⚠ Rule $RNUM ($RNAME): $VFOUND violations [$SEV] [BLOCKING]"
+                BLOCKING_VIOLATIONS=$((BLOCKING_VIOLATIONS + VFOUND))
+              else
+                echo "  ℹ Rule $RNUM ($RNAME): $VFOUND violations [$SEV]"
+              fi
+            done
+
+            echo ""
+            if [ "$BLOCKING_VIOLATIONS" -gt 0 ]; then
+              echo "  WARN: $BLOCKING_VIOLATIONS blocking violations (Phase 2 backfill pending)"
+            else
+              echo "  All blocking rules clean"
+            fi
+            echo "CHECK 11: PASS (INFO — rules engine operational)"
+          fi
+
       - name: Summary
         if: always()
         run: |
@@ -383,7 +433,7 @@ jobs:
           echo "========================================"
           echo "  HEALTH CHECK COMPLETE"
           echo "========================================"
-          echo "  Checks: Services, Data, Content, Cache, Search, Flows, Structure, Sync, Registry, Quality"
+          echo "  Checks: Services, Data, Content, Cache, Search, Flows, Structure, Sync, Registry, Quality, Rules"
           echo "  VPS: $VPS_AGENT_DATA_URL"
           echo "  Web: $WEBSITE_URL"
           echo "========================================"
