@@ -330,6 +330,22 @@ const { data: dotToolsCount } = useAsyncData(
 			</p>
 		</div>
 
+		<!-- Quick links -->
+		<div class="mb-6 flex flex-wrap gap-3">
+			<NuxtLink to="/knowledge/registries/all">
+				<UBadge color="blue" variant="subtle" size="sm" class="cursor-pointer hover:opacity-80">All Entities</UBadge>
+			</NuxtLink>
+			<NuxtLink to="/knowledge/registries/taxonomy">
+				<UBadge color="orange" variant="subtle" size="sm" class="cursor-pointer hover:opacity-80">Taxonomy 6x6</UBadge>
+			</NuxtLink>
+			<NuxtLink to="/knowledge/registries/matrix">
+				<UBadge color="purple" variant="subtle" size="sm" class="cursor-pointer hover:opacity-80">Entity Matrix</UBadge>
+			</NuxtLink>
+			<NuxtLink to="/knowledge/registries/changelog">
+				<UBadge color="gray" variant="subtle" size="sm" class="cursor-pointer hover:opacity-80">Changelog</UBadge>
+			</NuxtLink>
+		</div>
+
 		<!-- Unified registry table: summaries + details -->
 		<UTable :columns="columns" :rows="tableRows" @select="onRowClick">
 			<template #cell-stt="{ row }">
