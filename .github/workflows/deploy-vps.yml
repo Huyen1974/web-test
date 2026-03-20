@@ -24,6 +24,8 @@ permissions:
 env:
   REGION: asia-southeast1
   PROJECT_ID: github-chatgpt-ggcloud
+  # NOTE: Artifact Registry images below are LEGACY (API disabled S154).
+  # Active deploy uses DEPLOY_MODE=direct (rsync to VPS, no image pull).
   NUXT_IMAGE: asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/web-test/nuxt-ssr:latest
   AGENT_DATA_IMAGE: asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/agent-data/agent-data-test:latest
 
