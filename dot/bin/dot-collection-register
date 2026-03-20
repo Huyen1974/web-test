@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-collection-register — Register a collection in collection_registry
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-*register* — no collection register tool]
+# VERSION: 1.0.0
+# §0-E DOT-FIRST: All governance declarations MUST go through DOT tools.
+#
+# Usage:
+#   dot-collection-register <collection_name> [options]
+#
+# Options:
+#   --storage_role X      primary|junction|log|system
+#   --governance_role Y   governed|observed|excluded
+#   --source_kind Z       registry|native|derived|policy
+#   --migration_state W   unclassified|classified|pilot|stable (default: unclassified)
+#   --description D       Description text
+#   --cloud|--local       Environment selection
+#   --dry-run             Show what would be done
+#   --help, -h            Show help
+#
+# Examples:
+#   dot-collection-register dot_tools --storage_role primary --governance_role governed
+#   dot-collection-register some_table   # → COL-NNN, migration_state=unclassified
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+
+show_help() {
+  cat << 'EOF'
+dot-collection-register v1.0.0 — Register collection in collection_registry
+
+Usage: dot-collection-register <collection_name> [options]
+
+Options:
+  --storage_role X      primary|junction|log|system
+  --governance_role Y   governed|observed|excluded
+  --source_kind Z       registry|native|derived|policy
+  --migration_state W   unclassified|classified|pilot|stable (default: unclassified)
+  --description D       Description text
+  --cloud|--local       Environment
+  --dry-run             Preview mode
+  --help, -h            This help
+
+Idempotent: skips if collection_name already registered.
+Auto-generates code COL-NNN (sequential).
+EOF
+  show_environment_help
+}
+
+main() {
+  local COLLECTION_NAME="" STORAGE_ROLE="" GOVERNANCE_ROLE="" SOURCE_KIND=""
+  local MIGRATION_STATE="unclassified" DESCRIPTION="" DRY_RUN=""
+
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --storage_role) STORAGE_ROLE="$2"; shift 2 ;;
+      --governance_role) GOVERNANCE_ROLE="$2"; shift 2 ;;
+      --source_kind) SOURCE_KIND="$2"; shift 2 ;;
+      --migration_state) MIGRATION_STATE="$2"; shift 2 ;;
+      --description) DESCRIPTION="$2"; shift 2 ;;
+      --dry-run) DRY_RUN="1"; shift ;;
+      --help|-h) show_help; exit 0 ;;
+      --local|--cloud) shift ;;
+      -*) echo "[ERR] Unknown option: $1" >&2; exit 1 ;;
+      *) if [[ -z "$COLLECTION_NAME" ]]; then COLLECTION_NAME="$1"; fi; shift ;;
+    esac
+  done
+
+  if [[ -z "$COLLECTION_NAME" ]]; then
+    echo "[ERR] collection_name is required" >&2
+    echo "Usage: dot-collection-register <collection_name> [options]" >&2
+    exit 1
+  fi
+
+  init_environment "$@" 2>/dev/null || init_environment
+  local BASE_URL="$DIRECTUS_URL"
+
+  # Auth
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    source "${SCRIPT_DIR}/dot-auth" "$@" 2>/dev/null || source "${SCRIPT_DIR}/dot-auth"
+  fi
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    echo "[ERR] Authentication failed" >&2; exit 1
+  fi
+
+  # Check if already registered
+  local CHECK_RESP CHECK_CODE
+  CHECK_RESP=$(curl -sS --globoff -k -X GET \
+    "${BASE_URL}/items/collection_registry?filter[name][_eq]=${COLLECTION_NAME}&fields=id,code,name" \
+    -H "Authorization: Bearer $DOT_TOKEN" -w "\n%{http_code}")
+  CHECK_CODE="${CHECK_RESP##*$'\n'}"
+  local CHECK_BODY="${CHECK_RESP%$'\n'*}"
+
+  if [[ "$CHECK_CODE" == "200" ]]; then
+    local EXISTING
+    EXISTING=$(echo "$CHECK_BODY" | jq '.data | length')
+    if [[ "$EXISTING" -gt 0 ]]; then
+      local EX_CODE
+      EX_CODE=$(echo "$CHECK_BODY" | jq -r '.data[0].code')
+      echo "[SKIP] ${COLLECTION_NAME} already registered as ${EX_CODE}"
+      exit 0
+    fi
+  fi
+
+  # Get next code
+  local LAST_RESP LAST_CODE_NUM
+  LAST_RESP=$(curl -sS --globoff -k -X GET \
+    "${BASE_URL}/items/collection_registry?sort=-code&limit=1&fields=code" \
+    -H "Authorization: Bearer $DOT_TOKEN" -w "\n%{http_code}")
+  local LAST_BODY="${LAST_RESP%$'\n'*}"
+  LAST_CODE_NUM=$(echo "$LAST_BODY" | jq -r '.data[0].code // "COL-000"' | sed 's/COL-//')
+  local NEXT_NUM=$((10#$LAST_CODE_NUM + 1))
+  local NEW_CODE
+  NEW_CODE=$(printf "COL-%03d" "$NEXT_NUM")
+
+  if [[ -n "$DRY_RUN" ]]; then
+    echo "[DRY] Would register ${COLLECTION_NAME} as ${NEW_CODE}"
+    echo "  storage_role=${STORAGE_ROLE:-NULL} governance_role=${GOVERNANCE_ROLE:-NULL}"
+    echo "  source_kind=${SOURCE_KIND:-NULL} migration_state=${MIGRATION_STATE}"
+    exit 0
+  fi
+
+  # Build payload
+  local PAYLOAD
+  PAYLOAD=$(jq -nc \
+    --arg code "$NEW_CODE" \
+    --arg name "$COLLECTION_NAME" \
+    --arg coll "$COLLECTION_NAME" \
+    --arg ms "$MIGRATION_STATE" \
+    --arg desc "$DESCRIPTION" \
+    --arg sr "$STORAGE_ROLE" \
+    --arg gr "$GOVERNANCE_ROLE" \
+    --arg sk "$SOURCE_KIND" \
+    '{
+      code: $code,
+      name: $name,
+      collection_name: $coll,
+      status: "active",
+      migration_state: $ms
+    }
+    + (if $desc != "" then {description: $desc} else {} end)
+    + (if $sr != "" then {storage_role: $sr} else {} end)
+    + (if $gr != "" then {governance_role: $gr} else {} end)
+    + (if $sk != "" then {source_kind: $sk} else {} end)')
+
+  local RESP RESP_CODE
+  RESP=$(curl -sS --globoff -k -X POST "${BASE_URL}/items/collection_registry" \
+    -H "Authorization: Bearer $DOT_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "$PAYLOAD" -w "\n%{http_code}")
+  RESP_CODE="${RESP##*$'\n'}"
+
+  if [[ "$RESP_CODE" == "200" ]]; then
+    echo "[OK] Registered ${COLLECTION_NAME} as ${NEW_CODE} (migration_state=${MIGRATION_STATE})"
+  else
+    local RESP_BODY="${RESP%$'\n'*}"
+    echo "[ERR] Failed to register ${COLLECTION_NAME}: HTTP ${RESP_CODE}" >&2
+    echo "$RESP_BODY" | head -c 200 >&2
+    exit 1
+  fi
+}
+
+main "$@"

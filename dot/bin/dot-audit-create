@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-audit-create — Create record in entity_audit_queue
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-*audit* — no audit create tool]
+# VERSION: 1.0.0
+# §0-E DOT-FIRST: All governance declarations MUST go through DOT tools.
+#
+# Usage:
+#   dot-audit-create <collection_name> <record_id> <issue_type> [options]
+#
+# issue_type: unknown_species | wrong_collection | missing_code | stale_zombie
+#
+# Options:
+#   --species_guess S     Guessed species code
+#   --reason R            Reason/context for the audit
+#   --cloud|--local       Environment
+#   --dry-run             Preview mode
+#   --help, -h            Show help
+#
+# Examples:
+#   dot-audit-create dot_tools DOT-999 unknown_species --reason "Cannot resolve species"
+#   dot-audit-create tasks TASK-001 missing_code --species_guess task
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+
+show_help() {
+  cat << 'EOF'
+dot-audit-create v1.0.0 — Create entity audit queue record
+
+Usage: dot-audit-create <collection_name> <record_id> <issue_type> [options]
+
+Positional:
+  collection_name   Source collection
+  record_id         Record identifier
+  issue_type        unknown_species|wrong_collection|missing_code|stale_zombie
+
+Options:
+  --species_guess S   Best guess for species
+  --reason R          Audit reason
+  --cloud|--local     Environment
+  --dry-run           Preview mode
+  --help, -h          This help
+EOF
+  show_environment_help
+}
+
+main() {
+  local COLLECTION_NAME="" RECORD_ID="" ISSUE_TYPE=""
+  local SPECIES_GUESS="" REASON="" DRY_RUN=""
+  local POSITIONAL=()
+
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --species_guess) SPECIES_GUESS="$2"; shift 2 ;;
+      --reason) REASON="$2"; shift 2 ;;
+      --dry-run) DRY_RUN="1"; shift ;;
+      --help|-h) show_help; exit 0 ;;
+      --local|--cloud) shift ;;
+      -*) echo "[ERR] Unknown option: $1" >&2; exit 1 ;;
+      *) POSITIONAL+=("$1"); shift ;;
+    esac
+  done
+
+  if [[ ${#POSITIONAL[@]} -lt 3 ]]; then
+    echo "[ERR] 3 positional args required: collection_name record_id issue_type" >&2
+    exit 1
+  fi
+
+  COLLECTION_NAME="${POSITIONAL[0]}"
+  RECORD_ID="${POSITIONAL[1]}"
+  ISSUE_TYPE="${POSITIONAL[2]}"
+
+  # Validate issue_type
+  case "$ISSUE_TYPE" in
+    unknown_species|wrong_collection|missing_code|stale_zombie) ;;
+    *) echo "[ERR] Invalid issue_type: $ISSUE_TYPE (must be unknown_species|wrong_collection|missing_code|stale_zombie)" >&2; exit 1 ;;
+  esac
+
+  init_environment "$@" 2>/dev/null || init_environment
+  local BASE_URL="$DIRECTUS_URL"
+
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    source "${SCRIPT_DIR}/dot-auth" "$@" 2>/dev/null || source "${SCRIPT_DIR}/dot-auth"
+  fi
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    echo "[ERR] Authentication failed" >&2; exit 1
+  fi
+
+  if [[ -n "$DRY_RUN" ]]; then
+    echo "[DRY] Would create audit: ${COLLECTION_NAME}/${RECORD_ID} type=${ISSUE_TYPE} guess=${SPECIES_GUESS:-NULL}"
+    exit 0
+  fi
+
+  local PAYLOAD
+  PAYLOAD=$(jq -nc \
+    --arg cn "$COLLECTION_NAME" \
+    --arg ri "$RECORD_ID" \
+    --arg it "$ISSUE_TYPE" \
+    --arg sg "$SPECIES_GUESS" \
+    --arg rc "$REASON" \
+    '{
+      collection_name: $cn,
+      record_id: $ri,
+      issue_type: $it,
+      audit_status: "open"
+    }
+    + (if $sg != "" then {species_guess: $sg} else {} end)
+    + (if $rc != "" then {audit_reason_code: $rc} else {} end)')
+
+  local RESP RESP_CODE
+  RESP=$(curl -sS --globoff -k -X POST "${BASE_URL}/items/entity_audit_queue" \
+    -H "Authorization: Bearer $DOT_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "$PAYLOAD" -w "\n%{http_code}")
+  RESP_CODE="${RESP##*$'\n'}"
+
+  if [[ "$RESP_CODE" == "200" ]]; then
+    local NEW_ID
+    NEW_ID=$(echo "${RESP%$'\n'*}" | jq -r '.data.id')
+    echo "[OK] Created audit #${NEW_ID}: ${COLLECTION_NAME}/${RECORD_ID} (${ISSUE_TYPE})"
+  else
+    local RESP_BODY="${RESP%$'\n'*}"
+    echo "[ERR] Failed: HTTP ${RESP_CODE}" >&2
+    echo "$RESP_BODY" | head -c 200 >&2
+    exit 1
+  fi
+}
+
+main "$@"
