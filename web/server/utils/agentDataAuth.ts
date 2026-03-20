@@ -93,9 +93,9 @@ export async function buildAgentDataHeaders(baseUrl: string, apiKey?: string): P
 	//
 	// // Method 3: API key fallback (may not work for Cloud Run IAM)
 
-	// VPS: use API key auth
+	// VPS: use API key auth (X-API-Key header for Agent Data)
 	if (apiKey) {
-		headers['Authorization'] = `Bearer ${apiKey}`;
+		headers['X-API-Key'] = apiKey;
 	}
 
 	return headers;
