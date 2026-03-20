@@ -1,0 +1,758 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-schema-species-ensure — S153: Schema Contract for Species Collection Law
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-schema-*species* — none found]
+# VERSION: 1.0.0
+#
+# Creates 3 new collections:
+#   - entity_species       (Species ontology SSOT)
+#   - species_collection_map (Species ↔ Collection mapping)
+#   - entity_audit_queue   (Soft enforcement audit queue)
+#
+# Adds 4 fields to existing collection_registry:
+#   - storage_role, governance_role, source_kind, migration_state
+#
+# Registers 3 new entries in meta_catalog.
+#
+# CHỈ SCHEMA + META. Không data. Không trigger. Không business logic.
+#
+# Usage:
+#   dot-schema-species-ensure [--cloud|--local] [--dry-run]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+DRY_RUN=""
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-schema-species-ensure v${VERSION} — S153 Schema Contract
+
+Creates: entity_species, species_collection_map, entity_audit_queue
+Extends: collection_registry (+4 fields)
+Registers: 3 entries in meta_catalog
+
+Usage:
+  dot-schema-species-ensure [--cloud|--local] [--dry-run]
+
+EOF
+  show_environment_help
+}
+
+main() {
+  for arg in "$@"; do
+    case "$arg" in
+      --dry-run) DRY_RUN="1" ;;
+      --help|-h) show_help; exit 0 ;;
+    esac
+  done
+
+  init_environment "$@"
+  local BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: Schema Species Ensure v${VERSION}"
+  echo "S153: Schema Contract — Luật Loài"
+  echo "========================================="
+  print_environment_banner "$@"
+
+  # Auth
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    source "${SCRIPT_DIR}/dot-auth" "$@"
+  fi
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "Authentication failed"; exit 1
+  fi
+
+  local tmp_py
+  tmp_py=$(mktemp /tmp/dot-species-schema-XXXXXX.py)
+  trap "rm -f '$tmp_py'" EXIT
+
+  cat > "$tmp_py" << 'PYEOF'
+import json, os, sys, ssl, urllib.request
+
+base_url = os.environ['BASE_URL']
+token = os.environ['DOT_TOKEN']
+dry_run = os.environ.get('DRY_RUN', '')
+
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+def api(method, path, data=None):
+    url = f'{base_url}{path}'
+    payload = json.dumps(data).encode() if data else None
+    req = urllib.request.Request(url, data=payload, method=method,
+        headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'})
+    try:
+        resp = urllib.request.urlopen(req, context=ctx)
+        return resp.status, json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        try:
+            return e.code, json.loads(body)
+        except:
+            return e.code, {'error': body[:200]}
+
+def collection_exists(name):
+    code, data = api('GET', f'/collections/{name}')
+    return code == 200
+
+def field_exists(coll, field):
+    code, data = api('GET', f'/fields/{coll}/{field}')
+    return code == 200
+
+def create_collection(name, meta_config, init_fields):
+    if collection_exists(name):
+        print(f'  [SKIP] Collection {name} already exists')
+        return True
+    if dry_run:
+        print(f'  [DRY] Would create collection {name}')
+        return True
+    payload = {
+        'collection': name,
+        'schema': {},
+        'meta': meta_config,
+        'fields': init_fields
+    }
+    code, resp = api('POST', '/collections', payload)
+    if code == 200:
+        print(f'  [OK]   Created collection {name}')
+        return True
+    else:
+        print(f'  [ERR]  Failed to create {name}: HTTP {code} — {json.dumps(resp)[:200]}')
+        return False
+
+def ensure_field(coll, field_name, field_type, meta_extra=None, schema_extra=None):
+    if field_exists(coll, field_name):
+        print(f'  [SKIP] {coll}.{field_name} exists')
+        return True
+    if dry_run:
+        print(f'  [DRY] Would create {coll}.{field_name} ({field_type})')
+        return True
+    payload = {
+        'field': field_name,
+        'type': field_type,
+        'meta': {'required': False, 'readonly': False, 'hidden': False, 'searchable': False},
+        'schema': {'is_nullable': True}
+    }
+    if meta_extra:
+        payload['meta'].update(meta_extra)
+    if schema_extra:
+        payload['schema'].update(schema_extra)
+    code, resp = api('POST', f'/fields/{coll}', payload)
+    if code == 200:
+        print(f'  [OK]   Created {coll}.{field_name}')
+        return True
+    else:
+        print(f'  [ERR]  Failed {coll}.{field_name}: HTTP {code} — {json.dumps(resp)[:150]}')
+        return False
+
+def ensure_permissions(coll, policy_id, actions):
+    for action in actions:
+        if dry_run:
+            print(f'  [DRY] Would set permission {coll}/{action} for policy {policy_id[:8]}')
+            continue
+        payload = {
+            'collection': coll,
+            'action': action,
+            'policy': policy_id,
+            'fields': ['*'],
+            'permissions': {},
+            'validation': {}
+        }
+        code, resp = api('POST', '/permissions', payload)
+        if code == 200:
+            print(f'  [OK]   Permission {coll}/{action} for {policy_id[:8]}')
+        elif code == 400:
+            print(f'  [SKIP] Permission {coll}/{action} already exists')
+        else:
+            print(f'  [WARN] Permission {coll}/{action}: HTTP {code}')
+
+def ensure_public_read(coll):
+    """Use PUBLIC_POLICY for public read access (Directus 11 style)."""
+    if dry_run:
+        print(f'  [DRY] Would set public read for {coll}')
+        return
+    payload = {
+        'collection': coll,
+        'action': 'read',
+        'policy': PUBLIC_POLICY,
+        'fields': ['*'],
+        'permissions': {},
+        'validation': {}
+    }
+    code, resp = api('POST', '/permissions', payload)
+    if code == 200:
+        print(f'  [OK]   Public READ for {coll}')
+    elif code == 400:
+        print(f'  [SKIP] Public READ for {coll} already exists')
+    else:
+        print(f'  [WARN] Public READ for {coll}: HTTP {code}')
+
+# Policy IDs
+PUBLIC_POLICY = 'a513bc9d-b5df-47c4-9b6e-31da6a3b71b0'
+AI_AGENT_POLICY = 'e81a70bc-21d3-4f30-856e-686608a2023b'
+
+# Standard Directus system fields (id + timestamps)
+SYSTEM_FIELDS = [
+    {'field': 'id', 'type': 'integer',
+     'meta': {'hidden': True, 'interface': 'input', 'readonly': True, 'searchable': False},
+     'schema': {'is_primary_key': True, 'has_auto_increment': True}},
+    {'field': 'sort', 'type': 'integer',
+     'meta': {'hidden': True, 'readonly': False, 'searchable': False}, 'schema': {}},
+    {'field': 'user_created', 'type': 'uuid',
+     'meta': {'special': ['user-created'], 'interface': 'select-dropdown-m2o',
+              'display': 'user', 'readonly': True, 'hidden': True, 'width': 'half', 'searchable': False},
+     'schema': {}},
+    {'field': 'date_created', 'type': 'timestamp',
+     'meta': {'special': ['date-created'], 'interface': 'datetime',
+              'display': 'datetime', 'readonly': True, 'hidden': True, 'width': 'half', 'searchable': False},
+     'schema': {}},
+    {'field': 'user_updated', 'type': 'uuid',
+     'meta': {'special': ['user-updated'], 'interface': 'select-dropdown-m2o',
+              'display': 'user', 'readonly': True, 'hidden': True, 'width': 'half', 'searchable': False},
+     'schema': {}},
+    {'field': 'date_updated', 'type': 'timestamp',
+     'meta': {'special': ['date-updated'], 'interface': 'datetime',
+              'display': 'datetime', 'readonly': True, 'hidden': True, 'width': 'half', 'searchable': False},
+     'schema': {}},
+]
+
+# ============================================================
+# STEP 1: Create entity_species
+# ============================================================
+print('=' * 60)
+print('STEP 1: Create entity_species')
+print('=' * 60)
+print()
+
+entity_species_meta = {
+    'collection': 'entity_species',
+    'icon': 'category',
+    'note': 'Species ontology SSOT — Luat Loai v0.5. Moi doi tuong governance phai resolve dung 1 species.',
+    'display_template': '{{code}} — {{display_name}} [{{status}}]',
+    'sort_field': 'code',
+    'hidden': False,
+    'singleton': False,
+    'accountability': 'all',
+    'translations': None,
+    'archive_field': None,
+    'archive_app_filter': True,
+    'archive_value': None,
+    'unarchive_value': None,
+    'sort': None,
+    'group': None,
+    'collapse': 'open',
+    'color': None,
+    'item_duplication_fields': None,
+    'preview_url': None,
+    'versioning': False
+}
+
+ok = create_collection('entity_species', entity_species_meta, SYSTEM_FIELDS)
+if ok:
+    # code — unique species code like SPE-DOT
+    ensure_field('entity_species', 'code', 'string',
+        {'required': True, 'interface': 'input', 'width': 'half',
+         'note': 'Unique species code (e.g. SPE-DOT, SPE-WKF)'},
+        {'is_unique': True, 'is_nullable': False})
+
+    # species_code — machine-readable IMMUTABLE identifier
+    ensure_field('entity_species', 'species_code', 'string',
+        {'required': True, 'interface': 'input', 'width': 'half',
+         'note': 'Machine-readable IMMUTABLE identifier (e.g. dot_tool, workflow)'},
+        {'is_unique': True, 'is_nullable': False})
+
+    # display_name
+    ensure_field('entity_species', 'display_name', 'string',
+        {'required': True, 'interface': 'input', 'width': 'half',
+         'note': 'Human-readable name (e.g. "DOT Tool", "Quy trinh")'},
+        {'is_nullable': False})
+
+    # composition_level
+    ensure_field('entity_species', 'composition_level', 'string',
+        {'required': True, 'interface': 'select-dropdown', 'width': 'half',
+         'note': 'Complexity level in composition hierarchy',
+         'options': {'choices': [
+             {'text': 'Atom', 'value': 'atom'},
+             {'text': 'Molecule', 'value': 'molecule'},
+             {'text': 'Compound', 'value': 'compound'},
+             {'text': 'Material', 'value': 'material'},
+             {'text': 'Product', 'value': 'product'},
+             {'text': 'Building', 'value': 'building'},
+         ]}},
+        {'is_nullable': False})
+
+    # management_mode
+    ensure_field('entity_species', 'management_mode', 'string',
+        {'required': True, 'interface': 'select-dropdown', 'width': 'half',
+         'note': 'Governance mode: governed/observed/excluded',
+         'options': {'choices': [
+             {'text': 'Governed', 'value': 'governed'},
+             {'text': 'Observed', 'value': 'observed'},
+             {'text': 'Excluded', 'value': 'excluded'},
+         ]}},
+        {'is_nullable': False, 'default_value': 'governed'})
+
+    # prefix
+    ensure_field('entity_species', 'prefix', 'string',
+        {'interface': 'input', 'width': 'half',
+         'note': 'Entity code prefix (e.g. DOT-, WKF-)'},
+        None)
+
+    # description
+    ensure_field('entity_species', 'description', 'text',
+        {'interface': 'input-multiline', 'width': 'full',
+         'note': 'Species description and purpose'},
+        None)
+
+    # status
+    ensure_field('entity_species', 'status', 'string',
+        {'required': True, 'interface': 'select-dropdown', 'width': 'half',
+         'note': 'Lifecycle status',
+         'options': {'choices': [
+             {'text': 'Active', 'value': 'active'},
+             {'text': 'Deprecated', 'value': 'deprecated'},
+             {'text': 'Retired', 'value': 'retired'},
+         ]}},
+        {'is_nullable': False, 'default_value': 'active'})
+
+    # _dot_origin — DOT provenance tracking
+    ensure_field('entity_species', '_dot_origin', 'string',
+        {'interface': 'input', 'width': 'half', 'hidden': True,
+         'note': 'DOT tool provenance'},
+        None)
+
+print()
+
+# ============================================================
+# STEP 2: Create species_collection_map
+# ============================================================
+print('=' * 60)
+print('STEP 2: Create species_collection_map')
+print('=' * 60)
+print()
+
+scm_meta = {
+    'collection': 'species_collection_map',
+    'icon': 'hub',
+    'note': 'Mapping species to collections — Luat Loai v0.5. Junction table.',
+    'display_template': '{{species_code}} → {{collection_name}}',
+    'sort_field': 'species_code',
+    'hidden': False,
+    'singleton': False,
+    'accountability': 'all',
+    'translations': None,
+    'archive_field': None,
+    'archive_app_filter': True,
+    'archive_value': None,
+    'unarchive_value': None,
+    'sort': None,
+    'group': None,
+    'collapse': 'open',
+    'color': None,
+    'item_duplication_fields': None,
+    'preview_url': None,
+    'versioning': False
+}
+
+ok = create_collection('species_collection_map', scm_meta, SYSTEM_FIELDS)
+if ok:
+    # species_code — FK to entity_species (logical, not enforced via Directus M2O for now)
+    ensure_field('species_collection_map', 'species_code', 'string',
+        {'required': True, 'interface': 'input', 'width': 'half',
+         'note': 'Species code (FK -> entity_species.species_code)'},
+        {'is_nullable': False})
+
+    # collection_name
+    ensure_field('species_collection_map', 'collection_name', 'string',
+        {'required': True, 'interface': 'input', 'width': 'half',
+         'note': 'Directus collection name'},
+        {'is_nullable': False})
+
+    # is_primary
+    ensure_field('species_collection_map', 'is_primary', 'boolean',
+        {'interface': 'boolean', 'width': 'half',
+         'note': 'Is this the primary collection for the species?'},
+        {'default_value': True, 'is_nullable': False})
+
+    # discriminator_field
+    ensure_field('species_collection_map', 'discriminator_field', 'string',
+        {'interface': 'input', 'width': 'half',
+         'note': 'Field used to distinguish species in multi-species collections'},
+        None)
+
+    # discriminator_value
+    ensure_field('species_collection_map', 'discriminator_value', 'string',
+        {'interface': 'input', 'width': 'half',
+         'note': 'Simple discriminator value'},
+        None)
+
+    # discriminator_operator
+    ensure_field('species_collection_map', 'discriminator_operator', 'string',
+        {'interface': 'select-dropdown', 'width': 'half',
+         'note': 'Discriminator comparison operator',
+         'options': {'choices': [
+             {'text': 'Equal', 'value': 'eq'},
+             {'text': 'Not Equal', 'value': 'neq'},
+             {'text': 'Regex', 'value': 'regex'},
+             {'text': 'In', 'value': 'in'},
+             {'text': 'Not Null', 'value': 'not_null'},
+         ]}},
+        None)
+
+    # discriminator_config — complex discriminator rules
+    ensure_field('species_collection_map', 'discriminator_config', 'json',
+        {'interface': 'input-code', 'width': 'full',
+         'note': 'Complex discriminator config (JSON)',
+         'options': {'language': 'json'}},
+        None)
+
+print()
+
+# ============================================================
+# STEP 3: Create entity_audit_queue
+# ============================================================
+print('=' * 60)
+print('STEP 3: Create entity_audit_queue')
+print('=' * 60)
+print()
+
+eaq_meta = {
+    'collection': 'entity_audit_queue',
+    'icon': 'fact_check',
+    'note': 'Soft enforcement audit queue — Luat Loai v0.5. Records that cannot auto-resolve species.',
+    'display_template': '{{collection_name}}/{{record_id}} — {{issue_type}} [{{audit_status}}]',
+    'sort_field': 'id',
+    'hidden': False,
+    'singleton': False,
+    'accountability': 'all',
+    'translations': None,
+    'archive_field': None,
+    'archive_app_filter': True,
+    'archive_value': None,
+    'unarchive_value': None,
+    'sort': None,
+    'group': None,
+    'collapse': 'open',
+    'color': None,
+    'item_duplication_fields': None,
+    'preview_url': None,
+    'versioning': False
+}
+
+ok = create_collection('entity_audit_queue', eaq_meta, SYSTEM_FIELDS)
+if ok:
+    # collection_name
+    ensure_field('entity_audit_queue', 'collection_name', 'string',
+        {'required': True, 'interface': 'input', 'width': 'half',
+         'note': 'Source collection name'},
+        {'is_nullable': False})
+
+    # record_id
+    ensure_field('entity_audit_queue', 'record_id', 'string',
+        {'required': True, 'interface': 'input', 'width': 'half',
+         'note': 'Record ID in source collection'},
+        {'is_nullable': False})
+
+    # species_guess
+    ensure_field('entity_audit_queue', 'species_guess', 'string',
+        {'interface': 'input', 'width': 'half',
+         'note': 'Auto/agent guess for species (nullable)'},
+        None)
+
+    # issue_type
+    ensure_field('entity_audit_queue', 'issue_type', 'string',
+        {'required': True, 'interface': 'select-dropdown', 'width': 'half',
+         'note': 'Type of audit issue',
+         'options': {'choices': [
+             {'text': 'Unknown Species', 'value': 'unknown_species'},
+             {'text': 'Wrong Collection', 'value': 'wrong_collection'},
+             {'text': 'Missing Code', 'value': 'missing_code'},
+             {'text': 'Stale Zombie', 'value': 'stale_zombie'},
+         ]}},
+        {'is_nullable': False})
+
+    # audit_status
+    ensure_field('entity_audit_queue', 'audit_status', 'string',
+        {'required': True, 'interface': 'select-dropdown', 'width': 'half',
+         'note': 'Current audit status',
+         'options': {'choices': [
+             {'text': 'Open', 'value': 'open'},
+             {'text': 'Auto Resolved', 'value': 'auto_resolved'},
+             {'text': 'Agent Proposed', 'value': 'agent_proposed'},
+             {'text': 'Human Finalized', 'value': 'human_finalized'},
+             {'text': 'Unknown Garbage', 'value': 'unknown_garbage'},
+         ]}},
+        {'is_nullable': False, 'default_value': 'open'})
+
+    # audit_owner
+    ensure_field('entity_audit_queue', 'audit_owner', 'string',
+        {'interface': 'input', 'width': 'half',
+         'note': 'Assigned owner/agent for resolution'},
+        None)
+
+    # audit_deadline
+    ensure_field('entity_audit_queue', 'audit_deadline', 'timestamp',
+        {'interface': 'datetime', 'width': 'half',
+         'note': 'SLA deadline (>7 days = auto Unknown_Garbage)'},
+        None)
+
+    # audit_reason_code
+    ensure_field('entity_audit_queue', 'audit_reason_code', 'string',
+        {'interface': 'input', 'width': 'half',
+         'note': 'Reason code for audit resolution'},
+        None)
+
+    # resolved_at
+    ensure_field('entity_audit_queue', 'resolved_at', 'timestamp',
+        {'interface': 'datetime', 'width': 'half',
+         'note': 'When the audit was resolved'},
+        None)
+
+print()
+
+# ============================================================
+# STEP 4: Add 4 fields to collection_registry
+# ============================================================
+print('=' * 60)
+print('STEP 4: Extend collection_registry (+4 fields)')
+print('=' * 60)
+print()
+
+if not collection_exists('collection_registry'):
+    print('  [ERR]  collection_registry does not exist! Cannot add fields.')
+else:
+    # storage_role
+    ensure_field('collection_registry', 'storage_role', 'string',
+        {'interface': 'select-dropdown', 'width': 'half',
+         'note': 'Storage classification: primary/junction/log/system',
+         'options': {'choices': [
+             {'text': 'Primary', 'value': 'primary'},
+             {'text': 'Junction', 'value': 'junction'},
+             {'text': 'Log', 'value': 'log'},
+             {'text': 'System', 'value': 'system'},
+         ]}},
+        None)
+
+    # governance_role
+    ensure_field('collection_registry', 'governance_role', 'string',
+        {'interface': 'select-dropdown', 'width': 'half',
+         'note': 'Governance level: governed/observed/excluded',
+         'options': {'choices': [
+             {'text': 'Governed', 'value': 'governed'},
+             {'text': 'Observed', 'value': 'observed'},
+             {'text': 'Excluded', 'value': 'excluded'},
+         ]}},
+        None)
+
+    # source_kind
+    ensure_field('collection_registry', 'source_kind', 'string',
+        {'interface': 'select-dropdown', 'width': 'half',
+         'note': 'Data source classification: registry/native/derived/policy',
+         'options': {'choices': [
+             {'text': 'Registry', 'value': 'registry'},
+             {'text': 'Native', 'value': 'native'},
+             {'text': 'Derived', 'value': 'derived'},
+             {'text': 'Policy', 'value': 'policy'},
+         ]}},
+        None)
+
+    # migration_state
+    ensure_field('collection_registry', 'migration_state', 'string',
+        {'interface': 'select-dropdown', 'width': 'half',
+         'note': 'Species migration progress: unclassified/classified/pilot/stable',
+         'options': {'choices': [
+             {'text': 'Unclassified', 'value': 'unclassified'},
+             {'text': 'Classified', 'value': 'classified'},
+             {'text': 'Pilot', 'value': 'pilot'},
+             {'text': 'Stable', 'value': 'stable'},
+         ]}},
+        {'default_value': 'unclassified'})
+
+print()
+
+# ============================================================
+# STEP 5: Set permissions
+# ============================================================
+print('=' * 60)
+print('STEP 5: Set permissions')
+print('=' * 60)
+print()
+
+new_collections = ['entity_species', 'species_collection_map', 'entity_audit_queue']
+for coll in new_collections:
+    print(f'--- {coll} ---')
+    # Public read for entity_species and entity_audit_queue
+    if coll in ('entity_species', 'entity_audit_queue'):
+        ensure_public_read(coll)
+    # AI Agent CRUD for all
+    ensure_permissions(coll, AI_AGENT_POLICY, ['create', 'read', 'update', 'delete'])
+    # Public policy read for species_collection_map too (useful for species resolution)
+    if coll == 'species_collection_map':
+        ensure_public_read(coll)
+    print()
+
+# ============================================================
+# STEP 6: Register in meta_catalog
+# ============================================================
+print('=' * 60)
+print('STEP 6: Register in meta_catalog')
+print('=' * 60)
+print()
+
+meta_entries = [
+    {
+        'code': 'CAT-020',
+        'name': 'Loai thuc the',
+        'name_en': 'Entity Species',
+        'entity_type': 'collection',
+        'source_model': 'A',
+        'source_location': 'Directus:entity_species',
+        'registry_collection': 'entity_species',
+        'sync_script': None,
+        'sync_frequency': 'realtime',
+        'record_count': 0,
+        'active_count': 0,
+        'ui_page': '/knowledge/registries',
+        'status': 'active',
+        'description': 'Species ontology SSOT — phan loai goc nhat cua moi thuc the trong he thong. Luat Loai v0.5.',
+        'layer': 2
+    },
+    {
+        'code': 'CAT-021',
+        'name': 'Species-Collection Map',
+        'name_en': 'Species Collection Map',
+        'entity_type': 'collection',
+        'source_model': 'A',
+        'source_location': 'Directus:species_collection_map',
+        'registry_collection': 'species_collection_map',
+        'sync_script': None,
+        'sync_frequency': 'realtime',
+        'record_count': 0,
+        'active_count': 0,
+        'ui_page': '/knowledge/registries',
+        'status': 'active',
+        'description': 'Junction: mapping giua species va collections. Luat Loai v0.5.',
+        'layer': 2
+    },
+    {
+        'code': 'CAT-022',
+        'name': 'Hang doi kiem dinh',
+        'name_en': 'Entity Audit Queue',
+        'entity_type': 'collection',
+        'source_model': 'A',
+        'source_location': 'Directus:entity_audit_queue',
+        'registry_collection': 'entity_audit_queue',
+        'sync_script': None,
+        'sync_frequency': 'realtime',
+        'record_count': 0,
+        'active_count': 0,
+        'ui_page': '/knowledge/registries',
+        'status': 'active',
+        'description': 'Audit queue cho soft enforcement — records khong auto-resolve species. Luat Loai v0.5.',
+        'layer': 2
+    },
+]
+
+for entry in meta_entries:
+    cat_code = entry['code']
+    # Check if already exists
+    code, resp = api('GET', f'/items/meta_catalog?filter[code][_eq]={cat_code}&fields=id,code')
+    if code == 200 and resp.get('data', []):
+        print(f'  [SKIP] {cat_code} already exists in meta_catalog')
+        continue
+    if dry_run:
+        print(f'  [DRY] Would create {cat_code} in meta_catalog')
+        continue
+    code, resp = api('POST', '/items/meta_catalog', entry)
+    if code == 200:
+        print(f'  [OK]   Created {cat_code} ({entry["name_en"]})')
+    else:
+        print(f'  [ERR]  Failed {cat_code}: HTTP {code} — {json.dumps(resp)[:150]}')
+
+print()
+
+# ============================================================
+# STEP 7: Verify
+# ============================================================
+print('=' * 60)
+print('STEP 7: Verify')
+print('=' * 60)
+print()
+
+errors = 0
+
+# 7.1 Check 3 collections exist
+for coll in ['entity_species', 'species_collection_map', 'entity_audit_queue']:
+    if collection_exists(coll):
+        print(f'  [OK]   Collection {coll} exists')
+    else:
+        print(f'  [FAIL] Collection {coll} MISSING')
+        errors += 1
+
+# 7.2 Check 4 new fields in collection_registry
+for fld in ['storage_role', 'governance_role', 'source_kind', 'migration_state']:
+    if field_exists('collection_registry', fld):
+        print(f'  [OK]   collection_registry.{fld} exists')
+    else:
+        print(f'  [FAIL] collection_registry.{fld} MISSING')
+        errors += 1
+
+# 7.3 Check API access (public read)
+for coll in ['entity_species', 'entity_audit_queue']:
+    try:
+        url = f'{base_url}/items/{coll}?limit=1'
+        req = urllib.request.Request(url, method='GET',
+            headers={'Content-Type': 'application/json'})
+        resp = urllib.request.urlopen(req, context=ctx)
+        if resp.status == 200:
+            print(f'  [OK]   Public read {coll}: 200')
+        else:
+            print(f'  [WARN] Public read {coll}: {resp.status}')
+    except urllib.error.HTTPError as e:
+        print(f'  [FAIL] Public read {coll}: HTTP {e.code}')
+        errors += 1
+
+# 7.4 Check meta_catalog entries
+for cat_code in ['CAT-020', 'CAT-021', 'CAT-022']:
+    code, resp = api('GET', f'/items/meta_catalog?filter[code][_eq]={cat_code}&fields=id,code')
+    if code == 200 and resp.get('data', []):
+        print(f'  [OK]   meta_catalog {cat_code} exists')
+    else:
+        print(f'  [FAIL] meta_catalog {cat_code} MISSING')
+        errors += 1
+
+print()
+if errors == 0:
+    print('VERIFY: ALL CHECKS PASSED')
+else:
+    print(f'VERIFY: {errors} CHECK(S) FAILED')
+
+print()
+print('DONE — Schema Species Ensure complete')
+PYEOF
+
+  BASE_URL="$BASE_URL" DOT_TOKEN="$DOT_TOKEN" DRY_RUN="${DRY_RUN}" \
+    python3 "$tmp_py" < /dev/null
+
+  rm -f "$tmp_py"
+
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Schema Species Ensure - COMPLETE"
+  echo "========================================="
+}
+
+main "$@"
