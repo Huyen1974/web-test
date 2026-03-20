@@ -52,6 +52,10 @@ function formatDate(ts: string | null) {
 	return `${dd}/${mm}/${yy}`;
 }
 
+function isExternal(url: string) {
+	return url.startsWith('http://') || url.startsWith('https://');
+}
+
 const lawColumns = [
 	{ key: 'sort', label: '#' },
 	{ key: 'name', label: 'Name' },
@@ -104,13 +108,18 @@ const ssotColumns = [
 						class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
 						:class="{ 'opacity-40 italic': !doc.visible }"
 					>
+						<a
+							v-if="doc.url_path && isExternal(doc.url_path)"
+							:href="doc.url_path"
+							target="_blank"
+							rel="noopener"
+							class="font-medium text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
+						>{{ doc.name }}</a>
 						<NuxtLink
-							v-if="doc.url_path"
+							v-else-if="doc.url_path"
 							:to="doc.url_path"
 							class="font-medium text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
-						>
-							{{ doc.name }}
-						</NuxtLink>
+						>{{ doc.name }}</NuxtLink>
 						<span v-else class="font-medium text-gray-900 dark:text-white">{{ doc.name }}</span>
 						<div v-if="doc.date_updated" class="mt-1 text-xs text-gray-400">{{ formatDate(doc.date_updated) }}</div>
 					</div>
@@ -125,14 +134,20 @@ const ssotColumns = [
 						<span class="text-xs text-gray-400">{{ row.sort }}</span>
 					</template>
 					<template #cell-name="{ row }">
+						<a
+							v-if="row.url_path && isExternal(row.url_path)"
+							:href="row.url_path"
+							target="_blank"
+							rel="noopener"
+							class="text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
+							:class="{ 'opacity-40 italic': !row.visible }"
+						>{{ row.name }}</a>
 						<NuxtLink
-							v-if="row.url_path"
+							v-else-if="row.url_path"
 							:to="row.url_path"
 							class="text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
 							:class="{ 'opacity-40 italic': !row.visible }"
-						>
-							{{ row.name }}
-						</NuxtLink>
+						>{{ row.name }}</NuxtLink>
 						<span v-else :class="{ 'opacity-40 italic': !row.visible }">{{ row.name }}</span>
 						<UBadge v-if="!row.visible" color="gray" variant="subtle" size="xs" class="ml-2">draft</UBadge>
 					</template>
@@ -150,14 +165,20 @@ const ssotColumns = [
 						<span class="text-xs text-gray-400">{{ row.sort }}</span>
 					</template>
 					<template #cell-name="{ row }">
+						<a
+							v-if="row.url_path && isExternal(row.url_path)"
+							:href="row.url_path"
+							target="_blank"
+							rel="noopener"
+							class="text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
+							:class="{ 'opacity-40 italic': !row.visible }"
+						>{{ row.name }}</a>
 						<NuxtLink
-							v-if="row.url_path"
+							v-else-if="row.url_path"
 							:to="row.url_path"
 							class="text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
 							:class="{ 'opacity-40 italic': !row.visible }"
-						>
-							{{ row.name }}
-						</NuxtLink>
+						>{{ row.name }}</NuxtLink>
 						<span v-else :class="{ 'opacity-40 italic': !row.visible }">{{ row.name }}</span>
 					</template>
 					<template #cell-date_updated="{ row }">
