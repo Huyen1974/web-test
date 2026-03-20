@@ -4,8 +4,8 @@
 # VPS: Contabo 38.242.240.89
 # Services: PostgreSQL, Qdrant, Directus, Agent Data, Nuxt, Nginx
 #
-# Images: agent-data and nuxt pulled from Artifact Registry (CI/CD pipeline)
-# Registry: asia-southeast1-docker.pkg.dev/github-chatgpt-ggcloud/
+# Deploy: DEPLOY_MODE=direct (S109b). Build on GitHub → rsync → VPS.
+# Artifact Registry RETIRED (API disabled). Fallback images in env vars are legacy.
 # MySQL RETIRED 2026-03-13 (S115) — Replaced by PostgreSQL
 # =============================================================================
 
