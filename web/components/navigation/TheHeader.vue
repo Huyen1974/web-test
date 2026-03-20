@@ -96,7 +96,17 @@ const registriesNavItem = {
 	title: 'Registries',
 };
 
-const staticNavItems = [knowledgeNavItem, modulesNavItem, tasksNavItem, workflowNavItem, registriesNavItem];
+const lawsNavItem = {
+	id: 'laws-nav-static',
+	has_children: false,
+	icon: 'gavel',
+	label: null,
+	type: 'url',
+	url: '/knowledge/laws',
+	title: 'Laws',
+};
+
+const staticNavItems = [knowledgeNavItem, modulesNavItem, tasksNavItem, workflowNavItem, registriesNavItem, lawsNavItem];
 
 const navigationItems = computed(() => {
 	const items = [...(navigation.value?.items || [])];
