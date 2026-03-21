@@ -1,0 +1,275 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-birth-trigger-setup — Deploy PG AFTER INSERT triggers for birth_registry
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-*birth* — no existing birth trigger tool]
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-03-21): Initial — reads governed collections from collection_registry
+#     → generates + deploys AFTER INSERT triggers per collection
+#     → auto-inserts into birth_registry on entity creation
+#
+# How it works:
+#   1. Query collection_registry WHERE governance_role='governed' via Directus API
+#   2. For each collection: CREATE OR REPLACE trigger fn + trigger
+#   3. Trigger auto-looks up species from species_collection_map (NULL if not mapped yet)
+#   4. Trigger auto-looks up governance_role from collection_registry
+#
+# Usage:
+#   dot-birth-trigger-setup [--cloud|--local] [--dry-run]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+DRY_RUN=""
+
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-birth-trigger-setup v${VERSION} — Deploy PG birth triggers
+
+Reads governed collections from collection_registry.
+Deploys AFTER INSERT triggers that auto-insert into birth_registry.
+
+Usage:
+  dot-birth-trigger-setup [--cloud|--local] [--dry-run]
+
+EOF
+  show_environment_help
+}
+
+main() {
+  for arg in "$@"; do
+    case "$arg" in
+      --dry-run) DRY_RUN="1" ;;
+      --help|-h) show_help; exit 0 ;;
+    esac
+  done
+
+  init_environment "$@"
+  local BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: Birth Trigger Setup v${VERSION}"
+  echo "S157-A: PG Triggers for Birth Registry"
+  echo "========================================="
+  print_environment_banner "$@"
+
+  # Auth
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    source "${SCRIPT_DIR}/dot-auth" "$@"
+  fi
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "Authentication failed"; exit 1
+  fi
+
+  # =========================================================================
+  # STEP 1: Get governed collections from collection_registry
+  # =========================================================================
+  log_info "Step 1: Fetching governed collections from collection_registry..."
+
+  local RESP
+  RESP=$(curl -sS --globoff -k -X GET \
+    "${BASE_URL}/items/collection_registry?filter[governance_role][_eq]=governed&fields=collection_name,code&sort=collection_name&limit=-1" \
+    -H "Authorization: Bearer $DOT_TOKEN")
+
+  local COLLECTIONS
+  COLLECTIONS=$(echo "$RESP" | jq -r '.data[].collection_name' 2>/dev/null)
+
+  if [[ -z "$COLLECTIONS" ]]; then
+    log_err "No governed collections found in collection_registry"
+    exit 1
+  fi
+
+  local COUNT
+  COUNT=$(echo "$COLLECTIONS" | wc -l | tr -d ' ')
+  log_ok "Found ${COUNT} governed collections"
+
+  # =========================================================================
+  # STEP 2: Create master birth trigger function
+  # =========================================================================
+  log_info "Step 2: Creating master birth trigger function..."
+
+  MASTER_SQL=$(cat <<'ENDSQL'
+-- =============================================================================
+-- fn_birth_registry_auto() — Master trigger function
+-- Called AFTER INSERT on any governed collection
+-- Auto-inserts a birth record into birth_registry
+-- =============================================================================
+CREATE OR REPLACE FUNCTION fn_birth_registry_auto()
+RETURNS trigger AS $$
+DECLARE
+  v_entity_code text;
+  v_code_field text;
+  v_species_code text;
+  v_comp_level text;
+  v_gov_role text;
+  v_dot_origin text;
+  v_row_json jsonb;
+BEGIN
+  -- Determine the code field name for this collection
+  -- Most collections use 'code', some use specialized fields
+  v_code_field := TG_ARGV[0];  -- passed as trigger argument
+
+  -- Get entity code from the new row
+  EXECUTE format('SELECT ($1).%I', v_code_field) USING NEW INTO v_entity_code;
+
+  -- Skip if no entity code (orphan — will be fixed by orphan fixer)
+  IF v_entity_code IS NULL OR v_entity_code = '' THEN
+    RETURN NEW;
+  END IF;
+
+  -- Skip if birth record already exists (idempotent)
+  IF EXISTS (SELECT 1 FROM birth_registry WHERE entity_code = v_entity_code) THEN
+    RETURN NEW;
+  END IF;
+
+  -- Read _dot_origin from entity row (NULL if column doesn't exist)
+  -- to_jsonb(NEW) includes only columns that exist in the row type
+  v_row_json := to_jsonb(NEW);
+  v_dot_origin := v_row_json->>'_dot_origin';
+  -- Fallback to trigger name if entity has no _dot_origin
+  IF v_dot_origin IS NULL OR v_dot_origin = '' THEN
+    v_dot_origin := 'PG:trg_birth_' || TG_TABLE_NAME;
+  END IF;
+
+  -- Lookup species from species_collection_map (NULL if not mapped yet — Phase B)
+  SELECT scm.species_code, es.composition_level
+    INTO v_species_code, v_comp_level
+    FROM species_collection_map scm
+    LEFT JOIN entity_species es ON es.species_code = scm.species_code
+    WHERE scm.collection_name = TG_TABLE_NAME
+      AND scm.is_primary = true
+    LIMIT 1;
+
+  -- Lookup governance_role from collection_registry
+  SELECT governance_role INTO v_gov_role
+    FROM collection_registry
+    WHERE collection_name = TG_TABLE_NAME
+    LIMIT 1;
+
+  -- Insert birth record
+  INSERT INTO birth_registry (
+    entity_code, collection_name, species_code,
+    composition_level, dot_origin, born_at,
+    governance_role, certified
+  ) VALUES (
+    v_entity_code, TG_TABLE_NAME, v_species_code,
+    v_comp_level, v_dot_origin, now(),
+    COALESCE(v_gov_role, 'governed'), false
+  )
+  ON CONFLICT (entity_code) DO NOTHING;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+ENDSQL
+)
+
+  if [[ -n "$DRY_RUN" ]]; then
+    log_info "[DRY] Would create fn_birth_registry_auto()"
+    echo "$MASTER_SQL"
+  else
+    ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+      "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB}" <<< "$MASTER_SQL"
+
+    if [[ $? -eq 0 ]]; then
+      log_ok "Master function fn_birth_registry_auto() created"
+    else
+      log_err "Failed to create master function"
+      exit 1
+    fi
+  fi
+
+  # =========================================================================
+  # STEP 3: Deploy trigger per governed collection
+  # =========================================================================
+  log_info "Step 3: Deploying triggers per governed collection..."
+
+  # Map collection → code field (most use 'code', some use special fields)
+  declare -A CODE_FIELDS
+  CODE_FIELDS=(
+    [table_registry]="table_id"
+    [workflows]="process_code"
+  )
+  # All others default to 'code'
+
+  local TRIGGER_SQL=""
+  local COL_COUNT=0
+
+  while IFS= read -r coll; do
+    [[ -z "$coll" ]] && continue
+    COL_COUNT=$((COL_COUNT + 1))
+
+    local code_field="${CODE_FIELDS[$coll]:-code}"
+    local trig_name="trg_birth_${coll}"
+
+    TRIGGER_SQL+=$(cat <<ENDSQL
+
+-- Trigger for ${coll}
+DROP TRIGGER IF EXISTS ${trig_name} ON ${coll};
+CREATE TRIGGER ${trig_name}
+  AFTER INSERT ON ${coll} FOR EACH ROW
+  EXECUTE FUNCTION fn_birth_registry_auto('${code_field}');
+
+ENDSQL
+)
+  done <<< "$COLLECTIONS"
+
+  if [[ -n "$DRY_RUN" ]]; then
+    log_info "[DRY] Would deploy ${COL_COUNT} triggers:"
+    echo "$TRIGGER_SQL"
+  else
+    ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+      "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB}" <<< "$TRIGGER_SQL"
+
+    if [[ $? -eq 0 ]]; then
+      log_ok "Deployed ${COL_COUNT} birth triggers"
+    else
+      log_err "Some triggers may have failed (check output)"
+    fi
+  fi
+
+  # =========================================================================
+  # STEP 4: Verify
+  # =========================================================================
+  log_info "Step 4: Verify triggers exist..."
+
+  local VERIFY_SQL="SELECT tgname, tgrelid::regclass AS table_name
+    FROM pg_trigger
+    WHERE tgname LIKE 'trg_birth_%'
+    ORDER BY tgrelid::regclass::text;"
+
+  if [[ -n "$DRY_RUN" ]]; then
+    log_info "[DRY] Would verify triggers"
+  else
+    ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+      "docker exec ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -c \"${VERIFY_SQL}\""
+  fi
+
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Birth Trigger Setup — COMPLETE"
+  echo "========================================="
+  echo "Triggers deployed: ${COL_COUNT}"
+  echo ""
+  echo "NEXT STEPS:"
+  echo "  1. dot-birth-backfill  — Backfill existing entities"
+  echo "  2. dot-inspect-pen     — Run pen inspection"
+}
+
+main "$@"

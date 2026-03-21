@@ -1,0 +1,551 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-schema-birth-registry-ensure — S157-A: Birth Registry Schema
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-*birth* — no existing birth tools]
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-03-21): Initial — birth_registry collection + meta + permissions
+#
+# Creates:
+#   - birth_registry collection (Điều 0-G schema)
+#
+# Registers:
+#   - meta_catalog entry (CAT-023)
+#   - collection_registry entry via dot-collection-register
+#   - AI Agent + Public READ permissions
+#
+# Also creates PG-level:
+#   - Partial indexes for uncertified, species, collection
+#   - UNIQUE constraint on entity_code
+#   - Auto-certify trigger (fn_birth_auto_certify)
+#
+# CHỈ SCHEMA + META. Không data. Không birth trigger (xem dot-birth-trigger-setup).
+#
+# Usage:
+#   dot-schema-birth-registry-ensure [--cloud|--local] [--dry-run]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+DRY_RUN=""
+
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-schema-birth-registry-ensure v${VERSION} — S157-A Birth Registry Schema
+
+Creates: birth_registry collection (Điều 0-G)
+Registers: meta_catalog CAT-023, collection_registry, permissions
+PG extras: partial indexes, UNIQUE constraint, auto-certify trigger
+
+Usage:
+  dot-schema-birth-registry-ensure [--cloud|--local] [--dry-run]
+
+EOF
+  show_environment_help
+}
+
+main() {
+  for arg in "$@"; do
+    case "$arg" in
+      --dry-run) DRY_RUN="1" ;;
+      --help|-h) show_help; exit 0 ;;
+    esac
+  done
+
+  init_environment "$@"
+  local BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: Schema Birth Registry v${VERSION}"
+  echo "S157-A: Birth Registry — Điều 0-G"
+  echo "========================================="
+  print_environment_banner "$@"
+
+  # Auth
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    source "${SCRIPT_DIR}/dot-auth" "$@"
+  fi
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "Authentication failed"; exit 1
+  fi
+
+  # =========================================================================
+  # STEP 1: Create birth_registry collection via Directus API
+  # =========================================================================
+  local tmp_py
+  tmp_py=$(mktemp /tmp/dot-birth-schema-XXXXXX.py)
+  trap "rm -f '$tmp_py'" EXIT
+
+  cat > "$tmp_py" << 'PYEOF'
+import json, os, sys, ssl, urllib.request
+
+base_url = os.environ['BASE_URL']
+token = os.environ['DOT_TOKEN']
+dry_run = os.environ.get('DRY_RUN', '')
+
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+def api(method, path, data=None):
+    url = f'{base_url}{path}'
+    payload = json.dumps(data).encode() if data else None
+    req = urllib.request.Request(url, data=payload, method=method,
+        headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'})
+    try:
+        resp = urllib.request.urlopen(req, context=ctx)
+        return resp.status, json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        try:
+            return e.code, json.loads(body)
+        except:
+            return e.code, {'error': body[:200]}
+
+def collection_exists(name):
+    code, data = api('GET', f'/collections/{name}')
+    return code == 200
+
+def field_exists(coll, field):
+    code, data = api('GET', f'/fields/{coll}/{field}')
+    return code == 200
+
+def create_collection(name, meta_config, init_fields):
+    if collection_exists(name):
+        print(f'  [SKIP] Collection {name} already exists')
+        return True
+    if dry_run:
+        print(f'  [DRY] Would create collection {name}')
+        return True
+    payload = {
+        'collection': name,
+        'schema': {},
+        'meta': meta_config,
+        'fields': init_fields
+    }
+    code, resp = api('POST', '/collections', payload)
+    if code == 200:
+        print(f'  [OK]   Created collection {name}')
+        return True
+    else:
+        print(f'  [ERR]  Failed to create {name}: HTTP {code} — {json.dumps(resp)[:200]}')
+        return False
+
+def ensure_field(coll, field_name, field_type, meta_extra=None, schema_extra=None):
+    if field_exists(coll, field_name):
+        print(f'  [SKIP] {coll}.{field_name} exists')
+        return True
+    if dry_run:
+        print(f'  [DRY] Would create {coll}.{field_name} ({field_type})')
+        return True
+    payload = {
+        'field': field_name,
+        'type': field_type,
+        'meta': {'required': False, 'readonly': False, 'hidden': False, 'searchable': False},
+        'schema': {'is_nullable': True}
+    }
+    if meta_extra:
+        payload['meta'].update(meta_extra)
+    if schema_extra:
+        payload['schema'].update(schema_extra)
+    code, resp = api('POST', f'/fields/{coll}', payload)
+    if code == 200:
+        print(f'  [OK]   Created {coll}.{field_name}')
+        return True
+    else:
+        print(f'  [ERR]  Failed {coll}.{field_name}: HTTP {code} — {json.dumps(resp)[:150]}')
+        return False
+
+def ensure_permissions(coll, policy_id, actions):
+    for action in actions:
+        if dry_run:
+            print(f'  [DRY] Would set permission {coll}/{action} for policy {policy_id[:8]}')
+            continue
+        payload = {
+            'collection': coll,
+            'action': action,
+            'policy': policy_id,
+            'fields': ['*'],
+            'permissions': {},
+            'validation': {}
+        }
+        code, resp = api('POST', '/permissions', payload)
+        if code == 200:
+            print(f'  [OK]   Permission {coll}/{action} for {policy_id[:8]}')
+        elif code == 400:
+            print(f'  [SKIP] Permission {coll}/{action} already exists')
+        else:
+            print(f'  [WARN] Permission {coll}/{action}: HTTP {code}')
+
+# Policy IDs
+PUBLIC_POLICY = 'a513bc9d-b5df-47c4-9b6e-31da6a3b71b0'
+AI_AGENT_POLICY = 'e81a70bc-21d3-4f30-856e-686608a2023b'
+
+# Standard Directus system fields (UUID PK per TD-111)
+SYSTEM_FIELDS = [
+    {'field': 'id', 'type': 'integer',
+     'meta': {'hidden': True, 'interface': 'input', 'readonly': True, 'searchable': False},
+     'schema': {'is_primary_key': True, 'has_auto_increment': True}},
+    {'field': 'sort', 'type': 'integer',
+     'meta': {'hidden': True, 'readonly': False, 'searchable': False}, 'schema': {}},
+    {'field': 'user_created', 'type': 'uuid',
+     'meta': {'special': ['user-created'], 'interface': 'select-dropdown-m2o',
+              'display': 'user', 'readonly': True, 'hidden': True, 'width': 'half', 'searchable': False},
+     'schema': {}},
+    {'field': 'date_created', 'type': 'timestamp',
+     'meta': {'special': ['date-created'], 'interface': 'datetime',
+              'display': 'datetime', 'readonly': True, 'hidden': True, 'width': 'half', 'searchable': False},
+     'schema': {}},
+    {'field': 'user_updated', 'type': 'uuid',
+     'meta': {'special': ['user-updated'], 'interface': 'select-dropdown-m2o',
+              'display': 'user', 'readonly': True, 'hidden': True, 'width': 'half', 'searchable': False},
+     'schema': {}},
+    {'field': 'date_updated', 'type': 'timestamp',
+     'meta': {'special': ['date-updated'], 'interface': 'datetime',
+              'display': 'datetime', 'readonly': True, 'hidden': True, 'width': 'half', 'searchable': False},
+     'schema': {}},
+]
+
+# ============================================================
+# STEP 1: Create birth_registry collection
+# ============================================================
+print('=' * 60)
+print('STEP 1: Create birth_registry')
+print('=' * 60)
+print()
+
+birth_meta = {
+    'collection': 'birth_registry',
+    'icon': 'child_care',
+    'note': 'Birth Registry — Dieu 0-G. Moi entity sinh ra phai co birth record.',
+    'display_template': '{{entity_code}} — {{collection_name}} [{{certified}}]',
+    'sort_field': 'id',
+    'hidden': False,
+    'singleton': False,
+    'accountability': 'all',
+    'translations': None,
+    'archive_field': None,
+    'archive_app_filter': True,
+    'archive_value': None,
+    'unarchive_value': None,
+    'sort': None,
+    'group': None,
+    'collapse': 'open',
+    'color': None,
+    'item_duplication_fields': None,
+    'preview_url': None,
+    'versioning': False
+}
+
+ok = create_collection('birth_registry', birth_meta, SYSTEM_FIELDS)
+if ok:
+    # entity_code — UNIQUE, the born entity's code (e.g. DOT-001)
+    ensure_field('birth_registry', 'entity_code', 'string',
+        {'required': True, 'interface': 'input', 'width': 'half',
+         'note': 'Entity code (UNIQUE). The born entity identifier.'},
+        {'is_unique': True, 'is_nullable': False})
+
+    # collection_name — source collection where entity was born
+    ensure_field('birth_registry', 'collection_name', 'string',
+        {'required': True, 'interface': 'input', 'width': 'half',
+         'note': 'Source collection name where entity was created.'},
+        {'is_nullable': False})
+
+    # species_code — resolved species (NULL ok in Phase A)
+    ensure_field('birth_registry', 'species_code', 'string',
+        {'interface': 'input', 'width': 'half',
+         'note': 'Resolved species code (nullable — Phase B will fill).'},
+        None)
+
+    # composition_level — atom/molecule/compound/etc
+    ensure_field('birth_registry', 'composition_level', 'string',
+        {'interface': 'select-dropdown', 'width': 'half',
+         'note': 'Composition level from species taxonomy.',
+         'options': {'choices': [
+             {'text': 'Atom', 'value': 'atom'},
+             {'text': 'Molecule', 'value': 'molecule'},
+             {'text': 'Compound', 'value': 'compound'},
+             {'text': 'Material', 'value': 'material'},
+             {'text': 'Product', 'value': 'product'},
+             {'text': 'Building', 'value': 'building'},
+         ]}},
+        None)
+
+    # dot_origin — which DOT tool or process created this entity
+    ensure_field('birth_registry', 'dot_origin', 'string',
+        {'interface': 'input', 'width': 'half',
+         'note': 'DOT tool or trigger that created this entity.'},
+        None)
+
+    # born_at — timestamp of birth (defaults to now())
+    ensure_field('birth_registry', 'born_at', 'timestamp',
+        {'interface': 'datetime', 'display': 'datetime', 'width': 'half',
+         'note': 'Timestamp when entity was born. Default: now().'},
+        {'default_value': 'now()'})
+
+    # governance_role — governed/observed/excluded
+    ensure_field('birth_registry', 'governance_role', 'string',
+        {'interface': 'select-dropdown', 'width': 'half',
+         'note': 'Governance role from collection_registry.',
+         'options': {'choices': [
+             {'text': 'Governed', 'value': 'governed'},
+             {'text': 'Observed', 'value': 'observed'},
+             {'text': 'Excluded', 'value': 'excluded'},
+         ]}},
+        None)
+
+    # inspect_pen — Pen inspection timestamp
+    ensure_field('birth_registry', 'inspect_pen', 'timestamp',
+        {'interface': 'datetime', 'display': 'datetime', 'width': 'third',
+         'note': 'Pen inspection: basic data validation check.'},
+        None)
+
+    # inspect_stamp — Stamp inspection timestamp
+    ensure_field('birth_registry', 'inspect_stamp', 'timestamp',
+        {'interface': 'datetime', 'display': 'datetime', 'width': 'third',
+         'note': 'Stamp inspection: species + composition validation.'},
+        None)
+
+    # inspect_gate — Gate inspection timestamp
+    ensure_field('birth_registry', 'inspect_gate', 'timestamp',
+        {'interface': 'datetime', 'display': 'datetime', 'width': 'third',
+         'note': 'Gate inspection: cross-reference + dependency validation.'},
+        None)
+
+    # certified — boolean flag
+    ensure_field('birth_registry', 'certified', 'boolean',
+        {'interface': 'boolean', 'width': 'half',
+         'note': 'True when ALL 3 inspections passed.'},
+        {'default_value': False, 'is_nullable': False})
+
+    # certified_at — timestamp when certified
+    ensure_field('birth_registry', 'certified_at', 'timestamp',
+        {'interface': 'datetime', 'display': 'datetime', 'width': 'half',
+         'note': 'Timestamp when entity was certified (all inspections passed).'},
+        None)
+
+print()
+
+# ============================================================
+# STEP 2: Set permissions
+# ============================================================
+print('=' * 60)
+print('STEP 2: Set permissions')
+print('=' * 60)
+print()
+
+# Public READ
+if not dry_run:
+    payload = {
+        'collection': 'birth_registry',
+        'action': 'read',
+        'policy': PUBLIC_POLICY,
+        'fields': ['*'],
+        'permissions': {},
+        'validation': {}
+    }
+    code, resp = api('POST', '/permissions', payload)
+    if code == 200:
+        print(f'  [OK]   Public READ for birth_registry')
+    elif code == 400:
+        print(f'  [SKIP] Public READ already exists')
+    else:
+        print(f'  [WARN] Public READ: HTTP {code}')
+
+# AI Agent CRUD
+ensure_permissions('birth_registry', AI_AGENT_POLICY, ['create', 'read', 'update', 'delete'])
+print()
+
+# ============================================================
+# STEP 3: Register in meta_catalog
+# ============================================================
+print('=' * 60)
+print('STEP 3: Register in meta_catalog')
+print('=' * 60)
+print()
+
+meta_entry = {
+    'code': 'CAT-023',
+    'name': 'So khai sinh',
+    'name_en': 'Birth Registry',
+    'entity_type': 'collection',
+    'source_model': 'A',
+    'source_location': 'Directus:birth_registry',
+    'registry_collection': 'birth_registry',
+    'sync_script': None,
+    'sync_frequency': 'realtime',
+    'record_count': 0,
+    'active_count': 0,
+    'ui_page': '/knowledge/registries',
+    'status': 'active',
+    'description': 'Birth Registry — Dieu 0-G. Moi entity governed phai co birth record. PG trigger auto-insert.',
+    'layer': 2
+}
+
+code, resp = api('GET', f'/items/meta_catalog?filter[code][_eq]=CAT-023&fields=id,code')
+if code == 200 and resp.get('data', []):
+    print(f'  [SKIP] CAT-023 already exists')
+elif dry_run:
+    print(f'  [DRY] Would create CAT-023')
+else:
+    code, resp = api('POST', '/items/meta_catalog', meta_entry)
+    if code == 200:
+        print(f'  [OK]   Created CAT-023 (Birth Registry)')
+    else:
+        print(f'  [ERR]  Failed CAT-023: HTTP {code} — {json.dumps(resp)[:150]}')
+
+print()
+
+# ============================================================
+# STEP 4: Verify
+# ============================================================
+print('=' * 60)
+print('STEP 4: Verify')
+print('=' * 60)
+print()
+
+errors = 0
+
+if collection_exists('birth_registry'):
+    print(f'  [OK]   Collection birth_registry exists')
+else:
+    print(f'  [FAIL] Collection birth_registry MISSING')
+    errors += 1
+
+for fld in ['entity_code', 'collection_name', 'species_code', 'composition_level',
+            'dot_origin', 'born_at', 'governance_role', 'inspect_pen',
+            'inspect_stamp', 'inspect_gate', 'certified', 'certified_at']:
+    if field_exists('birth_registry', fld):
+        print(f'  [OK]   birth_registry.{fld} exists')
+    else:
+        print(f'  [FAIL] birth_registry.{fld} MISSING')
+        errors += 1
+
+# meta_catalog
+code, resp = api('GET', '/items/meta_catalog?filter[code][_eq]=CAT-023&fields=id,code')
+if code == 200 and resp.get('data', []):
+    print(f'  [OK]   meta_catalog CAT-023 exists')
+else:
+    print(f'  [FAIL] meta_catalog CAT-023 MISSING')
+    errors += 1
+
+print()
+if errors == 0:
+    print('VERIFY: ALL CHECKS PASSED')
+else:
+    print(f'VERIFY: {errors} CHECK(S) FAILED')
+
+print()
+print('DONE — Schema Birth Registry Ensure complete')
+print('NOTE: Run dot-birth-trigger-setup next to deploy PG triggers.')
+PYEOF
+
+  BASE_URL="$BASE_URL" DOT_TOKEN="$DOT_TOKEN" DRY_RUN="${DRY_RUN}" \
+    python3 "$tmp_py" < /dev/null
+
+  rm -f "$tmp_py"
+
+  # =========================================================================
+  # STEP 5: PG-level extras (indexes + auto-certify trigger)
+  # =========================================================================
+  if [[ -n "$DRY_RUN" ]]; then
+    log_info "[DRY] Would create PG indexes + auto-certify trigger"
+  else
+    log_info "Step 5: Creating PG indexes + auto-certify trigger..."
+
+    PG_SQL=$(cat <<'ENDSQL'
+-- =============================================================================
+-- S157-A: birth_registry PG extras
+-- Partial indexes + auto-certify trigger
+-- =============================================================================
+
+-- Partial index: uncertified births (most queried)
+CREATE INDEX IF NOT EXISTS idx_birth_uncertified
+  ON birth_registry (born_at DESC) WHERE certified = false;
+
+-- Partial index: species grouping for governed entities
+CREATE INDEX IF NOT EXISTS idx_birth_species
+  ON birth_registry (species_code) WHERE governance_role = 'governed';
+
+-- Index: collection_name for lookups
+CREATE INDEX IF NOT EXISTS idx_birth_collection
+  ON birth_registry (collection_name);
+
+-- Auto-certify trigger: when ALL 3 inspect_* are NOT NULL → certified = true
+CREATE OR REPLACE FUNCTION fn_birth_auto_certify()
+RETURNS trigger AS $$
+BEGIN
+  IF NEW.inspect_pen IS NOT NULL
+     AND NEW.inspect_stamp IS NOT NULL
+     AND NEW.inspect_gate IS NOT NULL
+     AND NEW.certified = false THEN
+    NEW.certified := true;
+    NEW.certified_at := now();
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_birth_auto_certify ON birth_registry;
+CREATE TRIGGER trg_birth_auto_certify
+  BEFORE UPDATE ON birth_registry FOR EACH ROW
+  EXECUTE FUNCTION fn_birth_auto_certify();
+
+ENDSQL
+)
+
+    ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+      "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB}" <<< "$PG_SQL"
+
+    if [[ $? -eq 0 ]]; then
+      log_ok "PG indexes + auto-certify trigger created"
+    else
+      log_warn "Some PG extras may have failed (check output)"
+    fi
+  fi
+
+  # =========================================================================
+  # STEP 6: Register in collection_registry via dot-collection-register
+  # =========================================================================
+  log_info "Step 6: Register birth_registry in collection_registry..."
+
+  if [[ -n "$DRY_RUN" ]]; then
+    log_info "[DRY] Would run dot-collection-register birth_registry"
+  else
+    "${SCRIPT_DIR}/dot-collection-register" birth_registry \
+      --storage_role log \
+      --governance_role observed \
+      --source_kind derived \
+      --migration_state stable \
+      --description "Birth Registry — Dieu 0-G. Auto-populated by PG triggers." \
+      "$@" || log_warn "collection_registry registration may have failed"
+  fi
+
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Schema Birth Registry — COMPLETE"
+  echo "========================================="
+  echo ""
+  echo "NEXT STEPS:"
+  echo "  1. dot-birth-trigger-setup  — Deploy PG triggers per governed collection"
+  echo "  2. dot-birth-backfill       — Backfill existing entities"
+  echo "  3. dot-inspect-pen          — Run pen inspection on uncertified births"
+}
+
+main "$@"

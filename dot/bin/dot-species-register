@@ -175,6 +175,29 @@ main() {
 
   if [[ "$RESP_CODE" == "200" ]]; then
     echo "[OK] Registered species '${SPECIES_CODE}' as ${NEW_CODE} (${DISPLAY_NAME}, ${COMP_LEVEL}/${MGMT_MODE})"
+
+    # Truncation read-back (TD-334)
+    local NEW_ID
+    NEW_ID=$(echo "${RESP%$'\n'*}" | jq -r '.data.id')
+    local RB_RESP
+    RB_RESP=$(curl -sS --globoff -k -X GET \
+      "${BASE_URL}/items/entity_species/${NEW_ID}?fields=code,species_code,display_name,description" \
+      -H "Authorization: Bearer $DOT_TOKEN")
+    local RB_DN RB_DN_LEN
+    RB_DN=$(echo "$RB_RESP" | jq -r '.data.display_name // ""')
+    RB_DN_LEN=${#RB_DN}
+    if [[ "$RB_DN_LEN" -lt "${#DISPLAY_NAME}" ]]; then
+      echo "[WARN] TRUNCATION DETECTED: display_name written=${#DISPLAY_NAME} chars, read-back=${RB_DN_LEN} chars"
+    else
+      echo "[OK]   Read-back verified (display_name: ${RB_DN_LEN} chars)"
+    fi
+    if [[ -n "$DESCRIPTION" ]]; then
+      local RB_DESC
+      RB_DESC=$(echo "$RB_RESP" | jq -r '.data.description // ""')
+      if [[ "${#RB_DESC}" -lt "${#DESCRIPTION}" ]]; then
+        echo "[WARN] TRUNCATION DETECTED: description written=${#DESCRIPTION} chars, read-back=${#RB_DESC} chars"
+      fi
+    fi
   else
     local RESP_BODY="${RESP%$'\n'*}"
     echo "[ERR] Failed: HTTP ${RESP_CODE}" >&2

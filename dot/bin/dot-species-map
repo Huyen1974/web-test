@@ -149,6 +149,22 @@ main() {
 
   if [[ "$RESP_CODE" == "200" ]]; then
     echo "[OK] Mapped ${SPECIES_CODE} -> ${COLLECTION_NAME} (primary=${IS_PRIMARY})"
+
+    # Truncation read-back (TD-334)
+    local NEW_ID
+    NEW_ID=$(echo "${RESP%$'\n'*}" | jq -r '.data.id')
+    local RB_RESP
+    RB_RESP=$(curl -sS --globoff -k -X GET \
+      "${BASE_URL}/items/species_collection_map/${NEW_ID}?fields=species_code,collection_name,is_primary" \
+      -H "Authorization: Bearer $DOT_TOKEN")
+    local RB_SC RB_CN
+    RB_SC=$(echo "$RB_RESP" | jq -r '.data.species_code // ""')
+    RB_CN=$(echo "$RB_RESP" | jq -r '.data.collection_name // ""')
+    if [[ "$RB_SC" != "$SPECIES_CODE" || "$RB_CN" != "$COLLECTION_NAME" ]]; then
+      echo "[WARN] TRUNCATION/MISMATCH: expected ${SPECIES_CODE}->${COLLECTION_NAME}, got ${RB_SC}->${RB_CN}"
+    else
+      echo "[OK]   Read-back verified (${RB_SC} -> ${RB_CN})"
+    fi
   else
     local RESP_BODY="${RESP%$'\n'*}"
     echo "[ERR] Failed: HTTP ${RESP_CODE}" >&2
