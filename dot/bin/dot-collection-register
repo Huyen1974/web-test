@@ -3,13 +3,18 @@
 # dot-collection-register — Register a collection in collection_registry
 # =============================================================================
 # CHECKED-NO-DUPLICATE: [searched dot/bin/dot-*register* — no collection register tool]
-# VERSION: 1.0.0
+# VERSION: 1.1.0
 # §0-E DOT-FIRST: All governance declarations MUST go through DOT tools.
+#
+# CHANGELOG:
+#   v1.1.0 (2026-03-21): S157-A — add --update mode (upsert)
+#   v1.0.0: Initial — create-only, skip if exists
 #
 # Usage:
 #   dot-collection-register <collection_name> [options]
 #
 # Options:
+#   --update              Update existing record (upsert mode)
 #   --storage_role X      primary|junction|log|system
 #   --governance_role Y   governed|observed|excluded
 #   --source_kind Z       registry|native|derived|policy
@@ -22,6 +27,7 @@
 # Examples:
 #   dot-collection-register dot_tools --storage_role primary --governance_role governed
 #   dot-collection-register some_table   # → COL-NNN, migration_state=unclassified
+#   dot-collection-register dot_tools --update --governance_role governed  # upsert
 # =============================================================================
 
 set -euo pipefail
@@ -29,15 +35,16 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="1.0.0"
+VERSION="1.1.0"
 
 show_help() {
   cat << 'EOF'
-dot-collection-register v1.0.0 — Register collection in collection_registry
+dot-collection-register v1.1.0 — Register collection in collection_registry
 
 Usage: dot-collection-register <collection_name> [options]
 
 Options:
+  --update              Update existing record (upsert mode)
   --storage_role X      primary|junction|log|system
   --governance_role Y   governed|observed|excluded
   --source_kind Z       registry|native|derived|policy
@@ -47,18 +54,20 @@ Options:
   --dry-run             Preview mode
   --help, -h            This help
 
-Idempotent: skips if collection_name already registered.
-Auto-generates code COL-NNN (sequential).
+Without --update: skips if collection_name already registered.
+With --update: PATCHes existing record with provided fields.
+Auto-generates code COL-NNN (sequential) for new records.
 EOF
   show_environment_help
 }
 
 main() {
   local COLLECTION_NAME="" STORAGE_ROLE="" GOVERNANCE_ROLE="" SOURCE_KIND=""
-  local MIGRATION_STATE="unclassified" DESCRIPTION="" DRY_RUN=""
+  local MIGRATION_STATE="unclassified" DESCRIPTION="" DRY_RUN="" UPDATE_MODE=""
 
   while [[ $# -gt 0 ]]; do
     case $1 in
+      --update) UPDATE_MODE="1"; shift ;;
       --storage_role) STORAGE_ROLE="$2"; shift 2 ;;
       --governance_role) GOVERNANCE_ROLE="$2"; shift 2 ;;
       --source_kind) SOURCE_KIND="$2"; shift 2 ;;
@@ -101,9 +110,69 @@ main() {
     local EXISTING
     EXISTING=$(echo "$CHECK_BODY" | jq '.data | length')
     if [[ "$EXISTING" -gt 0 ]]; then
-      local EX_CODE
+      local EX_CODE EX_ID
       EX_CODE=$(echo "$CHECK_BODY" | jq -r '.data[0].code')
-      echo "[SKIP] ${COLLECTION_NAME} already registered as ${EX_CODE}"
+      EX_ID=$(echo "$CHECK_BODY" | jq -r '.data[0].id')
+
+      if [[ -z "$UPDATE_MODE" ]]; then
+        echo "[SKIP] ${COLLECTION_NAME} already registered as ${EX_CODE}"
+        exit 0
+      fi
+
+      # --update mode: PATCH existing record
+      local PATCH_PAYLOAD
+      PATCH_PAYLOAD=$(jq -nc \
+        --arg ms "$MIGRATION_STATE" \
+        --arg desc "$DESCRIPTION" \
+        --arg sr "$STORAGE_ROLE" \
+        --arg gr "$GOVERNANCE_ROLE" \
+        --arg sk "$SOURCE_KIND" \
+        '{}
+        + (if $ms != "unclassified" then {migration_state: $ms} else {} end)
+        + (if $desc != "" then {description: $desc} else {} end)
+        + (if $sr != "" then {storage_role: $sr} else {} end)
+        + (if $gr != "" then {governance_role: $gr} else {} end)
+        + (if $sk != "" then {source_kind: $sk} else {} end)')
+
+      if [[ "$PATCH_PAYLOAD" == "{}" ]]; then
+        echo "[SKIP] ${COLLECTION_NAME} (${EX_CODE}): --update but no fields to change"
+        exit 0
+      fi
+
+      if [[ -n "$DRY_RUN" ]]; then
+        echo "[DRY] Would update ${COLLECTION_NAME} (${EX_CODE}): ${PATCH_PAYLOAD}"
+        exit 0
+      fi
+
+      local PATCH_RESP PATCH_CODE
+      PATCH_RESP=$(curl -sS --globoff -k -X PATCH "${BASE_URL}/items/collection_registry/${EX_ID}" \
+        -H "Authorization: Bearer $DOT_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "$PATCH_PAYLOAD" -w "\n%{http_code}")
+      PATCH_CODE="${PATCH_RESP##*$'\n'}"
+
+      if [[ "$PATCH_CODE" == "200" ]]; then
+        echo "[OK] Updated ${COLLECTION_NAME} (${EX_CODE}): ${PATCH_PAYLOAD}"
+
+        # Truncation read-back (TD-334)
+        local RB_RESP
+        RB_RESP=$(curl -sS --globoff -k -X GET \
+          "${BASE_URL}/items/collection_registry/${EX_ID}?fields=code,name,description,governance_role,storage_role,source_kind,migration_state" \
+          -H "Authorization: Bearer $DOT_TOKEN")
+        local RB_DESC RB_DESC_LEN
+        RB_DESC=$(echo "$RB_RESP" | jq -r '.data.description // ""')
+        RB_DESC_LEN=${#RB_DESC}
+        if [[ -n "$DESCRIPTION" && "$RB_DESC_LEN" -lt "${#DESCRIPTION}" ]]; then
+          echo "[WARN] TRUNCATION DETECTED: description written=${#DESCRIPTION} chars, read-back=${RB_DESC_LEN} chars"
+        else
+          echo "[OK]   Read-back verified (description: ${RB_DESC_LEN} chars)"
+        fi
+      else
+        local PATCH_BODY="${PATCH_RESP%$'\n'*}"
+        echo "[ERR] Failed to update ${COLLECTION_NAME}: HTTP ${PATCH_CODE}" >&2
+        echo "$PATCH_BODY" | head -c 200 >&2
+        exit 1
+      fi
       exit 0
     fi
   fi
@@ -158,6 +227,22 @@ main() {
 
   if [[ "$RESP_CODE" == "200" ]]; then
     echo "[OK] Registered ${COLLECTION_NAME} as ${NEW_CODE} (migration_state=${MIGRATION_STATE})"
+
+    # Truncation read-back (TD-334)
+    local NEW_ID
+    NEW_ID=$(echo "${RESP%$'\n'*}" | jq -r '.data.id')
+    local RB_RESP
+    RB_RESP=$(curl -sS --globoff -k -X GET \
+      "${BASE_URL}/items/collection_registry/${NEW_ID}?fields=code,name,description" \
+      -H "Authorization: Bearer $DOT_TOKEN")
+    local RB_DESC RB_DESC_LEN
+    RB_DESC=$(echo "$RB_RESP" | jq -r '.data.description // ""')
+    RB_DESC_LEN=${#RB_DESC}
+    if [[ -n "$DESCRIPTION" && "$RB_DESC_LEN" -lt "${#DESCRIPTION}" ]]; then
+      echo "[WARN] TRUNCATION DETECTED: description written=${#DESCRIPTION} chars, read-back=${RB_DESC_LEN} chars"
+    else
+      echo "[OK]   Read-back verified (description: ${RB_DESC_LEN} chars)"
+    fi
   else
     local RESP_BODY="${RESP%$'\n'*}"
     echo "[ERR] Failed to register ${COLLECTION_NAME}: HTTP ${RESP_CODE}" >&2

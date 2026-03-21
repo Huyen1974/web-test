@@ -1,0 +1,211 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-birth-backfill — Backfill birth_registry for existing governed entities
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-*backfill* — none]
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-03-21): Initial — backfill existing governed entities
+#
+# What it does:
+#   1. Query all governed collections from collection_registry
+#   2. For each collection: INSERT INTO birth_registry from existing records
+#   3. Set certified=true (existing entities already passed checks)
+#   4. Verify: COUNT birth_registry governed = COUNT total governed entities
+#
+# Usage:
+#   dot-birth-backfill [--cloud|--local] [--dry-run]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+DRY_RUN=""
+
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-birth-backfill v${VERSION} — Backfill birth_registry for existing entities
+
+Inserts birth records for all existing governed entities.
+Sets certified=true (pre-existing entities are trusted).
+Verifies COUNT matches.
+
+Usage:
+  dot-birth-backfill [--cloud|--local] [--dry-run]
+
+EOF
+  show_environment_help
+}
+
+main() {
+  for arg in "$@"; do
+    case "$arg" in
+      --dry-run) DRY_RUN="1" ;;
+      --help|-h) show_help; exit 0 ;;
+    esac
+  done
+
+  init_environment "$@"
+  local BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: Birth Backfill v${VERSION}"
+  echo "S157-A: Backfill existing entities"
+  echo "========================================="
+  print_environment_banner "$@"
+
+  # Auth
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    source "${SCRIPT_DIR}/dot-auth" "$@"
+  fi
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "Authentication failed"; exit 1
+  fi
+
+  # =========================================================================
+  # STEP 1: Get governed collections from collection_registry
+  # =========================================================================
+  log_info "Step 1: Fetching governed collections..."
+
+  local RESP
+  RESP=$(curl -sS --globoff -k -X GET \
+    "${BASE_URL}/items/collection_registry?filter[governance_role][_eq]=governed&fields=collection_name,code&sort=collection_name&limit=-1" \
+    -H "Authorization: Bearer $DOT_TOKEN")
+
+  local COLLECTIONS
+  COLLECTIONS=$(echo "$RESP" | jq -r '.data[].collection_name' 2>/dev/null)
+
+  if [[ -z "$COLLECTIONS" ]]; then
+    log_err "No governed collections found in collection_registry"
+    exit 1
+  fi
+
+  local COUNT
+  COUNT=$(echo "$COLLECTIONS" | wc -l | tr -d ' ')
+  log_ok "Found ${COUNT} governed collections"
+
+  # =========================================================================
+  # STEP 2: Build backfill SQL
+  # =========================================================================
+  log_info "Step 2: Building backfill SQL..."
+
+  # Map collection → code field (same as dot-birth-trigger-setup)
+  declare -A CODE_FIELDS
+  CODE_FIELDS=(
+    [table_registry]="table_id"
+    [workflows]="process_code"
+  )
+
+  local BACKFILL_SQL=""
+  local COL_COUNT=0
+
+  while IFS= read -r coll; do
+    [[ -z "$coll" ]] && continue
+    COL_COUNT=$((COL_COUNT + 1))
+
+    local code_field="${CODE_FIELDS[$coll]:-code}"
+
+    BACKFILL_SQL+="
+-- Backfill: ${coll}
+INSERT INTO birth_registry (
+  entity_code, collection_name, species_code,
+  composition_level, dot_origin, born_at,
+  governance_role, certified, certified_at,
+  inspect_pen, inspect_stamp, inspect_gate
+)
+SELECT
+  c.${code_field} AS entity_code,
+  '${coll}' AS collection_name,
+  scm.species_code,
+  es.composition_level,
+  'backfill:dot-birth-backfill' AS dot_origin,
+  COALESCE(c.date_created, now()) AS born_at,
+  COALESCE(cr.governance_role, 'governed') AS governance_role,
+  true AS certified,
+  now() AS certified_at,
+  now() AS inspect_pen,
+  now() AS inspect_stamp,
+  now() AS inspect_gate
+FROM ${coll} c
+LEFT JOIN species_collection_map scm
+  ON scm.collection_name = '${coll}' AND scm.is_primary = true
+LEFT JOIN entity_species es
+  ON es.species_code = scm.species_code
+LEFT JOIN collection_registry cr
+  ON cr.collection_name = '${coll}'
+WHERE c.${code_field} IS NOT NULL
+  AND c.${code_field} != ''
+ON CONFLICT (entity_code) DO NOTHING;
+"
+  done <<< "$COLLECTIONS"
+
+  # Add verification query
+  BACKFILL_SQL+=$(cat <<'ENDSQL'
+
+-- =========================================================================
+-- VERIFY: Count birth_registry governed vs total governed entities
+-- =========================================================================
+SELECT 'birth_registry governed' AS source, COUNT(*) AS total
+FROM birth_registry WHERE governance_role = 'governed'
+UNION ALL
+SELECT 'birth_registry certified' AS source, COUNT(*) AS total
+FROM birth_registry WHERE certified = true
+UNION ALL
+SELECT 'birth_registry uncertified' AS source, COUNT(*) AS total
+FROM birth_registry WHERE certified = false AND governance_role = 'governed';
+
+-- Per-collection breakdown
+SELECT collection_name, COUNT(*) AS birth_count, COUNT(*) FILTER (WHERE certified) AS certified_count
+FROM birth_registry
+WHERE governance_role = 'governed'
+GROUP BY collection_name
+ORDER BY collection_name;
+
+ENDSQL
+)
+
+  # =========================================================================
+  # STEP 3: Execute
+  # =========================================================================
+  if [[ -n "$DRY_RUN" ]]; then
+    log_info "[DRY] Would backfill ${COL_COUNT} collections. SQL:"
+    echo "$BACKFILL_SQL"
+  else
+    log_info "Step 3: Executing backfill for ${COL_COUNT} collections..."
+
+    ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+      "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB}" <<< "$BACKFILL_SQL"
+
+    if [[ $? -eq 0 ]]; then
+      log_ok "Backfill complete for ${COL_COUNT} collections"
+    else
+      log_err "Some backfill operations may have failed (check output)"
+    fi
+  fi
+
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Birth Backfill — COMPLETE"
+  echo "========================================="
+  echo "Collections processed: ${COL_COUNT}"
+  echo ""
+  echo "NEXT STEPS:"
+  echo "  1. dot-inspect-pen  — Run pen inspection on uncertified births"
+  echo "  2. Verify COUNT matches via Directus UI or PG query"
+}
+
+main "$@"

@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-inspect-pen — Pen Inspection: basic data validation for birth records
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-*inspect* — only dot-coverage-inspector]
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-03-21): Initial — pen inspection for birth_registry
+#
+# What it checks per birth record:
+#   - entity_code NOT NULL and NOT empty
+#   - collection_name NOT NULL
+#   - dot_origin NOT NULL (how was this entity created?)
+#   - governance_role NOT NULL
+#   - (species_code check SKIPPED in Phase A — Phase B will fill)
+#
+# Pass → SET inspect_pen = now()
+# Fail → Create entity_audit_queue record via dot-audit-create
+#
+# Usage:
+#   dot-inspect-pen [--cloud|--local] [--dry-run] [--limit N]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+DRY_RUN=""
+LIMIT=""
+
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-inspect-pen v${VERSION} — Pen Inspection for birth_registry
+
+Checks: entity_code, collection_name, dot_origin, governance_role NOT NULL.
+Pass → inspect_pen = now(). Fail → entity_audit_queue record.
+
+Usage:
+  dot-inspect-pen [--cloud|--local] [--dry-run] [--limit N]
+
+Options:
+  --limit N       Process at most N records (default: all)
+  --dry-run       Preview mode
+  --cloud|--local Environment
+
+EOF
+  show_environment_help
+}
+
+main() {
+  for arg in "$@"; do
+    case "$arg" in
+      --dry-run) DRY_RUN="1" ;;
+      --help|-h) show_help; exit 0 ;;
+    esac
+  done
+
+  # Parse --limit
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --limit) LIMIT="$2"; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+
+  init_environment "$@"
+
+  echo "========================================="
+  echo "DOT Tool: Inspect Pen v${VERSION}"
+  echo "S157-A: Pen Inspection"
+  echo "========================================="
+  print_environment_banner "$@"
+
+  # Auth
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    source "${SCRIPT_DIR}/dot-auth" "$@"
+  fi
+
+  # =========================================================================
+  # STEP 1: Run pen inspection via PG
+  # =========================================================================
+  log_info "Step 1: Running pen inspection on birth_registry..."
+
+  local LIMIT_CLAUSE=""
+  if [[ -n "$LIMIT" ]]; then
+    LIMIT_CLAUSE="LIMIT ${LIMIT}"
+  fi
+
+  # Use PG to do the inspection in bulk — much faster than per-record API calls
+  INSPECT_SQL=$(cat <<ENDSQL
+-- =============================================================================
+-- Pen Inspection: bulk validate + update
+-- Phase A: entity_code, collection_name, dot_origin, governance_role must be NOT NULL
+-- species_code check SKIPPED (Phase B)
+-- =============================================================================
+DO \$\$
+DECLARE
+  rec RECORD;
+  pass_count int := 0;
+  fail_count int := 0;
+  total_count int := 0;
+BEGIN
+  FOR rec IN
+    SELECT id, entity_code, collection_name, dot_origin, governance_role
+    FROM birth_registry
+    WHERE inspect_pen IS NULL
+      AND governance_role = 'governed'
+    ORDER BY born_at ASC
+    ${LIMIT_CLAUSE}
+  LOOP
+    total_count := total_count + 1;
+
+    -- Check required fields
+    IF rec.entity_code IS NOT NULL
+       AND rec.entity_code != ''
+       AND rec.collection_name IS NOT NULL
+       AND rec.dot_origin IS NOT NULL
+       AND rec.governance_role IS NOT NULL THEN
+      -- PASS: set inspect_pen
+      UPDATE birth_registry SET inspect_pen = now() WHERE id = rec.id;
+      pass_count := pass_count + 1;
+    ELSE
+      -- FAIL: log to entity_audit_queue
+      INSERT INTO entity_audit_queue (collection_name, record_id, issue_type, audit_status, audit_reason_code)
+      VALUES (
+        COALESCE(rec.collection_name, 'unknown'),
+        COALESCE(rec.entity_code, rec.id::text),
+        CASE
+          WHEN rec.entity_code IS NULL OR rec.entity_code = '' THEN 'missing_code'
+          ELSE 'stale_zombie'
+        END,
+        'open',
+        'pen_inspection_fail'
+      )
+      ON CONFLICT DO NOTHING;
+      fail_count := fail_count + 1;
+    END IF;
+  END LOOP;
+
+  RAISE NOTICE 'Pen Inspection: total=%, pass=%, fail=%', total_count, pass_count, fail_count;
+END;
+\$\$;
+
+-- Show summary
+SELECT
+  COUNT(*) FILTER (WHERE inspect_pen IS NOT NULL) AS pen_passed,
+  COUNT(*) FILTER (WHERE inspect_pen IS NULL AND governance_role = 'governed') AS pen_pending,
+  COUNT(*) AS total
+FROM birth_registry;
+ENDSQL
+)
+
+  if [[ -n "$DRY_RUN" ]]; then
+    log_info "[DRY] Would run pen inspection SQL:"
+    echo "$INSPECT_SQL"
+  else
+    ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+      "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB}" <<< "$INSPECT_SQL"
+
+    if [[ $? -eq 0 ]]; then
+      log_ok "Pen inspection complete"
+    else
+      log_err "Pen inspection failed"
+      exit 1
+    fi
+  fi
+
+  # =========================================================================
+  # STEP 2: Show audit queue (failures)
+  # =========================================================================
+  log_info "Step 2: Checking audit queue for pen failures..."
+
+  local AUDIT_SQL="SELECT collection_name, record_id, issue_type, audit_reason_code
+    FROM entity_audit_queue
+    WHERE audit_reason_code = 'pen_inspection_fail'
+      AND audit_status = 'open'
+    ORDER BY id DESC
+    LIMIT 20;"
+
+  if [[ -z "$DRY_RUN" ]]; then
+    ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+      "docker exec ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -c \"${AUDIT_SQL}\""
+  fi
+
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Inspect Pen — COMPLETE"
+  echo "========================================="
+}
+
+main "$@"
