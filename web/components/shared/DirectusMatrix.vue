@@ -21,8 +21,13 @@ export interface MatrixColumn {
 export interface MatrixConfig {
 	title: string;
 	description?: string;
-	collection: string;
-	fields: string[];
+	/** Directus collection name — used when fetching via Directus SDK */
+	collection?: string;
+	/** Server API URL — used instead of Directus SDK (e.g., '/api/registry/species-matrix') */
+	dataUrl?: string;
+	/** Response key for dataUrl mode (default: 'data') */
+	dataKey?: string;
+	fields?: string[];
 	filter?: Record<string, any>;
 	sort?: string[];
 	columns: MatrixColumn[];
@@ -44,12 +49,19 @@ const { $directus } = useNuxtApp();
 const searchQuery = ref('');
 
 const { data: rawData, status } = useAsyncData(
-	`matrix-${props.config.collection}`,
+	`matrix-${props.config.collection || props.config.dataUrl}`,
 	async () => {
 		try {
+			if (props.config.dataUrl) {
+				// Server API mode
+				const resp = await $fetch<any>(props.config.dataUrl);
+				const key = props.config.dataKey || 'data';
+				return (resp?.[key] || resp || []) as any[];
+			}
+			// Directus SDK mode
 			const items = await $directus.request(
 				readItems(props.config.collection as any, {
-					fields: props.config.fields,
+					fields: props.config.fields || [],
 					filter: props.config.filter || {},
 					sort: props.config.sort || [],
 					limit: -1,
