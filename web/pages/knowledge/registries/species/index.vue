@@ -8,10 +8,9 @@ definePageMeta({
 
 const speciesMatrixConfig: MatrixConfig = {
 	title: 'Ma trận Loài (Species Matrix)',
-	description: 'Phân loại loài — data từ v_species_matrix (PG VIEW trên birth_registry + entity_species). Thêm species mới = row tự xuất hiện.',
-	collection: 'v_species_matrix',
-	fields: ['species_code', 'display_name', 'composition_level', 'management_mode', 'total', 'certified', 'uncertified'],
-	sort: ['-total'],
+	description: 'Phân loại loài — data từ birth_registry + entity_species. Thêm species mới = row tự xuất hiện.',
+	dataUrl: '/api/registry/species-matrix',
+	dataKey: 'data',
 	columns: [
 		{ key: 'species_code', label: 'Mã loài', type: 'text' },
 		{ key: 'display_name', label: 'Tên loài', type: 'text' },
