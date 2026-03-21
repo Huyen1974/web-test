@@ -71,6 +71,8 @@ const LEVEL_CONFIG: Record<string, { label: string; color: string }> = {
 	product: { label: 'Sản phẩm', color: 'amber' },
 	building: { label: 'Công trình', color: 'indigo' },
 	meta: { label: 'Phân loại', color: 'pink' },
+	health: { label: 'Sức khỏe', color: 'red' },
+	info: { label: 'Tham khảo', color: 'gray' },
 };
 
 const LEVEL_LABEL_VI: Record<string, string> = {
@@ -224,7 +226,53 @@ const tableRows = computed(() => {
 		verified: true,
 		_speciesCount: sd.speciesCount,
 	};
-	return [...data.summaries, speciesRow, ...data.details, coverageRow].map((row, idx) => ({
+	// Rows 8-10: Health system
+	const hd = healthData.value;
+	const ud = unmanagedData.value;
+	const orphanRow = {
+		_type: 'summary',
+		_virtualCode: null,
+		_link: '/knowledge/registries/health',
+		code: 'CAT-ORP',
+		name: 'Mồ côi (Orphan)',
+		entity_type: '',
+		composition_level: hd.orphan > 0 ? 'health' : 'info',
+		record_count: hd.orphan,
+		orphan_count: hd.totalGap,
+		delta_plus: 0,
+		delta_minus: 0,
+		verified: hd.orphan === 0,
+	};
+	const phantomRow = {
+		_type: 'summary',
+		_virtualCode: null,
+		_link: '/knowledge/registries/health',
+		code: 'CAT-PHA',
+		name: 'Phantom',
+		entity_type: '',
+		composition_level: hd.phantom > 0 ? 'health' : 'info',
+		record_count: hd.phantom,
+		orphan_count: 0,
+		delta_plus: 0,
+		delta_minus: 0,
+		verified: hd.phantom === 0,
+	};
+	const unmanagedRow = {
+		_type: 'summary',
+		_virtualCode: null,
+		_link: '/knowledge/registries/unmanaged',
+		code: 'CAT-UNM',
+		name: 'Không quản trị',
+		entity_type: '',
+		composition_level: 'info',
+		record_count: ud.total,
+		orphan_count: 0,
+		delta_plus: 0,
+		delta_minus: 0,
+		verified: true,
+		_unmanagedDetail: `${ud.observed} observed, ${ud.excluded} excluded`,
+	};
+	return [...data.summaries, speciesRow, orphanRow, phantomRow, unmanagedRow, ...data.details, coverageRow].map((row, idx) => ({
 		...row,
 		stt: idx + 1,
 	}));
@@ -312,6 +360,34 @@ const changelogRows = computed(() =>
 		...e,
 		stt: idx + 1,
 	})),
+);
+
+// Fetch registry health (orphan/phantom) for rows 8-9
+const { data: healthData } = useAsyncData(
+	'registry-health',
+	async () => {
+		try {
+			const resp = await $fetch<any>('/api/registry/health');
+			return resp?.totals || { khop: 0, orphan: 0, phantom: 0, totalGap: 0 };
+		} catch {
+			return { khop: 0, orphan: 0, phantom: 0, totalGap: 0 };
+		}
+	},
+	{ default: () => ({ khop: 0, orphan: 0, phantom: 0, totalGap: 0 }) },
+);
+
+// Fetch unmanaged count for row 10
+const { data: unmanagedData } = useAsyncData(
+	'registry-unmanaged',
+	async () => {
+		try {
+			const resp = await $fetch<any>('/api/registry/unmanaged');
+			return resp?.totals || { observed: 0, excluded: 0, total: 0 };
+		} catch {
+			return { observed: 0, excluded: 0, total: 0 };
+		}
+	},
+	{ default: () => ({ observed: 0, excluded: 0, total: 0 }) },
 );
 
 // Fetch DOT tools count for coverage row
