@@ -55,6 +55,7 @@ const COMPOSITION_LEVEL_DISPLAY: Record<string, { emoji: string; label: string }
 	material: { emoji: '\uD83D\uDFE0', label: 'vật liệu' },
 	product: { emoji: '\uD83D\uDFE1', label: 'sản phẩm' },
 	building: { emoji: '\uD83D\uDFE4', label: 'công trình' },
+	meta: { emoji: '\uD83D\uDFE3', label: 'phân loại' },
 };
 
 const { $directus } = useNuxtApp();
@@ -69,6 +70,7 @@ const LEVEL_CONFIG: Record<string, { label: string; color: string }> = {
 	material: { label: 'Vật liệu', color: 'orange' },
 	product: { label: 'Sản phẩm', color: 'amber' },
 	building: { label: 'Công trình', color: 'indigo' },
+	meta: { label: 'Phân loại', color: 'pink' },
 };
 
 const LEVEL_LABEL_VI: Record<string, string> = {
@@ -205,7 +207,24 @@ const tableRows = computed(() => {
 		delta_minus: 0,
 		verified: true,
 	};
-	return [...data.summaries, ...data.details, coverageRow].map((row, idx) => ({
+	// Row 7: Species classification (Phân loại loài)
+	const sd = speciesData.value;
+	const speciesRow = {
+		_type: 'summary',
+		_virtualCode: null,
+		_link: '/knowledge/registries/species',
+		code: 'CAT-SPE',
+		name: 'Phân loại loài',
+		entity_type: '',
+		composition_level: 'meta',
+		record_count: sd.birthGovCount,
+		orphan_count: 0,
+		delta_plus: 0,
+		delta_minus: 0,
+		verified: true,
+		_speciesCount: sd.speciesCount,
+	};
+	return [...data.summaries, speciesRow, ...data.details, coverageRow].map((row, idx) => ({
 		...row,
 		stt: idx + 1,
 	}));
@@ -310,6 +329,38 @@ const { data: dotToolsCount } = useAsyncData(
 	},
 	{ default: () => 0 },
 );
+
+// Fetch species count + birth_registry governed count for Row 7
+const { data: speciesData } = useAsyncData(
+	'species-row7',
+	async () => {
+		try {
+			const [species, births] = await Promise.all([
+				$directus.request(
+					readItems('entity_species' as any, {
+						fields: ['id'],
+						filter: { management_mode: { _eq: 'governed' } },
+						limit: -1,
+					}),
+				),
+				$directus.request(
+					readItems('birth_registry' as any, {
+						fields: ['id'],
+						filter: { governance_role: { _eq: 'governed' } },
+						limit: -1,
+					}),
+				),
+			]);
+			return {
+				speciesCount: (species as any[]).length,
+				birthGovCount: (births as any[]).length,
+			};
+		} catch {
+			return { speciesCount: 0, birthGovCount: 0 };
+		}
+	},
+	{ default: () => ({ speciesCount: 0, birthGovCount: 0 }) },
+);
 </script>
 
 <template>
@@ -341,6 +392,9 @@ const { data: dotToolsCount } = useAsyncData(
 			<NuxtLink to="/knowledge/registries/matrix">
 				<UBadge color="purple" variant="subtle" size="sm" class="cursor-pointer hover:opacity-80">Entity Matrix</UBadge>
 			</NuxtLink>
+			<NuxtLink to="/knowledge/registries/species">
+				<UBadge color="pink" variant="subtle" size="sm" class="cursor-pointer hover:opacity-80">Species Matrix</UBadge>
+			</NuxtLink>
 			<NuxtLink to="/knowledge/registries/changelog">
 				<UBadge color="gray" variant="subtle" size="sm" class="cursor-pointer hover:opacity-80">Changelog</UBadge>
 			</NuxtLink>
@@ -353,8 +407,8 @@ const { data: dotToolsCount } = useAsyncData(
 			</template>
 			<template #cell-code="{ row }">
 				<NuxtLink
-					v-if="row._type === 'summary' && row._virtualCode"
-					:to="`/knowledge/registries/${row._virtualCode}`"
+					v-if="row._type === 'summary' && (row._virtualCode || row._link)"
+					:to="row._link || `/knowledge/registries/${row._virtualCode}`"
 					class="font-mono text-xs font-medium text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
 					@click.stop
 				>{{ row.code }}</NuxtLink>
@@ -362,11 +416,11 @@ const { data: dotToolsCount } = useAsyncData(
 			</template>
 			<template #cell-name="{ row }">
 				<NuxtLink
-					v-if="row._type === 'summary' && row._virtualCode"
-					:to="`/knowledge/registries/${row._virtualCode}`"
+					v-if="row._type === 'summary' && (row._virtualCode || row._link)"
+					:to="row._link || `/knowledge/registries/${row._virtualCode}`"
 					class="font-semibold text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
 					@click.stop
-				>{{ row.name }}</NuxtLink>
+				>{{ row.name }}<span v-if="row._speciesCount" class="ml-2 text-xs font-normal text-gray-500">({{ row._speciesCount }} loài)</span></NuxtLink>
 				<NuxtLink
 					v-else-if="row._type === 'detail' && row.entity_type"
 					:to="getRowLink(row)"
