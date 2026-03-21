@@ -80,17 +80,17 @@ export default defineEventHandler(async () => {
 		birthCounts[cn] = (birthCounts[cn] || 0) + 1;
 	}
 
-	// Get source counts per collection
+	// Get source counts per collection using meta=total_count
 	const collections: HealthRow[] = [];
 	for (const cn of uniqueCollections) {
 		try {
 			const resp = await $fetch<any>(`${baseUrl}/items/${cn}`, {
-				params: { 'aggregate[count]': '*', 'limit': 0 },
+				params: { meta: 'total_count', limit: 0, fields: 'id' },
 				headers,
 			});
-			const sourceCount = resp?.data?.[0]?.count || 0;
+			const sourceCount = resp?.meta?.total_count ?? resp?.meta?.filter_count ?? 0;
 			const birthCount = birthCounts[cn] || 0;
-			const gap = sourceCount - birthCount;
+			const gap = Number(sourceCount) - birthCount;
 			collections.push({
 				collection_name: cn,
 				noi_chua: Number(sourceCount),
