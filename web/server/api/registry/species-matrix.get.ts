@@ -26,40 +26,33 @@ export default defineEventHandler(async () => {
 	}
 
 	const config = useRuntimeConfig();
-	const directusUrl = config.public?.directusUrl || process.env.NUXT_PUBLIC_DIRECTUS_URL || 'https://directus.incomexsaigoncorp.vn';
+	const baseUrl = config.directusInternalUrl || config.public?.directusUrl || 'https://directus.incomexsaigoncorp.vn';
+	const token = config.directusServiceToken || process.env.NUXT_DIRECTUS_SERVICE_TOKEN;
 
-	// Auth
-	const loginResp = await $fetch<any>(`${directusUrl}/auth/login`, {
-		method: 'POST',
-		body: {
-			email: process.env.DIRECTUS_ADMIN_EMAIL,
-			password: process.env.DIRECTUS_ADMIN_PASSWORD,
-		},
-	}).catch(() => null);
-
-	const token = loginResp?.data?.access_token;
 	if (!token) {
-		throw createError({ statusCode: 500, statusMessage: 'Auth failed' });
+		throw createError({ statusCode: 500, statusMessage: 'Service token not configured' });
 	}
+
+	const headers = { Authorization: `Bearer ${token}` };
 
 	// Query entity_species + birth_registry aggregate
 	const [species, births] = await Promise.all([
-		$fetch<any>(`${directusUrl}/items/entity_species`, {
+		$fetch<any>(`${baseUrl}/items/entity_species`, {
 			params: {
 				'fields': 'code,species_code,display_name,composition_level,management_mode',
 				'filter[management_mode][_eq]': 'governed',
 				'limit': -1,
 				'sort': 'code',
 			},
-			headers: { Authorization: `Bearer ${token}` },
+			headers,
 		}),
-		$fetch<any>(`${directusUrl}/items/birth_registry`, {
+		$fetch<any>(`${baseUrl}/items/birth_registry`, {
 			params: {
 				'fields': 'species_code,certified',
 				'filter[governance_role][_eq]': 'governed',
 				'limit': -1,
 			},
-			headers: { Authorization: `Bearer ${token}` },
+			headers,
 		}),
 	]);
 
