@@ -1,0 +1,236 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-schema-species-tree-ensure — S157-B: Add tree support to entity_species
+# =============================================================================
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-schema-*species*tree* — none]
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-03-21): Initial — parent_id + depth + meta composition_level
+#
+# Adds to entity_species:
+#   - parent_id (integer, FK to entity_species.id)
+#   - depth (smallint, DEFAULT 1, CHECK 0-2)
+#   - Updates composition_level choices to include "meta"
+#
+# Usage:
+#   dot-schema-species-tree-ensure [--cloud|--local] [--dry-run]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+DRY_RUN=""
+
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-schema-species-tree-ensure v${VERSION} — S157-B Species Tree
+
+Adds: parent_id, depth to entity_species.
+Updates: composition_level choices (+meta).
+
+Usage:
+  dot-schema-species-tree-ensure [--cloud|--local] [--dry-run]
+
+EOF
+  show_environment_help
+}
+
+main() {
+  for arg in "$@"; do
+    case "$arg" in
+      --dry-run) DRY_RUN="1" ;;
+      --help|-h) show_help; exit 0 ;;
+    esac
+  done
+
+  init_environment "$@"
+  local BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: Species Tree Ensure v${VERSION}"
+  echo "S157-B: parent_id + depth + meta"
+  echo "========================================="
+  print_environment_banner "$@"
+
+  # Auth
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    source "${SCRIPT_DIR}/dot-auth" "$@"
+  fi
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "Authentication failed"; exit 1
+  fi
+
+  local tmp_py
+  tmp_py=$(mktemp /tmp/dot-species-tree-XXXXXX.py)
+  trap "rm -f '$tmp_py'" EXIT
+
+  cat > "$tmp_py" << 'PYEOF'
+import json, os, sys, ssl, urllib.request
+
+base_url = os.environ['BASE_URL']
+token = os.environ['DOT_TOKEN']
+dry_run = os.environ.get('DRY_RUN', '')
+
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+def api(method, path, data=None):
+    url = f'{base_url}{path}'
+    payload = json.dumps(data).encode() if data else None
+    req = urllib.request.Request(url, data=payload, method=method,
+        headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'})
+    try:
+        resp = urllib.request.urlopen(req, context=ctx)
+        return resp.status, json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        try:
+            return e.code, json.loads(body)
+        except:
+            return e.code, {'error': body[:200]}
+
+def field_exists(coll, field):
+    code, data = api('GET', f'/fields/{coll}/{field}')
+    return code == 200
+
+def ensure_field(coll, field_name, field_type, meta_extra=None, schema_extra=None):
+    if field_exists(coll, field_name):
+        print(f'  [SKIP] {coll}.{field_name} exists')
+        return True
+    if dry_run:
+        print(f'  [DRY] Would create {coll}.{field_name} ({field_type})')
+        return True
+    payload = {
+        'field': field_name,
+        'type': field_type,
+        'meta': {'required': False, 'readonly': False, 'hidden': False, 'searchable': False},
+        'schema': {'is_nullable': True}
+    }
+    if meta_extra:
+        payload['meta'].update(meta_extra)
+    if schema_extra:
+        payload['schema'].update(schema_extra)
+    code, resp = api('POST', f'/fields/{coll}', payload)
+    if code == 200:
+        print(f'  [OK]   Created {coll}.{field_name}')
+        return True
+    else:
+        print(f'  [ERR]  Failed {coll}.{field_name}: HTTP {code} -- {json.dumps(resp)[:150]}')
+        return False
+
+# ============================================================
+# STEP 1: Add parent_id field
+# ============================================================
+print('=' * 60)
+print('STEP 1: Add parent_id to entity_species')
+print('=' * 60)
+
+ensure_field('entity_species', 'parent_id', 'integer',
+    {'interface': 'select-dropdown-m2o', 'width': 'half',
+     'display': 'related-values',
+     'note': 'Parent species (for 3-tier tree). NULL = depth 0 or standalone depth 1.',
+     'options': {'template': '{{code}} -- {{display_name}}'}},
+    {'foreign_key_table': 'entity_species', 'foreign_key_column': 'id'})
+
+# ============================================================
+# STEP 2: Add depth field
+# ============================================================
+print()
+print('=' * 60)
+print('STEP 2: Add depth to entity_species')
+print('=' * 60)
+
+ensure_field('entity_species', 'depth', 'integer',
+    {'interface': 'select-dropdown', 'width': 'half',
+     'note': 'Tree depth: 0=root group, 1=main species, 2=sub-species. Default=1.',
+     'options': {'choices': [
+         {'text': '0 - Root Group', 'value': 0},
+         {'text': '1 - Main Species', 'value': 1},
+         {'text': '2 - Sub-species', 'value': 2},
+     ]}},
+    {'numeric_precision': 5, 'numeric_scale': 0, 'default_value': 1})
+
+# ============================================================
+# STEP 3: Update composition_level choices to include 'meta'
+# ============================================================
+print()
+print('=' * 60)
+print('STEP 3: Update composition_level choices (+meta)')
+print('=' * 60)
+
+new_choices = [
+    {'text': 'Atom', 'value': 'atom'},
+    {'text': 'Molecule', 'value': 'molecule'},
+    {'text': 'Compound', 'value': 'compound'},
+    {'text': 'Material', 'value': 'material'},
+    {'text': 'Product', 'value': 'product'},
+    {'text': 'Building', 'value': 'building'},
+    {'text': 'Meta', 'value': 'meta'},
+]
+
+if dry_run:
+    print(f'  [DRY] Would update composition_level choices')
+else:
+    code, resp = api('PATCH', '/fields/entity_species/composition_level', {
+        'meta': {
+            'options': {'choices': new_choices}
+        }
+    })
+    if code == 200:
+        print(f'  [OK]   Updated composition_level choices (+meta)')
+    else:
+        print(f'  [WARN] Update composition_level: HTTP {code}')
+
+# ============================================================
+# STEP 4: Verify
+# ============================================================
+print()
+print('=' * 60)
+print('STEP 4: Verify')
+print('=' * 60)
+
+errors = 0
+for fld in ['parent_id', 'depth']:
+    if field_exists('entity_species', fld):
+        print(f'  [OK]   entity_species.{fld} exists')
+    else:
+        print(f'  [FAIL] entity_species.{fld} MISSING')
+        errors += 1
+
+print()
+if errors == 0:
+    print('VERIFY: ALL CHECKS PASSED')
+else:
+    print(f'VERIFY: {errors} CHECK(S) FAILED')
+
+print()
+print('DONE -- Species Tree Ensure complete')
+PYEOF
+
+  BASE_URL="$BASE_URL" DOT_TOKEN="$DOT_TOKEN" DRY_RUN="${DRY_RUN}" \
+    python3 "$tmp_py" < /dev/null
+
+  rm -f "$tmp_py"
+
+  echo ""
+  echo "========================================="
+  echo "DOT Tool: Species Tree Ensure - COMPLETE"
+  echo "========================================="
+}
+
+main "$@"
