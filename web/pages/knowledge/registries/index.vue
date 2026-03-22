@@ -217,6 +217,20 @@ const columns = [
 	{ key: 'verified', label: 'Xác minh' },
 ];
 
+const registriesTableRoot = ref<HTMLElement | null>(null);
+const registriesHeaderTestIds: Record<string, string> = {
+	stt: 'col-stt',
+	code: 'col-code',
+	name: 'col-ten',
+	composition_level: 'col-lop',
+	record_count: 'col-so-luong',
+	thanh_phan: 'col-thanh-phan',
+	delta_plus: 'col-delta-plus',
+	delta_minus: 'col-delta-minus',
+	orphan_count: 'col-mo-coi',
+	verified: 'col-xac-minh',
+};
+
 // Combined rows: summaries + details + DOT coverage row, with STT
 const tableRows = computed(() => {
 	const data = registryData.value;
@@ -460,6 +474,16 @@ const { data: speciesData } = useAsyncData(
 	},
 	{ default: () => ({ speciesCount: 0, birthGovCount: 0 }) },
 );
+
+useTableTestIds({
+	rootRef: registriesTableRoot,
+	tableTestId: 'registries-table',
+	columnKeys: computed(() => columns.map((column) => column.key)),
+	headerTestIds: registriesHeaderTestIds,
+	rowTestIds: computed(() =>
+		tableRows.value.map((row: any) => (row.code ? `row-${row.code}` : undefined)),
+	),
+});
 </script>
 
 <template>
@@ -491,7 +515,7 @@ const { data: speciesData } = useAsyncData(
 			<NuxtLink to="/knowledge/registries/matrix">
 				<UBadge color="purple" variant="subtle" size="sm" class="cursor-pointer hover:opacity-80">Entity Matrix</UBadge>
 			</NuxtLink>
-			<NuxtLink to="/knowledge/registries/species">
+			<NuxtLink to="/knowledge/registries/species" data-testid="link-species-matrix">
 				<UBadge color="pink" variant="subtle" size="sm" class="cursor-pointer hover:opacity-80">Species Matrix</UBadge>
 			</NuxtLink>
 			<NuxtLink to="/knowledge/registries/changelog">
@@ -500,90 +524,92 @@ const { data: speciesData } = useAsyncData(
 		</div>
 
 		<!-- Unified registry table: summaries + details -->
-		<UTable :columns="columns" :rows="tableRows" @select="onRowClick">
-			<template #cell-stt="{ row }">
-				<span class="text-xs text-gray-400">{{ row.stt }}</span>
-			</template>
-			<template #cell-code="{ row }">
-				<NuxtLink
-					v-if="row._type === 'summary' && (row._virtualCode || row._link)"
-					:to="row._link || `/knowledge/registries/${row._virtualCode}`"
-					class="font-mono text-xs font-medium text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
-					@click.stop
-				>{{ row.code }}</NuxtLink>
-				<span v-else class="font-mono text-xs">{{ row.code }}</span>
-			</template>
-			<template #cell-name="{ row }">
-				<NuxtLink
-					v-if="row._type === 'summary' && (row._virtualCode || row._link)"
-					:to="row._link || `/knowledge/registries/${row._virtualCode}`"
-					class="font-semibold text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
-					@click.stop
-				>{{ row.name }}<span v-if="row._speciesCount" class="ml-2 text-xs font-normal text-gray-500">({{ row._speciesCount }} loài)</span></NuxtLink>
-				<NuxtLink
-					v-else-if="row._type === 'detail' && row.entity_type"
-					:to="getRowLink(row)"
-					class="text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
-					@click.stop
-				>{{ row.name }}</NuxtLink>
-				<span v-else>{{ row.name }}</span>
-			</template>
-			<template #cell-composition_level="{ row }">
-				<UBadge
-					:color="(LEVEL_CONFIG[row.composition_level]?.color as any) || 'gray'"
-					variant="subtle"
-					size="xs"
-				>
-					{{ LEVEL_CONFIG[row.composition_level]?.label || row.composition_level }}
-				</UBadge>
-			</template>
-			<template #cell-record_count="{ row }">
-				<span
-					:class="row._type === 'summary' ? 'font-bold text-gray-900 dark:text-white' : 'font-medium'"
-				>{{ row.record_count }}</span>
-			</template>
-			<template #cell-thanh_phan="{ row }">
-				<template v-if="row.code === 'CAT-SPE'">
-					<span class="font-medium text-pink-600 dark:text-pink-400">{{ compositionData.totalSpecies }} loài</span>
+		<div ref="registriesTableRoot">
+			<UTable :columns="columns" :rows="tableRows" @select="onRowClick">
+				<template #stt-data="{ row }">
+					<span class="text-xs text-gray-400">{{ row.stt }}</span>
 				</template>
-				<template v-else-if="row._type === 'summary' && row._virtualCode && compositionData.byLevel?.[row.composition_level]">
-					<span class="text-sm text-gray-600 dark:text-gray-400">
-						{{ compositionData.byLevel[row.composition_level]?.speciesCount || 0 }} loài
-					</span>
+				<template #code-data="{ row }">
+					<NuxtLink
+						v-if="row._type === 'summary' && (row._virtualCode || row._link)"
+						:to="row._link || `/knowledge/registries/${row._virtualCode}`"
+						class="font-mono text-xs font-medium text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
+						@click.stop
+					>{{ row.code }}</NuxtLink>
+					<span v-else class="font-mono text-xs">{{ row.code }}</span>
 				</template>
-				<template v-else-if="row._type === 'detail' && row.entity_type && compositionData.byCollection">
-					<span class="text-xs text-gray-500">
-						{{ getCollectionSpecies(row) }}
-					</span>
+				<template #name-data="{ row }">
+					<NuxtLink
+						v-if="row._type === 'summary' && (row._virtualCode || row._link)"
+						:to="row._link || `/knowledge/registries/${row._virtualCode}`"
+						class="font-semibold text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
+						@click.stop
+					>{{ row.name }}<span v-if="row._speciesCount" class="ml-2 text-xs font-normal text-gray-500">({{ row._speciesCount }} loài)</span></NuxtLink>
+					<NuxtLink
+						v-else-if="row._type === 'detail' && row.entity_type"
+						:to="getRowLink(row)"
+						class="text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-200"
+						@click.stop
+					>{{ row.name }}</NuxtLink>
+					<span v-else>{{ row.name }}</span>
 				</template>
-				<template v-else>
-					<span class="text-gray-300 dark:text-gray-600">&mdash;</span>
+				<template #composition_level-data="{ row }">
+					<UBadge
+						:color="(LEVEL_CONFIG[row.composition_level]?.color as any) || 'gray'"
+						variant="subtle"
+						size="xs"
+					>
+						{{ LEVEL_CONFIG[row.composition_level]?.label || row.composition_level }}
+					</UBadge>
 				</template>
-			</template>
-			<template #cell-delta_plus="{ row }">
-				<span v-if="row.delta_plus > 0" class="font-medium text-emerald-600 dark:text-emerald-400">+{{ row.delta_plus }}</span>
-			</template>
-			<template #cell-delta_minus="{ row }">
-				<span v-if="row.delta_minus < 0" class="font-medium text-red-600 dark:text-red-400">{{ row.delta_minus }}</span>
-			</template>
-			<template #cell-orphan_count="{ row }">
-				<span
-					v-if="row.orphan_count > 0"
-					class="font-medium text-amber-600 dark:text-amber-400"
-				>{{ row.orphan_count }}</span>
-				<span v-else class="text-gray-400">0</span>
-			</template>
-			<template #cell-verified="{ row }">
-				<span v-if="row.verified">✅</span>
-				<span v-else>❌</span>
-			</template>
-		</UTable>
+				<template #record_count-data="{ row }">
+					<span
+						:class="row._type === 'summary' ? 'font-bold text-gray-900 dark:text-white' : 'font-medium'"
+					>{{ row.record_count }}</span>
+				</template>
+				<template #thanh_phan-data="{ row }">
+					<template v-if="row.code === 'CAT-SPE'">
+						<span class="font-medium text-pink-600 dark:text-pink-400">{{ compositionData.totalSpecies }} loài</span>
+					</template>
+					<template v-else-if="row._type === 'summary' && row._virtualCode && compositionData.byLevel?.[row.composition_level]">
+						<span class="text-sm text-gray-600 dark:text-gray-400">
+							{{ compositionData.byLevel[row.composition_level]?.speciesCount || 0 }} loài
+						</span>
+					</template>
+					<template v-else-if="row._type === 'detail' && row.entity_type && compositionData.byCollection">
+						<span class="text-xs text-gray-500">
+							{{ getCollectionSpecies(row) }}
+						</span>
+					</template>
+					<template v-else>
+						<span class="text-gray-300 dark:text-gray-600">&mdash;</span>
+					</template>
+				</template>
+				<template #delta_plus-data="{ row }">
+					<span v-if="row.delta_plus > 0" class="font-medium text-emerald-600 dark:text-emerald-400">+{{ row.delta_plus }}</span>
+				</template>
+				<template #delta_minus-data="{ row }">
+					<span v-if="row.delta_minus < 0" class="font-medium text-red-600 dark:text-red-400">{{ row.delta_minus }}</span>
+				</template>
+				<template #orphan_count-data="{ row }">
+					<span
+						v-if="row.orphan_count > 0"
+						class="font-medium text-amber-600 dark:text-amber-400"
+					>{{ row.orphan_count }}</span>
+					<span v-else class="text-gray-400">0</span>
+				</template>
+				<template #verified-data="{ row }">
+					<span v-if="row.verified">✅</span>
+					<span v-else>❌</span>
+				</template>
+			</UTable>
+		</div>
 
 		<!-- Nhật ký hệ thống — Log entries tách riêng -->
 		<div v-if="registryData.logs && registryData.logs.length > 0" class="mt-10">
 			<h2 class="mb-4 text-xl font-semibold text-gray-900 dark:text-white">Nhật ký hệ thống</h2>
 			<UTable :columns="logColumns" :rows="logRows">
-				<template #cell-name="{ row }">
+				<template #name-data="{ row }">
 					<NuxtLink
 						v-if="row.entity_type"
 						:to="`/knowledge/registries/${row.entity_type}`"
@@ -592,10 +618,10 @@ const { data: speciesData } = useAsyncData(
 					>{{ row.name }}</NuxtLink>
 					<span v-else>{{ row.name }}</span>
 				</template>
-				<template #cell-record_count="{ row }">
+				<template #record_count-data="{ row }">
 					<span class="font-medium">{{ row.record_count }}</span>
 				</template>
-				<template #cell-orphan_count="{ row }">
+				<template #orphan_count-data="{ row }">
 					<span v-if="row.orphan_count > 0" class="font-medium text-amber-600 dark:text-amber-400">{{ row.orphan_count }}</span>
 					<span v-else class="text-gray-400">0</span>
 				</template>
@@ -614,10 +640,10 @@ const { data: speciesData } = useAsyncData(
 				</NuxtLink>
 			</div>
 			<UTable :columns="changelogColumns" :rows="changelogRows">
-				<template #cell-stt="{ row }">
+				<template #stt-data="{ row }">
 					<span class="text-xs text-gray-400">{{ row.stt }}</span>
 				</template>
-				<template #cell-code="{ row }">
+				<template #code-data="{ row }">
 					<template v-if="row.action === 'deleted'">
 						<span class="font-mono text-xs line-through text-gray-400">{{ row.code }}</span>
 					</template>
@@ -628,16 +654,16 @@ const { data: speciesData } = useAsyncData(
 					>{{ row.code }}</NuxtLink>
 					<span v-else class="font-mono text-xs text-gray-400">—</span>
 				</template>
-				<template #cell-name="{ row }">
+				<template #name-data="{ row }">
 					<template v-if="row.action === 'deleted'">
 						<span class="text-sm line-through text-gray-400">{{ row.name }}</span>
 					</template>
 					<span v-else class="text-sm">{{ row.name || '—' }}</span>
 				</template>
-				<template #cell-level="{ row }">
+				<template #level-data="{ row }">
 					<span class="text-xs">{{ COMPOSITION_LEVEL_DISPLAY[row.level]?.emoji || '' }} {{ COMPOSITION_LEVEL_DISPLAY[row.level]?.label || row.level }}</span>
 				</template>
-				<template #cell-action="{ row }">
+				<template #action-data="{ row }">
 					<UBadge
 						v-if="row.action === 'created'"
 						color="green"

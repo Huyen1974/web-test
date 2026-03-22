@@ -19,12 +19,32 @@ const columns = [
 	{ key: 'status', label: 'Trạng thái' },
 ];
 
+const healthTableRoot = ref<HTMLElement | null>(null);
+const healthHeaderTestIds: Record<string, string> = {
+	stt: 'health-col-stt',
+	collection_name: 'health-col-collection',
+	noi_chua: 'health-col-noi-chua',
+	noi_sinh: 'health-col-noi-sinh',
+	gap: 'health-col-gap',
+	status: 'health-col-status',
+};
+
 const rows = computed(() =>
 	(healthData.value?.collections || []).map((c: any, idx: number) => ({
 		...c,
 		stt: idx + 1,
 	})),
 );
+
+useTableTestIds({
+	rootRef: healthTableRoot,
+	tableTestId: 'health-table',
+	columnKeys: computed(() => columns.map((column) => column.key)),
+	headerTestIds: healthHeaderTestIds,
+	rowTestIds: computed(() =>
+		rows.value.map((row: any) => (row.collection_name ? `health-row-${row.collection_name}` : undefined)),
+	),
+});
 </script>
 
 <template>
@@ -47,15 +67,15 @@ const rows = computed(() =>
 
 		<!-- Summary cards -->
 		<div class="mb-6 flex flex-wrap gap-4">
-			<div class="rounded-lg bg-green-50 px-4 py-3 dark:bg-green-900/20">
+			<div data-testid="health-card-khop" class="rounded-lg bg-green-50 px-4 py-3 dark:bg-green-900/20">
 				<div class="text-2xl font-bold text-green-700 dark:text-green-400">{{ healthData.totals?.khop || 0 }}</div>
 				<div class="text-xs text-green-600 dark:text-green-500">KHỚP</div>
 			</div>
-			<div class="rounded-lg bg-red-50 px-4 py-3 dark:bg-red-900/20">
+			<div data-testid="health-card-orphan" class="rounded-lg bg-red-50 px-4 py-3 dark:bg-red-900/20">
 				<div class="text-2xl font-bold text-red-700 dark:text-red-400">{{ healthData.totals?.orphan || 0 }}</div>
 				<div class="text-xs text-red-600 dark:text-red-500">Orphan</div>
 			</div>
-			<div class="rounded-lg bg-amber-50 px-4 py-3 dark:bg-amber-900/20">
+			<div data-testid="health-card-phantom" class="rounded-lg bg-amber-50 px-4 py-3 dark:bg-amber-900/20">
 				<div class="text-2xl font-bold text-amber-700 dark:text-amber-400">{{ healthData.totals?.phantom || 0 }}</div>
 				<div class="text-xs text-amber-600 dark:text-amber-500">Phantom</div>
 			</div>
@@ -63,32 +83,34 @@ const rows = computed(() =>
 
 		<div v-if="status === 'pending'" class="py-8 text-center text-gray-500">Đang tải...</div>
 
-		<UTable v-else :columns="columns" :rows="rows">
-			<template #cell-stt="{ row }">
-				<span class="text-xs text-gray-400">{{ row.stt }}</span>
-			</template>
-			<template #cell-collection_name="{ row }">
-				<span class="font-mono text-xs">{{ row.collection_name }}</span>
-			</template>
-			<template #cell-noi_chua="{ row }">
-				<span class="font-medium">{{ row.noi_chua }}</span>
-			</template>
-			<template #cell-noi_sinh="{ row }">
-				<span class="font-medium">{{ row.noi_sinh }}</span>
-			</template>
-			<template #cell-gap="{ row }">
-				<span
-					class="font-bold"
-					:class="row.gap === 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'"
-				>{{ row.gap }}</span>
-			</template>
-			<template #cell-status="{ row }">
-				<UBadge
-					:color="row.status === 'KHOP' ? 'green' : row.status === 'ORPHAN' ? 'red' : 'amber'"
-					variant="subtle"
-					size="xs"
-				>{{ row.status }}</UBadge>
-			</template>
-		</UTable>
+		<div v-else ref="healthTableRoot">
+			<UTable :columns="columns" :rows="rows">
+				<template #stt-data="{ row }">
+					<span class="text-xs text-gray-400">{{ row.stt }}</span>
+				</template>
+				<template #collection_name-data="{ row }">
+					<span class="font-mono text-xs">{{ row.collection_name }}</span>
+				</template>
+				<template #noi_chua-data="{ row }">
+					<span class="font-medium">{{ row.noi_chua }}</span>
+				</template>
+				<template #noi_sinh-data="{ row }">
+					<span class="font-medium">{{ row.noi_sinh }}</span>
+				</template>
+				<template #gap-data="{ row }">
+					<span
+						class="font-bold"
+						:class="row.gap === 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'"
+					>{{ row.gap }}</span>
+				</template>
+				<template #status-data="{ row }">
+					<UBadge
+						:color="row.status === 'KHOP' ? 'green' : row.status === 'ORPHAN' ? 'red' : 'amber'"
+						variant="subtle"
+						size="xs"
+					>{{ row.status }}</UBadge>
+				</template>
+			</UTable>
+		</div>
 	</div>
 </template>

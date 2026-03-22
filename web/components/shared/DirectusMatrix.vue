@@ -38,6 +38,12 @@ export interface MatrixConfig {
 		searchable?: boolean;
 		totalsRow?: boolean;
 	};
+	testIds?: {
+		table: string;
+		totals?: string;
+		headers?: Record<string, string>;
+		rowPrefix?: string;
+	};
 }
 
 const props = defineProps<{
@@ -45,6 +51,7 @@ const props = defineProps<{
 }>();
 
 const { $directus } = useNuxtApp();
+const tableRoot = ref<HTMLElement | null>(null);
 
 const searchQuery = ref('');
 
@@ -147,6 +154,21 @@ function onSort(col: { key: string }) {
 		sortDir.value = 'desc';
 	}
 }
+
+useTableTestIds({
+	rootRef: tableRoot,
+	tableTestId: props.config.testIds?.table || 'matrix-table',
+	columnKeys: computed(() => tableColumns.value.map((column) => column.key)),
+	headerTestIds: computed(() => ({
+		stt: `${props.config.testIds?.table || 'matrix-table'}-col-stt`,
+		...(props.config.testIds?.headers || {}),
+	})),
+	rowTestIds: computed(() =>
+		props.config.testIds?.rowPrefix
+			? tableRows.value.map((row: any) => `${props.config.testIds?.rowPrefix}-${row[props.config.rowKey]}`)
+			: [],
+	),
+});
 </script>
 
 <template>
@@ -174,37 +196,39 @@ function onSort(col: { key: string }) {
 		</div>
 
 		<!-- Matrix table -->
-		<UTable
-			v-else
-			:columns="tableColumns"
-			:rows="tableRows"
-			:sort="sortField ? { column: sortField, direction: sortDir } : undefined"
-			@update:sort="onSort"
-		>
-			<template #cell-stt="{ row }">
-				<span class="text-xs text-gray-400">{{ row.stt }}</span>
-			</template>
+		<div v-else ref="tableRoot">
+			<UTable
+				:columns="tableColumns"
+				:rows="tableRows"
+				:sort="sortField ? { column: sortField, direction: sortDir } : undefined"
+				@update:sort="onSort"
+			>
+				<template #stt-data="{ row }">
+					<span class="text-xs text-gray-400">{{ row.stt }}</span>
+				</template>
 
-			<!-- Dynamic cell rendering based on column config -->
-			<template v-for="col in config.columns" :key="col.key" #[`cell-${col.key}`]="{ row }">
-				<UBadge
-					v-if="col.type === 'badge'"
-					:color="(col.badgeColor as any) || 'gray'"
-					variant="subtle"
-					size="xs"
-				>{{ row[col.key] }}</UBadge>
-				<span
-					v-else-if="col.type === 'number'"
-					class="font-medium"
-					:class="row[col.key] > 0 ? '' : 'text-gray-400'"
-				>{{ row[col.key] }}</span>
-				<span v-else>{{ row[col.key] }}</span>
-			</template>
-		</UTable>
+				<!-- Dynamic cell rendering based on column config -->
+				<template v-for="col in config.columns" :key="col.key" #[`${col.key}-data`]="{ row }">
+					<UBadge
+						v-if="col.type === 'badge'"
+						:color="(col.badgeColor as any) || 'gray'"
+						variant="subtle"
+						size="xs"
+					>{{ row[col.key] }}</UBadge>
+					<span
+						v-else-if="col.type === 'number'"
+						class="font-medium"
+						:class="row[col.key] > 0 ? '' : 'text-gray-400'"
+					>{{ row[col.key] }}</span>
+					<span v-else>{{ row[col.key] }}</span>
+				</template>
+			</UTable>
+		</div>
 
 		<!-- Totals row -->
 		<div
 			v-if="totalsRow"
+			:data-testid="config.testIds?.totals"
 			class="mt-2 flex items-center gap-6 rounded-md bg-gray-50 px-4 py-2 text-sm font-semibold dark:bg-gray-800"
 		>
 			<span class="text-gray-600 dark:text-gray-300">TOTAL</span>

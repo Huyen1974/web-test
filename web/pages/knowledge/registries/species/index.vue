@@ -26,6 +26,19 @@ const speciesMatrixConfig: MatrixConfig = {
 		searchable: true,
 		totalsRow: true,
 	},
+	testIds: {
+		table: 'species-matrix-table',
+		totals: 'species-matrix-total',
+		rowPrefix: 'species-row',
+		headers: {
+			species_code: 'species-col-code',
+			display_name: 'species-col-name',
+			composition_level: 'species-col-level',
+			total: 'species-col-total',
+			certified: 'species-col-certified',
+			uncertified: 'species-col-uncertified',
+		},
+	},
 };
 </script>
 
