@@ -40,7 +40,6 @@ export default defineEventHandler(async () => {
 		$fetch<any>(`${baseUrl}/items/entity_species`, {
 			params: {
 				'fields': 'code,species_code,display_name,composition_level,management_mode',
-				'filter[management_mode][_eq]': 'governed',
 				'limit': -1,
 				'sort': 'code',
 			},
@@ -49,7 +48,6 @@ export default defineEventHandler(async () => {
 		$fetch<any>(`${baseUrl}/items/birth_registry`, {
 			params: {
 				'fields': 'species_code,certified',
-				'filter[governance_role][_eq]': 'governed',
 				'limit': -1,
 			},
 			headers,
