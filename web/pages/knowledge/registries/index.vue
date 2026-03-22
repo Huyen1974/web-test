@@ -203,7 +203,7 @@ const { data: compositionData } = useAsyncData(
 	{ default: () => ({ byLevel: {}, byCollection: {}, totalSpecies: 0 }) },
 );
 
-// UTable columns — STT first, "Lớp" instead of "Tầng", + "Thành phần"
+// UTable columns — STT first, "Lớp" instead of "Tầng", + "Thành phần" (S160)
 const columns = [
 	{ key: 'stt', label: 'STT' },
 	{ key: 'code', label: 'Code' },
@@ -211,6 +211,8 @@ const columns = [
 	{ key: 'composition_level', label: 'Lớp' },
 	{ key: 'record_count', label: 'Số lượng' },
 	{ key: 'thanh_phan', label: 'Thành phần' },
+	{ key: 'delta_plus', label: '+' },
+	{ key: 'delta_minus', label: '-' },
 	{ key: 'orphan_count', label: 'Mồ côi' },
 	{ key: 'verified', label: 'Xác minh' },
 ];
@@ -443,6 +445,7 @@ const { data: speciesData } = useAsyncData(
 				$directus.request(
 					readItems('birth_registry' as any, {
 						fields: ['id'],
+						filter: { governance_role: { _eq: 'governed' } },
 						limit: -1,
 					}),
 				),
@@ -556,6 +559,12 @@ const { data: speciesData } = useAsyncData(
 				<template v-else>
 					<span class="text-gray-300 dark:text-gray-600">&mdash;</span>
 				</template>
+			</template>
+			<template #cell-delta_plus="{ row }">
+				<span v-if="row.delta_plus > 0" class="font-medium text-emerald-600 dark:text-emerald-400">+{{ row.delta_plus }}</span>
+			</template>
+			<template #cell-delta_minus="{ row }">
+				<span v-if="row.delta_minus < 0" class="font-medium text-red-600 dark:text-red-400">{{ row.delta_minus }}</span>
 			</template>
 			<template #cell-orphan_count="{ row }">
 				<span
