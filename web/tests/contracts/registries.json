@@ -24,7 +24,8 @@
     { "code": "CAT-SPE", "name": "Phân loại loài", "testid": "row-CAT-SPE" },
     { "code": "CAT-ORP", "name": "Mồ côi (Orphan)", "testid": "row-CAT-ORP" },
     { "code": "CAT-PHA", "name": "Phantom", "testid": "row-CAT-PHA" },
-    { "code": "CAT-UNM", "name": "Không quản trị", "testid": "row-CAT-UNM" }
+    { "code": "CAT-UNM", "name": "Không quản trị", "testid": "row-CAT-UNM" },
+    { "code": "CAT-FAKE", "name": "Test Block", "testid": "row-CAT-FAKE" }
   ],
   "required_links": [
     { "text": "Species Matrix", "href": "/knowledge/registries/species", "testid": "link-species-matrix" }
