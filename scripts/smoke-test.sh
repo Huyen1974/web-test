@@ -43,6 +43,41 @@ check() {
   rm -f "$tmpfile"
 }
 
+check_contract_keywords() {
+  local name="$1"
+  local url="$2"
+  shift 2
+  local keywords=("$@")
+  local tmpfile=$(mktemp)
+  local status
+  local missing=()
+
+  status=$(curl -s -o "$tmpfile" -w "%{http_code}" --max-time 15 "$url" 2>/dev/null || echo "000")
+
+  if [ "$status" != "200" ]; then
+    echo "  ✗ FAIL: $name — Expected 200, Got $status"
+    FAIL=$((FAIL+1))
+    rm -f "$tmpfile"
+    return
+  fi
+
+  for keyword in "${keywords[@]}"; do
+    if ! grep -Fq -- "$keyword" "$tmpfile" 2>/dev/null; then
+      missing+=("$keyword")
+    fi
+  done
+
+  if [ "${#missing[@]}" -eq 0 ]; then
+    echo "  ✓ PASS: $name (contract keywords OK)"
+    PASS=$((PASS+1))
+  else
+    echo "  ✗ FAIL: $name — missing keywords: ${missing[*]}"
+    FAIL=$((FAIL+1))
+  fi
+
+  rm -f "$tmpfile"
+}
+
 echo "1. INFRASTRUCTURE"
 check "Directus Health"    "https://directus.incomexsaigoncorp.vn/server/health" "200" '"status":"ok"'
 check "Agent Data Health"  "https://vps.incomexsaigoncorp.vn/api/health"         "200" '"status":"healthy"'
@@ -64,7 +99,8 @@ check "posts"                "https://directus.incomexsaigoncorp.vn/items/posts?
 echo ""
 echo "3. WEBSITE PAGES"
 check "Knowledge Hub"      "https://vps.incomexsaigoncorp.vn/knowledge"            "200" "Knowledge"
-check "Registries"         "https://vps.incomexsaigoncorp.vn/knowledge/registries"  "200" "CAT-"
+check_contract_keywords "Registries" "https://vps.incomexsaigoncorp.vn/knowledge/registries" \
+  "CAT-SPE" "CAT-ORP" "Phân loại loài" "Thành phần"
 
 check "Homepage"           "https://vps.incomexsaigoncorp.vn/"                    "200" "Incomex"
 
