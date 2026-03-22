@@ -16,10 +16,15 @@ jobs:
           REQUIRED_FILES=(
             "docs/dev/blueprints/BUSINESS_OS_BLUEPRINT.md"
             "docs/ssot/constitution.md"
+            "web/tests/contracts/registries.json"
+            "web/tests/contracts/species-matrix.json"
+            "web/tests/contracts/health.json"
+            ".github/workflows/e2e-test.yml"
+            "scripts/smoke-test.sh"
           )
-          
+
           MISSING_FILES=0
-          
+
           for FILE in "${REQUIRED_FILES[@]}"; do
             if [ ! -f "$FILE" ]; then
               echo "::error::Critical file missing: $FILE"
@@ -33,3 +38,51 @@ jobs:
             echo "::error::One or more critical files are missing. This PR cannot be merged."
             exit 1
           fi
+
+      - name: Verify contracts not weakened
+        run: |
+          python3 - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          contract_paths = [
+              Path("web/tests/contracts/registries.json"),
+              Path("web/tests/contracts/species-matrix.json"),
+              Path("web/tests/contracts/health.json"),
+          ]
+
+          failures = []
+
+          for path in contract_paths:
+              data = json.loads(path.read_text(encoding="utf-8"))
+              columns = len(data.get("columns", []))
+              required_rows = len(data.get("required_rows", []))
+              required_text = len(data.get("required_text", []))
+              cards = len(data.get("cards", []))
+              required_links = len(data.get("required_links", []))
+              invariants = required_rows + required_text + cards + required_links
+
+              print(
+                  f"Contract {path}: columns={columns}, "
+                  f"required_rows={required_rows}, required_text={required_text}, "
+                  f"cards={cards}, required_links={required_links}"
+              )
+
+              if columns < 3:
+                  failures.append(f"{path} has fewer than 3 columns")
+
+              if required_rows > 0 and required_rows < 3:
+                  failures.append(f"{path} has fewer than 3 required rows")
+
+              if invariants < 1:
+                  failures.append(f"{path} has no content invariants")
+
+          if failures:
+              for failure in failures:
+                  print(f"::error::{failure}")
+              print("::error::One or more contracts look weakened.")
+              sys.exit(1)
+
+          print("✅ All contracts meet minimum coverage requirements")
+          PY
