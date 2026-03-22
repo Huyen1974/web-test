@@ -60,6 +60,16 @@ const COMPOSITION_LEVEL_DISPLAY: Record<string, { emoji: string; label: string }
 
 const { $directus } = useNuxtApp();
 
+// Helper: get species display for a detail row's registry collection
+function getCollectionSpecies(row: any): string {
+	const comp = compositionData.value;
+	if (!comp?.byCollection) return '—';
+	// Look up by the Directus collection name from meta_catalog entity_type → registry_collection
+	// For now, try the entity_type as collection hint
+	const entry = comp.byCollection[row.entity_type] || comp.byCollection[row.code];
+	return entry ? entry.speciesName : '—';
+}
+
 // taxonomy count now comes from v_registry_counts (CAT-018) — same as other collections
 
 // Composition level labels + colors
@@ -180,15 +190,27 @@ const { data: registryData } = useAsyncData(
 	{ default: () => ({ summaries: [], details: [], logs: [] }) },
 );
 
-// UTable columns — STT first, "Lớp" instead of "Tầng"
+// Fetch composition data for "Thành phần" column
+const { data: compositionData } = useAsyncData(
+	'registry-composition',
+	async () => {
+		try {
+			return await $fetch<any>('/api/registry/composition');
+		} catch {
+			return { byLevel: {}, byCollection: {}, totalSpecies: 0 };
+		}
+	},
+	{ default: () => ({ byLevel: {}, byCollection: {}, totalSpecies: 0 }) },
+);
+
+// UTable columns — STT first, "Lớp" instead of "Tầng", + "Thành phần"
 const columns = [
 	{ key: 'stt', label: 'STT' },
 	{ key: 'code', label: 'Code' },
 	{ key: 'name', label: 'Tên' },
 	{ key: 'composition_level', label: 'Lớp' },
 	{ key: 'record_count', label: 'Số lượng' },
-	{ key: 'delta_plus', label: '+' },
-	{ key: 'delta_minus', label: '-' },
+	{ key: 'thanh_phan', label: 'Thành phần' },
 	{ key: 'orphan_count', label: 'Mồ côi' },
 	{ key: 'verified', label: 'Xác minh' },
 ];
@@ -415,14 +437,12 @@ const { data: speciesData } = useAsyncData(
 				$directus.request(
 					readItems('entity_species' as any, {
 						fields: ['id'],
-						filter: { management_mode: { _eq: 'governed' } },
 						limit: -1,
 					}),
 				),
 				$directus.request(
 					readItems('birth_registry' as any, {
 						fields: ['id'],
-						filter: { governance_role: { _eq: 'governed' } },
 						limit: -1,
 					}),
 				),
@@ -519,11 +539,23 @@ const { data: speciesData } = useAsyncData(
 					:class="row._type === 'summary' ? 'font-bold text-gray-900 dark:text-white' : 'font-medium'"
 				>{{ row.record_count }}</span>
 			</template>
-			<template #cell-delta_plus="{ row }">
-				<span v-if="row.delta_plus > 0" class="font-medium text-emerald-600 dark:text-emerald-400">+{{ row.delta_plus }}</span>
-			</template>
-			<template #cell-delta_minus="{ row }">
-				<span v-if="row.delta_minus < 0" class="font-medium text-red-600 dark:text-red-400">{{ row.delta_minus }}</span>
+			<template #cell-thanh_phan="{ row }">
+				<template v-if="row.code === 'CAT-SPE'">
+					<span class="font-medium text-pink-600 dark:text-pink-400">{{ compositionData.totalSpecies }} loài</span>
+				</template>
+				<template v-else-if="row._type === 'summary' && row._virtualCode && compositionData.byLevel?.[row.composition_level]">
+					<span class="text-sm text-gray-600 dark:text-gray-400">
+						{{ compositionData.byLevel[row.composition_level]?.speciesCount || 0 }} loài
+					</span>
+				</template>
+				<template v-else-if="row._type === 'detail' && row.entity_type && compositionData.byCollection">
+					<span class="text-xs text-gray-500">
+						{{ getCollectionSpecies(row) }}
+					</span>
+				</template>
+				<template v-else>
+					<span class="text-gray-300 dark:text-gray-600">&mdash;</span>
+				</template>
 			</template>
 			<template #cell-orphan_count="{ row }">
 				<span
