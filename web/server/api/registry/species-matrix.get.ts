@@ -28,12 +28,7 @@ export default defineEventHandler(async () => {
 	const config = useRuntimeConfig();
 	const baseUrl = config.directusInternalUrl || config.public?.directusUrl || 'https://directus.incomexsaigoncorp.vn';
 	const token = config.directusServiceToken || process.env.NUXT_DIRECTUS_SERVICE_TOKEN;
-
-	if (!token) {
-		throw createError({ statusCode: 500, statusMessage: 'Service token not configured' });
-	}
-
-	const headers = { Authorization: `Bearer ${token}` };
+	const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
 	// Query entity_species + birth_registry aggregate
 	const [species, births] = await Promise.all([

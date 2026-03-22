@@ -3,12 +3,12 @@ import type { MatrixConfig } from '~/components/shared/DirectusMatrix.vue';
 
 definePageMeta({
 	title: 'Ma trận Loài',
-	description: 'Species Matrix — 21 loài × metrics từ Birth Registry',
+	description: 'Species Matrix — tất cả loài × metrics từ Birth Registry',
 });
 
 const speciesMatrixConfig: MatrixConfig = {
 	title: 'Ma trận Loài (Species Matrix)',
-	description: 'Phân loại loài — data từ birth_registry + entity_species. Thêm species mới = row tự xuất hiện.',
+	description: 'Phân loại loài — data từ birth_registry + entity_species. Thêm loài mới = row tự xuất hiện.',
 	dataUrl: '/api/registry/species-matrix',
 	dataKey: 'data',
 	columns: [

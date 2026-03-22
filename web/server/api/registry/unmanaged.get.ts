@@ -5,6 +5,8 @@
  * Cached for 5 minutes.
  */
 
+import { isRegistryE2EFixtureMode, registryUnmanagedFixture } from '~/server/utils/registryE2EFixtures';
+
 interface UnmanagedRow {
 	collection_name: string;
 	governance_role: string;
@@ -25,6 +27,9 @@ export default defineEventHandler(async () => {
 	const token = config.directusServiceToken || process.env.NUXT_DIRECTUS_SERVICE_TOKEN;
 
 	if (!token) {
+		if (isRegistryE2EFixtureMode()) {
+			return registryUnmanagedFixture;
+		}
 		throw createError({ statusCode: 500, statusMessage: 'Service token not configured' });
 	}
 

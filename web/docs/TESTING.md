@@ -6,26 +6,32 @@ This document describes the minimal test commands for production validation.
 
 - Health check (4-layer):
 ```bash
-npm run health
+pnpm run health
 ```
 
-- E2E login tests against production:
+- Registry regression suite against the local preview build:
 ```bash
-npm run test:e2e:prod
+REGISTRY_E2E_FIXTURES=1 pnpm run test:e2e
+```
+
+- E2E smoke tests against production:
+```bash
+pnpm run test:e2e:prod
 ```
 
 ## DOT Tools
 
 - Schema check:
 ```bash
-npm run dot:schema
+pnpm run dot:schema
 ```
 
 - Cost audit:
 ```bash
-npm run dot:cost
+pnpm run dot:cost
 ```
 
 ## Notes
-- The E2E production tests run against https://vps.incomexsaigoncorp.vn.
-- Use production credentials only when required by the test.
+- PR CI runs the registry browser suite against a local preview build.
+- `REGISTRY_E2E_FIXTURES=1` enables stable fixtures for registry health/unmanaged endpoints when CI does not have a Directus service token.
+- The production smoke suite runs against https://vps.incomexsaigoncorp.vn.
