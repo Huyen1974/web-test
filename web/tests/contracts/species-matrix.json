@@ -1,0 +1,19 @@
+{
+  "route": "/knowledge/registries/species",
+  "tier": "A",
+  "table_testid": "species-matrix-table",
+  "total_testid": "species-matrix-total",
+  "columns": [
+    { "key": "stt", "label": "STT", "testid": "species-matrix-table-col-stt" },
+    { "key": "species_code", "label": "Mã loài", "testid": "species-col-code" },
+    { "key": "display_name", "label": "Tên loài", "testid": "species-col-name" },
+    { "key": "composition_level", "label": "Lớp", "testid": "species-col-level" },
+    { "key": "total", "label": "Tổng", "testid": "species-col-total" },
+    { "key": "certified", "label": "Certified", "testid": "species-col-certified" },
+    { "key": "uncertified", "label": "Chưa", "testid": "species-col-uncertified" }
+  ],
+  "min_rows": 33,
+  "required_text": ["Ma trận Loài", "TOTAL"],
+  "owner": "orchestrator",
+  "contract_version": "1.0"
+}

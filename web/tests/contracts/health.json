@@ -1,0 +1,21 @@
+{
+  "route": "/knowledge/registries/health",
+  "tier": "A",
+  "table_testid": "health-table",
+  "cards": [
+    { "label": "KHỚP", "testid": "health-card-khop" },
+    { "label": "Orphan", "testid": "health-card-orphan" },
+    { "label": "Phantom", "testid": "health-card-phantom" }
+  ],
+  "columns": [
+    { "key": "stt", "label": "STT", "testid": "health-col-stt" },
+    { "key": "collection_name", "label": "Collection", "testid": "health-col-collection" },
+    { "key": "noi_chua", "label": "Nơi chứa", "testid": "health-col-noi-chua" },
+    { "key": "noi_sinh", "label": "Nơi sinh", "testid": "health-col-noi-sinh" },
+    { "key": "gap", "label": "Gap", "testid": "health-col-gap" },
+    { "key": "status", "label": "Trạng thái", "testid": "health-col-status" }
+  ],
+  "min_rows": 3,
+  "owner": "orchestrator",
+  "contract_version": "1.0"
+}

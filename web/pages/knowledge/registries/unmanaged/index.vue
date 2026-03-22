@@ -42,13 +42,13 @@ const rows = computed(() =>
 		<div v-if="status === 'pending'" class="py-8 text-center text-gray-500">Đang tải...</div>
 
 		<UTable v-else :columns="columns" :rows="rows">
-			<template #cell-stt="{ row }">
+			<template #stt-data="{ row }">
 				<span class="text-xs text-gray-400">{{ row.stt }}</span>
 			</template>
-			<template #cell-collection_name="{ row }">
+			<template #collection_name-data="{ row }">
 				<span class="font-mono text-xs">{{ row.collection_name }}</span>
 			</template>
-			<template #cell-governance_role="{ row }">
+			<template #governance_role-data="{ row }">
 				<UBadge
 					:color="row.governance_role === 'observed' ? 'blue' : 'gray'"
 					variant="subtle"

@@ -1,0 +1,36 @@
+{
+  "route": "/knowledge/registries",
+  "tier": "A",
+  "table_testid": "registries-table",
+  "columns": [
+    { "key": "stt", "label": "STT", "testid": "col-stt" },
+    { "key": "code", "label": "Code", "testid": "col-code" },
+    { "key": "name", "label": "Tên", "testid": "col-ten" },
+    { "key": "composition_level", "label": "Lớp", "testid": "col-lop" },
+    { "key": "record_count", "label": "Số lượng", "testid": "col-so-luong" },
+    { "key": "thanh_phan", "label": "Thành phần", "testid": "col-thanh-phan" },
+    { "key": "delta_plus", "label": "+", "testid": "col-delta-plus" },
+    { "key": "delta_minus", "label": "-", "testid": "col-delta-minus" },
+    { "key": "orphan_count", "label": "Mồ côi", "testid": "col-mo-coi" },
+    { "key": "verified", "label": "Xác minh", "testid": "col-xac-minh" }
+  ],
+  "required_rows": [
+    { "code": "CAT-ALL", "name": "Tổng nguyên tử", "testid": "row-CAT-ALL" },
+    { "code": "CAT-MOL", "name": "Tổng phân tử", "testid": "row-CAT-MOL" },
+    { "code": "CAT-CMP", "name": "Tổng hợp chất", "testid": "row-CAT-CMP" },
+    { "code": "CAT-MAT", "name": "Tổng vật liệu", "testid": "row-CAT-MAT" },
+    { "code": "CAT-PRD", "name": "Tổng sản phẩm", "testid": "row-CAT-PRD" },
+    { "code": "CAT-BLD", "name": "Tổng công trình", "testid": "row-CAT-BLD" },
+    { "code": "CAT-SPE", "name": "Phân loại loài", "testid": "row-CAT-SPE" },
+    { "code": "CAT-ORP", "name": "Mồ côi (Orphan)", "testid": "row-CAT-ORP" },
+    { "code": "CAT-PHA", "name": "Phantom", "testid": "row-CAT-PHA" },
+    { "code": "CAT-UNM", "name": "Không quản trị", "testid": "row-CAT-UNM" }
+  ],
+  "required_links": [
+    { "text": "Species Matrix", "href": "/knowledge/registries/species", "testid": "link-species-matrix" }
+  ],
+  "min_rows": 15,
+  "smoke_keywords": ["CAT-SPE", "CAT-ORP", "Phân loại loài", "Thành phần"],
+  "owner": "orchestrator",
+  "contract_version": "1.0"
+}
