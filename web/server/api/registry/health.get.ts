@@ -6,6 +6,8 @@
  * Cached for 2 minutes server-side.
  */
 
+import { isRegistryE2EFixtureMode, registryHealthFixture } from '~/server/utils/registryE2EFixtures';
+
 interface HealthRow {
 	collection_name: string;
 	noi_chua: number;
@@ -29,6 +31,9 @@ export default defineEventHandler(async () => {
 	const token = config.directusServiceToken || process.env.NUXT_DIRECTUS_SERVICE_TOKEN;
 
 	if (!token) {
+		if (isRegistryE2EFixtureMode()) {
+			return registryHealthFixture;
+		}
 		throw createError({ statusCode: 500, statusMessage: 'Service token not configured' });
 	}
 

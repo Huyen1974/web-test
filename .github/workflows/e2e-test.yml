@@ -1,62 +1,49 @@
 name: E2E Tests
 
 on:
-  # Run after VPS Deploy completes
-  workflow_run:
-    workflows: ["Deploy to VPS"]
-    types:
-      - completed
-    branches: [main]
-  # Allow manual trigger
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    # Only run if VPS Deploy was successful
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    defaults:
+      run:
+        working-directory: ./web
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
-      # Wait for deployment to propagate
-      - name: Wait for deployment propagation
-        run: sleep 60
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '20'
 
-      - name: Verify Super Session accessible
-        run: |
-          HTTP_CODE=$(curl -s --retry 3 --retry-delay 5 --retry-all-errors -o /dev/null -w "%{http_code}" "https://vps.incomexsaigoncorp.vn/admin/super-session")
-          echo "Super Session HTTP Code: $HTTP_CODE"
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "Warning: Super Session returned $HTTP_CODE (may require auth)"
-          fi
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+        with:
+          version: 9
 
-      - name: Verify Directus API accessible
-        run: |
-          HTTP_CODE=$(curl -s --retry 3 --retry-delay 5 --retry-all-errors -o /dev/null -w "%{http_code}" "https://directus.incomexsaigoncorp.vn/server/health")
-          echo "Directus Health HTTP Code: $HTTP_CODE"
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "Error: Directus not healthy"
-            exit 1
-          fi
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-      - name: Verify Directus public collections
-        run: |
-          # Check public collections that SSR needs (must be 200)
-          for col in v_registry_counts meta_catalog knowledge_documents; do
-            HTTP=$(curl -s -o /dev/null -w "%{http_code}" --retry 2 --retry-delay 3 "https://directus.incomexsaigoncorp.vn/items/$col?limit=1")
-            echo "$col: $HTTP"
-            if [ "$HTTP" != "200" ]; then
-              echo "Error: $col should be publicly accessible"
-              exit 1
-            fi
-          done
-          # Verify restricted collections are blocked (must be 403)
-          for col in ai_discussions system_issues; do
-            HTTP=$(curl -s -o /dev/null -w "%{http_code}" --retry 2 --retry-delay 3 "https://directus.incomexsaigoncorp.vn/items/$col?limit=1")
-            echo "$col: $HTTP (expected 403)"
-            if [ "$HTTP" = "200" ]; then
-              echo "Warning: $col should NOT be publicly accessible"
-            fi
-          done
-          echo "E2E Directus checks passed"
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run registry E2E suite
+        env:
+          NUXT_PUBLIC_DIRECTUS_URL: https://directus.incomexsaigoncorp.vn
+          REGISTRY_E2E_FIXTURES: '1'
+        run: pnpm run test:e2e
+
+      - name: Upload Playwright artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            web/playwright-report/
+            web/test-results/
