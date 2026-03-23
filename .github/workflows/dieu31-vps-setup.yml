@@ -1,0 +1,133 @@
+name: Điều 31 VPS Setup
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action: setup-cron | run-once | check-status'
+        required: true
+        default: 'run-once'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  vps-action:
+    name: VPS ${{ inputs.action }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed  # v2
+        with:
+          project_id: github-chatgpt-ggcloud
+          workload_identity_provider: projects/812872501910/locations/global/workloadIdentityPools/agent-data-pool/providers/github-provider
+          service_account: chatgpt-deployer@github-chatgpt-ggcloud.iam.gserviceaccount.com
+
+      - name: Fetch Directus token
+        id: token
+        uses: google-github-actions/get-secret-manager-secrets@v1
+        with:
+          secrets: |
+            directus_token:projects/github-chatgpt-ggcloud/secrets/DIRECTUS_ADMIN_TOKEN
+
+      - name: Run integrity runner (first run / test)
+        if: inputs.action == 'run-once'
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
+          command_timeout: 5m
+          script: |
+            set -euo pipefail
+            cd /opt/incomex/deploys/web-test
+
+            export DIRECTUS_TOKEN="${{ steps.token.outputs.directus_token }}"
+            export DIRECTUS_URL=https://directus.incomexsaigoncorp.vn
+            export SITE_URL=https://vps.incomexsaigoncorp.vn
+
+            echo "=== Files check ==="
+            ls -la scripts/integrity/main.js scripts/integrity/runners/ web/tests/contracts/
+
+            echo ""
+            echo "=== Running integrity runner ==="
+            RUN_ID="gh-dispatch-$(date +%Y%m%d-%H%M%S)"
+            node scripts/integrity/main.js --tier=A --run-id="$RUN_ID" || true
+
+            echo ""
+            echo "=== Checking WATCHDOG issue ==="
+            curl -sf "$DIRECTUS_URL/items/system_issues?filter[source_system][_eq]=dieu31-runner&filter[issue_class][_eq]=watchdog_fault&limit=1&sort=-last_seen_at&fields=id,title,violation_hash,occurrence_count,last_seen_at" \
+              -H "Authorization: Bearer $DIRECTUS_TOKEN" | python3 -c "
+            import sys, json
+            d = json.load(sys.stdin)
+            items = d.get('data', [])
+            if items:
+                w = items[0]
+                print(f'WATCHDOG issue: #{w[\"id\"]} — count={w[\"occurrence_count\"]} — last={w[\"last_seen_at\"]}')
+            else:
+                print('WATCHDOG: NO ISSUE FOUND')
+            " || echo "Could not query WATCHDOG"
+
+      - name: Setup cron + WATCHDOG monitor
+        if: inputs.action == 'setup-cron'
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -euo pipefail
+
+            echo "=== Setting up cron ==="
+            mkdir -p /opt/incomex/logs/integrity
+
+            # Make scripts executable
+            chmod +x /opt/incomex/deploys/web-test/scripts/integrity/*.sh
+
+            # Backup current crontab
+            crontab -l > /tmp/crontab-backup-$(date +%Y%m%d) 2>/dev/null || true
+
+            # Remove old integrity entries if any
+            (crontab -l 2>/dev/null || true) | grep -v "integrity" > /tmp/crontab-clean || true
+
+            # Add new entries
+            cat >> /tmp/crontab-clean <<'CRON'
+            # Điều 31 — Daily Integrity Audit (3AM VN = 20:00 UTC)
+            0 20 * * * /opt/incomex/deploys/web-test/scripts/integrity/cron-integrity.sh >> /opt/incomex/logs/integrity/cron.log 2>&1
+            # WATCHDOG Monitor — hourly
+            0 * * * * /opt/incomex/deploys/web-test/scripts/integrity/watchdog-monitor.sh >> /opt/incomex/logs/integrity/watchdog.log 2>&1
+            CRON
+
+            crontab /tmp/crontab-clean
+            rm /tmp/crontab-clean
+
+            echo "=== Crontab installed ==="
+            crontab -l | grep -E "integrity|WATCHDOG"
+
+      - name: Check status
+        if: inputs.action == 'check-status'
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            echo "=== Crontab ==="
+            crontab -l 2>/dev/null | grep -E "integrity|WATCHDOG" || echo "No integrity cron entries"
+
+            echo ""
+            echo "=== Recent logs ==="
+            ls -lt /opt/incomex/logs/integrity/ 2>/dev/null | head -10 || echo "No logs"
+
+            echo ""
+            echo "=== Latest cron log ==="
+            tail -20 /opt/incomex/logs/integrity/cron.log 2>/dev/null || echo "No cron log"
+
+            echo ""
+            echo "=== Scripts ==="
+            ls -la /opt/incomex/deploys/web-test/scripts/integrity/ 2>/dev/null || echo "Scripts not found"
