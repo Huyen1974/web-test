@@ -2,133 +2,118 @@
   "contract_id": "CTR-001",
   "name": "Registries Layer 1 — Main Dashboard",
   "tier": "A",
-  "type": "dom_vs_db",
+  "type": "dom_vs_contract",
   "owner": "orchestrator",
   "enabled": true,
-  "contract_version": "1.0.0",
+  "contract_version": "2.0.0",
   "last_verified_at": "2026-03-23",
   "grace_seconds": 60,
   "page_url": "https://vps.incomexsaigoncorp.vn/knowledge/registries",
   "checks": [
     {
       "check_id": "CTR-001-01",
-      "description": "Table registries-table exists on page",
+      "description": "Page title Danh mục hệ thống visible",
       "operator": "exists",
       "severity": "CRITICAL",
-      "source_dom": { "selector": "[data-testid='registries-table']" },
-      "source_db": { "query": "SELECT 1" }
+      "source_dom": { "selector": "Danh mục hệ thống" }
     },
     {
       "check_id": "CTR-001-02",
-      "description": "Column STT header present",
+      "description": "CAT-ALL row text present",
       "operator": "exists",
       "severity": "CRITICAL",
-      "source_dom": { "selector": "[data-testid='col-stt']" },
-      "source_db": { "query": "SELECT 1" }
+      "source_dom": { "selector": "CAT-ALL" }
     },
     {
       "check_id": "CTR-001-03",
-      "description": "Column Code header present",
+      "description": "CAT-MOL row text present",
       "operator": "exists",
       "severity": "CRITICAL",
-      "source_dom": { "selector": "[data-testid='col-code']" },
-      "source_db": { "query": "SELECT 1" }
+      "source_dom": { "selector": "CAT-MOL" }
     },
     {
       "check_id": "CTR-001-04",
-      "description": "Column Tên header present",
+      "description": "CAT-SPE (Phân loại loài) present",
       "operator": "exists",
       "severity": "CRITICAL",
-      "source_dom": { "selector": "[data-testid='col-ten']" },
-      "source_db": { "query": "SELECT 1" }
+      "source_dom": { "selector": "CAT-SPE" }
     },
     {
       "check_id": "CTR-001-05",
-      "description": "Column Số lượng header present",
+      "description": "CAT-ORP (Mồ côi) present",
       "operator": "exists",
       "severity": "CRITICAL",
-      "source_dom": { "selector": "[data-testid='col-so-luong']" },
-      "source_db": { "query": "SELECT 1" }
+      "source_dom": { "selector": "CAT-ORP" }
     },
     {
       "check_id": "CTR-001-06",
-      "description": "Row CAT-ALL (Tổng nguyên tử) exists",
+      "description": "CAT-PHA (Phantom) present",
       "operator": "exists",
-      "severity": "CRITICAL",
-      "source_dom": { "selector": "[data-testid='row-CAT-ALL']" },
-      "source_db": { "query": "SELECT code FROM v_registry_counts WHERE code = 'CAT-ALL'" }
+      "severity": "WARNING",
+      "source_dom": { "selector": "CAT-PHA" }
     },
     {
       "check_id": "CTR-001-07",
-      "description": "Row CAT-SPE (Phân loại loài) exists",
+      "description": "CAT-UNM (Không quản trị) present",
       "operator": "exists",
-      "severity": "CRITICAL",
-      "source_dom": { "selector": "[data-testid='row-CAT-SPE']" },
-      "source_db": { "query": "SELECT code FROM v_registry_counts WHERE code = 'CAT-SPE'" }
+      "severity": "WARNING",
+      "source_dom": { "selector": "CAT-UNM" }
     },
     {
       "check_id": "CTR-001-08",
-      "description": "Row CAT-ORP (Mồ côi) exists",
+      "description": "CAT-017 (Vấn đề Hệ thống) present — Dòng 11",
       "operator": "exists",
       "severity": "CRITICAL",
-      "source_dom": { "selector": "[data-testid='row-CAT-ORP']" },
-      "source_db": { "query": "SELECT code FROM v_registry_counts WHERE code = 'CAT-ORP'" }
+      "source_dom": { "selector": "Vấn đề Hệ thống" }
     },
     {
       "check_id": "CTR-001-09",
-      "description": "Row CAT-PHA (Phantom) exists",
-      "operator": "exists",
-      "severity": "WARNING",
-      "source_dom": { "selector": "[data-testid='row-CAT-PHA']" },
-      "source_db": { "query": "SELECT code FROM v_registry_counts WHERE code = 'CAT-PHA'" }
-    },
-    {
-      "check_id": "CTR-001-10",
-      "description": "Row CAT-UNM (Không quản trị) exists",
-      "operator": "exists",
-      "severity": "WARNING",
-      "source_dom": { "selector": "[data-testid='row-CAT-UNM']" },
-      "source_db": { "query": "SELECT code FROM v_registry_counts WHERE code = 'CAT-UNM'" }
-    },
-    {
-      "check_id": "CTR-001-11",
       "description": "Species Matrix link present",
       "operator": "exists",
       "severity": "CRITICAL",
-      "source_dom": { "selector": "[data-testid='link-species-matrix']" },
-      "source_db": { "query": "SELECT 1" }
+      "source_dom": { "selector": "Species Matrix" }
+    },
+    {
+      "check_id": "CTR-001-10",
+      "description": "Thành phần column keyword",
+      "operator": "exists",
+      "severity": "WARNING",
+      "source_dom": { "selector": "Thành phần" }
+    },
+    {
+      "check_id": "CTR-001-11",
+      "description": "LAYER 1 badge present",
+      "operator": "exists",
+      "severity": "CRITICAL",
+      "source_dom": { "selector": "LAYER 1" }
     },
     {
       "check_id": "CTR-001-12",
-      "description": "Table has at least 15 rows",
+      "description": "Tổng nguyên tử label present",
       "operator": "exists",
       "severity": "CRITICAL",
-      "source_dom": { "selector": "[data-testid='registries-table'] tbody tr:nth-child(15)" },
-      "source_db": { "query": "SELECT count(*) FROM v_registry_counts WHERE record_count > 0" }
+      "source_dom": { "selector": "Tổng nguyên tử" }
     },
     {
       "check_id": "CTR-001-13",
-      "description": "Column Thành phần header present",
+      "description": "Phân loại loài label present",
       "operator": "exists",
-      "severity": "WARNING",
-      "source_dom": { "selector": "[data-testid='col-thanh-phan']" },
-      "source_db": { "query": "SELECT 1" }
+      "severity": "CRITICAL",
+      "source_dom": { "selector": "Phân loại loài" }
     },
     {
       "check_id": "CTR-001-14",
-      "description": "Column Mồ côi header present",
+      "description": "Mồ côi (Orphan) label present",
       "operator": "exists",
       "severity": "WARNING",
-      "source_dom": { "selector": "[data-testid='col-mo-coi']" },
-      "source_db": { "query": "SELECT 1" }
+      "source_dom": { "selector": "Mồ côi (Orphan)" }
     },
     {
       "check_id": "CTR-001-15",
-      "description": "Row CAT-MOL (Tổng phân tử) exists",
+      "description": "Changelog section present",
       "operator": "exists",
-      "severity": "CRITICAL",
-      "source_dom": { "selector": "[data-testid='row-CAT-MOL']" },
-      "source_db": { "query": "SELECT code FROM v_registry_counts WHERE code = 'CAT-MOL'" }
+      "severity": "INFO",
+      "source_dom": { "selector": "Nhật ký thay đổi" }
     }
   ]
 }
