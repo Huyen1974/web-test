@@ -231,30 +231,6 @@ jobs:
 
             echo "=== Direct deploy complete ==="
 
-      - name: Copy smoke script to VPS
-        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634  # v0.1.7
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: root
-          key: ${{ secrets.VPS_SSH_KEY }}
-          source: "scripts/smoke-test.sh"
-          target: "/opt/incomex"
-          strip_components: 0
-
-      - name: Post-deploy smoke test
-        if: success()
-        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: root
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            set -euo pipefail
-            sleep 15
-            cd /opt/incomex
-            chmod +x scripts/smoke-test.sh
-            scripts/smoke-test.sh
-
   # ===========================================================================
   # Artifact Deploy: Pull Docker image from Artifact Registry → VPS restart
   # Active when DEPLOY_MODE != direct (default / artifact)
@@ -432,27 +408,3 @@ jobs:
             echo "Registry refresh: $(echo "$REFRESH_OUT" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(f"updated={d.get(\"updated\",\"?\")}, errors={d.get(\"errors\",\"?\")}")' 2>/dev/null || echo 'unknown')"
 
             echo "=== Deploy complete ==="
-
-      - name: Copy smoke script to VPS
-        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634  # v0.1.7
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: root
-          key: ${{ secrets.VPS_SSH_KEY }}
-          source: "scripts/smoke-test.sh"
-          target: "/opt/incomex"
-          strip_components: 0
-
-      - name: Post-deploy smoke test
-        if: success()
-        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: root
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            set -euo pipefail
-            sleep 15
-            cd /opt/incomex
-            chmod +x scripts/smoke-test.sh
-            scripts/smoke-test.sh
