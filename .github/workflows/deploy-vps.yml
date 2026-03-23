@@ -130,6 +130,27 @@ jobs:
           remote_user: root
           remote_key: ${{ secrets.VPS_SSH_KEY }}
 
+      # --- Rsync integrity runner + contracts to VPS ---
+      - name: Rsync integrity scripts to VPS
+        uses: burnett01/rsync-deployments@796cf0d5e4b535745ce49d7429f77cf39e25ef39  # 7.0.1
+        with:
+          switches: -avz --chmod=F755
+          path: scripts/integrity/
+          remote_path: /opt/incomex/deploys/web-test/scripts/integrity/
+          remote_host: ${{ secrets.VPS_HOST }}
+          remote_user: root
+          remote_key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Rsync contracts to VPS
+        uses: burnett01/rsync-deployments@796cf0d5e4b535745ce49d7429f77cf39e25ef39  # 7.0.1
+        with:
+          switches: -avz
+          path: web/tests/contracts/
+          remote_path: /opt/incomex/deploys/web-test/web/tests/contracts/
+          remote_host: ${{ secrets.VPS_HOST }}
+          remote_user: root
+          remote_key: ${{ secrets.VPS_SSH_KEY }}
+
       # --- Count Model B catalog sources (filesystem) ---
       - name: Count catalog sources
         id: catalog
