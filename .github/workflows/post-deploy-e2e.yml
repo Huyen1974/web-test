@@ -1,0 +1,27 @@
+name: Post-Deploy E2E
+
+on:
+  # Run after Deploy to VPS completes successfully
+  # Restores pattern from pre-PR#567 (S129C investigation: workflow_run removed by accident)
+  workflow_run:
+    workflows: ["Deploy to VPS"]
+    types:
+      - completed
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  post-deploy-smoke:
+    name: Production Smoke Test
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Wait for deployment propagation
+        run: sleep 30
+
+      - name: Run smoke test
+        run: bash scripts/smoke-test.sh
