@@ -11,4 +11,10 @@ export SITE_URL="${SITE_URL:-https://vps.incomexsaigoncorp.vn}"
 
 RUN_ID="deploy-$(date +%Y%m%d-%H%M%S)"
 echo "=== Điều 31 Post-Deploy — $RUN_ID ==="
-node "$SCRIPT_DIR/main.js" --tier=A --run-id="$RUN_ID"
+
+# Find node binary
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" 2>/dev/null
+NODE_BIN=$(which node 2>/dev/null || ls /usr/local/bin/node 2>/dev/null || ls "$NVM_DIR"/versions/node/*/bin/node 2>/dev/null | tail -1)
+
+$NODE_BIN "$SCRIPT_DIR/main.js" --tier=A --run-id="$RUN_ID"

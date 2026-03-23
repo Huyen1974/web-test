@@ -38,10 +38,22 @@ jobs:
             echo "=== Files check ==="
             ls scripts/integrity/main.js scripts/integrity/runners/ web/tests/contracts/ 2>/dev/null && echo "Files OK" || echo "Files MISSING"
 
+            # Find node binary (may be in nvm, docker, or /usr/local/bin)
+            NODE_BIN=$(which node 2>/dev/null || ls /usr/local/bin/node 2>/dev/null || ls /root/.nvm/versions/node/*/bin/node 2>/dev/null | tail -1 || echo "")
+            if [ -z "$NODE_BIN" ]; then
+              echo "Node not found on host. Installing via nvm..."
+              curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+              export NVM_DIR="$HOME/.nvm"
+              [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+              nvm install 20
+              NODE_BIN=$(which node)
+            fi
+            echo "Node: $($NODE_BIN --version)"
+
             echo ""
             echo "=== Running integrity runner ==="
             RUN_ID="gh-dispatch-$(date +%Y%m%d-%H%M%S)"
-            node scripts/integrity/main.js --tier=A --run-id="$RUN_ID" || true
+            $NODE_BIN scripts/integrity/main.js --tier=A --run-id="$RUN_ID" || true
 
             echo ""
             echo "=== Checking WATCHDOG issue ==="
