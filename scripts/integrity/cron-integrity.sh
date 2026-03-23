@@ -19,7 +19,12 @@ LOG_FILE="$LOG_DIR/$RUN_ID.log"
 echo "=== Điều 31 Cron — $RUN_ID ===" | tee "$LOG_FILE"
 echo "Time: $(date)" | tee -a "$LOG_FILE"
 
-node "$SCRIPT_DIR/main.js" --tier=all --run-id="$RUN_ID" 2>&1 | tee -a "$LOG_FILE"
+# Find node binary
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" 2>/dev/null
+NODE_BIN=$(which node 2>/dev/null || ls /usr/local/bin/node 2>/dev/null || ls "$NVM_DIR"/versions/node/*/bin/node 2>/dev/null | tail -1)
+
+$NODE_BIN "$SCRIPT_DIR/main.js" --tier=all --run-id="$RUN_ID" 2>&1 | tee -a "$LOG_FILE"
 EXIT=$?
 
 echo "=== Done: $(date) — exit $EXIT ===" | tee -a "$LOG_FILE"
