@@ -100,7 +100,7 @@ echo ""
 echo "3. WEBSITE PAGES"
 check "Knowledge Hub"      "https://vps.incomexsaigoncorp.vn/knowledge"            "200" "Knowledge"
 check_contract_keywords "Registries" "https://vps.incomexsaigoncorp.vn/knowledge/registries" \
-  "CAT-SPE" "CAT-ORP" "Phân loại loài" "Thành phần"
+  "CAT-SPE" "CAT-ORP" "Phân loại loài" "Thành phần" "Vấn đề Hệ thống"
 
 check "Homepage"           "https://vps.incomexsaigoncorp.vn/"                    "200" "Incomex"
 
