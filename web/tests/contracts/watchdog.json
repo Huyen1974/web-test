@@ -1,0 +1,20 @@
+{
+  "contract_id": "CTR-WATCHDOG",
+  "name": "WATCHDOG — Runner Liveness Check",
+  "tier": "A",
+  "type": "dom_vs_contract",
+  "owner": "system",
+  "enabled": true,
+  "contract_version": "1.0.0",
+  "last_verified_at": "2026-03-23",
+  "grace_seconds": 0,
+  "page_url": "https://vps.incomexsaigoncorp.vn/knowledge",
+  "checks": [
+    {
+      "check_id": "CTR-WATCHDOG-01",
+      "description": "Check luôn FAIL — nếu không thấy fail, runner đã chết",
+      "operator": "always_fail",
+      "severity": "CRITICAL"
+    }
+  ]
+}
