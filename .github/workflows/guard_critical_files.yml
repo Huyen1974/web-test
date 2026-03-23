@@ -20,6 +20,7 @@ jobs:
             "web/tests/contracts/species-matrix.json"
             "web/tests/contracts/health.json"
             ".github/workflows/e2e-test.yml"
+            ".github/workflows/post-deploy-e2e.yml"
             "scripts/smoke-test.sh"
           )
 
@@ -38,6 +39,42 @@ jobs:
             echo "::error::One or more critical files are missing. This PR cannot be merged."
             exit 1
           fi
+
+      - name: Verify workflow invariants
+        run: |
+          # Prevent PR#567-style regression: agent rewrites workflow file,
+          # removing critical triggers/features while file still exists.
+          # Each entry: "file|required_pattern|description"
+          WORKFLOW_CHECKS=(
+            ".github/workflows/post-deploy-e2e.yml|workflow_run:|must have workflow_run trigger (post-deploy chain)"
+            ".github/workflows/post-deploy-e2e.yml|Deploy to VPS|must trigger after Deploy to VPS"
+            ".github/workflows/post-deploy-e2e.yml|smoke-test.sh|must run smoke-test.sh"
+            ".github/workflows/e2e-test.yml|push:|must trigger on push to main"
+            ".github/workflows/e2e-test.yml|pull_request:|must trigger on pull_request"
+            ".github/workflows/e2e-test.yml|test:e2e|must run Playwright E2E tests"
+            ".github/workflows/deploy-vps.yml|workflow_run:|must have workflow_run trigger"
+            ".github/workflows/deploy-vps.yml|Nuxt 3 CI|must trigger after Nuxt 3 CI"
+          )
+
+          FAILED=0
+          for CHECK in "${WORKFLOW_CHECKS[@]}"; do
+            IFS='|' read -r FILE PATTERN DESC <<< "$CHECK"
+            if [ ! -f "$FILE" ]; then
+              echo "::error::$FILE missing — $DESC"
+              FAILED=1
+            elif ! grep -q "$PATTERN" "$FILE"; then
+              echo "::error::$FILE — $DESC (pattern '$PATTERN' not found)"
+              FAILED=1
+            else
+              echo "✅ $FILE: $DESC"
+            fi
+          done
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::Workflow invariant check failed. A critical trigger or feature may have been removed."
+            exit 1
+          fi
+          echo "✅ All workflow invariants intact"
 
       - name: Verify contracts not weakened
         run: |
