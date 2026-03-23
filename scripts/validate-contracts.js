@@ -7,10 +7,17 @@
 
 const fs = require('fs');
 const path = require('path');
-const Ajv = require('ajv').default || require('ajv');
-const addFormats = require('ajv-formats').default || require('ajv-formats');
 
-const CONTRACTS_DIR = path.join(__dirname, '..', 'web', 'tests', 'contracts');
+const WEB_DIR = path.join(__dirname, '..', 'web');
+const CONTRACTS_DIR = path.join(WEB_DIR, 'tests', 'contracts');
+
+// Resolve ajv from web/node_modules (where pnpm installs it)
+const ajvPath = require.resolve('ajv', { paths: [WEB_DIR] });
+const ajvFormatsPath = require.resolve('ajv-formats', { paths: [WEB_DIR] });
+const AjvModule = require(ajvPath);
+const addFormatsModule = require(ajvFormatsPath);
+const Ajv = AjvModule.default || AjvModule;
+const addFormats = addFormatsModule.default || addFormatsModule;
 const SCHEMA_FILE = path.join(CONTRACTS_DIR, 'schema.json');
 const SKIP_FILES = ['schema.json', 'README.md'];
 
