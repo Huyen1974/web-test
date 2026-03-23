@@ -262,6 +262,22 @@ jobs:
 
             echo "=== Direct deploy complete ==="
 
+      # --- Post-deploy integrity check (Điều 31 Vòng A) ---
+      - name: Post-deploy integrity check (Điều 31)
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
+          command_timeout: 3m
+          script: |
+            cd /opt/incomex/deploys/web-test
+            if [ -f scripts/integrity/post-deploy-check.sh ]; then
+              bash scripts/integrity/post-deploy-check.sh || echo "::warning::Integrity check failed — issues created"
+            else
+              echo "::notice::Integrity scripts not yet deployed — skipping"
+            fi
+
   # ===========================================================================
   # Artifact Deploy: Pull Docker image from Artifact Registry → VPS restart
   # Active when DEPLOY_MODE != direct (default / artifact)
