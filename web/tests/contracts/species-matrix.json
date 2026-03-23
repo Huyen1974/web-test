@@ -1,6 +1,15 @@
 {
-  "route": "/knowledge/registries/species",
+  "contract_id": "CTR-003",
+  "name": "Species Matrix — Phân loại loài",
   "tier": "A",
+  "type": "dom_vs_db",
+  "owner": "orchestrator",
+  "enabled": true,
+  "contract_version": "1.0.0",
+  "last_verified_at": "2026-03-23",
+  "grace_seconds": 60,
+  "page_url": "https://vps.incomexsaigoncorp.vn/knowledge/registries/species",
+  "route": "/knowledge/registries/species",
   "table_testid": "species-matrix-table",
   "total_testid": "species-matrix-total",
   "columns": [
@@ -14,6 +23,86 @@
   ],
   "min_rows": 33,
   "required_text": ["Ma trận Loài", "TOTAL"],
-  "owner": "orchestrator",
-  "contract_version": "1.0"
+  "checks": [
+    {
+      "check_id": "CTR-003-01",
+      "description": "Species table exists",
+      "operator": "exists",
+      "severity": "CRITICAL",
+      "source_dom": { "selector": "[data-testid='species-matrix-table']" },
+      "source_db": { "query": "SELECT count(*) FROM species" }
+    },
+    {
+      "check_id": "CTR-003-02",
+      "description": "At least 33 species rows",
+      "operator": "exists",
+      "severity": "CRITICAL",
+      "source_dom": { "selector": "[data-testid='species-matrix-table'] tbody tr:nth-child(33)" },
+      "source_db": { "query": "SELECT count(*) FROM species WHERE count > 0" }
+    },
+    {
+      "check_id": "CTR-003-03",
+      "description": "TOTAL summary card visible",
+      "operator": "exists",
+      "severity": "CRITICAL",
+      "source_dom": { "selector": "[data-testid='species-matrix-total']" },
+      "source_db": { "query": "SELECT sum(total) FROM species" }
+    },
+    {
+      "check_id": "CTR-003-04",
+      "description": "Column Mã loài header present",
+      "operator": "exists",
+      "severity": "CRITICAL",
+      "source_dom": { "selector": "[data-testid='species-col-code']" },
+      "source_db": { "query": "SELECT 1" }
+    },
+    {
+      "check_id": "CTR-003-05",
+      "description": "Column Tên loài header present",
+      "operator": "exists",
+      "severity": "CRITICAL",
+      "source_dom": { "selector": "[data-testid='species-col-name']" },
+      "source_db": { "query": "SELECT 1" }
+    },
+    {
+      "check_id": "CTR-003-06",
+      "description": "Column Tổng header present",
+      "operator": "exists",
+      "severity": "CRITICAL",
+      "source_dom": { "selector": "[data-testid='species-col-total']" },
+      "source_db": { "query": "SELECT 1" }
+    },
+    {
+      "check_id": "CTR-003-07",
+      "description": "Column Certified header present",
+      "operator": "exists",
+      "severity": "WARNING",
+      "source_dom": { "selector": "[data-testid='species-col-certified']" },
+      "source_db": { "query": "SELECT 1" }
+    },
+    {
+      "check_id": "CTR-003-08",
+      "description": "Column Chưa header present",
+      "operator": "exists",
+      "severity": "WARNING",
+      "source_dom": { "selector": "[data-testid='species-col-uncertified']" },
+      "source_db": { "query": "SELECT 1" }
+    },
+    {
+      "check_id": "CTR-003-09",
+      "description": "Heading Ma trận Loài visible",
+      "operator": "exists",
+      "severity": "CRITICAL",
+      "source_dom": { "selector": "h1, h2" },
+      "source_db": { "query": "SELECT 1" }
+    },
+    {
+      "check_id": "CTR-003-10",
+      "description": "Column Lớp header present",
+      "operator": "exists",
+      "severity": "WARNING",
+      "source_dom": { "selector": "[data-testid='species-col-level']" },
+      "source_db": { "query": "SELECT 1" }
+    }
+  ]
 }

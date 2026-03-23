@@ -1,6 +1,15 @@
 {
-  "route": "/knowledge/registries/health",
+  "contract_id": "CTR-002",
+  "name": "Health Dashboard — Registry Health Check",
   "tier": "A",
+  "type": "dom_vs_db",
+  "owner": "orchestrator",
+  "enabled": true,
+  "contract_version": "1.0.0",
+  "last_verified_at": "2026-03-23",
+  "grace_seconds": 60,
+  "page_url": "https://vps.incomexsaigoncorp.vn/knowledge/registries/health",
+  "route": "/knowledge/registries/health",
   "table_testid": "health-table",
   "cards": [
     { "label": "KHỚP", "testid": "health-card-khop" },
@@ -16,6 +25,46 @@
     { "key": "status", "label": "Trạng thái", "testid": "health-col-status" }
   ],
   "min_rows": 3,
-  "owner": "orchestrator",
-  "contract_version": "1.0"
+  "checks": [
+    {
+      "check_id": "CTR-002-01",
+      "description": "Card KHỚP exists",
+      "operator": "exists",
+      "severity": "CRITICAL",
+      "source_dom": { "selector": "[data-testid='health-card-khop']" },
+      "source_db": { "query": "SELECT count(*) FROM v_registry_health WHERE status = 'KHỚP'" }
+    },
+    {
+      "check_id": "CTR-002-02",
+      "description": "Card Orphan exists",
+      "operator": "exists",
+      "severity": "CRITICAL",
+      "source_dom": { "selector": "[data-testid='health-card-orphan']" },
+      "source_db": { "query": "SELECT count(*) FROM v_registry_health WHERE status = 'ORPHAN'" }
+    },
+    {
+      "check_id": "CTR-002-03",
+      "description": "Card Phantom exists",
+      "operator": "exists",
+      "severity": "CRITICAL",
+      "source_dom": { "selector": "[data-testid='health-card-phantom']" },
+      "source_db": { "query": "SELECT count(*) FROM v_registry_health WHERE status = 'PHANTOM'" }
+    },
+    {
+      "check_id": "CTR-002-04",
+      "description": "Health table exists with at least 3 rows",
+      "operator": "exists",
+      "severity": "CRITICAL",
+      "source_dom": { "selector": "[data-testid='health-table'] tbody tr:nth-child(3)" },
+      "source_db": { "query": "SELECT count(*) FROM v_registry_health" }
+    },
+    {
+      "check_id": "CTR-002-05",
+      "description": "All 6 column headers present",
+      "operator": "exists",
+      "severity": "CRITICAL",
+      "source_dom": { "selector": "[data-testid='health-col-status']" },
+      "source_db": { "query": "SELECT 1" }
+    }
+  ]
 }

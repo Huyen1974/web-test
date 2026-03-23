@@ -1,0 +1,39 @@
+{
+  "contract_id": "CTR-SYNC-001",
+  "name": "Directus ↔ Agent Data Sync — knowledge_documents",
+  "tier": "A",
+  "type": "directus_vs_vector",
+  "owner": "orchestrator",
+  "enabled": true,
+  "contract_version": "1.0.0",
+  "last_verified_at": "2026-03-23",
+  "grace_seconds": 300,
+  "checks": [
+    {
+      "check_id": "CTR-SYNC-001-01",
+      "description": "Chiều A: Directus → Agent Data — document count eventual_equals",
+      "operator": "eventual_equals",
+      "severity": "WARNING",
+      "direction": "directus_to_vector",
+      "source_db": {
+        "query": "SELECT count(*) FROM knowledge_documents WHERE status = 'published'",
+        "field": "count"
+      },
+      "expected": {
+        "collection": "knowledge_documents",
+        "freshness_seconds": 3600
+      }
+    },
+    {
+      "check_id": "CTR-SYNC-001-02",
+      "description": "Chiều B: Agent Data → Directus — vector documents exist",
+      "operator": "exists",
+      "severity": "CRITICAL",
+      "direction": "vector_to_directus",
+      "source_db": {
+        "query": "SELECT count(*) FROM knowledge_documents",
+        "field": "count"
+      }
+    }
+  ]
+}

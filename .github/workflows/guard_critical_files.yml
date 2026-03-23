@@ -17,11 +17,16 @@ jobs:
             "docs/dev/blueprints/BUSINESS_OS_BLUEPRINT.md"
             "docs/ssot/constitution.md"
             "web/tests/contracts/registries.json"
+            "web/tests/contracts/registries-l1.json"
             "web/tests/contracts/species-matrix.json"
             "web/tests/contracts/health.json"
+            "web/tests/contracts/watchdog.json"
+            "web/tests/contracts/sync-directus-vector.json"
+            "web/tests/contracts/schema.json"
             ".github/workflows/e2e-test.yml"
             ".github/workflows/post-deploy-e2e.yml"
             "scripts/smoke-test.sh"
+            "scripts/validate-contracts.js"
           )
 
           MISSING_FILES=0
