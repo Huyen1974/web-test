@@ -24,13 +24,14 @@
     { "code": "CAT-SPE", "name": "Phân loại loài", "testid": "row-CAT-SPE" },
     { "code": "CAT-ORP", "name": "Mồ côi (Orphan)", "testid": "row-CAT-ORP" },
     { "code": "CAT-PHA", "name": "Phantom", "testid": "row-CAT-PHA" },
-    { "code": "CAT-UNM", "name": "Không quản trị", "testid": "row-CAT-UNM" }
+    { "code": "CAT-UNM", "name": "Không quản trị", "testid": "row-CAT-UNM" },
+    { "code": "CAT-017", "name": "Vấn đề Hệ thống", "testid": "row-CAT-017" }
   ],
   "required_links": [
     { "text": "Species Matrix", "href": "/knowledge/registries/species", "testid": "link-species-matrix" }
   ],
   "min_rows": 15,
-  "smoke_keywords": ["CAT-SPE", "CAT-ORP", "Phân loại loài", "Thành phần"],
+  "smoke_keywords": ["CAT-SPE", "CAT-ORP", "Phân loại loài", "Thành phần", "Vấn đề Hệ thống"],
   "owner": "orchestrator",
   "contract_version": "1.0"
 }

@@ -310,7 +310,25 @@ const tableRows = computed(() => {
 		verified: true,
 		_unmanagedDetail: `${ud.observed} observed, ${ud.excluded} excluded`,
 	};
-	return [...data.summaries, speciesRow, orphanRow, phantomRow, unmanagedRow, ...data.details, coverageRow].map((row, idx) => ({
+	// Row 11: System Issues (Vấn đề Hệ thống)
+	const sid = systemIssuesData.value;
+	const issLevel = sid.critical > 0 ? 'health' : sid.warning > 0 ? 'health' : 'info';
+	const systemIssuesRow = {
+		_type: 'summary',
+		_virtualCode: null,
+		_link: '/knowledge/registries/system_issue',
+		code: 'CAT-017',
+		name: 'Vấn đề Hệ thống',
+		entity_type: 'system_issue',
+		composition_level: issLevel,
+		record_count: sid.all,
+		orphan_count: sid.critical,
+		delta_plus: 0,
+		delta_minus: 0,
+		verified: sid.critical === 0,
+		_issueDetail: { critical: sid.critical, warning: sid.warning, info: sid.info },
+	};
+	return [...data.summaries, speciesRow, orphanRow, phantomRow, unmanagedRow, systemIssuesRow, ...data.details, coverageRow].map((row, idx) => ({
 		...row,
 		stt: idx + 1,
 	}));
@@ -426,6 +444,20 @@ const { data: unmanagedData } = useAsyncData(
 		}
 	},
 	{ default: () => ({ observed: 0, excluded: 0, total: 0 }) },
+);
+
+// Fetch system issues count for Row 11 (Vấn đề Hệ thống)
+const { data: systemIssuesData } = useAsyncData(
+	'registry-system-issues',
+	async () => {
+		try {
+			const resp = await $fetch<any>('/api/registry/system-issues');
+			return resp?.totals || { all: 0, critical: 0, warning: 0, info: 0 };
+		} catch {
+			return { all: 0, critical: 0, warning: 0, info: 0 };
+		}
+	},
+	{ default: () => ({ all: 0, critical: 0, warning: 0, info: 0 }) },
 );
 
 // Fetch DOT tools count for coverage row
@@ -568,7 +600,12 @@ useTableTestIds({
 					>{{ row.record_count }}</span>
 				</template>
 				<template #thanh_phan-data="{ row }">
-					<template v-if="row.code === 'CAT-SPE'">
+					<template v-if="row.code === 'CAT-017' && row._issueDetail">
+						<span v-if="row._issueDetail.critical > 0" class="font-medium text-red-600 dark:text-red-400">{{ row._issueDetail.critical }} CRITICAL</span>
+						<span v-else-if="row._issueDetail.warning > 0" class="font-medium text-amber-600 dark:text-amber-400">{{ row._issueDetail.warning }} WARNING</span>
+						<span v-else class="font-medium text-emerald-600 dark:text-emerald-400">OK</span>
+					</template>
+					<template v-else-if="row.code === 'CAT-SPE'">
 						<span class="font-medium text-pink-600 dark:text-pink-400">{{ compositionData.totalSpecies }} loài</span>
 					</template>
 					<template v-else-if="row._type === 'summary' && row._virtualCode && compositionData.byLevel?.[row.composition_level]">
