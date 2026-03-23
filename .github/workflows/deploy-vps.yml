@@ -131,6 +131,16 @@ jobs:
           remote_key: ${{ secrets.VPS_SSH_KEY }}
 
       # --- Rsync integrity runner + contracts to VPS ---
+      - name: Create VPS directories for integrity runner
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            mkdir -p /opt/incomex/deploys/web-test/scripts/integrity/runners
+            mkdir -p /opt/incomex/deploys/web-test/web/tests/contracts
+
       - name: Rsync integrity scripts to VPS
         uses: burnett01/rsync-deployments@796cf0d5e4b535745ce49d7429f77cf39e25ef39  # 7.0.1
         with:
