@@ -37,3 +37,4 @@ dot/config/google-credentials.json
 # Local-only files
 dot/backups/
 reports/
+scripts/integrity/node_modules/
