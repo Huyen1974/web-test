@@ -5,9 +5,20 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-export DIRECTUS_TOKEN="${DIRECTUS_TOKEN:-$(gcloud secrets versions access latest --secret="DIRECTUS_ADMIN_TOKEN" --project="github-chatgpt-ggcloud" 2>/dev/null || echo "")}"
+# Ensure gcloud is in PATH (VPS deploy context may have minimal PATH)
+export PATH="/usr/local/bin:/usr/bin:/bin:/snap/bin:$PATH"
+for SDK_DIR in /usr/lib/google-cloud-sdk /snap/google-cloud-cli/current /opt/google-cloud-sdk "$HOME/google-cloud-sdk"; do
+    [ -d "$SDK_DIR/bin" ] && export PATH="$SDK_DIR/bin:$PATH" && break
+done
+
+export DIRECTUS_TOKEN="${DIRECTUS_TOKEN:-$(gcloud secrets versions access latest --secret="DIRECTUS_ADMIN_TOKEN" --project="github-chatgpt-ggcloud" 2>&1)}"
 export DIRECTUS_URL="${DIRECTUS_URL:-https://directus.incomexsaigoncorp.vn}"
 export SITE_URL="${SITE_URL:-https://vps.incomexsaigoncorp.vn}"
+
+# Warn if token looks like an error (non-blocking: post-deploy is || true)
+if [ -z "$DIRECTUS_TOKEN" ] || echo "$DIRECTUS_TOKEN" | grep -qi "error\|not found\|permission"; then
+    echo "WARNING: DIRECTUS_TOKEN may be invalid — running in DRY-RUN mode"
+fi
 
 RUN_ID="deploy-$(date +%Y%m%d-%H%M%S)"
 echo "=== Điều 31 Post-Deploy — $RUN_ID ==="
