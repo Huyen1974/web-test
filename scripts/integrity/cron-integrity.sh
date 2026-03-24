@@ -22,7 +22,7 @@ export SITE_URL="${SITE_URL:-https://vps.incomexsaigoncorp.vn}"
 # PG connection for measurement_registry (v2.0 PG-driven runner)
 # PG connection — read from Docker .env file on VPS
 ENV_FILE="/opt/incomex/deploys/docker/.env"
-if [ -z "$DATABASE_URL" ] && [ -f "$ENV_FILE" ]; then
+if [ -z "${DATABASE_URL:-}" ] && [ -f "$ENV_FILE" ]; then
     PG_U=$(grep '^PG_USER=' "$ENV_FILE" | cut -d= -f2)
     PG_P=$(grep '^PG_PASSWORD=' "$ENV_FILE" | cut -d= -f2)
     PG_D=$(grep '^PG_DATABASE=' "$ENV_FILE" | cut -d= -f2 || echo directus)
