@@ -10,14 +10,16 @@
   "grace_seconds": 60,
   "page_url": "https://vps.incomexsaigoncorp.vn/knowledge/registries/species",
   "route": "/knowledge/registries/species",
+  "table_testid": "species-matrix-table",
+  "total_testid": "species-matrix-total",
   "columns": [
-    { "key": "stt", "label": "STT" },
-    { "key": "species_code", "label": "Mã loài" },
-    { "key": "display_name", "label": "Tên loài" },
-    { "key": "composition_level", "label": "Lớp" },
-    { "key": "total", "label": "Tổng" },
-    { "key": "certified", "label": "Certified" },
-    { "key": "uncertified", "label": "Chưa" }
+    { "key": "stt", "label": "STT", "testid": "species-matrix-table-col-stt" },
+    { "key": "species_code", "label": "Mã loài", "testid": "species-col-code" },
+    { "key": "display_name", "label": "Tên loài", "testid": "species-col-name" },
+    { "key": "composition_level", "label": "Lớp", "testid": "species-col-level" },
+    { "key": "total", "label": "Tổng", "testid": "species-col-total" },
+    { "key": "certified", "label": "Certified", "testid": "species-col-certified" },
+    { "key": "uncertified", "label": "Chưa", "testid": "species-col-uncertified" }
   ],
   "min_rows": 33,
   "required_text": ["Ma trận", "TOTAL", "loài"],
