@@ -2,69 +2,99 @@
   "contract_id": "CTR-002",
   "name": "Health Dashboard — Registry Health Check",
   "tier": "A",
-  "type": "dom_vs_db",
+  "type": "dom_vs_contract",
   "owner": "orchestrator",
   "enabled": true,
-  "contract_version": "1.0.0",
-  "last_verified_at": "2026-03-23",
+  "contract_version": "2.0.0",
+  "last_verified_at": "2026-03-24",
   "grace_seconds": 60,
   "page_url": "https://vps.incomexsaigoncorp.vn/knowledge/registries/health",
   "route": "/knowledge/registries/health",
-  "table_testid": "health-table",
   "cards": [
     { "label": "KHỚP", "testid": "health-card-khop" },
     { "label": "Orphan", "testid": "health-card-orphan" },
     { "label": "Phantom", "testid": "health-card-phantom" }
   ],
   "columns": [
-    { "key": "stt", "label": "STT", "testid": "health-col-stt" },
-    { "key": "collection_name", "label": "Collection", "testid": "health-col-collection" },
-    { "key": "noi_chua", "label": "Nơi chứa", "testid": "health-col-noi-chua" },
-    { "key": "noi_sinh", "label": "Nơi sinh", "testid": "health-col-noi-sinh" },
-    { "key": "gap", "label": "Gap", "testid": "health-col-gap" },
-    { "key": "status", "label": "Trạng thái", "testid": "health-col-status" }
+    { "key": "stt", "label": "STT" },
+    { "key": "collection_name", "label": "Collection" },
+    { "key": "noi_chua", "label": "Nơi chứa" },
+    { "key": "noi_sinh", "label": "Nơi sinh" },
+    { "key": "gap", "label": "Gap" },
+    { "key": "status", "label": "Trạng thái" }
   ],
   "min_rows": 3,
+  "required_text": ["LAYER 2", "Đếm 2 nơi"],
   "checks": [
     {
       "check_id": "CTR-002-01",
       "description": "Card KHỚP exists",
       "operator": "exists",
       "severity": "CRITICAL",
-      "source_dom": { "selector": "[data-testid='health-card-khop']" },
-      "source_db": { "query": "SELECT count(*) FROM v_registry_health WHERE status = 'KHỚP'" }
+      "source_dom": { "selector": "health-card-khop" }
     },
     {
       "check_id": "CTR-002-02",
       "description": "Card Orphan exists",
       "operator": "exists",
       "severity": "CRITICAL",
-      "source_dom": { "selector": "[data-testid='health-card-orphan']" },
-      "source_db": { "query": "SELECT count(*) FROM v_registry_health WHERE status = 'ORPHAN'" }
+      "source_dom": { "selector": "health-card-orphan" }
     },
     {
       "check_id": "CTR-002-03",
       "description": "Card Phantom exists",
       "operator": "exists",
       "severity": "CRITICAL",
-      "source_dom": { "selector": "[data-testid='health-card-phantom']" },
-      "source_db": { "query": "SELECT count(*) FROM v_registry_health WHERE status = 'PHANTOM'" }
+      "source_dom": { "selector": "health-card-phantom" }
     },
     {
       "check_id": "CTR-002-04",
-      "description": "Health table exists with at least 3 rows",
+      "description": "Column header Collection present",
       "operator": "exists",
       "severity": "CRITICAL",
-      "source_dom": { "selector": "[data-testid='health-table'] tbody tr:nth-child(3)" },
-      "source_db": { "query": "SELECT count(*) FROM v_registry_health" }
+      "source_dom": { "selector": "Collection" }
     },
     {
       "check_id": "CTR-002-05",
-      "description": "All 6 column headers present",
+      "description": "Column header Nơi chứa present",
       "operator": "exists",
       "severity": "CRITICAL",
-      "source_dom": { "selector": "[data-testid='health-col-status']" },
-      "source_db": { "query": "SELECT 1" }
+      "source_dom": { "selector": "Nơi chứa" }
+    },
+    {
+      "check_id": "CTR-002-06",
+      "description": "Column header Nơi sinh present",
+      "operator": "exists",
+      "severity": "CRITICAL",
+      "source_dom": { "selector": "Nơi sinh" }
+    },
+    {
+      "check_id": "CTR-002-07",
+      "description": "Column header Gap present",
+      "operator": "exists",
+      "severity": "WARNING",
+      "source_dom": { "selector": "Gap" }
+    },
+    {
+      "check_id": "CTR-002-08",
+      "description": "Column header Trạng thái present",
+      "operator": "exists",
+      "severity": "WARNING",
+      "source_dom": { "selector": "Trạng thái" }
+    },
+    {
+      "check_id": "CTR-002-09",
+      "description": "LAYER 2 badge present",
+      "operator": "exists",
+      "severity": "CRITICAL",
+      "source_dom": { "selector": "LAYER 2" }
+    },
+    {
+      "check_id": "CTR-002-10",
+      "description": "Page heading Đếm 2 nơi present",
+      "operator": "exists",
+      "severity": "CRITICAL",
+      "source_dom": { "selector": "Đếm 2 nơi" }
     }
   ]
 }

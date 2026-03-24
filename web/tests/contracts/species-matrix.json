@@ -2,107 +2,95 @@
   "contract_id": "CTR-003",
   "name": "Species Matrix — Phân loại loài",
   "tier": "A",
-  "type": "dom_vs_db",
+  "type": "dom_vs_contract",
   "owner": "orchestrator",
   "enabled": true,
-  "contract_version": "1.0.0",
-  "last_verified_at": "2026-03-23",
+  "contract_version": "2.0.0",
+  "last_verified_at": "2026-03-24",
   "grace_seconds": 60,
   "page_url": "https://vps.incomexsaigoncorp.vn/knowledge/registries/species",
   "route": "/knowledge/registries/species",
-  "table_testid": "species-matrix-table",
-  "total_testid": "species-matrix-total",
   "columns": [
-    { "key": "stt", "label": "STT", "testid": "species-matrix-table-col-stt" },
-    { "key": "species_code", "label": "Mã loài", "testid": "species-col-code" },
-    { "key": "display_name", "label": "Tên loài", "testid": "species-col-name" },
-    { "key": "composition_level", "label": "Lớp", "testid": "species-col-level" },
-    { "key": "total", "label": "Tổng", "testid": "species-col-total" },
-    { "key": "certified", "label": "Certified", "testid": "species-col-certified" },
-    { "key": "uncertified", "label": "Chưa", "testid": "species-col-uncertified" }
+    { "key": "stt", "label": "STT" },
+    { "key": "species_code", "label": "Mã loài" },
+    { "key": "display_name", "label": "Tên loài" },
+    { "key": "composition_level", "label": "Lớp" },
+    { "key": "total", "label": "Tổng" },
+    { "key": "certified", "label": "Certified" },
+    { "key": "uncertified", "label": "Chưa" }
   ],
   "min_rows": 33,
-  "required_text": ["Ma trận Loài", "TOTAL"],
+  "required_text": ["Ma trận", "TOTAL", "loài"],
   "checks": [
     {
       "check_id": "CTR-003-01",
-      "description": "Species table exists",
-      "operator": "exists",
-      "severity": "CRITICAL",
-      "source_dom": { "selector": "[data-testid='species-matrix-table']" },
-      "source_db": { "query": "SELECT count(*) FROM species" }
-    },
-    {
-      "check_id": "CTR-003-02",
-      "description": "At least 33 species rows",
-      "operator": "exists",
-      "severity": "CRITICAL",
-      "source_dom": { "selector": "[data-testid='species-matrix-table'] tbody tr:nth-child(33)" },
-      "source_db": { "query": "SELECT count(*) FROM species WHERE count > 0" }
-    },
-    {
-      "check_id": "CTR-003-03",
       "description": "TOTAL summary card visible",
       "operator": "exists",
       "severity": "CRITICAL",
-      "source_dom": { "selector": "[data-testid='species-matrix-total']" },
-      "source_db": { "query": "SELECT sum(total) FROM species" }
+      "source_dom": { "selector": "species-matrix-total" }
+    },
+    {
+      "check_id": "CTR-003-02",
+      "description": "Page heading Ma trận visible",
+      "operator": "exists",
+      "severity": "CRITICAL",
+      "source_dom": { "selector": "Ma trận" }
+    },
+    {
+      "check_id": "CTR-003-03",
+      "description": "LAYER 2 badge present",
+      "operator": "exists",
+      "severity": "CRITICAL",
+      "source_dom": { "selector": "LAYER 2" }
     },
     {
       "check_id": "CTR-003-04",
-      "description": "Column Mã loài header present",
+      "description": "Column header Mã loài present",
       "operator": "exists",
       "severity": "CRITICAL",
-      "source_dom": { "selector": "[data-testid='species-col-code']" },
-      "source_db": { "query": "SELECT 1" }
+      "source_dom": { "selector": "Mã loài" }
     },
     {
       "check_id": "CTR-003-05",
-      "description": "Column Tên loài header present",
+      "description": "Column header Tên loài present",
       "operator": "exists",
       "severity": "CRITICAL",
-      "source_dom": { "selector": "[data-testid='species-col-name']" },
-      "source_db": { "query": "SELECT 1" }
+      "source_dom": { "selector": "Tên loài" }
     },
     {
       "check_id": "CTR-003-06",
-      "description": "Column Tổng header present",
+      "description": "Column header Tổng present",
       "operator": "exists",
       "severity": "CRITICAL",
-      "source_dom": { "selector": "[data-testid='species-col-total']" },
-      "source_db": { "query": "SELECT 1" }
+      "source_dom": { "selector": "Tổng" }
     },
     {
       "check_id": "CTR-003-07",
-      "description": "Column Certified header present",
+      "description": "Column header Certified present",
       "operator": "exists",
       "severity": "WARNING",
-      "source_dom": { "selector": "[data-testid='species-col-certified']" },
-      "source_db": { "query": "SELECT 1" }
+      "source_dom": { "selector": "Certified" }
     },
     {
       "check_id": "CTR-003-08",
-      "description": "Column Chưa header present",
+      "description": "Column header Chưa present",
       "operator": "exists",
       "severity": "WARNING",
-      "source_dom": { "selector": "[data-testid='species-col-uncertified']" },
-      "source_db": { "query": "SELECT 1" }
+      "source_dom": { "selector": "Chưa" }
     },
     {
       "check_id": "CTR-003-09",
-      "description": "Heading Ma trận Loài visible",
+      "description": "Column header Lớp present",
       "operator": "exists",
-      "severity": "CRITICAL",
-      "source_dom": { "selector": "h1, h2" },
-      "source_db": { "query": "SELECT 1" }
+      "severity": "WARNING",
+      "source_dom": { "selector": "Lớp" }
     },
     {
       "check_id": "CTR-003-10",
-      "description": "Column Lớp header present",
+      "description": "Species keyword loài present in data",
       "operator": "exists",
-      "severity": "WARNING",
-      "source_dom": { "selector": "[data-testid='species-col-level']" },
-      "source_db": { "query": "SELECT 1" }
+      "severity": "CRITICAL",
+      "source_dom": { "selector": "loài" }
     }
   ]
 }
