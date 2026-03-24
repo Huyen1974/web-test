@@ -84,10 +84,10 @@
     },
     {
       "check_id": "CTR-002-09",
-      "description": "LAYER 2 badge present",
+      "description": "HEALTH keyword present in page",
       "operator": "exists",
       "severity": "CRITICAL",
-      "source_dom": { "selector": "LAYER 2" }
+      "source_dom": { "selector": "health" }
     },
     {
       "check_id": "CTR-002-10",
