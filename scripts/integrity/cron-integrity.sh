@@ -20,10 +20,14 @@ export DIRECTUS_TOKEN="${DIRECTUS_TOKEN:-$(gcloud secrets versions access latest
 export DIRECTUS_URL="${DIRECTUS_URL:-https://directus.incomexsaigoncorp.vn}"
 export SITE_URL="${SITE_URL:-https://vps.incomexsaigoncorp.vn}"
 # PG connection for measurement_registry (v2.0 PG-driven runner)
-PG_U=$(gcloud secrets versions access latest --secret=PG_USER --project=github-chatgpt-ggcloud 2>/dev/null || echo directus)
-PG_P=$(gcloud secrets versions access latest --secret=PG_PASSWORD --project=github-chatgpt-ggcloud 2>/dev/null || echo directus)
-PG_D=$(gcloud secrets versions access latest --secret=PG_DATABASE --project=github-chatgpt-ggcloud 2>/dev/null || echo directus)
-export DATABASE_URL="${DATABASE_URL:-postgresql://${PG_U}:${PG_P}@localhost:5432/${PG_D}}"
+# PG connection — read from Docker .env file on VPS
+ENV_FILE="/opt/incomex/deploys/docker/.env"
+if [ -z "$DATABASE_URL" ] && [ -f "$ENV_FILE" ]; then
+    PG_U=$(grep '^PG_USER=' "$ENV_FILE" | cut -d= -f2)
+    PG_P=$(grep '^PG_PASSWORD=' "$ENV_FILE" | cut -d= -f2)
+    PG_D=$(grep '^PG_DATABASE=' "$ENV_FILE" | cut -d= -f2 || echo directus)
+    export DATABASE_URL="postgresql://${PG_U:-directus}:${PG_P:-directus}@localhost:5432/${PG_D:-directus}"
+fi
 
 # Fail-fast if token is empty or looks like an error
 if [ -z "$DIRECTUS_TOKEN" ] || echo "$DIRECTUS_TOKEN" | grep -qi "error\|not found\|permission"; then
