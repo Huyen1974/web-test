@@ -22,6 +22,8 @@ services:
       POSTGRES_DB: ${PG_DATABASE:-directus}
       POSTGRES_USER: ${PG_USER:-directus}
       POSTGRES_PASSWORD: ${PG_PASSWORD}
+    ports:
+      - "127.0.0.1:5432:5432"  # Localhost only — for integrity runner PG client
     volumes:
       - /opt/workflow/postgres/data:/var/lib/postgresql/data
       - /opt/workflow/postgres/backups:/backups
