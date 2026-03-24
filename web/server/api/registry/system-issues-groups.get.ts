@@ -27,16 +27,34 @@ export default defineEventHandler(async () => {
 	const headers = { Authorization: `Bearer ${token}` };
 
 	try {
-		// Fetch open issues with grouping fields
-		const resp = await $fetch<any>(`${baseUrl}/items/system_issues`, {
-			params: {
-				'filter[status][_eq]': 'open',
-				'fields': 'id,title,severity,issue_type,issue_class,source_system,date_created',
-				'limit': -1,
-				'sort': '-date_created',
-			},
+		// Fetch issues with grouping fields
+		// Use meta total_count + paginated fetch to handle large collections
+		// Legacy records may not have status='open', so fetch all and filter client-side
+		const countResp = await $fetch<any>(`${baseUrl}/items/system_issues`, {
+			params: { 'meta': 'total_count', 'limit': 0, 'fields': 'id' },
 			headers,
 		});
+		const total = countResp?.meta?.total_count ?? 0;
+
+		// Fetch in pages of 500 to avoid timeout
+		const allIssues: any[] = [];
+		const pageSize = 500;
+		for (let offset = 0; offset < Math.min(total, 5000); offset += pageSize) {
+			const page = await $fetch<any>(`${baseUrl}/items/system_issues`, {
+				params: {
+					'fields': 'id,title,severity,issue_type,issue_class,source_system,status,date_created',
+					'limit': pageSize,
+					'offset': offset,
+					'sort': '-date_created',
+				},
+				headers,
+			});
+			allIssues.push(...(page?.data || []));
+		}
+
+		// Filter: prefer status='open', but if no records have status → use all
+		const openIssues = allIssues.filter((i: any) => i.status === 'open');
+		const resp = { data: openIssues.length > 0 ? openIssues : allIssues };
 
 		const issues = resp?.data || [];
 
