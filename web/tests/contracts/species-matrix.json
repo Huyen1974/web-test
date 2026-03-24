@@ -13,7 +13,7 @@
   "table_testid": "species-matrix-table",
   "total_testid": "species-matrix-total",
   "columns": [
-    { "key": "stt", "label": "STT", "testid": "species-col-stt" },
+    { "key": "stt", "label": "STT", "testid": "species-matrix-table-col-stt" },
     { "key": "species_code", "label": "Mã loài", "testid": "species-col-code" },
     { "key": "display_name", "label": "Tên loài", "testid": "species-col-name" },
     { "key": "composition_level", "label": "Lớp", "testid": "species-col-level" },
