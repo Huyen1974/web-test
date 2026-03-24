@@ -19,6 +19,8 @@ done
 export DIRECTUS_TOKEN="${DIRECTUS_TOKEN:-$(gcloud secrets versions access latest --secret="DIRECTUS_ADMIN_TOKEN" --project="github-chatgpt-ggcloud" 2>&1)}"
 export DIRECTUS_URL="${DIRECTUS_URL:-https://directus.incomexsaigoncorp.vn}"
 export SITE_URL="${SITE_URL:-https://vps.incomexsaigoncorp.vn}"
+# PG connection for measurement_registry (v2.0 PG-driven runner)
+export DATABASE_URL="${DATABASE_URL:-postgresql://directus:directus@localhost:5432/directus}"
 
 # Fail-fast if token is empty or looks like an error
 if [ -z "$DIRECTUS_TOKEN" ] || echo "$DIRECTUS_TOKEN" | grep -qi "error\|not found\|permission"; then

@@ -1,27 +1,171 @@
 #!/usr/bin/env node
 /**
- * Điều 31 Integrity Runner — Main Entry Point
- * Reads contracts, runs checks, dedupes issues, reports results.
- * Usage: node scripts/integrity/main.js [--tier=A] [--contract=CTR-001] [--run-id=xxx]
+ * Điều 31 Integrity Runner v2.0 — PG-Driven
+ *
+ * Default: reads method=2 measurements from measurement_registry (PG).
+ * --legacy: runs original JSON contract flow (preserved 100%).
+ *
+ * Usage:
+ *   node main.js [--run-id=xxx]                    # PG-driven (default)
+ *   node main.js --legacy [--tier=all] [--run-id=x] # Legacy JSON contracts
  */
 
-const { loadContracts } = require('./contract-reader');
+// ─── PG-driven imports ───
+const { connect: pgConnect, getMethod2Measurements, logMeasurementResult, disconnect: pgDisconnect } = require('./pg-client');
+const { runPgVsNuxtCheck } = require('./runners/pg-vs-nuxt-check');
+
+// ─── Shared imports ───
 const { checkHealth } = require('./health-gate');
 const { dedupeAndReport } = require('./dedupe');
+
+// ─── Legacy imports (kept for --legacy flow) ───
+const { loadContracts } = require('./contract-reader');
 const { runExistsCheck } = require('./runners/exists-check');
 const { runSyncCheck } = require('./runners/sync-check');
 const { runAlwaysFail } = require('./runners/always-fail');
 
-// Parse CLI args
+// ─── Parse CLI args ───
 const args = {};
 for (const arg of process.argv.slice(2)) {
-	const match = arg.match(/^--(\w[\w-]*)=(.+)$/);
-	if (match) args[match[1]] = match[2];
+	const match = arg.match(/^--(\w[\w-]*)(?:=(.+))?$/);
+	if (match) args[match[1]] = match[2] || 'true';
 }
 
+const runId = args['run-id'] || `run-${Date.now()}`;
+const legacyMode = args.legacy === 'true';
 const tier = args.tier || 'all';
 const contractFilter = args.contract || null;
-const runId = args['run-id'] || `run-${Date.now()}`;
+
+// ═══════════════════════════════════════════════════════════════
+// PG-DRIVEN FLOW (default) — Methodology v2.0 Bài toán B
+// ═══════════════════════════════════════════════════════════════
+
+async function runPgDriven() {
+	console.log('');
+	console.log('╔══════════════════════════════════════╗');
+	console.log('║   ĐIỀU 31 — INTEGRITY RUNNER v2.0    ║');
+	console.log('║        PG-DRIVEN (method=2)          ║');
+	console.log('╚══════════════════════════════════════╝');
+	console.log(`  Run ID:  ${runId}`);
+	console.log(`  Mode:    PG-driven (measurement_registry)`);
+	console.log(`  Token:   ${process.env.DIRECTUS_TOKEN ? 'set' : 'NOT SET (dry-run)'}`);
+	console.log(`  DB:      ${process.env.DATABASE_URL ? 'set' : 'NOT SET'}`);
+	console.log('');
+
+	// 1. Health Gate
+	console.log('1. HEALTH GATE');
+	const health = await checkHealth();
+	if (!health.ok) {
+		console.log(`  ✗ FAIL: ${health.error}`);
+		await dedupeAndReport({
+			contractId: 'INFRA', checkId: 'INFRA-HEALTH', issueClass: 'infra_fault',
+			severity: 'CRITICAL', description: `Health gate failed: ${health.error}`,
+			evidence: { error: health.error, timestamp: new Date().toISOString() },
+		}, runId);
+		process.exit(1);
+	}
+	console.log('  ✓ PASS: All endpoints healthy');
+	console.log('');
+
+	// 2. Connect to PG
+	console.log('2. PG CONNECTION');
+	const pgOk = await pgConnect();
+	if (!pgOk) {
+		console.log('  ✗ PG connection failed, falling back to legacy.');
+		console.log('');
+		return runLegacy();
+	}
+	console.log('  ✓ Connected to PG');
+	console.log('');
+
+	try {
+		// 3. Load method=2 measurements
+		console.log('3. LOADING MEASUREMENTS FROM PG');
+		const measurements = await getMethod2Measurements();
+		if (measurements.length === 0) {
+			console.log('  ⚠ No method=2 measurements found. Falling back to legacy.');
+			console.log('');
+			await pgDisconnect();
+			return runLegacy();
+		}
+		console.log(`  Loaded ${measurements.length} method-2 measurements from measurement_registry`);
+		for (const m of measurements) {
+			console.log(`    ${m.measurement_id} [${m.law_code}] ${m.measurement_name}`);
+		}
+		console.log('');
+
+		// 4. Run each measurement
+		console.log('4. RUNNING PG vs NUXT CHECKS');
+		let totalPass = 0;
+		let totalFail = 0;
+		let totalError = 0;
+		let issuesCreated = 0;
+		let issuesReopened = 0;
+		let watchdogUpdated = false;
+
+		for (const m of measurements) {
+			const isWatchdog = m.comparison === 'always_fail';
+			const result = await runPgVsNuxtCheck(m);
+
+			const icon = result.result === 'pass' ? '✓' : (isWatchdog ? '⚡' : (result.result === 'error' ? '!' : '✗'));
+			const label = result.result === 'pass' ? 'PASS' : (isWatchdog ? 'WATCHDOG' : result.result.toUpperCase());
+
+			console.log(`  ${icon} ${m.measurement_id}: ${label} — ${m.measurement_name}`);
+			console.log(`    PG (source):   ${result.source_value}`);
+			console.log(`    Nuxt (target): ${result.target_value}`);
+			if (result.delta !== '0') console.log(`    Delta: ${result.delta}`);
+
+			// Log to measurement_log via PG (trigger auto-updates measurement_registry.last_*)
+			await logMeasurementResult(runId, m.measurement_id, result.result, result.source_value, result.target_value, result.delta);
+
+			if (isWatchdog) {
+				await dedupeAndReport({
+					contractId: 'CTR-WATCHDOG', checkId: m.measurement_id,
+					issueClass: 'watchdog_fault', severity: (m.severity || 'critical').toUpperCase(),
+					description: m.measurement_name,
+					evidence: { source_value: result.source_value, target_value: result.target_value, delta: result.delta, runId, timestamp: new Date().toISOString() },
+				}, runId);
+				watchdogUpdated = true;
+			} else if (result.result === 'pass') {
+				totalPass++;
+			} else if (result.result === 'error') {
+				totalError++;
+			} else {
+				totalFail++;
+				const dedupeResult = await dedupeAndReport({
+					contractId: m.law_code, checkId: m.measurement_id,
+					issueClass: 'sync_fault', severity: (m.severity || 'warning').toUpperCase(),
+					description: `${m.measurement_name}: PG=${result.source_value} ≠ Nuxt=${result.target_value}`,
+					evidence: { source_value: result.source_value, target_value: result.target_value, delta: result.delta, runId, measurement_id: m.measurement_id, timestamp: new Date().toISOString() },
+				}, runId);
+				if (dedupeResult.action === 'created') issuesCreated++;
+				if (dedupeResult.action === 'reopened') issuesReopened++;
+			}
+			console.log('');
+		}
+
+		// 5. Summary
+		const total = totalPass + totalFail;
+		const passRate = total > 0 ? ((totalPass / total) * 100).toFixed(1) : '100.0';
+
+		console.log('═══════════════════════════════════════');
+		console.log(`  PASS: ${totalPass} | FAIL: ${totalFail} | ERROR: ${totalError}`);
+		console.log(`  WATCHDOG: ${watchdogUpdated ? 'alive' : 'not found'}`);
+		console.log(`  Pass Rate: ${passRate}% (${totalPass}/${total})`);
+		console.log(`  Issues Created: ${issuesCreated} | Reopened: ${issuesReopened}`);
+		console.log(`  Results logged to measurement_log (run_id: ${runId})`);
+		console.log('═══════════════════════════════════════');
+
+		process.exit(totalFail > 0 ? 1 : 0);
+	} finally {
+		await pgDisconnect();
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LEGACY FLOW (--legacy flag) — 100% original code from v1.0
+// CUT-PASTE from original main(). NO simplification. NO feature removal.
+// ═══════════════════════════════════════════════════════════════
 
 function classifyIssue(contract, check) {
 	if (check.operator === 'always_fail') return 'watchdog_fault';
@@ -60,10 +204,11 @@ async function runSyncContract(contract) {
 	return results;
 }
 
-async function main() {
+async function runLegacy() {
 	console.log('');
 	console.log('╔══════════════════════════════════════╗');
 	console.log('║   ĐIỀU 31 — INTEGRITY RUNNER v1.0    ║');
+	console.log('║          LEGACY CONTRACT MODE         ║');
 	console.log('╚══════════════════════════════════════╝');
 	console.log(`  Run ID:  ${runId}`);
 	console.log(`  Tier:    ${tier}`);
@@ -210,7 +355,12 @@ async function main() {
 	process.exit(totalFail > 0 ? 1 : 0);
 }
 
-main().catch(e => {
-	console.error('Runner crashed:', e.message);
-	process.exit(2);
-});
+// ═══════════════════════════════════════════════════════════════
+// ENTRY POINT
+// ═══════════════════════════════════════════════════════════════
+
+if (legacyMode) {
+	runLegacy().catch(e => { console.error('Runner crashed:', e.message); process.exit(2); });
+} else {
+	runPgDriven().catch(e => { console.error('Runner crashed:', e.message); process.exit(2); });
+}
