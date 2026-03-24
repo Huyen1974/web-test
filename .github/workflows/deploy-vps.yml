@@ -188,9 +188,13 @@ jobs:
               base=$(basename "$sql_file")
               if [ ! -f "$MARKER_DIR/$base.done" ]; then
                 echo "Applying migration: $base"
-                docker exec -i incomex-directus-pg psql -U directus -d directus < "$sql_file" 2>&1 | tail -5
-                touch "$MARKER_DIR/$base.done"
-                echo "  ✓ Applied $base"
+                if docker exec -i incomex-directus-pg psql -U directus -d directus < "$sql_file" 2>&1 | tail -20; then
+                  touch "$MARKER_DIR/$base.done"
+                  echo "  ✓ Applied $base"
+                else
+                  echo "  ✗ FAILED $base — stopping"
+                  exit 1
+                fi
               else
                 echo "  ⏭ Skip $base (already applied)"
               fi
