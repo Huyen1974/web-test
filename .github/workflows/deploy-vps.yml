@@ -184,9 +184,7 @@ jobs:
             MIGRATION_DIR="/opt/incomex/deploys/web-test/sql"
             MARKER_DIR="/opt/incomex/deploys/web-test/.sql-applied"
             mkdir -p "$MARKER_DIR"
-            # One-time cleanup: remove false markers from failed S133 deploy
-            rm -f "$MARKER_DIR/s133_measurement_framework.sql.done" 2>/dev/null || true
-            rm -f "$MARKER_DIR/0047c_antigravity_proposal.sql.done" 2>/dev/null || true
+            # Markers track which migrations have been applied
             for sql_file in "$MIGRATION_DIR"/*.sql; do
               [ -f "$sql_file" ] || continue
               base=$(basename "$sql_file")
