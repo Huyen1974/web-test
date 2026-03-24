@@ -180,19 +180,29 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           command_timeout: 2m
           script: |
+            set -euo pipefail
             MIGRATION_DIR="/opt/incomex/deploys/web-test/sql"
             MARKER_DIR="/opt/incomex/deploys/web-test/.sql-applied"
             mkdir -p "$MARKER_DIR"
+            # One-time cleanup: remove false markers from failed S133 deploy
+            rm -f "$MARKER_DIR/s133_measurement_framework.sql.done" 2>/dev/null || true
+            rm -f "$MARKER_DIR/0047c_antigravity_proposal.sql.done" 2>/dev/null || true
             for sql_file in "$MIGRATION_DIR"/*.sql; do
               [ -f "$sql_file" ] || continue
               base=$(basename "$sql_file")
               if [ ! -f "$MARKER_DIR/$base.done" ]; then
                 echo "Applying migration: $base"
-                if docker exec -i incomex-directus-pg psql -U directus -d directus < "$sql_file" 2>&1 | tail -20; then
+                TMP_OUT=$(mktemp)
+                if docker exec -i postgres psql -U directus -d directus < "$sql_file" > "$TMP_OUT" 2>&1; then
+                  tail -20 "$TMP_OUT"
+                  rm -f "$TMP_OUT"
                   touch "$MARKER_DIR/$base.done"
                   echo "  ✓ Applied $base"
                 else
-                  echo "  ✗ FAILED $base — stopping"
+                  EXIT_CODE=$?
+                  cat "$TMP_OUT"
+                  rm -f "$TMP_OUT"
+                  echo "  ✗ FAILED $base (exit $EXIT_CODE) — stopping"
                   exit 1
                 fi
               else
