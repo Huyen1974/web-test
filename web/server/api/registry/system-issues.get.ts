@@ -2,7 +2,7 @@
  * GET /api/registry/system-issues
  *
  * Returns system_issues counts by severity for Registries Row 11.
- * Queries Directus system_issues collection with service token.
+ * Uses Directus aggregate API (groupBy severity) for accurate counts.
  * Cached for 2 minutes server-side.
  */
 
@@ -33,51 +33,31 @@ export default defineEventHandler(async () => {
 	const headers = { Authorization: `Bearer ${token}` };
 
 	try {
-		// Count open issues by severity using Directus aggregate
-		const [allResp, criticalResp, warningResp] = await Promise.all([
-			$fetch<any>(`${baseUrl}/items/system_issues`, {
-				params: {
-					'filter[status][_eq]': 'open',
-					'meta': 'total_count',
-					'limit': 0,
-					'fields': 'id',
-				},
-				headers,
-			}),
-			$fetch<any>(`${baseUrl}/items/system_issues`, {
-				params: {
-					'filter[status][_eq]': 'open',
-					'filter[severity][_eq]': 'critical',
-					'meta': 'total_count',
-					'limit': 0,
-					'fields': 'id',
-				},
-				headers,
-			}),
-			$fetch<any>(`${baseUrl}/items/system_issues`, {
-				params: {
-					'filter[status][_eq]': 'open',
-					'filter[severity][_eq]': 'warning',
-					'meta': 'total_count',
-					'limit': 0,
-					'fields': 'id',
-				},
-				headers,
-			}),
-		]);
+		// Use Directus aggregate API — groupBy severity for accurate counts
+		const resp = await $fetch<any>(`${baseUrl}/items/system_issues`, {
+			params: {
+				'groupBy[]': 'severity',
+				'aggregate[count]': '*',
+			},
+			headers,
+		});
 
-		const all = allResp?.meta?.total_count ?? allResp?.meta?.filter_count ?? 0;
-		const critical = criticalResp?.meta?.total_count ?? criticalResp?.meta?.filter_count ?? 0;
-		const warning = warningResp?.meta?.total_count ?? warningResp?.meta?.filter_count ?? 0;
-		const info = all - critical - warning;
+		let all = 0;
+		let critical = 0;
+		let warning = 0;
+		let info = 0;
+
+		for (const row of (resp?.data || [])) {
+			const sev = (row.severity || '').toUpperCase();
+			const cnt = Number(row.count?.['*'] ?? row.count ?? 0);
+			all += cnt;
+			if (sev === 'CRITICAL') critical = cnt;
+			else if (sev === 'WARNING') warning = cnt;
+			else if (sev === 'INFO') info += cnt;
+		}
 
 		cache = {
-			totals: {
-				all: Number(all),
-				critical: Number(critical),
-				warning: Number(warning),
-				info: Math.max(0, Number(info)),
-			},
+			totals: { all, critical, warning, info },
 			cachedAt: new Date().toISOString(),
 		};
 		cacheTime = now;

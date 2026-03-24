@@ -1,14 +1,24 @@
 /**
  * GET /api/registry/system-issues-groups
  *
- * Returns system_issues grouped by issue_type using Directus aggregate API.
- * Used by Layer 2 page to show actionable issue groups.
- * Cached 2 minutes.
+ * Returns system_issues grouped by issue_class (Điều 31 taxonomy)
+ * with per-group severity breakdown.
+ * Uses Directus aggregate API. Cached 2 minutes.
  */
 
 let cache: any = null;
 let cacheTime = 0;
 const CACHE_TTL = 2 * 60 * 1000;
+
+// Human-readable labels for issue_class (Điều 31 §IV.6)
+const CLASS_LABELS: Record<string, string> = {
+	render_fault: 'Lỗi hiển thị',
+	data_fault: 'Lỗi dữ liệu',
+	sync_fault: 'Lỗi đồng bộ',
+	contract_fault: 'Lỗi hợp đồng',
+	infra_fault: 'Lỗi hạ tầng',
+	watchdog_fault: 'Watchdog',
+};
 
 export default defineEventHandler(async () => {
 	const now = Date.now();
@@ -27,18 +37,15 @@ export default defineEventHandler(async () => {
 	const headers = { Authorization: `Bearer ${token}` };
 
 	try {
-		// Use Directus aggregate API for grouping — avoids fetching individual records
-		const [byType, bySeverity, totalResp] = await Promise.all([
-			// Group by issue_type
+		// Two aggregate queries: by issue_class+severity (for per-group breakdown) and by severity (for totals)
+		const [byClassSev, bySeverity] = await Promise.all([
 			$fetch<any>(`${baseUrl}/items/system_issues`, {
 				params: {
-					'groupBy[]': 'issue_type',
+					'groupBy[]': ['issue_class', 'severity'],
 					'aggregate[count]': '*',
-					'sort': '-count',
 				},
 				headers,
 			}),
-			// Group by severity
 			$fetch<any>(`${baseUrl}/items/system_issues`, {
 				params: {
 					'groupBy[]': 'severity',
@@ -46,47 +53,55 @@ export default defineEventHandler(async () => {
 				},
 				headers,
 			}),
-			// Total count
-			$fetch<any>(`${baseUrl}/items/system_issues`, {
-				params: { 'meta': 'total_count', 'limit': 0, 'fields': 'id' },
-				headers,
-			}),
 		]);
 
-		const total = totalResp?.meta?.total_count ?? 0;
-
 		// Parse severity totals
+		let totalAll = 0;
 		let totalCritical = 0;
 		let totalWarning = 0;
 		for (const s of (bySeverity?.data || [])) {
-			const sev = (s.severity || '').toLowerCase();
+			const sev = (s.severity || '').toUpperCase();
 			const cnt = Number(s.count?.['*'] ?? s.count ?? 0);
-			if (sev === 'critical') totalCritical = cnt;
-			else if (sev === 'warning') totalWarning = cnt;
+			totalAll += cnt;
+			if (sev === 'CRITICAL') totalCritical = cnt;
+			else if (sev === 'WARNING') totalWarning = cnt;
 		}
 
-		// Parse groups from issue_type aggregate
-		const groups = (byType?.data || [])
-			.map((g: any) => {
-				const issueType = g.issue_type || 'chưa phân loại';
-				const count = Number(g.count?.['*'] ?? g.count ?? 0);
-				return {
-					key: issueType,
-					label: issueType.replace(/_/g, ' '),
-					count,
-					severity_max: totalCritical > 0 ? 'critical' : totalWarning > 0 ? 'warning' : 'info',
-				};
-			})
-			.filter((g: any) => g.count > 0)
-			.sort((a: any, b: any) => b.count - a.count);
+		// Build groups from issue_class + severity cross-tab
+		const groupMap = new Map<string, { count: number; critical: number; warning: number }>();
+		for (const row of (byClassSev?.data || [])) {
+			const cls = row.issue_class || 'unclassified';
+			const sev = (row.severity || '').toUpperCase();
+			const cnt = Number(row.count?.['*'] ?? row.count ?? 0);
+
+			if (!groupMap.has(cls)) {
+				groupMap.set(cls, { count: 0, critical: 0, warning: 0 });
+			}
+			const g = groupMap.get(cls)!;
+			g.count += cnt;
+			if (sev === 'CRITICAL') g.critical += cnt;
+			else if (sev === 'WARNING') g.warning += cnt;
+		}
+
+		const groups = Array.from(groupMap.entries())
+			.map(([cls, g]) => ({
+				key: cls,
+				label: CLASS_LABELS[cls] || cls.replace(/_/g, ' '),
+				count: g.count,
+				critical: g.critical,
+				warning: g.warning,
+				severity_max: g.critical > 0 ? 'critical' : g.warning > 0 ? 'warning' : 'info',
+			}))
+			.filter(g => g.count > 0)
+			.sort((a, b) => b.count - a.count);
 
 		cache = {
 			groups,
 			totals: {
-				all: total,
+				all: totalAll,
 				critical: totalCritical,
 				warning: totalWarning,
-				info: Math.max(0, total - totalCritical - totalWarning),
+				info: Math.max(0, totalAll - totalCritical - totalWarning),
 				group_count: groups.length,
 			},
 			cachedAt: new Date().toISOString(),

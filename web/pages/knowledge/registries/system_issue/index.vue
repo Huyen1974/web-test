@@ -40,7 +40,7 @@ const rows = computed(() =>
 			</div>
 			<h1 class="text-2xl font-bold text-gray-900 dark:text-white">Vấn đề Hệ thống — Phân loại</h1>
 			<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-				Gom nhóm theo loại vấn đề (issue_type × issue_class). Tổng: {{ groupData.totals?.all || 0 }} issues trong {{ groupData.totals?.group_count || 0 }} nhóm.
+				Gom nhóm theo phân loại nguyên nhân (issue_class — Điều 31 §IV.6). Tổng: {{ groupData.totals?.all || 0 }} issues trong {{ groupData.totals?.group_count || 0 }} nhóm.
 			</p>
 		</div>
 
