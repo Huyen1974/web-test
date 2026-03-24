@@ -7,7 +7,7 @@
  */
 
 let cache: {
-	totals: { all: number; critical: number; warning: number; info: number };
+	totals: { all: number; critical: number; warning: number; info: number; group_count: number };
 	cachedAt: string;
 } | null = null;
 let cacheTime = 0;
@@ -25,7 +25,7 @@ export default defineEventHandler(async () => {
 
 	if (!token) {
 		return {
-			totals: { all: 0, critical: 0, warning: 0, info: 0 },
+			totals: { all: 0, critical: 0, warning: 0, info: 0, group_count: 0 },
 			cachedAt: new Date().toISOString(),
 		};
 	}
@@ -33,21 +33,24 @@ export default defineEventHandler(async () => {
 	const headers = { Authorization: `Bearer ${token}` };
 
 	try {
-		// Use Directus aggregate API — groupBy severity for accurate counts
-		const resp = await $fetch<any>(`${baseUrl}/items/system_issues`, {
-			params: {
-				'groupBy[]': 'severity',
-				'aggregate[count]': '*',
-			},
-			headers,
-		});
+		// Two aggregate queries: severity counts + issue_class group count
+		const [bySeverity, byClass] = await Promise.all([
+			$fetch<any>(`${baseUrl}/items/system_issues`, {
+				params: { 'groupBy[]': 'severity', 'aggregate[count]': '*' },
+				headers,
+			}),
+			$fetch<any>(`${baseUrl}/items/system_issues`, {
+				params: { 'groupBy[]': 'issue_class', 'aggregate[count]': '*' },
+				headers,
+			}),
+		]);
 
 		let all = 0;
 		let critical = 0;
 		let warning = 0;
 		let info = 0;
 
-		for (const row of (resp?.data || [])) {
+		for (const row of (bySeverity?.data || [])) {
 			const sev = (row.severity || '').toUpperCase();
 			const cnt = Number(row.count?.['*'] ?? row.count ?? 0);
 			all += cnt;
@@ -56,15 +59,17 @@ export default defineEventHandler(async () => {
 			else if (sev === 'INFO') info += cnt;
 		}
 
+		const group_count = (byClass?.data || []).filter((r: any) => Number(r.count?.['*'] ?? r.count ?? 0) > 0).length;
+
 		cache = {
-			totals: { all, critical, warning, info },
+			totals: { all, critical, warning, info, group_count },
 			cachedAt: new Date().toISOString(),
 		};
 		cacheTime = now;
 		return cache;
 	} catch {
 		return {
-			totals: { all: 0, critical: 0, warning: 0, info: 0 },
+			totals: { all: 0, critical: 0, warning: 0, info: 0, group_count: 0 },
 			cachedAt: new Date().toISOString(),
 		};
 	}

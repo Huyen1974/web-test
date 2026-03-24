@@ -326,7 +326,7 @@ const tableRows = computed(() => {
 		delta_plus: 0,
 		delta_minus: 0,
 		verified: sid.critical === 0,
-		_issueDetail: { critical: sid.critical, warning: sid.warning, info: sid.info },
+		_issueDetail: { critical: sid.critical, warning: sid.warning, info: sid.info, group_count: sid.group_count || 0 },
 	};
 	return [...data.summaries, speciesRow, orphanRow, phantomRow, unmanagedRow, systemIssuesRow, ...data.details, coverageRow].map((row, idx) => ({
 		...row,
@@ -452,12 +452,12 @@ const { data: systemIssuesData } = useAsyncData(
 	async () => {
 		try {
 			const resp = await $fetch<any>('/api/registry/system-issues');
-			return resp?.totals || { all: 0, critical: 0, warning: 0, info: 0 };
+			return resp?.totals || { all: 0, critical: 0, warning: 0, info: 0, group_count: 0 };
 		} catch {
-			return { all: 0, critical: 0, warning: 0, info: 0 };
+			return { all: 0, critical: 0, warning: 0, info: 0, group_count: 0 };
 		}
 	},
-	{ default: () => ({ all: 0, critical: 0, warning: 0, info: 0 }) },
+	{ default: () => ({ all: 0, critical: 0, warning: 0, info: 0, group_count: 0 }) },
 );
 
 // Fetch DOT tools count for coverage row
@@ -601,9 +601,7 @@ useTableTestIds({
 				</template>
 				<template #thanh_phan-data="{ row }">
 					<template v-if="row.code === 'CAT-017' && row._issueDetail">
-						<span v-if="row._issueDetail.critical > 0" class="font-medium text-red-600 dark:text-red-400">{{ row._issueDetail.critical }} CRITICAL</span>
-						<span v-else-if="row._issueDetail.warning > 0" class="font-medium text-amber-600 dark:text-amber-400">{{ row._issueDetail.warning }} WARNING</span>
-						<span v-else class="font-medium text-emerald-600 dark:text-emerald-400">OK</span>
+						<span class="font-medium" :class="row._issueDetail.critical > 0 ? 'text-red-600 dark:text-red-400' : row._issueDetail.warning > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'">{{ row._issueDetail.group_count || 0 }} nhóm</span>
 					</template>
 					<template v-else-if="row.code === 'CAT-SPE'">
 						<span class="font-medium text-pink-600 dark:text-pink-400">{{ compositionData.totalSpecies }} loài</span>

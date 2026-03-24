@@ -147,6 +147,10 @@ async function main() {
 				}, runId);
 				watchdogUpdated = true;
 				totalSkip++;
+			} else if (r.check.severity === 'INFO') {
+				// INFO: log only, do NOT create issue (Điều 31 §IV.5)
+				console.log(`      ℹ INFO — artifact only, no issue created`);
+				totalPass++; // INFO fails don't count against pass rate
 			} else {
 				totalFail++;
 				cascadeTracker[contract.contract_id] = (cascadeTracker[contract.contract_id] || 0) + 1;
