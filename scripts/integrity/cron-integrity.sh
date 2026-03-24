@@ -8,10 +8,23 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_DIR="/opt/incomex/logs/integrity"
 mkdir -p "$LOG_DIR"
 
+# Ensure gcloud is in PATH (cron has minimal PATH)
+export PATH="/usr/local/bin:/usr/bin:/bin:/snap/bin:$PATH"
+# Google Cloud SDK paths (common install locations)
+for SDK_DIR in /usr/lib/google-cloud-sdk /snap/google-cloud-cli/current /opt/google-cloud-sdk "$HOME/google-cloud-sdk"; do
+    [ -d "$SDK_DIR/bin" ] && export PATH="$SDK_DIR/bin:$PATH" && break
+done
+
 # Token from GSM (gcloud must be configured on VPS)
-export DIRECTUS_TOKEN="${DIRECTUS_TOKEN:-$(gcloud secrets versions access latest --secret="DIRECTUS_ADMIN_TOKEN" --project="github-chatgpt-ggcloud" 2>/dev/null || echo "")}"
+export DIRECTUS_TOKEN="${DIRECTUS_TOKEN:-$(gcloud secrets versions access latest --secret="DIRECTUS_ADMIN_TOKEN" --project="github-chatgpt-ggcloud" 2>&1)}"
 export DIRECTUS_URL="${DIRECTUS_URL:-https://directus.incomexsaigoncorp.vn}"
 export SITE_URL="${SITE_URL:-https://vps.incomexsaigoncorp.vn}"
+
+# Fail-fast if token is empty or looks like an error
+if [ -z "$DIRECTUS_TOKEN" ] || echo "$DIRECTUS_TOKEN" | grep -qi "error\|not found\|permission"; then
+    echo "FATAL: Failed to get DIRECTUS_TOKEN from GSM. Token value: ${DIRECTUS_TOKEN:0:50}" >&2
+    exit 1
+fi
 
 RUN_ID="cron-$(date +%Y%m%d-%H%M%S)"
 LOG_FILE="$LOG_DIR/$RUN_ID.log"

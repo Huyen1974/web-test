@@ -110,7 +110,7 @@ async function dedupeAndReport(result, runId) {
 	const issue = await createIssue({
 		title: `[${contractId}] ${description}`,
 		status: 'open',
-		severity: severity.toLowerCase(),
+		severity: severity.toUpperCase(),
 		source_system: 'dieu31-runner',
 		issue_class: issueClass,
 		violation_hash: violationHash,
