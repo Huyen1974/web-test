@@ -38,10 +38,10 @@
     },
     {
       "check_id": "CTR-003-03",
-      "description": "LAYER 2 badge present",
+      "description": "Species keyword present in page",
       "operator": "exists",
       "severity": "CRITICAL",
-      "source_dom": { "selector": "LAYER 2" }
+      "source_dom": { "selector": "species" }
     },
     {
       "check_id": "CTR-003-04",
