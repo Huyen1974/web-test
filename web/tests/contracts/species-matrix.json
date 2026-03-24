@@ -9,6 +9,18 @@
   "last_verified_at": "2026-03-24",
   "grace_seconds": 60,
   "page_url": "https://vps.incomexsaigoncorp.vn/knowledge/registries/species",
+  "route": "/knowledge/registries/species",
+  "columns": [
+    { "key": "stt", "label": "STT" },
+    { "key": "species_code", "label": "Mã loài" },
+    { "key": "display_name", "label": "Tên loài" },
+    { "key": "composition_level", "label": "Lớp" },
+    { "key": "total", "label": "Tổng" },
+    { "key": "certified", "label": "Certified" },
+    { "key": "uncertified", "label": "Chưa" }
+  ],
+  "min_rows": 33,
+  "required_text": ["Ma trận", "TOTAL", "loài"],
   "checks": [
     {
       "check_id": "CTR-003-01",
