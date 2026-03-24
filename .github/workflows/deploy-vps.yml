@@ -161,6 +161,45 @@ jobs:
           remote_user: root
           remote_key: ${{ secrets.VPS_SSH_KEY }}
 
+      # --- Deploy SQL migrations ---
+      - name: Rsync SQL migrations to VPS
+        uses: burnett01/rsync-deployments@796cf0d5e4b535745ce49d7429f77cf39e25ef39  # 7.0.1
+        with:
+          switches: -avz
+          path: sql/
+          remote_path: /opt/incomex/deploys/web-test/sql/
+          remote_host: ${{ secrets.VPS_HOST }}
+          remote_user: root
+          remote_key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Run pending SQL migrations
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
+          command_timeout: 2m
+          script: |
+            MIGRATION_DIR="/opt/incomex/deploys/web-test/sql"
+            MARKER_DIR="/opt/incomex/deploys/web-test/.sql-applied"
+            mkdir -p "$MARKER_DIR"
+            for sql_file in "$MIGRATION_DIR"/*.sql; do
+              [ -f "$sql_file" ] || continue
+              base=$(basename "$sql_file")
+              if [ ! -f "$MARKER_DIR/$base.done" ]; then
+                echo "Applying migration: $base"
+                if docker exec -i incomex-directus-pg psql -U directus -d directus < "$sql_file" 2>&1 | tail -20; then
+                  touch "$MARKER_DIR/$base.done"
+                  echo "  ✓ Applied $base"
+                else
+                  echo "  ✗ FAILED $base — stopping"
+                  exit 1
+                fi
+              else
+                echo "  ⏭ Skip $base (already applied)"
+              fi
+            done
+
       # --- Count Model B catalog sources (filesystem) ---
       - name: Count catalog sources
         id: catalog
