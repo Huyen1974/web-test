@@ -257,6 +257,10 @@ jobs:
             fi
             rm -rf /tmp/infra-sync
 
+            # Recreate postgres if compose changed (applies port/config changes)
+            echo "=== Ensuring postgres config is current ==="
+            docker compose up -d --no-build postgres 2>&1 | tail -3
+
             # Restart Nuxt (reads new .output from volume mount)
             echo "=== Restarting Nuxt ==="
             docker compose restart nuxt
