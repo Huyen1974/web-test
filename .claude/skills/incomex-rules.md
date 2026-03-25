@@ -13,8 +13,26 @@ MERGE NGAY khi 4 cái trên xanh.
 KHÔNG đợi: build, E2E Tests, Terraform Deploy, required-docs-guard (non-blocking).
 Đợi non-blocking = VI PHẠM, lãng phí thời gian User.
 
-**CẤM `--admin` merge.** Lệnh đúng: `gh pr merge [PR] --squash --delete-branch`
-KHÔNG BAO GIỜ dùng `--admin` flag. Nếu required checks đang queued → ĐỢI, KHÔNG force.
+## §0-AB CẤM --admin (v4.72)
+- TUYỆT ĐỐI CẤM `gh pr merge --admin` hoặc bypass branch protection
+- "4 required GREEN" = ĐỢI checks XONG rồi merge, KHÔNG force
+- Queued → ĐỢI. FAIL → DỪNG, fix.
+- Lệnh đúng: `gh pr merge [PR] --squash --delete-branch`
+
+## §0-AC PHÂN LOẠI TRƯỚC FIX SAU (v4.73)
+- Investigate → Classify → Ghi luật → Code theo luật → Fix từng nhóm
+- CẤM giao "fix tất cả" chưa phân loại
+
+## §0-AD CẤM MANUAL DEPLOY (v4.75)
+- CẤM `gh workflow run deploy-vps.yml` khi auto-deploy hoạt động
+- Manual CHỈ khi auto bị block VÀ cần phá vòng lặp
+- Duplicate deploy = race condition trên VPS
+
+## CODE DISCIPLINE (v4.75)
+- Test local TRƯỚC push: `cd web && npx nuxt build`
+- Gộp fix vào 1 commit — KHÔNG push commit lẻ
+- Mỗi vòng CI+deploy ~10 phút. Sửa lắt nhắt = lãng phí user time
+- Nghĩ kỹ, sửa đúng 1 lần
 
 ## ⚡ AUTO MODE — GIẢM PERMISSION PROMPTS
 Chạy với auto mode: `claude --enable-auto-mode` hoặc Shift+Tab chuyển mode.

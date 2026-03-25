@@ -87,6 +87,34 @@ async function updateIssue(id, patchData) {
 	}
 }
 
+function classifySubClass(issueClass, description, contractId) {
+	const desc = (description || '').toLowerCase();
+	switch (issueClass) {
+		case 'render_fault':
+			if (desc.includes('target')) return 'orphan_dep_target';
+			if (desc.includes('source')) return 'orphan_dep_source';
+			if (desc.includes('layer') || desc.includes('config')) return 'missing_registry_config';
+			return 'stale_check';
+		case 'data_fault':
+			if (desc.includes('identifier') || desc.includes('mã')) return 'missing_identifier';
+			if (desc.includes('dependency') || desc.includes('quan hệ')) return 'no_dependencies';
+			return 'catalog_incomplete';
+		case 'sync_fault':
+			if (desc.includes('vector') || desc.includes('agent data')) return 'missing_vector';
+			return 'count_drift';
+		case 'contract_fault':
+			if (desc.includes('cascade')) return 'cascade_failure';
+			return 'stale_contract';
+		case 'infra_fault':
+			if (desc.includes('auth')) return 'auth_failure';
+			return 'production_down';
+		case 'watchdog_fault':
+			return 'runner_liveness';
+		default:
+			return 'unclassified';
+	}
+}
+
 async function dedupeAndReport(result, runId) {
 	const { contractId, checkId, issueClass, severity, description, evidence } = result;
 	const { violationHash, businessLogicHash } = computeHashes(contractId, checkId, issueClass);
@@ -106,6 +134,9 @@ async function dedupeAndReport(result, runId) {
 		return { action: 'reopened', issueId: existing.id, occurrenceCount: newCount };
 	}
 
+	// Classify sub_class per Điều 31 §IV.6-B
+	const subClass = classifySubClass(issueClass, description, contractId);
+
 	// Create new
 	const issue = await createIssue({
 		title: `[${contractId}] ${description}`,
@@ -113,6 +144,7 @@ async function dedupeAndReport(result, runId) {
 		severity: severity.toUpperCase(),
 		source_system: 'dieu31-runner',
 		issue_class: issueClass,
+		sub_class: subClass,
 		violation_hash: violationHash,
 		business_logic_hash: businessLogicHash,
 		run_id: runId,
