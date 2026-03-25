@@ -54,7 +54,7 @@ export default defineEventHandler(async (event) => {
 			const resp = await $fetch<any>(`${baseUrl}/items/system_issues`, {
 				params: {
 					'filter[issue_class][_eq]': mapping.issue_class,
-					'fields': 'id,code,title,entity_type,entity_code,severity,status,date_created,occurrence_count,source_system,issue_type',
+					'fields': 'id,code,title,entity_type,entity_code,severity,status,detected_at,occurrence_count,source_system,issue_type',
 					'sort': 'id',
 					'limit': 800,
 				},
@@ -81,7 +81,7 @@ export default defineEventHandler(async (event) => {
 		const issues = pageItems.map((r: any) => ({
 			id: r.id, code: r.code, entity_code: r.entity_code, entity_type: r.entity_type,
 			title: r.title, severity: r.severity, status: r.status,
-			date_created: r.date_created, occurrence_count: r.occurrence_count || 1,
+			date_created: r.detected_at, occurrence_count: r.occurrence_count || 1,
 			source_system: r.source_system,
 			entity_url: buildEntityUrl(r),
 		}));
