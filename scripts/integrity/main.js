@@ -16,7 +16,7 @@ const { runPgVsNuxtCheck } = require('./runners/pg-vs-nuxt-check');
 
 // ─── Shared imports ───
 const { checkHealth } = require('./health-gate');
-const { dedupeAndReport } = require('./dedupe');
+const { dedupeAndReport, autoResolveStale, computeHashes } = require('./dedupe');
 
 // ─── Legacy imports (kept for --legacy flow) ───
 const { loadContracts } = require('./contract-reader');
@@ -102,6 +102,7 @@ async function runPgDriven() {
 		let issuesCreated = 0;
 		let issuesReopened = 0;
 		let watchdogUpdated = false;
+		const failedHashes = new Set(); // Track violation_hashes for auto-resolve
 
 		for (const m of measurements) {
 			const isWatchdog = m.comparison === 'always_fail';
@@ -119,6 +120,8 @@ async function runPgDriven() {
 			await logMeasurementResult(runId, m.measurement_id, result.result, result.source_value, result.target_value, result.delta);
 
 			if (isWatchdog) {
+				const { violationHash } = computeHashes('CTR-WATCHDOG', m.measurement_id, 'watchdog_fault');
+				failedHashes.add(violationHash); // Watchdog always "fails" by design — keep in set
 				await dedupeAndReport({
 					contractId: 'CTR-WATCHDOG', checkId: m.measurement_id,
 					issueClass: 'watchdog_fault', severity: (m.severity || 'critical').toUpperCase(),
@@ -132,6 +135,8 @@ async function runPgDriven() {
 				totalError++;
 			} else {
 				totalFail++;
+				const { violationHash } = computeHashes(m.law_code, m.measurement_id, 'sync_fault');
+				failedHashes.add(violationHash);
 				const dedupeResult = await dedupeAndReport({
 					contractId: m.law_code, checkId: m.measurement_id,
 					issueClass: 'sync_fault', severity: (m.severity || 'warning').toUpperCase(),
@@ -143,6 +148,12 @@ async function runPgDriven() {
 			}
 			console.log('');
 		}
+
+		// 4b. Auto-resolve: close issues whose problems no longer exist
+		console.log('5. AUTO-RESOLVE STALE ISSUES');
+		const resolveResult = await autoResolveStale(failedHashes, runId);
+		console.log(`  Resolved: ${resolveResult.resolved} stale issues`);
+		console.log('');
 
 		// 5. Summary
 		const total = totalPass + totalFail;
@@ -252,6 +263,7 @@ async function runLegacy() {
 	let issuesReopened = 0;
 	let watchdogUpdated = false;
 	const cascadeTracker = {}; // contract_id → fail count
+	const legacyFailedHashes = new Set(); // Track for auto-resolve
 
 	for (const contract of contracts) {
 		console.log(`  [${contract.contract_id}] ${contract.name}`);
@@ -282,6 +294,8 @@ async function runLegacy() {
 				totalPass++;
 			} else if (isWatchdog) {
 				// WATCHDOG: always fail, update issue but don't count as failure
+				const { violationHash: wh } = computeHashes(contract.contract_id, r.check.check_id, 'watchdog_fault');
+				legacyFailedHashes.add(wh);
 				await dedupeAndReport({
 					contractId: contract.contract_id,
 					checkId: r.check.check_id,
@@ -301,6 +315,8 @@ async function runLegacy() {
 				cascadeTracker[contract.contract_id] = (cascadeTracker[contract.contract_id] || 0) + 1;
 
 				const issueClass = classifyIssue(contract, r.check);
+				const { violationHash: fh } = computeHashes(contract.contract_id, r.check.check_id, issueClass);
+				legacyFailedHashes.add(fh);
 
 				// 2-pass for WARNING: skip grace for v1 pilot (would need async wait)
 				if (r.check.severity === 'WARNING' && contract.grace_seconds > 0) {
@@ -339,7 +355,13 @@ async function runLegacy() {
 		}
 	}
 
-	// 5. Summary
+	// 4b. Auto-resolve stale issues
+	console.log('');
+	console.log('5. AUTO-RESOLVE STALE ISSUES');
+	const legacyResolveResult = await autoResolveStale(legacyFailedHashes, runId);
+	console.log(`  Resolved: ${legacyResolveResult.resolved} stale issues`);
+
+	// 6. Summary
 	const passRate = totalPass + totalFail > 0
 		? ((totalPass / (totalPass + totalFail)) * 100).toFixed(1)
 		: '100.0';
@@ -348,6 +370,7 @@ async function runLegacy() {
 	console.log(`  PASS: ${totalPass} | FAIL: ${totalFail} | SKIP: ${totalSkip} (watchdog)`);
 	console.log(`  Pass Rate: ${passRate}%`);
 	console.log(`  Issues Created: ${issuesCreated} | Reopened: ${issuesReopened}`);
+	console.log(`  Auto-Resolved: ${legacyResolveResult.resolved}`);
 	console.log(`  Watchdog: ${watchdogUpdated ? 'updated' : 'not found'}`);
 	console.log('═══════════════════════════════════════');
 

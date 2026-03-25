@@ -137,7 +137,7 @@ CODE_INFO = {
 # ============================================================
 # Fetch meta_catalog
 # ============================================================
-resp = api_get('/items/meta_catalog?fields=id,code,name,entity_type,registry_collection,record_count,actual_count,source_model,status,ui_page,description_field&sort=code&limit=-1')
+resp = api_get('/items/meta_catalog?fields=id,code,name,entity_type,identity_class,registry_collection,record_count,actual_count,source_model,status,ui_page,description_field&sort=code&limit=-1')
 catalog = resp.get('data', [])
 
 if not catalog:
@@ -251,17 +251,21 @@ for entry in catalog:
         r['c2'] = '—'
 
     # CHECK 3 — Entity has relationships in entity_dependencies
-    dep_resp = api_get(f'/items/entity_dependencies?filter[source_type][_eq]={urllib.parse.quote(et)}&limit=0&meta=filter_count')
-    dep_count = dep_resp.get('meta', {}).get('filter_count') or 0
-    if dep_count > 0:
-        check_pass(entry, f'{code} Quan hệ={dep_count}')
-        r['c3'] = str(dep_count)
-    elif et in ('changelog', 'table_proposal', 'checkpoint_instance'):
-        # These types may not have dependencies yet — acceptable
+    # Skip for: relationship types (they ARE deps), log/virtual types, types without meaningful deps
+    identity_class = entry.get('identity_class', 'managed')
+    DEP_CHECK_SKIP_TYPES = {'entity_dependency', 'changelog', 'system_issue', 'comment', 'uncategorized', 'table_proposal', 'checkpoint_instance'}
+    DEP_CHECK_SKIP_CLASSES = {'log', 'virtual'}
+    if et in DEP_CHECK_SKIP_TYPES or identity_class in DEP_CHECK_SKIP_CLASSES:
         r['c3'] = '—'
     else:
-        check_warn(entry, f'{code} {name} — Không có quan hệ entity_dependencies', 'thiếu_quan_hệ')
-        r['c3'] = '⚠️ 0'
+        dep_resp = api_get(f'/items/entity_dependencies?filter[source_type][_eq]={urllib.parse.quote(et)}&limit=0&meta=filter_count')
+        dep_count = dep_resp.get('meta', {}).get('filter_count') or 0
+        if dep_count > 0:
+            check_pass(entry, f'{code} Quan hệ={dep_count}')
+            r['c3'] = str(dep_count)
+        else:
+            check_warn(entry, f'{code} {name} — Không có quan hệ entity_dependencies', 'thiếu_quan_hệ')
+            r['c3'] = '⚠️ 0'
 
     # CHECK 4 — Dedicated page link works
     ui_page = entry.get('ui_page', '')
@@ -413,6 +417,50 @@ if issues:
     for i, issue in enumerate(issues, 1):
         sev = 'LỖI' if issue['severity'] == 'nghiêm_trọng' else 'CẢNH BÁO'
         print(f'  {i}. [{sev}] {issue["entity_code"]} — {issue["title"]}')
+
+# ============================================================
+# AUTO-RESOLVE: close issues whose problems no longer exist
+# ============================================================
+if not dry_run and not no_write:
+    print()
+    print('[AUTO-RESOLVE] Kiểm tra vấn đề cũ đã được fix...')
+    # Collect current issue titles (problems found THIS scan)
+    current_titles = {iss['title'] for iss in issues}
+
+    # Fetch all existing open/archived issues from this scanner
+    page = 1
+    all_existing = []
+    while True:
+        batch = api_get(
+            f'/items/system_issues?filter[source_system][_eq]=dot-scanner'
+            f'&filter[status][_neq]=resolved'
+            f'&fields=id,title,status,sub_class'
+            f'&limit=100&page={page}'
+        )
+        items = batch.get('data', [])
+        if not items:
+            break
+        all_existing.extend(items)
+        page += 1
+
+    # Resolve issues whose title is NOT in current scan results
+    # (= the problem no longer detected → it's been fixed)
+    # Exclude watchdog issues (runner_liveness) from auto-resolve
+    resolved_count = 0
+    for ex in all_existing:
+        if ex.get('sub_class') == 'runner_liveness':
+            continue  # Watchdog must always stay open
+        if ex['title'] not in current_titles:
+            result = api_post(f'/items/system_issues/{ex["id"]}', {
+                'status': 'resolved',
+                'resolved_at': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z'),
+                'resolution': 'Auto-resolved: problem no longer detected by dot-layer-integrity-audit',
+            })
+            if 'error' not in str(result):
+                resolved_count += 1
+
+    still_open = len([e for e in all_existing if e['title'] in current_titles])
+    print(f'  Auto-resolved: {resolved_count} | Still open: {still_open} | Skipped (watchdog): {len([e for e in all_existing if e.get("sub_class") == "runner_liveness"])}')
 
 print()
 total = PASS + FAIL + WARN
