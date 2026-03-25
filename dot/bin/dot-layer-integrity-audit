@@ -42,7 +42,16 @@ for arg in "$@"; do
   esac
 done
 
+# Preserve caller's token (init_environment may overwrite with stale credentials)
+SAVED_TOKEN="${DIRECTUS_TOKEN:-${DOT_TOKEN:-}}"
+
 init_environment "$@"
+
+# Restore caller's token if it was set
+if [[ -n "$SAVED_TOKEN" ]]; then
+  export DIRECTUS_TOKEN="$SAVED_TOKEN"
+  export DOT_TOKEN="$SAVED_TOKEN"
+fi
 
 echo ""
 echo "═══════════════════════════════════════════════════════════"
