@@ -14,16 +14,9 @@ done
 export DIRECTUS_TOKEN="${DIRECTUS_TOKEN:-$(gcloud secrets versions access latest --secret="DIRECTUS_ADMIN_TOKEN" --project="github-chatgpt-ggcloud" 2>&1)}"
 export DIRECTUS_URL="${DIRECTUS_URL:-https://directus.incomexsaigoncorp.vn}"
 export SITE_URL="${SITE_URL:-https://vps.incomexsaigoncorp.vn}"
-# PG connection for v2.0 PG-driven runner (measurement_registry)
-# PG connection — read from Docker .env file on VPS (reliable in all contexts)
-ENV_FILE="/opt/incomex/deploys/docker/.env"
-if [ -z "${DATABASE_URL:-}" ] && [ -f "$ENV_FILE" ]; then
-    PG_U=$(grep '^PG_USER=' "$ENV_FILE" | cut -d= -f2)
-    PG_P=$(grep '^PG_PASSWORD=' "$ENV_FILE" | cut -d= -f2)
-    PG_D=$(grep '^PG_DATABASE=' "$ENV_FILE" | cut -d= -f2 || echo directus)
-    export DATABASE_URL="postgresql://${PG_U:-directus}:${PG_P:-directus}@localhost:5432/${PG_D:-directus}"
-fi
-export DATABASE_URL="${DATABASE_URL:-}"  # empty = PG-driven will fallback to legacy
+# PG connection — passed from deploy workflow via DATABASE_URL env
+# If not set, runner falls back to legacy mode
+export DATABASE_URL="${DATABASE_URL:-}"
 
 # Warn if token looks like an error (non-blocking: post-deploy is || true)
 if [ -z "$DIRECTUS_TOKEN" ] || echo "$DIRECTUS_TOKEN" | grep -qi "error\|not found\|permission"; then
