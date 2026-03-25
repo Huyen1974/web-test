@@ -36,11 +36,11 @@ export default defineEventHandler(async () => {
 		// Two aggregate queries: severity counts + issue_class group count
 		const [bySeverity, byClass] = await Promise.all([
 			$fetch<any>(`${baseUrl}/items/system_issues`, {
-				params: { 'groupBy[]': 'severity', 'aggregate[count]': '*', 'filter[status][_neq]': 'archived' },
+				params: { 'groupBy[]': 'severity', 'aggregate[count]': '*' },
 				headers,
 			}),
 			$fetch<any>(`${baseUrl}/items/system_issues`, {
-				params: { 'groupBy[]': 'issue_class', 'aggregate[count]': '*', 'filter[status][_neq]': 'archived' },
+				params: { 'groupBy[]': 'issue_class', 'aggregate[count]': '*' },
 				headers,
 			}),
 		]);
