@@ -72,7 +72,7 @@ const rows = computed(() =>
 					<span class="text-xs text-gray-400">{{ row.stt }}</span>
 				</template>
 				<template #label-data="{ row }">
-					<span class="font-medium text-gray-900 dark:text-white">{{ row.label }}</span>
+					<NuxtLink :to="`/knowledge/registries/system_issue/${row.key}`" class="font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400">{{ row.label }}</NuxtLink>
 					<div v-if="row.top_issues?.length" class="mt-1">
 						<div v-for="issue in row.top_issues" :key="issue.id" class="text-xs text-gray-400 truncate max-w-xs">
 							#{{ issue.id }} {{ issue.title }}
