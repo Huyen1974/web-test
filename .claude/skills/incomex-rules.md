@@ -13,6 +13,12 @@ MERGE NGAY khi 4 cái trên xanh.
 KHÔNG đợi: build, E2E Tests, Terraform Deploy, required-docs-guard (non-blocking).
 Đợi non-blocking = VI PHẠM, lãng phí thời gian User.
 
+## ⚡ AUTO MODE — GIẢM PERMISSION PROMPTS
+Chạy với auto mode: `claude --enable-auto-mode` hoặc Shift+Tab chuyển mode.
+Auto mode = AI tự đánh giá rủi ro, chỉ hỏi khi nguy hiểm thật.
+User KHÔNG hiểu kỹ thuật, bấm Yes vô nghĩa, lãng phí thời gian.
+Hệ thống đã có post-deploy E2E bắt lỗi — rủi ro thấp.
+
 ## NGUYÊN TẮC SỐ 1: LẮP RÁP, KHÔNG CODE
 
 **LUÔN ưu tiên lắp ráp. Code là lựa chọn CUỐI CÙNG.**
