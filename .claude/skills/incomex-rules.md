@@ -13,6 +13,9 @@ MERGE NGAY khi 4 cái trên xanh.
 KHÔNG đợi: build, E2E Tests, Terraform Deploy, required-docs-guard (non-blocking).
 Đợi non-blocking = VI PHẠM, lãng phí thời gian User.
 
+**CẤM `--admin` merge.** Lệnh đúng: `gh pr merge [PR] --squash --delete-branch`
+KHÔNG BAO GIỜ dùng `--admin` flag. Nếu required checks đang queued → ĐỢI, KHÔNG force.
+
 ## ⚡ AUTO MODE — GIẢM PERMISSION PROMPTS
 Chạy với auto mode: `claude --enable-auto-mode` hoặc Shift+Tab chuyển mode.
 Auto mode = AI tự đánh giá rủi ro, chỉ hỏi khi nguy hiểm thật.
