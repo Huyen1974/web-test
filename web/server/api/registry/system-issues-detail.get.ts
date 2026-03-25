@@ -38,7 +38,9 @@ export default defineEventHandler(async (event) => {
 	}
 
 	const config = useRuntimeConfig();
-	const baseUrl = config.directusInternalUrl || config.public?.directusUrl || 'https://directus.incomexsaigoncorp.vn';
+	// Use PUBLIC Directus URL — internal URL (http://directus:8055) blocks item-level reads
+	// for system_issues via service token. External URL with admin token works.
+	const baseUrl = config.public?.directusUrl || 'https://directus.incomexsaigoncorp.vn';
 	const token = config.directusServiceToken || process.env.NUXT_DIRECTUS_SERVICE_TOKEN;
 
 	if (!token) {
@@ -54,7 +56,7 @@ export default defineEventHandler(async (event) => {
 				'filter[issue_class][_eq]': mapping.issue_class,
 				'fields': 'id,code,title,description,entity_type,entity_code,severity,status,date_created,occurrence_count,source_system,issue_type',
 				'sort': '-severity,-occurrence_count,-date_created',
-				'limit': 1000,
+				'limit': 800,
 			},
 			headers,
 		});
@@ -79,9 +81,10 @@ export default defineEventHandler(async (event) => {
 			entity_url: buildEntityUrl(r),
 		}));
 
-		return { sub_class: subClass, issues, total, page, limit };
+		const pages = Math.ceil(total / limit);
+		return { sub_class: subClass, issues, total, page, limit, pages };
 	} catch (e) {
-		return { sub_class: subClass, issues: [], total: 0, page, limit, error: String(e) };
+		return { sub_class: subClass, issues: [], total: 0, page, limit, pages: 0, error: String(e) };
 	}
 });
 
