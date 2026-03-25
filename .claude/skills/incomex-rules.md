@@ -28,6 +28,11 @@ KHÔNG đợi: build, E2E Tests, Terraform Deploy, required-docs-guard (non-bloc
 - Manual CHỈ khi auto bị block VÀ cần phá vòng lặp
 - Duplicate deploy = race condition trên VPS
 
+## §0-AF VERIFY TRÊN PRODUCTION URL (v4.77)
+- EVIDENCE bắt buộc từ production URL `https://vps.incomexsaigoncorp.vn/api/...`
+- Curl từ Directus, localhost, VPS nội bộ KHÔNG ĐƯỢC tính
+- Format: `curl https://vps.incomexsaigoncorp.vn/api/[endpoint]` → [output thực]
+
 ## CODE DISCIPLINE (v4.75)
 - Test local TRƯỚC push: `cd web && npx nuxt build`
 - Gộp fix vào 1 commit — KHÔNG push commit lẻ
