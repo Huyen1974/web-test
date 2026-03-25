@@ -54,7 +54,7 @@ export default defineEventHandler(async (event) => {
 				'filter[issue_class][_eq]': mapping.issue_class,
 				'fields': 'id,code,title,description,entity_type,entity_code,severity,status,date_created,occurrence_count,source_system,issue_type',
 				'sort': '-severity,-occurrence_count,-date_created',
-				'limit': -1,
+				'limit': 1000,
 			},
 			headers,
 		});
