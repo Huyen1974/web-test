@@ -323,6 +323,20 @@ jobs:
               2>/dev/null || echo '{"status":"error"}')
             echo "Registry refresh: $(echo "$REFRESH_OUT" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(f"updated={d.get(\"updated\",\"?\")}, errors={d.get(\"errors\",\"?\")}")' 2>/dev/null || echo 'unknown')"
 
+            # Refresh CAT-ALL summary (S129-A guard requires PG session bypass)
+            echo "=== Refreshing CAT-ALL summary ==="
+            docker exec postgres psql -U directus -d directus -c "
+              SELECT set_config('app.allow_meta_update', 'true', true);
+              UPDATE meta_catalog SET record_count = (
+                SELECT COALESCE(SUM(record_count), 0) FROM meta_catalog
+                WHERE identity_class = 'managed' AND code != 'CAT-ALL'
+              ), active_count = (
+                SELECT COALESCE(SUM(active_count), 0) FROM meta_catalog
+                WHERE identity_class = 'managed' AND code != 'CAT-ALL'
+              ) WHERE code = 'CAT-ALL';
+            " 2>&1 | tail -3
+            echo "CAT-ALL refreshed"
+
             echo "=== Direct deploy complete ==="
 
       # --- Post-deploy integrity check (Điều 31 Vòng A) ---

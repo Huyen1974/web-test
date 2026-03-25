@@ -136,30 +136,11 @@ export default defineEventHandler(async (event) => {
 		}
 	}
 
-	// 4. CAT-ALL summary row = SUM(record_count) of managed collections
-	// Điều 26 v2.1.1: CAT-ALL = SUM(managed only). NEVER include identity_class='log'.
-	// Note: PG trigger trg_refresh_virtual_summaries exists but doesn't fire reliably
-	// through Directus API PATCH path. Computing here as fallback (S161C-HOTFIX).
-	try {
-		const catAllSum = results
-			.filter(r => {
-				const entry = catalog.find((c: any) => c.code === r.code);
-				return entry?.identity_class === 'managed';
-			})
-			.reduce((sum, r) => sum + r.new_count, 0);
-
-		const catAll = catalog.find((c: any) => c.code === 'CAT-ALL');
-		if (catAll && catAll.record_count !== catAllSum) {
-			await $fetch(`${directusUrl}/items/meta_catalog/${catAll.id}`, {
-				method: 'PATCH',
-				headers,
-				body: { record_count: catAllSum, active_count: catAllSum, last_scan_date: now },
-				timeout: 10000,
-			});
-		}
-	} catch {
-		// Non-fatal: CAT-ALL update failure doesn't block refresh
-	}
+	// 4. CAT-ALL and virtual summaries
+	// Điều 26 v2.1.1: CAT-ALL = SUM(managed only).
+	// PG trigger trg_refresh_virtual_summaries + S129-A guard handle this.
+	// Directus API PATCH is blocked by guard. CAT-ALL is updated by deploy step
+	// (ssh: docker exec postgres psql with app.allow_meta_update bypass).
 
 	return {
 		status: 'ok',
