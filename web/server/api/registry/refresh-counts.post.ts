@@ -136,11 +136,30 @@ export default defineEventHandler(async (event) => {
 		}
 	}
 
-	// 4. CAT-ALL and virtual summaries (CAT-MOL, CAT-CMP, etc.)
+	// 4. CAT-ALL summary row = SUM(record_count) of managed collections
 	// Điều 26 v2.1.1: CAT-ALL = SUM(managed only). NEVER include identity_class='log'.
-	// PG trigger fn_refresh_virtual_summaries is the SSOT for CAT-ALL.
-	// It fires automatically when any managed entry's record_count changes (step 3 above).
-	// DO NOT compute or patch CAT-ALL here — dual-write causes inflation (TD-241).
+	// Note: PG trigger trg_refresh_virtual_summaries exists but doesn't fire reliably
+	// through Directus API PATCH path. Computing here as fallback (S161C-HOTFIX).
+	try {
+		const catAllSum = results
+			.filter(r => {
+				const entry = catalog.find((c: any) => c.code === r.code);
+				return entry?.identity_class === 'managed';
+			})
+			.reduce((sum, r) => sum + r.new_count, 0);
+
+		const catAll = catalog.find((c: any) => c.code === 'CAT-ALL');
+		if (catAll && catAll.record_count !== catAllSum) {
+			await $fetch(`${directusUrl}/items/meta_catalog/${catAll.id}`, {
+				method: 'PATCH',
+				headers,
+				body: { record_count: catAllSum, active_count: catAllSum, last_scan_date: now },
+				timeout: 10000,
+			});
+		}
+	} catch {
+		// Non-fatal: CAT-ALL update failure doesn't block refresh
+	}
 
 	return {
 		status: 'ok',
