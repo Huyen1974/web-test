@@ -2,25 +2,24 @@
  * GET /api/registry/system-issues-detail?sub_class=orphan_dep_target&page=1&limit=50
  *
  * Returns Layer 4 individual issues for a given sub_class.
- * Điều 31 §IV.6-C: Each issue points to exact fix address.
+ * Điều 31 §IV.6-C.
  *
- * Note: Uses aggregate+groupBy for count (works with sub_class),
- * then fetches items with issue_class filter + client-side sub_class filter
- * (workaround for Directus permission issue with new fields in filters).
+ * Implementation: Fetches by issue_class (Directus filter works), uses
+ * issue_type to match sub_class (avoids Directus 403 on sub_class field).
  */
 
-// Map sub_class → issue_class (for Directus filter fallback)
-const SUB_CLASS_TO_CLASS: Record<string, string> = {
-	orphan_dep_target: 'render_fault',
-	orphan_dep_source: 'render_fault',
-	missing_registry_config: 'render_fault',
-	stale_check: 'render_fault',
-	no_dependencies: 'data_fault',
-	missing_identifier: 'data_fault',
-	catalog_incomplete: 'data_fault',
-	count_drift: 'sync_fault',
-	cascade_failure: 'contract_fault',
-	runner_liveness: 'watchdog_fault',
+// Map sub_class → { issue_class, issue_type match }
+const SUB_CLASS_MAP: Record<string, { issue_class: string; match: (r: any) => boolean }> = {
+	orphan_dep_target: { issue_class: 'render_fault', match: r => r.issue_type === 'link_hỏng' && (r.title || '').includes('target') },
+	orphan_dep_source: { issue_class: 'render_fault', match: r => r.issue_type === 'link_hỏng' && (r.title || '').includes('source') },
+	missing_registry_config: { issue_class: 'render_fault', match: r => r.issue_type === 'lỗi_lớp_2' },
+	stale_check: { issue_class: 'render_fault', match: r => r.source_system === 'dieu31-runner' },
+	no_dependencies: { issue_class: 'data_fault', match: r => r.issue_type === 'thiếu_quan_hệ' },
+	missing_identifier: { issue_class: 'data_fault', match: r => r.issue_type === 'thiếu_mã_định_danh' },
+	catalog_incomplete: { issue_class: 'data_fault', match: r => r.issue_type !== 'thiếu_quan_hệ' && r.issue_type !== 'thiếu_mã_định_danh' },
+	count_drift: { issue_class: 'sync_fault', match: () => true },
+	cascade_failure: { issue_class: 'contract_fault', match: () => true },
+	runner_liveness: { issue_class: 'watchdog_fault', match: () => true },
 };
 
 export default defineEventHandler(async (event) => {
@@ -33,7 +32,11 @@ export default defineEventHandler(async (event) => {
 		throw createError({ statusCode: 400, message: 'sub_class query param required' });
 	}
 
-	const issueClass = SUB_CLASS_TO_CLASS[subClass] || '';
+	const mapping = SUB_CLASS_MAP[subClass];
+	if (!mapping) {
+		return { sub_class: subClass, issues: [], total: 0, page, limit };
+	}
+
 	const config = useRuntimeConfig();
 	const baseUrl = config.directusInternalUrl || config.public?.directusUrl || 'https://directus.incomexsaigoncorp.vn';
 	const token = config.directusServiceToken || process.env.NUXT_DIRECTUS_SERVICE_TOKEN;
@@ -45,37 +48,21 @@ export default defineEventHandler(async (event) => {
 	const headers = { Authorization: `Bearer ${token}` };
 
 	try {
-		// Get count via aggregate (works with groupBy sub_class)
-		const countResp = await $fetch<any>(`${baseUrl}/items/system_issues`, {
-			params: {
-				'filter[issue_class][_eq]': issueClass || undefined,
-				'groupBy[]': 'sub_class',
-				'aggregate[count]': '*',
-			},
-			headers,
-		});
-
-		const total = Number(
-			(countResp?.data || []).find((r: any) => r.sub_class === subClass)?.count?.['*']
-			?? (countResp?.data || []).find((r: any) => r.sub_class === subClass)?.count
-			?? 0,
-		);
-
-		// Fetch items by issue_class (filter works), then filter by sub_class client-side
-		const fetchLimit = Math.min(limit * 3, 200); // Over-fetch to ensure enough after filter
+		// Fetch all items of the issue_class (no sub_class in fields/filter)
 		const itemsResp = await $fetch<any>(`${baseUrl}/items/system_issues`, {
 			params: {
-				'filter[issue_class][_eq]': issueClass || undefined,
-				'fields': 'id,code,title,description,entity_type,entity_code,severity,status,date_created,occurrence_count,source_system,issue_class,sub_class',
+				'filter[issue_class][_eq]': mapping.issue_class,
+				'fields': 'id,code,title,description,entity_type,entity_code,severity,status,date_created,occurrence_count,source_system,issue_type',
 				'sort': '-severity,-occurrence_count,-date_created',
-				'limit': fetchLimit,
+				'limit': -1,
 			},
 			headers,
 		});
 
-		// Client-side filter by sub_class
-		const allItems = (itemsResp?.data || []).filter((r: any) => r.sub_class === subClass);
-		const pageItems = allItems.slice((page - 1) * limit, page * limit);
+		// Client-side filter by sub_class match function
+		const allMatched = (itemsResp?.data || []).filter(mapping.match);
+		const total = allMatched.length;
+		const pageItems = allMatched.slice((page - 1) * limit, page * limit);
 
 		const issues = pageItems.map((r: any) => ({
 			id: r.id,
