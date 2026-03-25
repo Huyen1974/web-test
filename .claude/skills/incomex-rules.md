@@ -33,6 +33,13 @@ KHÔNG đợi: build, E2E Tests, Terraform Deploy, required-docs-guard (non-bloc
 - Curl từ Directus, localhost, VPS nội bộ KHÔNG ĐƯỢC tính
 - Format: `curl https://vps.incomexsaigoncorp.vn/api/[endpoint]` → [output thực]
 
+## §0-AG DB MIGRATION DEADLOCK (v4.78)
+- Khi PG migration mới gây CI deadlock (CI cần trigger mới → trigger nằm trong deploy → deploy cần CI pass):
+- SSH VPS → chạy SQL migration trực tiếp trên PG production TRƯỚC
+- Verify CI pass
+- Merge code → auto-deploy (code sync với PG)
+- TUYỆT ĐỐI KHÔNG merge khi CI đỏ để "fix bằng deploy"
+
 ## CODE DISCIPLINE (v4.75)
 - Test local TRƯỚC push: `cd web && npx nuxt build`
 - Gộp fix vào 1 commit — KHÔNG push commit lẻ
