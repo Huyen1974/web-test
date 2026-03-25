@@ -162,6 +162,12 @@ CODE_INFO = {
 resp = api_get('/items/meta_catalog?fields=id,code,name,entity_type,identity_class,registry_collection,record_count,actual_count,source_model,status,ui_page&sort=code&limit=-1')
 catalog = resp.get('data', [])
 
+# Fetch composition_level from v_registry_counts (PG view)
+reg_resp = api_get('/items/v_registry_counts?fields=cat_code,composition_level&limit=-1')
+comp_map = {r['cat_code']: r.get('composition_level', '') for r in reg_resp.get('data', [])}
+for entry in catalog:
+    entry['_composition_level'] = comp_map.get(entry.get('code', ''), '')
+
 if not catalog:
     print('[LỖI] Không thể đọc meta_catalog')
     sys.exit(1)
@@ -273,11 +279,14 @@ for entry in catalog:
         r['c2'] = '—'
 
     # CHECK 3 — Entity has relationships in entity_dependencies
-    # Skip for: relationship types (they ARE deps), log/virtual types, types without meaningful deps
+    # Config-driven: only flag compound+ levels (Điều 0-B). Atoms/molecules are standalone.
+    # Also skip: relationship types, log/virtual, infrastructure collections.
     identity_class = entry.get('identity_class', 'managed')
+    composition = entry.get('_composition_level', '')
     DEP_CHECK_SKIP_TYPES = {'entity_dependency', 'changelog', 'system_issue', 'comment', 'uncategorized', 'table_proposal', 'checkpoint_instance'}
     DEP_CHECK_SKIP_CLASSES = {'log', 'virtual'}
-    if et in DEP_CHECK_SKIP_TYPES or identity_class in DEP_CHECK_SKIP_CLASSES:
+    DEP_CHECK_STANDALONE_LEVELS = {'atom', 'molecule', ''}  # atom/molecule = standalone per Điều 0-B
+    if et in DEP_CHECK_SKIP_TYPES or identity_class in DEP_CHECK_SKIP_CLASSES or composition in DEP_CHECK_STANDALONE_LEVELS:
         r['c3'] = '—'
     else:
         dep_resp = api_get(f'/items/entity_dependencies?filter[source_type][_eq]={urllib.parse.quote(et)}&limit=0&meta=filter_count')
