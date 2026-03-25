@@ -42,7 +42,6 @@ export default defineEventHandler(async (event) => {
 			$fetch<any>(`${baseUrl}/items/system_issues`, {
 				params: {
 					'filter[issue_class][_eq]': issueClass,
-					'filter[status][_neq]': 'archived',
 					'groupBy[]': ['sub_class', 'severity'],
 					'aggregate[count]': '*',
 				},
@@ -51,7 +50,6 @@ export default defineEventHandler(async (event) => {
 			$fetch<any>(`${baseUrl}/items/system_issues`, {
 				params: {
 					'filter[issue_class][_eq]': issueClass,
-					'filter[status][_neq]': 'archived',
 					'groupBy[]': 'severity',
 					'aggregate[count]': '*',
 				},
