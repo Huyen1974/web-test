@@ -43,6 +43,7 @@ export default defineEventHandler(async () => {
 				params: {
 					'groupBy[]': ['issue_class', 'severity'],
 					'aggregate[count]': '*',
+					'filter[status][_neq]': 'archived',
 				},
 				headers,
 			}),
@@ -50,6 +51,7 @@ export default defineEventHandler(async () => {
 				params: {
 					'groupBy[]': 'severity',
 					'aggregate[count]': '*',
+					'filter[status][_neq]': 'archived',
 				},
 				headers,
 			}),

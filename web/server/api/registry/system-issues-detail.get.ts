@@ -54,6 +54,7 @@ export default defineEventHandler(async (event) => {
 			const resp = await $fetch<any>(`${baseUrl}/items/system_issues`, {
 				params: {
 					'filter[issue_class][_eq]': mapping.issue_class,
+					'filter[status][_neq]': 'archived',
 					'fields': 'id,code,title,entity_type,entity_code,severity,status,detected_at,occurrence_count,source_system,issue_type',
 					'sort': 'id',
 					'limit': 800,
