@@ -2,6 +2,17 @@
 
 > Đọc file này TRƯỚC MỌI tác vụ. Vi phạm = reject.
 
+## ⚡ MERGE RULE (web-test) — v4.68
+"CI GREEN" = CHỈ 4 required checks GREEN:
+- Pass Gate
+- Quality Gate
+- check-critical-files
+- Contract Schema Validation
+
+MERGE NGAY khi 4 cái trên xanh.
+KHÔNG đợi: build, E2E Tests, Terraform Deploy, required-docs-guard (non-blocking).
+Đợi non-blocking = VI PHẠM, lãng phí thời gian User.
+
 ## NGUYÊN TẮC SỐ 1: LẮP RÁP, KHÔNG CODE
 
 **LUÔN ưu tiên lắp ráp. Code là lựa chọn CUỐI CÙNG.**
