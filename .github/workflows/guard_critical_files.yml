@@ -14,8 +14,10 @@ jobs:
       - name: Check for required files
         run: |
           REQUIRED_FILES=(
+            # --- Docs & Constitution ---
             "docs/dev/blueprints/BUSINESS_OS_BLUEPRINT.md"
             "docs/ssot/constitution.md"
+            # --- Contracts ---
             "web/tests/contracts/registries.json"
             "web/tests/contracts/registries-l1.json"
             "web/tests/contracts/species-matrix.json"
@@ -23,10 +25,26 @@ jobs:
             "web/tests/contracts/watchdog.json"
             "web/tests/contracts/sync-directus-vector.json"
             "web/tests/contracts/schema.json"
+            # --- CI/CD Workflows ---
             ".github/workflows/e2e-test.yml"
             ".github/workflows/post-deploy-e2e.yml"
+            # --- Scripts ---
             "scripts/smoke-test.sh"
             "scripts/validate-contracts.js"
+            # --- Integrity Infrastructure (Dieu 31) ---
+            "scripts/integrity/main.js"
+            "scripts/integrity/pg-client.js"
+            "scripts/integrity/cron-integrity.sh"
+            "scripts/integrity/watchdog-monitor.sh"
+            "scripts/integrity/dedupe.js"
+            "scripts/integrity/runners/pg-vs-nuxt-check.js"
+            # --- SQL Definitions ---
+            "sql/s133_measurement_framework.sql"
+            "sql/s167g_scanner_hardening.sql"
+            # --- Agent Rules ---
+            ".claude/skills/incomex-rules.md"
+            # --- Guard self-protection ---
+            ".github/workflows/guard_critical_files.yml"
           )
 
           MISSING_FILES=0
