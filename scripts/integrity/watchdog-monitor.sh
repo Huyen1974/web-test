@@ -17,8 +17,8 @@ DIRECTUS_TOKEN="${DIRECTUS_TOKEN:-$(gcloud secrets versions access latest --secr
 MAX_AGE_SECONDS=$((26 * 3600))
 
 if [ -z "$DIRECTUS_TOKEN" ]; then
-  echo "WATCHDOG: No token — skipping"
-  exit 0
+  echo "WATCHDOG ALERT: No token — cannot verify runner liveness"
+  exit 1
 fi
 
 # Find most recent WATCHDOG issue

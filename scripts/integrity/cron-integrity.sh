@@ -29,10 +29,10 @@ export SITE_URL="${SITE_URL:-https://vps.incomexsaigoncorp.vn}"
 # PG connection — read from Docker .env file on VPS
 ENV_FILE="/opt/incomex/docker/.env"
 if [ -z "${DATABASE_URL:-}" ] && [ -f "$ENV_FILE" ]; then
-    PG_U=$(grep '^PG_USER=' "$ENV_FILE" | cut -d= -f2)
+    # Container uses POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB (workflow DB)
+    # and PG_PASSWORD for Directus user. Directus DB = 'directus', user = 'directus'.
     PG_P=$(grep '^PG_PASSWORD=' "$ENV_FILE" | cut -d= -f2)
-    PG_D=$(grep '^PG_DATABASE=' "$ENV_FILE" | cut -d= -f2 || echo directus)
-    export DATABASE_URL="postgresql://${PG_U:-directus}:${PG_P:-directus}@localhost:5432/${PG_D:-directus}"
+    export DATABASE_URL="postgresql://directus:${PG_P:-directus}@localhost:5432/directus"
 fi
 
 # Fail-fast if token is empty or looks like an error
