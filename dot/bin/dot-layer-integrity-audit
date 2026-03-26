@@ -312,19 +312,19 @@ for entry in catalog:
     else:
         r['c4'] = '—'
 
-    # CHECK 5 — Cross-check actual_count consistency
-    # For Model A: actual_count comes from Directus total → compare with live total_count
-    # For Model B: actual_count comes from independent source (FS, API) → skip collection comparison
+    # CHECK 5 — Cross-check record_count vs LIVE COUNT(*)
+    # Always compare meta_catalog.record_count against live Directus total_count
+    # This catches stale counts regardless of source_model
     source_model = entry.get('source_model', 'A')
-    if reg_col and source_model == 'A':
+    if reg_col and source_model != 'B':
         count_resp = api_get(f'/items/{reg_col}?limit=0&meta=total_count')
         real_count = count_resp.get('meta', {}).get('total_count') or 0
-        if real_count == act_count:
-            check_pass(entry, f'{code} Nhất quán ({act_count})')
+        if real_count == rec_count:
+            check_pass(entry, f'{code} Nhất quán ({rec_count})')
             r['c5'] = '✅'
         else:
-            check_fail(entry, f'{code} {name} — meta_catalog nói {act_count} nhưng thực tế {real_count}', 'sai_lệch_dữ_liệu', 'cảnh_báo')
-            r['c5'] = f'❌ {act_count}≠{real_count}'
+            check_fail(entry, f'{code} {name} — meta_catalog nói {rec_count} nhưng thực tế {real_count}', 'sai_lệch_dữ_liệu', 'cảnh_báo')
+            r['c5'] = f'❌ {rec_count}≠{real_count}'
     elif reg_col and source_model == 'B':
         # Model B: actual_count is from independent source, skip collection comparison
         check_pass(entry, f'{code} Model B — bỏ qua so sánh collection')
