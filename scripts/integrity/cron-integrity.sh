@@ -15,13 +15,19 @@ for SDK_DIR in /usr/lib/google-cloud-sdk /snap/google-cloud-cli/current /opt/goo
     [ -d "$SDK_DIR/bin" ] && export PATH="$SDK_DIR/bin:$PATH" && break
 done
 
-# Token from GSM (gcloud must be configured on VPS)
+# Token: prefer env var, then Docker .env file, then GSM fallback
+if [ -z "${DIRECTUS_TOKEN:-}" ]; then
+  DOCKER_ENV="/opt/incomex/docker/.env"
+  if [ -f "$DOCKER_ENV" ]; then
+    DIRECTUS_TOKEN=$(grep '^DIRECTUS_ADMIN_TOKEN=' "$DOCKER_ENV" | cut -d= -f2)
+  fi
+fi
 export DIRECTUS_TOKEN="${DIRECTUS_TOKEN:-$(gcloud secrets versions access latest --secret="DIRECTUS_ADMIN_TOKEN" --project="github-chatgpt-ggcloud" 2>&1)}"
 export DIRECTUS_URL="${DIRECTUS_URL:-https://directus.incomexsaigoncorp.vn}"
 export SITE_URL="${SITE_URL:-https://vps.incomexsaigoncorp.vn}"
 # PG connection for measurement_registry (v2.0 PG-driven runner)
 # PG connection — read from Docker .env file on VPS
-ENV_FILE="/opt/incomex/deploys/docker/.env"
+ENV_FILE="/opt/incomex/docker/.env"
 if [ -z "${DATABASE_URL:-}" ] && [ -f "$ENV_FILE" ]; then
     PG_U=$(grep '^PG_USER=' "$ENV_FILE" | cut -d= -f2)
     PG_P=$(grep '^PG_PASSWORD=' "$ENV_FILE" | cut -d= -f2)
