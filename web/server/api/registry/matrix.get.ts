@@ -30,28 +30,8 @@ interface MatrixResponse {
 	cachedAt: string;
 }
 
-// Collection → { codeField, nameField }
-const COLLECTION_MAP: Record<string, { codeField: string; nameField: string }> = {
-	meta_catalog: { codeField: 'code', nameField: 'name' },
-	table_registry: { codeField: 'table_id', nameField: 'name' },
-	modules: { codeField: 'code', nameField: 'name' },
-	workflows: { codeField: 'process_code', nameField: 'title' },
-	workflow_steps: { codeField: 'code', nameField: 'title' },
-	workflow_change_requests: { codeField: 'code', nameField: 'title' },
-	dot_tools: { codeField: 'code', nameField: 'name' },
-	ui_pages: { codeField: 'code', nameField: 'name' },
-	collection_registry: { codeField: 'code', nameField: 'name' },
-	tasks: { codeField: 'code', nameField: 'name' },
-	agents: { codeField: 'code', nameField: 'name' },
-	checkpoint_types: { codeField: 'code', nameField: 'name' },
-	checkpoint_sets: { codeField: 'code', nameField: 'name' },
-	entity_dependencies: { codeField: 'code', nameField: 'code' },
-	table_proposals: { codeField: 'code', nameField: 'code' },
-	checkpoint_instances: { codeField: 'code', nameField: 'code' },
-	system_issues: { codeField: 'code', nameField: 'title' },
-	taxonomy: { codeField: 'code', nameField: 'name' },
-	trigger_registry: { codeField: 'code', nameField: 'trigger_name' },
-};
+// Dynamic: COLLECTION_MAP built from meta_catalog at runtime (no hardcoding)
+// meta_catalog fields: registry_collection, code_column (default 'code'), name_column (default 'name')
 
 let cache: { data: MatrixResponse; ts: number } | null = null;
 const CACHE_TTL = 5 * 60 * 1000;
@@ -77,24 +57,29 @@ export default defineEventHandler(async () => {
 		throw createError({ statusCode: 500, message: 'Service token not configured' });
 	}
 
-	// 1. Fetch meta_catalog for composition levels
+	// 1. Fetch meta_catalog for composition levels + collection mapping (DYNAMIC)
 	const catalog: any[] = await fetchJson(
-		`${baseUrl}/items/meta_catalog?fields=code,name,composition_level,registry_collection&limit=-1`,
+		`${baseUrl}/items/meta_catalog?fields=code,name,composition_level,registry_collection,code_column,name_column,identity_class&filter[identity_class][_in]=managed,log&filter[registry_collection][_nnull]=true&limit=-1`,
 		token,
 	);
 	const collectionMeta = new Map<string, { compositionLevel: string; categoryName: string }>();
+	const collectionMap = new Map<string, { codeField: string; nameField: string }>();
 	for (const c of catalog) {
 		if (c.registry_collection) {
 			collectionMeta.set(c.registry_collection, {
 				compositionLevel: c.composition_level || '',
 				categoryName: c.name || '',
 			});
+			collectionMap.set(c.registry_collection, {
+				codeField: c.code_column || 'code',
+				nameField: c.name_column || 'name',
+			});
 		}
 	}
 
-	// 2. Fetch all entities from each collection in parallel
+	// 2. Fetch all entities from each collection in parallel (dynamic from meta_catalog)
 	const entityMap = new Map<string, { code: string; name: string; collection: string }>();
-	const fetchPromises = Object.entries(COLLECTION_MAP).map(async ([col, cfg]) => {
+	const fetchPromises = Array.from(collectionMap.entries()).map(async ([col, cfg]) => {
 		try {
 			const items: any[] = await fetchJson(
 				`${baseUrl}/items/${col}?fields=id,${cfg.codeField},${cfg.nameField}&limit=-1`,
