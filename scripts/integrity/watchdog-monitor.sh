@@ -6,6 +6,13 @@
 set -euo pipefail
 
 DIRECTUS_URL="${DIRECTUS_URL:-https://directus.incomexsaigoncorp.vn}"
+# Token: prefer env var, then Docker .env file, then GSM fallback
+if [ -z "${DIRECTUS_TOKEN:-}" ]; then
+  ENV_FILE="/opt/incomex/docker/.env"
+  if [ -f "$ENV_FILE" ]; then
+    DIRECTUS_TOKEN=$(grep '^DIRECTUS_ADMIN_TOKEN=' "$ENV_FILE" | cut -d= -f2)
+  fi
+fi
 DIRECTUS_TOKEN="${DIRECTUS_TOKEN:-$(gcloud secrets versions access latest --secret="DIRECTUS_ADMIN_TOKEN" --project="github-chatgpt-ggcloud" 2>/dev/null || echo "")}"
 MAX_AGE_SECONDS=$((26 * 3600))
 
@@ -15,7 +22,7 @@ if [ -z "$DIRECTUS_TOKEN" ]; then
 fi
 
 # Find most recent WATCHDOG issue
-WATCHDOG_JSON=$(curl -sf "$DIRECTUS_URL/items/system_issues?filter[source_system][_eq]=dieu31-runner&filter[issue_class][_eq]=watchdog_fault&limit=1&sort=-last_seen_at&fields=last_seen_at,occurrence_count" \
+WATCHDOG_JSON=$(curl -sfg "$DIRECTUS_URL/items/system_issues?filter[source_system][_eq]=dieu31-runner&filter[issue_class][_eq]=watchdog_fault&limit=1&sort=-last_seen_at&fields=last_seen_at,occurrence_count" \
   -H "Authorization: Bearer $DIRECTUS_TOKEN" 2>/dev/null || echo '{"data":[]}')
 
 LAST_SEEN=$(echo "$WATCHDOG_JSON" | python3 -c "

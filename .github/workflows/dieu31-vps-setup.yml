@@ -92,8 +92,8 @@ jobs:
             (crontab -l 2>/dev/null || true) | grep -v "integrity" | grep -v "WATCHDOG" > /tmp/crontab-clean || true
 
             # Add entries
-            echo "# Điều 31 — Daily Integrity Audit (3AM VN = 20:00 UTC)" >> /tmp/crontab-clean
-            echo "0 20 * * * /opt/incomex/deploys/web-test/scripts/integrity/cron-integrity.sh >> /opt/incomex/logs/integrity/cron.log 2>&1" >> /tmp/crontab-clean
+            echo "# Điều 31 — Integrity Audit every 6h (00:00/06:00/12:00/18:00 UTC)" >> /tmp/crontab-clean
+            echo "0 */6 * * * /opt/incomex/deploys/web-test/scripts/integrity/cron-integrity.sh >> /opt/incomex/logs/integrity/cron.log 2>&1" >> /tmp/crontab-clean
             echo "# WATCHDOG Monitor — hourly" >> /tmp/crontab-clean
             echo "0 * * * * /opt/incomex/deploys/web-test/scripts/integrity/watchdog-monitor.sh >> /opt/incomex/logs/integrity/watchdog.log 2>&1" >> /tmp/crontab-clean
 
