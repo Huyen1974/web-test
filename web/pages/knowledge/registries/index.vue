@@ -70,7 +70,7 @@ function getCollectionSpecies(row: any): string {
 	return entry ? entry.speciesName : '—';
 }
 
-// taxonomy count now comes from v_registry_counts (CAT-018) — same as other collections
+// Điều 26 v3.5: counts now from meta_catalog directly (pivot_count() populates via refresh-counts)
 
 // Composition level labels + colors
 const LEVEL_CONFIG: Record<string, { label: string; color: string }> = {
@@ -100,43 +100,35 @@ for (const [code, level] of Object.entries(VIRTUAL_CODE_LEVEL)) {
 	LEVEL_TO_VIRTUAL[level] = code;
 }
 
-// Fetch v_registry_counts + meta_catalog to build unified table
+// Điều 26 v3.5 Mission 1: pivot_count() replaces v_registry_counts
+// Now reads directly from meta_catalog (SSOT) — triggers disabled
 const { data: registryData } = useAsyncData(
 	'registry-unified',
 	async () => {
 		try {
-			const [counts, catalog] = await Promise.all([
-				$directus.request(
-					readItems('v_registry_counts' as any, {
-						fields: ['cat_code', 'entity_type', 'record_count', 'orphan_count', 'prev_count', 'composition_level'],
-						limit: -1,
-					}),
-				),
-				$directus.request(
-					readItems('meta_catalog' as any, {
-						fields: ['code', 'name', 'entity_type', 'composition_level', 'identity_class'],
-						filter: { identity_class: { _in: ['managed', 'log'] } },
-						limit: -1,
-					}),
-				),
-			]);
-
-			const catalogMap = new Map<string, any>();
-			for (const c of catalog as any[]) {
-				catalogMap.set(c.code, c);
-			}
+			const catalog = await $directus.request(
+				readItems('meta_catalog' as any, {
+					fields: ['code', 'name', 'entity_type', 'composition_level', 'identity_class', 'record_count', 'active_count', 'orphan_count', 'baseline_count'],
+					filter: {
+						identity_class: { _in: ['managed', 'log'] },
+						registry_collection: { _nnull: true },
+						status: { _eq: 'active' },
+					},
+					limit: -1,
+				}),
+			);
 
 			// Build detail rows — separate managed vs log
 			const managedDetails: any[] = [];
 			const logDetails: any[] = [];
-			for (const r of counts as any[]) {
-				const cat = catalogMap.get(r.cat_code);
-				const identityClass = cat?.identity_class || 'managed';
-				const delta = (r.record_count || 0) - (r.prev_count || 0);
+			for (const r of catalog as any[]) {
+				const prevCount = r.baseline_count || 0;
+				const delta = (r.record_count || 0) - prevCount;
+				const identityClass = r.identity_class || 'managed';
 				const row = {
 					_type: 'detail',
-					code: r.cat_code,
-					name: cat?.name || r.entity_type,
+					code: r.code,
+					name: r.name || r.entity_type,
 					entity_type: r.entity_type,
 					composition_level: r.composition_level || 'atom',
 					record_count: r.record_count || 0,
