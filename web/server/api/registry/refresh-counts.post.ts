@@ -4,6 +4,10 @@
  * Refreshes record_count for all meta_catalog entries by counting
  * actual records in each registry_collection via Directus API.
  *
+ * Điều 26 v3.5: Primary fast path is PG function refresh_meta_catalog_from_pivot()
+ * called via DOT tools on VPS. This Nuxt endpoint is the Directus API fallback
+ * that also handles Model B (file-scanned) counts from CI.
+ *
  * Model A (Directus SSOT): actual_count = record_count (same source — correct)
  * Model B (File-scanned):  actual_count NOT touched (needs filesystem — CLI only)
  *
