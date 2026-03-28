@@ -67,41 +67,31 @@ const { data: virtualData } = useAsyncData(
 	async () => {
 		if (!isVirtual.value) return null;
 		try {
-			const [catalog, counts] = await Promise.all([
-				$directus.request(
-					readItems('meta_catalog' as any, {
-						fields: ['code', 'name', 'entity_type', 'composition_level'],
-						filter: {
-							identity_class: { _eq: 'managed' },
-							composition_level: { _eq: virtualLevel.value },
-						},
-						sort: ['code'],
-						limit: -1,
-					}),
-				),
-				$directus.request(
-					readItems('v_registry_counts' as any, {
-						fields: ['cat_code', 'record_count', 'orphan_count', 'prev_count'],
-						limit: -1,
-					}),
-				),
-			]);
-
-			const countMap = new Map<string, { record_count: number; orphan_count: number; prev_count: number }>();
-			for (const c of counts as any[]) {
-				countMap.set(c.cat_code, { record_count: c.record_count || 0, orphan_count: c.orphan_count || 0, prev_count: c.prev_count || 0 });
-			}
+			// Điều 26 v3.5 Mission 1: read counts directly from meta_catalog (pivot replaces v_registry_counts)
+			const catalog = await $directus.request(
+				readItems('meta_catalog' as any, {
+					fields: ['code', 'name', 'entity_type', 'composition_level', 'record_count', 'orphan_count', 'baseline_count'],
+					filter: {
+						identity_class: { _eq: 'managed' },
+						composition_level: { _eq: virtualLevel.value },
+						registry_collection: { _nnull: true },
+						status: { _eq: 'active' },
+					},
+					sort: ['code'],
+					limit: -1,
+				}),
+			);
 
 			const items = (catalog as any[]).map((c, idx) => {
-				const cnt = countMap.get(c.code) || { record_count: 0, orphan_count: 0, prev_count: 0 };
-				const delta = cnt.record_count - cnt.prev_count;
+				const prevCount = c.baseline_count || 0;
+				const delta = (c.record_count || 0) - prevCount;
 				return {
 					stt: idx + 1,
 					code: c.code,
 					name: c.name,
 					entity_type: c.entity_type,
-					record_count: cnt.record_count,
-					orphan_count: cnt.orphan_count,
+					record_count: c.record_count || 0,
+					orphan_count: c.orphan_count || 0,
 					delta_plus: delta > 0 ? delta : 0,
 					delta_minus: delta < 0 ? delta : 0,
 				};
