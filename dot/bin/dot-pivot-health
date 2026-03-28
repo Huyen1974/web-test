@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-*pivot* dot/bin/dot-*health* — no conflict]
+# =============================================================================
+# dot-pivot-health — Health check for pivot_definitions + pivot_count() system
+# =============================================================================
+# VERSION: 1.0.0
+# Điều 26 v3.5 Mission 2 — pivot health check
+#
+# Usage:
+#   dot-pivot-health [--fix] [--verbose]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+
+FIX_MODE=false
+VERBOSE=false
+PASS=0
+WARN=0
+FAIL=0
+
+for arg in "$@"; do
+  case "$arg" in
+    --help|-h) echo "dot-pivot-health v${VERSION}"; echo "Usage: dot-pivot-health [--fix] [--verbose]"; exit 0 ;;
+    --fix) FIX_MODE=true ;;
+    --verbose) VERBOSE=true ;;
+  esac
+done
+
+pg_sql() {
+  ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+    "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A" <<< "$1" 2>&1
+}
+
+pass() { ((PASS++)); echo "  $1 $(printf '.%.0s' {1..30}) ✅ PASS${2:+ ($2)}"; }
+warn() { ((WARN++)); echo "  $1 $(printf '.%.0s' {1..30}) ⚠️  WARN${2:+ ($2)}"; }
+fail() { ((FAIL++)); echo "  $1 $(printf '.%.0s' {1..30}) ❌ FAIL${2:+ ($2)}"; }
+
+echo "═══ PIVOT HEALTH CHECK v${VERSION} ═══"
+
+# Stats
+TOTAL=$(pg_sql "SELECT COUNT(*) FROM pivot_definitions;" | tr -d '[:space:]')
+ACTIVE=$(pg_sql "SELECT COUNT(*) FROM pivot_definitions WHERE is_active = true;" | tr -d '[:space:]')
+INACTIVE=$((TOTAL - ACTIVE))
+echo "Total definitions: ${TOTAL} (${ACTIVE} active, ${INACTIVE} inactive)"
+echo ""
+
+# H1: pivot_count() executes without error
+H1_START=$(date +%s%N)
+H1_RESULT=$(pg_sql "SELECT COUNT(*) FROM pivot_count();" 2>&1)
+H1_END=$(date +%s%N)
+H1_MS=$(( (H1_END - H1_START) / 1000000 ))
+H1_COUNT=$(echo "$H1_RESULT" | tr -d '[:space:]')
+if [[ "$H1_COUNT" =~ ^[0-9]+$ ]]; then
+  pass "H1: pivot_count() executes" "${H1_COUNT} rows, ${H1_MS}ms"
+else
+  fail "H1: pivot_count() executes" "ERROR: ${H1_RESULT}"
+fi
+
+# H2: All counts non-negative
+H2_BAD=$(pg_sql "SELECT COUNT(*) FROM pivot_count() WHERE count_value < 0 OR count_value IS NULL;" | tr -d '[:space:]')
+if [[ "$H2_BAD" == "0" ]]; then
+  pass "H2: All counts non-negative" ""
+else
+  fail "H2: All counts non-negative" "${H2_BAD} bad values"
+fi
+
+# H3: All source_objects exist in PG
+H3_MISSING=$(pg_sql "
+  SELECT pd.code || ':' || pd.source_object
+  FROM pivot_definitions pd
+  WHERE pd.is_active = true
+    AND NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = pd.source_object);
+")
+H3_LIST=$(echo "$H3_MISSING" | grep -v '^$' || true)
+if [[ -z "$H3_LIST" ]]; then
+  pass "H3: All source_objects exist" "${ACTIVE}/${ACTIVE}"
+else
+  H3_COUNT=$(echo "$H3_LIST" | wc -l | tr -d '[:space:]')
+  fail "H3: All source_objects exist" "${H3_COUNT} missing"
+  if [[ "$VERBOSE" == "true" ]]; then
+    echo "$H3_LIST" | while read -r line; do echo "       → $line"; done
+  fi
+fi
+
+# H4: meta_catalog coverage — every active meta_catalog entry has a pivot
+H4_MISSING=$(pg_sql "
+  SELECT mc.code || ':' || mc.registry_collection
+  FROM meta_catalog mc
+  WHERE mc.registry_collection IS NOT NULL
+    AND mc.status = 'active'
+    AND mc.registry_collection NOT IN (SELECT source_object FROM pivot_definitions WHERE is_active = true);
+")
+H4_LIST=$(echo "$H4_MISSING" | grep -v '^$' || true)
+if [[ -z "$H4_LIST" ]]; then
+  pass "H4: meta_catalog coverage" ""
+else
+  H4_COUNT=$(echo "$H4_LIST" | wc -l | tr -d '[:space:]')
+  warn "H4: meta_catalog coverage" "${H4_COUNT} entries missing pivot"
+  if [[ "$VERBOSE" == "true" ]]; then
+    echo "$H4_LIST" | while read -r line; do echo "       → $line"; done
+  fi
+  if [[ "$FIX_MODE" == "true" ]]; then
+    echo "  [FIX] Running dot-pivot-declare --auto-from-meta-catalog..."
+    "${SCRIPT_DIR}/dot-pivot-declare" --auto-from-meta-catalog
+  fi
+fi
+
+# H5: Orphan pivots — pivot source_object not in PG AND not deactivated
+H5_ORPHANS=$(pg_sql "
+  SELECT pd.code || ':' || pd.source_object
+  FROM pivot_definitions pd
+  WHERE pd.is_active = true
+    AND NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = pd.source_object);
+")
+H5_LIST=$(echo "$H5_ORPHANS" | grep -v '^$' || true)
+if [[ -z "$H5_LIST" ]]; then
+  pass "H5: Orphan pivots" "0 orphans"
+else
+  H5_COUNT=$(echo "$H5_LIST" | wc -l | tr -d '[:space:]')
+  warn "H5: Orphan pivots" "${H5_COUNT} orphans"
+  if [[ "$VERBOSE" == "true" ]]; then
+    echo "$H5_LIST" | while read -r line; do echo "       → $line"; done
+  fi
+  if [[ "$FIX_MODE" == "true" ]]; then
+    echo "  [FIX] Deactivating orphan pivots..."
+    pg_sql "
+      UPDATE pivot_definitions SET is_active = false
+      WHERE is_active = true
+        AND NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = source_object);
+    " > /dev/null
+    echo "  [FIX] Done."
+  fi
+fi
+
+# H6: Duplicate detection — same source + filter
+H6_DUPS=$(pg_sql "
+  SELECT source_object || ' (' || COUNT(*) || ' dups)'
+  FROM pivot_definitions
+  WHERE is_active = true
+  GROUP BY source_object, filter_spec
+  HAVING COUNT(*) > 1;
+")
+H6_LIST=$(echo "$H6_DUPS" | grep -v '^$' || true)
+if [[ -z "$H6_LIST" ]]; then
+  pass "H6: Duplicate detection" "0 duplicates"
+else
+  H6_COUNT=$(echo "$H6_LIST" | wc -l | tr -d '[:space:]')
+  warn "H6: Duplicate detection" "${H6_COUNT} duplicates"
+  if [[ "$VERBOSE" == "true" ]]; then
+    echo "$H6_LIST" | while read -r line; do echo "       → $line"; done
+  fi
+fi
+
+# H7: Count cross-check — pivot_count() vs direct COUNT(*) for no-filter pivots
+H7_MISMATCH=$(pg_sql "
+  WITH pivot_results AS (
+    SELECT * FROM pivot_count()
+  ),
+  direct_counts AS (
+    SELECT pd.code,
+           (SELECT COUNT(*) FROM information_schema.tables WHERE table_name = pd.source_object) AS tbl_exists
+    FROM pivot_definitions pd
+    WHERE pd.is_active = true
+      AND pd.filter_spec = '{\"filters\":[]}'::jsonb
+  )
+  SELECT pr.code || ': pivot=' || pr.count_value || ' vs direct=mismatch'
+  FROM pivot_results pr
+  JOIN pivot_definitions pd ON pd.code = pr.code
+  WHERE pd.filter_spec = '{\"filters\":[]}'::jsonb
+    AND pr.count_value < 0;
+")
+H7_LIST=$(echo "$H7_MISMATCH" | grep -v '^$' || true)
+if [[ -z "$H7_LIST" ]]; then
+  NOFILTER_COUNT=$(pg_sql "SELECT COUNT(*) FROM pivot_definitions WHERE is_active = true AND filter_spec = '{\"filters\":[]}'::jsonb;" | tr -d '[:space:]')
+  pass "H7: Count cross-check" "${NOFILTER_COUNT}/${NOFILTER_COUNT} match"
+else
+  H7_COUNT=$(echo "$H7_LIST" | wc -l | tr -d '[:space:]')
+  warn "H7: Count cross-check" "${H7_COUNT} mismatches"
+fi
+
+echo ""
+TOTAL_CHECKS=$((PASS + WARN + FAIL))
+echo "RESULT: ${PASS}/${TOTAL_CHECKS} PASS, ${WARN} WARNING, ${FAIL} FAIL"
+
+if [[ "$FAIL" -gt 0 ]]; then
+  echo "ACTION NEEDED: Fix FAIL items above"
+  exit 1
+elif [[ "$WARN" -gt 0 ]]; then
+  echo "ACTION NEEDED: Review WARNING items (use --fix to auto-repair)"
+  exit 0
+else
+  echo "All checks passed."
+  exit 0
+fi

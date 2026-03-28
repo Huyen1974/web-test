@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-*pivot* — no existing tool]
+# =============================================================================
+# dot-pivot-declare — Khai báo pivot definition cho collection/source_object
+# =============================================================================
+# VERSION: 1.0.0
+# Điều 26 v3.5 Mission 2 — DOT khai báo pivot
+#
+# Usage:
+#   dot-pivot-declare --source <table> --name "<display name>" [--filter '{"filters":[]}'] [--group <group>] [--level <level>]
+#   dot-pivot-declare --auto-from-meta-catalog
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+pg_sql() {
+  ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+    "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A" <<< "$1"
+}
+
+# Parse args
+SOURCE="" NAME="" FILTER='{"filters":[]}' GROUP="default" LEVEL="atom" AUTO_MODE=false
+
+for arg in "$@"; do
+  case "$arg" in
+    --help|-h)
+      echo "dot-pivot-declare v${VERSION}"
+      echo "Usage:"
+      echo "  dot-pivot-declare --source <table> --name \"<name>\" [--filter '{...}'] [--group <g>] [--level <l>]"
+      echo "  dot-pivot-declare --auto-from-meta-catalog"
+      exit 0 ;;
+    --auto-from-meta-catalog) AUTO_MODE=true ;;
+    --source=*) SOURCE="${arg#*=}" ;;
+    --name=*) NAME="${arg#*=}" ;;
+    --filter=*) FILTER="${arg#*=}" ;;
+    --group=*) GROUP="${arg#*=}" ;;
+    --level=*) LEVEL="${arg#*=}" ;;
+    *) log_err "Unknown arg: $arg"; exit 1 ;;
+  esac
+done
+
+# === AUTO MODE: derive from meta_catalog (§0-AU) ===
+if [[ "$AUTO_MODE" == "true" ]]; then
+  log_info "Auto-declaring from meta_catalog..."
+
+  RESULT=$(pg_sql "
+    WITH existing AS (
+      SELECT source_object FROM pivot_definitions
+    ),
+    needed AS (
+      SELECT mc.code, mc.name, mc.registry_collection, mc.composition_level,
+             COALESCE(mc.atom_group, 'default') AS grp
+      FROM meta_catalog mc
+      WHERE mc.registry_collection IS NOT NULL
+        AND mc.status = 'active'
+        AND mc.registry_collection NOT IN (SELECT source_object FROM existing)
+        AND EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = mc.registry_collection)
+    )
+    SELECT COUNT(*) FROM needed;
+  ")
+  NEEDED_COUNT=$(echo "$RESULT" | tr -d '[:space:]')
+
+  if [[ "$NEEDED_COUNT" == "0" ]]; then
+    log_ok "All meta_catalog entries already have pivot definitions. 0 new."
+    exit 0
+  fi
+
+  pg_sql "
+    INSERT INTO pivot_definitions (code, name, source_object, filter_spec, registry_group, composition_level, display_order)
+    SELECT
+      'PIV-' || LPAD((ROW_NUMBER() OVER (ORDER BY mc.code) + COALESCE((SELECT MAX(SUBSTRING(code FROM 5)::INT) FROM pivot_definitions), 0))::TEXT, 3, '0'),
+      mc.name || ' — Total',
+      mc.registry_collection,
+      '{\"filters\":[]}',
+      COALESCE(mc.atom_group, 'default'),
+      COALESCE(mc.composition_level, 'atom'),
+      (ROW_NUMBER() OVER (ORDER BY mc.code) + COALESCE((SELECT MAX(display_order) FROM pivot_definitions), 0))
+    FROM meta_catalog mc
+    WHERE mc.registry_collection IS NOT NULL
+      AND mc.status = 'active'
+      AND mc.registry_collection NOT IN (SELECT source_object FROM pivot_definitions)
+      AND EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = mc.registry_collection)
+    ON CONFLICT (code) DO NOTHING;
+  "
+
+  NEW_COUNT=$(pg_sql "SELECT COUNT(*) FROM pivot_definitions;" | tr -d '[:space:]')
+  log_ok "Auto-declared: ${NEEDED_COUNT} new. Total pivot definitions: ${NEW_COUNT}"
+  exit 0
+fi
+
+# === SINGLE MODE ===
+if [[ -z "$SOURCE" || -z "$NAME" ]]; then
+  log_err "Required: --source <table> --name \"<name>\" (or --auto-from-meta-catalog)"
+  exit 1
+fi
+
+# 1. Check source_object exists in PG
+EXISTS=$(pg_sql "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = '${SOURCE}';" | tr -d '[:space:]')
+if [[ "$EXISTS" == "0" ]]; then
+  log_err "Table '${SOURCE}' does not exist in PG"
+  exit 1
+fi
+
+# 2. Check duplicate
+DUP=$(pg_sql "SELECT code FROM pivot_definitions WHERE source_object = '${SOURCE}' AND filter_spec = '${FILTER}'::jsonb LIMIT 1;" | tr -d '[:space:]')
+if [[ -n "$DUP" ]]; then
+  log_ok "Already exists: ${DUP} (source: ${SOURCE})"
+  exit 0
+fi
+
+# 3. Auto-generate code
+NEW_CODE=$(pg_sql "SELECT 'PIV-' || LPAD((COALESCE(MAX(SUBSTRING(code FROM 5)::INT), 0) + 1)::TEXT, 3, '0') FROM pivot_definitions;" | tr -d '[:space:]')
+
+# 4. INSERT
+pg_sql "
+  INSERT INTO pivot_definitions (code, name, source_object, filter_spec, registry_group, composition_level, is_active, display_order)
+  VALUES (
+    '${NEW_CODE}',
+    '${NAME}',
+    '${SOURCE}',
+    '${FILTER}'::jsonb,
+    '${GROUP}',
+    '${LEVEL}',
+    true,
+    COALESCE((SELECT MAX(display_order) FROM pivot_definitions), 0) + 1
+  );
+" > /dev/null
+
+# 5. Verify
+COUNT_VAL=$(pg_sql "SELECT count_value FROM pivot_count('${NEW_CODE}');" | tr -d '[:space:]')
+if [[ -z "$COUNT_VAL" ]]; then
+  log_err "pivot_count('${NEW_CODE}') returned no result"
+  exit 1
+fi
+
+log_ok "CREATED: ${NEW_CODE} | source: ${SOURCE} | name: ${NAME} | count: ${COUNT_VAL}"
