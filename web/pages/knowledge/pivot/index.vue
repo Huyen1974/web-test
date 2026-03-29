@@ -10,8 +10,8 @@ const { data: items, status } = useAsyncData('pivot-virtual-rows', () =>
 	$directus.request(
 		readItems('meta_catalog' as any, {
 			filter: { identity_class: { _eq: 'virtual' }, code: { _starts_with: 'CAT-' }, name: { _starts_with: 'Tổng' } },
-			fields: ['code', 'name', 'composition_level', 'record_count'],
-			sort: ['code'],
+			fields: ['code', 'name', 'composition_level', 'record_count', 'species_count', 'orphan_count', 'display_order'],
+			sort: ['display_order'],
 			limit: 10,
 		}),
 	), { default: () => [] },
@@ -20,7 +20,9 @@ const { data: items, status } = useAsyncData('pivot-virtual-rows', () =>
 const columns = [
 	{ key: 'name', label: 'Lớp' },
 	{ key: 'composition_level', label: 'Phân loại' },
-	{ key: 'record_count', label: 'Tổng' },
+	{ key: 'record_count', label: 'Tổng cá thể' },
+	{ key: 'species_count', label: 'Số loài' },
+	{ key: 'orphan_count', label: 'Mồ côi' },
 ];
 </script>
 
