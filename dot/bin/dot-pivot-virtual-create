@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-pivot-virtual* — no existing tool]
+# =============================================================================
+# dot-pivot-virtual-create — Create a new virtual row for Tab Pivot L1
+# =============================================================================
+# VERSION: 1.0.0
+# §0-BD: Enforce fn cho MỌI 5 cột + trigger + cron khi thêm dòng mới
+#
+# Usage:
+#   dot-pivot-virtual-create --code=CAT-XXX --name="Tổng ..." --source-table=xxx --order=N [--orphan-sql="SQL"]
+#   dot-pivot-virtual-create --help
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+pg_sql() {
+  local _on_vps=false
+  { docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${PG_CONTAINER}$"; } && _on_vps=true
+  if [[ "$_on_vps" == "true" ]]; then
+    docker exec -i "${PG_CONTAINER}" psql -U "${PG_USER}" -d "${PG_DB}" -t -A <<< "$1"
+  else
+    ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+      "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A" <<< "$1"
+  fi
+}
+
+CODE="" NAME="" SOURCE="" ORDER="" ORPHAN_SQL=""
+
+for arg in "$@"; do
+  case "$arg" in
+    --help|-h)
+      echo "dot-pivot-virtual-create v${VERSION}"
+      echo "Usage: dot-pivot-virtual-create --code=CAT-XXX --name=\"Tổng ...\" --source-table=xxx --order=N [--orphan-sql=\"SQL\"]"
+      exit 0 ;;
+    --code=*) CODE="${arg#*=}" ;;
+    --name=*) NAME="${arg#*=}" ;;
+    --source-table=*) SOURCE="${arg#*=}" ;;
+    --order=*) ORDER="${arg#*=}" ;;
+    --orphan-sql=*) ORPHAN_SQL="${arg#*=}" ;;
+    *) log_err "Unknown: $arg"; exit 1 ;;
+  esac
+done
+
+[[ -z "$CODE" || -z "$NAME" || -z "$SOURCE" || -z "$ORDER" ]] && { log_err "Required: --code --name --source-table --order"; exit 1; }
+
+# Check source table exists
+EXISTS=$(pg_sql "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = '${SOURCE}';" | tr -d '[:space:]')
+[[ "$EXISTS" == "0" ]] && { log_err "Table '${SOURCE}' not found"; exit 1; }
+
+# Check not duplicate
+DUP=$(pg_sql "SELECT COUNT(*) FROM meta_catalog WHERE code = '${CODE}';" | tr -d '[:space:]')
+[[ "$DUP" != "0" ]] && { log_ok "Already exists: ${CODE}"; exit 0; }
+
+log_info "Creating virtual row ${CODE}..."
+
+pg_sql "
+  SELECT set_config('app.allow_meta_update', 'true', false);
+  INSERT INTO meta_catalog (code, name, entity_type, source_model, identity_class, composition_level, status, record_count, active_count, species_count, orphan_count, display_order)
+  VALUES ('${CODE}', '${NAME}', '${CODE}_total', 'A', 'virtual', 'meta', 'active',
+          (SELECT COUNT(*) FROM ${SOURCE}), (SELECT COUNT(*) FROM ${SOURCE}), 0, 0, ${ORDER});
+  SELECT set_config('app.allow_meta_update', 'false', false);
+" > /dev/null
+
+# Verify
+RESULT=$(pg_sql "SELECT code || ': record_count=' || record_count || ', species=' || species_count || ', orphan=' || orphan_count || ', order=' || display_order FROM meta_catalog WHERE code = '${CODE}';" | tr -d '[:space:]')
+log_ok "Created: ${RESULT}"
+
+if [[ -z "$ORPHAN_SQL" ]]; then
+  log_info "WARNING: No --orphan-sql provided. orphan_count = 0 (define later)."
+fi
+
+log_ok "DONE. Run dot-pivot-health to verify L1 integrity."

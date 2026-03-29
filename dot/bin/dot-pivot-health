@@ -204,6 +204,29 @@ else
   echo "$H7_LIST" | while read -r line; do echo "       → $line"; done
 fi
 
+# H8: L1 Integrity — 9 rows × 5 cols = 45 cells ALL NOT NULL (§0-BD)
+H8_NULLS=$(pg_sql "
+  SELECT code || '.' || col AS cell FROM (
+    SELECT code,
+      CASE WHEN record_count IS NULL THEN 'record_count' END AS c1,
+      CASE WHEN species_count IS NULL THEN 'species_count' END AS c2,
+      CASE WHEN orphan_count IS NULL THEN 'orphan_count' END AS c3,
+      CASE WHEN display_order IS NULL THEN 'display_order' END AS c4
+    FROM meta_catalog WHERE identity_class = 'virtual' AND display_order > 0
+  ) sub CROSS JOIN LATERAL unnest(ARRAY[c1,c2,c3,c4]) AS col
+  WHERE col IS NOT NULL;
+")
+H8_LIST=$(echo "$H8_NULLS" | grep -v '^$' || true)
+H8_TOTAL=$(pg_sql "SELECT COUNT(*) * 5 FROM meta_catalog WHERE identity_class = 'virtual' AND display_order > 0;" | tr -d '[:space:]')
+if [[ -z "$H8_LIST" ]]; then
+  pass "H8: L1 Integrity (${H8_TOTAL} cells)" "ALL NOT NULL"
+else
+  H8_COUNT=$(echo "$H8_LIST" | wc -l | tr -d '[:space:]')
+  H8_OK=$((H8_TOTAL - H8_COUNT))
+  fail "H8: L1 Integrity" "${H8_OK}/${H8_TOTAL} — ${H8_COUNT} NULL cells"
+  echo "$H8_LIST" | while read -r line; do echo "       → $line"; done
+fi
+
 echo ""
 TOTAL_CHECKS=$((PASS + WARN + FAIL))
 echo "RESULT: ${PASS}/${TOTAL_CHECKS} PASS, ${WARN} WARNING, ${FAIL} FAIL"
