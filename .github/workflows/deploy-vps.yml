@@ -323,19 +323,18 @@ jobs:
               2>/dev/null || echo '{"status":"error"}')
             echo "Registry refresh: $(echo "$REFRESH_OUT" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(f"updated={d.get(\"updated\",\"?\")}, errors={d.get(\"errors\",\"?\")}")' 2>/dev/null || echo 'unknown')"
 
-            # Refresh CAT-ALL summary (S129-A guard requires PG session bypass)
-            echo "=== Refreshing CAT-ALL summary ==="
+            # Refresh virtual summaries — each row = SUM(managed active per level) — Điều 0-B
+            echo "=== Refreshing virtual summaries ==="
             docker exec postgres psql -U directus -d directus -c "
               SELECT set_config('app.allow_meta_update', 'true', true);
-              UPDATE meta_catalog SET record_count = (
-                SELECT COALESCE(SUM(record_count), 0) FROM meta_catalog
-                WHERE identity_class = 'managed' AND code != 'CAT-ALL'
-              ), active_count = (
-                SELECT COALESCE(SUM(active_count), 0) FROM meta_catalog
-                WHERE identity_class = 'managed' AND code != 'CAT-ALL'
-              ) WHERE code = 'CAT-ALL';
+              UPDATE meta_catalog SET record_count = (SELECT COALESCE(SUM(record_count),0) FROM meta_catalog WHERE identity_class='managed' AND status='active' AND composition_level='atom'), active_count = (SELECT COALESCE(SUM(record_count),0) FROM meta_catalog WHERE identity_class='managed' AND status='active' AND composition_level='atom') WHERE code='CAT-ALL';
+              UPDATE meta_catalog SET record_count = (SELECT COALESCE(SUM(record_count),0) FROM meta_catalog WHERE identity_class='managed' AND status='active' AND composition_level='molecule'), active_count = (SELECT COALESCE(SUM(record_count),0) FROM meta_catalog WHERE identity_class='managed' AND status='active' AND composition_level='molecule') WHERE code='CAT-MOL';
+              UPDATE meta_catalog SET record_count = (SELECT COALESCE(SUM(record_count),0) FROM meta_catalog WHERE identity_class='managed' AND status='active' AND composition_level='compound'), active_count = (SELECT COALESCE(SUM(record_count),0) FROM meta_catalog WHERE identity_class='managed' AND status='active' AND composition_level='compound') WHERE code='CAT-CMP';
+              UPDATE meta_catalog SET record_count = (SELECT COALESCE(SUM(record_count),0) FROM meta_catalog WHERE identity_class='managed' AND status='active' AND composition_level='material'), active_count = (SELECT COALESCE(SUM(record_count),0) FROM meta_catalog WHERE identity_class='managed' AND status='active' AND composition_level='material') WHERE code='CAT-MAT';
+              UPDATE meta_catalog SET record_count = (SELECT COALESCE(SUM(record_count),0) FROM meta_catalog WHERE identity_class='managed' AND status='active' AND composition_level='product'), active_count = (SELECT COALESCE(SUM(record_count),0) FROM meta_catalog WHERE identity_class='managed' AND status='active' AND composition_level='product') WHERE code='CAT-PRD';
+              UPDATE meta_catalog SET record_count = (SELECT COALESCE(SUM(record_count),0) FROM meta_catalog WHERE identity_class='managed' AND status='active' AND composition_level='building'), active_count = (SELECT COALESCE(SUM(record_count),0) FROM meta_catalog WHERE identity_class='managed' AND status='active' AND composition_level='building') WHERE code='CAT-BLD';
             " 2>&1 | tail -3
-            echo "CAT-ALL refreshed"
+            echo "Virtual summaries refreshed"
 
             echo "=== Direct deploy complete ==="
 
