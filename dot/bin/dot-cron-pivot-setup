@@ -38,6 +38,8 @@ PIVOT_CRON_ENTRIES=$(cat <<'EOF'
 0 4 * * * /opt/incomex/dot/bin/dot-pivot-health >> /var/log/incomex/pivot-health.log 2>&1
 # S145-M3 — Pivot results refresh every 10 min (piggyback pivot-refresh)
 */10 * * * * docker exec postgres psql -U directus -d directus -c "SELECT refresh_pivot_results();" >> /var/log/incomex/pivot-results-refresh.log 2>&1
+# S147-M4d-C — Orphan + species_count refresh every 10 min (§0-BD dual-trigger safety net)
+*/10 * * * * docker exec postgres psql -U directus -d directus -c "SELECT fn_refresh_orphan_species(); SELECT fn_refresh_orphan_dot(); SELECT fn_refresh_orphan_col(); SELECT fn_refresh_species_per_level();" >> /var/log/incomex/pivot-orphan.log 2>&1
 EOF
 )
 
