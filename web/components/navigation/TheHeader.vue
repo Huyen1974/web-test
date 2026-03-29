@@ -96,6 +96,16 @@ const registriesNavItem = {
 	title: 'Registries',
 };
 
+const pivotNavItem = {
+	id: 'pivot-nav-static',
+	has_children: false,
+	icon: 'analytics',
+	label: null,
+	type: 'url',
+	url: '/knowledge/pivot',
+	title: 'Pivot',
+};
+
 const lawsNavItem = {
 	id: 'laws-nav-static',
 	has_children: false,
@@ -106,7 +116,7 @@ const lawsNavItem = {
 	title: 'Laws',
 };
 
-const staticNavItems = [knowledgeNavItem, modulesNavItem, tasksNavItem, workflowNavItem, registriesNavItem, lawsNavItem];
+const staticNavItems = [knowledgeNavItem, modulesNavItem, tasksNavItem, workflowNavItem, registriesNavItem, pivotNavItem, lawsNavItem];
 
 const navigationItems = computed(() => {
 	const items = [...(navigation.value?.items || [])];
