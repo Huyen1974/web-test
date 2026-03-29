@@ -78,17 +78,17 @@ jobs:
           FAILED=0
           DIRECTUS="https://directus.incomexsaigoncorp.vn"
 
-          # 1. CAT-ALL = SUM(managed)
+          # 1. CAT-ALL = SUM(managed active atoms) — Điều 0-B: each virtual row = its composition_level
           echo -n "CAT-ALL contract....... "
-          MANAGED=$(curl -s --globoff --max-time 15 "$DIRECTUS/items/meta_catalog?fields=record_count&filter[identity_class][_eq]=managed&limit=-1" \
+          ATOM_SUM=$(curl -s --globoff --max-time 15 "$DIRECTUS/items/meta_catalog?fields=record_count&filter[identity_class][_eq]=managed&filter[status][_eq]=active&filter[composition_level][_eq]=atom&limit=-1" \
             | jq '[.data[].record_count // 0] | add // 0' 2>/dev/null || echo "-1")
           CAT_ALL=$(curl -s --globoff --max-time 15 "$DIRECTUS/items/meta_catalog?fields=record_count&filter[code][_eq]=CAT-ALL&limit=1" \
             | jq '.data[0].record_count // -1' 2>/dev/null || echo "-1")
 
-          if [ "$MANAGED" = "$CAT_ALL" ] && [ "$MANAGED" != "-1" ]; then
-            echo "PASS (CAT-ALL=$CAT_ALL = SUM=$MANAGED)"
+          if [ "$ATOM_SUM" = "$CAT_ALL" ] && [ "$ATOM_SUM" != "-1" ]; then
+            echo "PASS (CAT-ALL=$CAT_ALL = SUM(atom active)=$ATOM_SUM)"
           else
-            echo "FAIL (CAT-ALL=$CAT_ALL != SUM=$MANAGED)"
+            echo "FAIL (CAT-ALL=$CAT_ALL != SUM(atom active)=$ATOM_SUM)"
             FAILED=1
           fi
 
