@@ -29,8 +29,14 @@ log_warn() { echo "[WARN] $1"; }
 log_err()  { echo "[ERR]  $1" >&2; }
 
 pg_sql() {
-  ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
-    "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A" <<< "$1"
+  local _on_vps=false
+  { docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${PG_CONTAINER}$"; } && _on_vps=true
+  if [[ "$_on_vps" == "true" ]]; then
+    docker exec -i "${PG_CONTAINER}" psql -U "${PG_USER}" -d "${PG_DB}" -t -A <<< "$1"
+  else
+    ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+      "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A" <<< "$1"
+  fi
 }
 
 # Parse args
