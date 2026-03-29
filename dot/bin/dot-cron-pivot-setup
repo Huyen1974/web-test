@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# CHECKED-NO-DUPLICATE: [searched dot/bin/dot-cron* — no existing cron pivot tool]
+# =============================================================================
+# dot-cron-pivot-setup — Install/update pivot-related cron entries on VPS
+# =============================================================================
+# VERSION: 1.0.0
+# Điều 26 v3.5 — Version-controlled cron management for pivot system
+#
+# Usage:
+#   dot-cron-pivot-setup [--dry-run]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+DRY_RUN=false
+
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) DRY_RUN=true ;;
+    --help|-h) echo "dot-cron-pivot-setup v${VERSION}"; echo "Usage: dot-cron-pivot-setup [--dry-run]"; exit 0 ;;
+  esac
+done
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+
+# Define pivot cron entries (source of truth)
+PIVOT_CRON_ENTRIES=$(cat <<'EOF'
+# Dieu 26 v3.5 — Pivot refresh every 10 min (§0-AI dual-trigger)
+*/10 * * * * cd /opt/incomex/docker && docker exec postgres psql -U directus -d directus -c "SELECT refresh_meta_catalog_from_pivot();" >> /var/log/incomex/pivot-refresh.log 2>&1
+# Dieu 26 v3.5 — Pivot health daily 4AM (§0-AI dual-trigger)
+0 4 * * * /opt/incomex/dot/bin/dot-pivot-health >> /var/log/incomex/pivot-health.log 2>&1
+# S145-M3 — Pivot results refresh every 10 min (piggyback pivot-refresh)
+*/10 * * * * docker exec postgres psql -U directus -d directus -c "SELECT refresh_pivot_results();" >> /var/log/incomex/pivot-results-refresh.log 2>&1
+EOF
+)
+
+if [[ "$DRY_RUN" == "true" ]]; then
+  log_info "DRY RUN — would install these cron entries:"
+  echo "$PIVOT_CRON_ENTRIES"
+  exit 0
+fi
+
+log_info "Installing pivot cron entries on VPS..."
+
+# Remove old pivot cron entries and replace with new ones
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" bash -s <<REMOTE_EOF
+set -euo pipefail
+# Remove old pivot-related cron entries
+crontab -l 2>/dev/null | grep -v -E '(Pivot refresh|Pivot health|Pivot results|pivot-refresh|pivot-health|pivot-results)' > /tmp/cron_clean.txt || true
+
+# Append new entries
+cat >> /tmp/cron_clean.txt <<'CRON_ENTRIES'
+${PIVOT_CRON_ENTRIES}
+CRON_ENTRIES
+
+# Install
+crontab /tmp/cron_clean.txt
+rm -f /tmp/cron_clean.txt
+echo "Cron updated."
+REMOTE_EOF
+
+log_ok "Pivot cron entries installed."
+
+# Verify
+log_info "Verifying..."
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" "crontab -l | grep -i pivot"
+log_ok "Done."

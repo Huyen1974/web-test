@@ -37,13 +37,19 @@ for arg in "$@"; do
 done
 
 pg_sql() {
-  ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
-    "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A" <<< "$1" 2>&1
+  local _on_vps=false
+  { docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${PG_CONTAINER}$"; } && _on_vps=true
+  if [[ "$_on_vps" == "true" ]]; then
+    docker exec -i "${PG_CONTAINER}" psql -U "${PG_USER}" -d "${PG_DB}" -t -A <<< "$1" 2>&1
+  else
+    ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+      "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A" <<< "$1" 2>&1
+  fi
 }
 
-pass() { ((PASS++)); echo "  $1 $(printf '.%.0s' {1..30}) ✅ PASS${2:+ ($2)}"; }
-warn() { ((WARN++)); echo "  $1 $(printf '.%.0s' {1..30}) ⚠️  WARN${2:+ ($2)}"; }
-fail() { ((FAIL++)); echo "  $1 $(printf '.%.0s' {1..30}) ❌ FAIL${2:+ ($2)}"; }
+pass() { PASS=$((PASS + 1)); echo "  $1 $(printf '.%.0s' {1..30}) ✅ PASS${2:+ ($2)}"; }
+warn() { WARN=$((WARN + 1)); echo "  $1 $(printf '.%.0s' {1..30}) ⚠️  WARN${2:+ ($2)}"; }
+fail() { FAIL=$((FAIL + 1)); echo "  $1 $(printf '.%.0s' {1..30}) ❌ FAIL${2:+ ($2)}"; }
 
 echo "═══ PIVOT HEALTH CHECK v${VERSION} ═══"
 
@@ -161,31 +167,41 @@ else
   fi
 fi
 
-# H7: Count cross-check — pivot_count() vs direct COUNT(*) for no-filter pivots
+# H7: Count cross-check — pivot_count() vs direct COUNT(*) for no-filter pivots (AP-12 fix)
 H7_MISMATCH=$(pg_sql "
-  WITH pivot_results AS (
-    SELECT * FROM pivot_count()
-  ),
-  direct_counts AS (
-    SELECT pd.code,
-           (SELECT COUNT(*) FROM information_schema.tables WHERE table_name = pd.source_object) AS tbl_exists
-    FROM pivot_definitions pd
-    WHERE pd.is_active = true
-      AND pd.filter_spec = '{\"filters\":[]}'::jsonb
-  )
-  SELECT pr.code || ': pivot=' || pr.count_value || ' vs direct=mismatch'
-  FROM pivot_results pr
-  JOIN pivot_definitions pd ON pd.code = pr.code
-  WHERE pd.filter_spec = '{\"filters\":[]}'::jsonb
-    AND pr.count_value < 0;
+  DO \\\$\\\$
+  DECLARE
+    r RECORD;
+    direct_cnt bigint;
+    results text[] := ARRAY[]::text[];
+  BEGIN
+    FOR r IN
+      SELECT pc.code, pc.count_value, pd.source_object
+      FROM pivot_count() pc
+      JOIN pivot_definitions pd ON pd.code = pc.code
+      WHERE pd.is_active = true
+        AND pd.filter_spec = '{\"filters\":[]}'::jsonb
+        AND pd.group_spec = '{\"groups\":[]}'::jsonb
+    LOOP
+      EXECUTE format('SELECT COUNT(*) FROM %I', r.source_object) INTO direct_cnt;
+      IF r.count_value != direct_cnt THEN
+        results := array_append(results,
+          r.code || ': pivot=' || r.count_value || ' vs direct=' || direct_cnt);
+      END IF;
+    END LOOP;
+    IF array_length(results, 1) > 0 THEN
+      RAISE NOTICE '%', array_to_string(results, E'\n');
+    END IF;
+  END \\\$\\\$;
 ")
-H7_LIST=$(echo "$H7_MISMATCH" | grep -v '^$' || true)
+H7_LIST=$(echo "$H7_MISMATCH" | grep -E '^(PIV-|NOTICE:)' | sed 's/^NOTICE:  //' | grep -v '^$' || true)
 if [[ -z "$H7_LIST" ]]; then
-  NOFILTER_COUNT=$(pg_sql "SELECT COUNT(*) FROM pivot_definitions WHERE is_active = true AND filter_spec = '{\"filters\":[]}'::jsonb;" | tr -d '[:space:]')
-  pass "H7: Count cross-check" "${NOFILTER_COUNT}/${NOFILTER_COUNT} match"
+  NOFILTER_COUNT=$(pg_sql "SELECT COUNT(*) FROM pivot_definitions WHERE is_active = true AND filter_spec = '{\"filters\":[]}'::jsonb AND group_spec = '{\"groups\":[]}'::jsonb;" | tr -d '[:space:]')
+  pass "H7: Count cross-check (real COUNT)" "${NOFILTER_COUNT}/${NOFILTER_COUNT} match"
 else
   H7_COUNT=$(echo "$H7_LIST" | wc -l | tr -d '[:space:]')
-  warn "H7: Count cross-check" "${H7_COUNT} mismatches"
+  fail "H7: Count cross-check (real COUNT)" "${H7_COUNT} mismatches"
+  echo "$H7_LIST" | while read -r line; do echo "       → $line"; done
 fi
 
 echo ""
