@@ -1,257 +1,151 @@
-# Skill: Incomex Operating Rules — CƯỠNG CHẾ
+# INCOMEX SYSTEM RULES — v4.0 (S148 BAN HÀNH)
 
-> Đọc file này TRƯỚC MỌI tác vụ. Vi phạm = reject.
+> ĐỌC TOÀN BỘ FILE NÀY TRƯỚC KHI LÀM BẤT CỨ GÌ.
+> Vi phạm bất kỳ checkpoint nào = PR REJECT. Không ngoại lệ.
 
-## ⚡ MERGE RULE (web-test) — v4.68
-"CI GREEN" = CHỈ 4 required checks GREEN:
-- Pass Gate
-- Quality Gate
-- check-critical-files
-- Contract Schema Validation
+---
 
-MERGE NGAY khi 4 cái trên xanh.
-KHÔNG đợi: build, E2E Tests, Terraform Deploy, required-docs-guard (non-blocking).
-Đợi non-blocking = VI PHẠM, lãng phí thời gian User.
+## CHECKPOINT — ĐẾM TỪNG MỤC (18 điểm)
 
-## §0-AB CẤM --admin (v4.72)
-- TUYỆT ĐỐI CẤM `gh pr merge --admin` hoặc bypass branch protection
-- "4 required GREEN" = ĐỢI checks XONG rồi merge, KHÔNG force
-- Queued → ĐỢI. FAIL → DỪNG, fix.
-- Lệnh đúng: `gh pr merge [PR] --squash --delete-branch`
+Mỗi mission/prompt, bạn PHẢI tự đếm: "✅ CP-01 done, ✅ CP-02 done..."
+Thiếu bất kỳ CP nào trong report = CHƯA HOÀN THÀNH.
 
-## §0-AC PHÂN LOẠI TRƯỚC FIX SAU (v4.73)
-- Investigate → Classify → Ghi luật → Code theo luật → Fix từng nhóm
-- CẤM giao "fix tất cả" chưa phân loại
+### TRƯỚC KHI LÀM (CP-01 → CP-05)
 
-## §0-AD CẤM MANUAL DEPLOY (v4.75)
-- CẤM `gh workflow run deploy-vps.yml` khi auto-deploy hoạt động
-- Manual CHỈ khi auto bị block VÀ cần phá vòng lặp
-- Duplicate deploy = race condition trên VPS
+- [ ] **CP-01: ĐỌC LUẬT.** search_knowledge TRỰC TIẾP MAIN PROCESS:
+  - "hiến pháp v4.0 constitution 9 nguyên tắc"
+  - "operating rules SSOT"
+  - Luật liên quan đến mission (Điều 26? Điều 0-H? ...)
+  - Anti-patterns
+  - **TUYỆT ĐỐI KHÔNG background agent, KHÔNG Task, KHÔNG delegate.**
 
-## §0-AF VERIFY TRÊN PRODUCTION URL (v4.77)
-- EVIDENCE bắt buộc từ production URL `https://vps.incomexsaigoncorp.vn/api/...`
-- Curl từ Directus, localhost, VPS nội bộ KHÔNG ĐƯỢC tính
-- Format: `curl https://vps.incomexsaigoncorp.vn/api/[endpoint]` → [output thực]
+- [ ] **CP-02: QUOTE OR.** Ghi version OR đã đọc (vd: "OR v7.16").
 
-## §0-AG DB MIGRATION DEADLOCK (v4.78)
-- Khi PG migration mới gây CI deadlock (CI cần trigger mới → trigger nằm trong deploy → deploy cần CI pass):
-- SSH VPS → chạy SQL migration trực tiếp trên PG production TRƯỚC
-- Verify CI pass
-- Merge code → auto-deploy (code sync với PG)
-- TUYỆT ĐỐI KHÔNG merge khi CI đỏ để "fix bằng deploy"
+- [ ] **CP-03: ASSEMBLY GATE.** Tự hỏi 5 câu:
+  ```
+  Q0: "PG đã giải quyết chưa?"
+  Q1: "Directus có sẵn không?"
+  Q2: "Nuxt/Agency OS có sẵn không?"
+  Q3: "Nguồn mở?"
+  Q4: "Code mới?" → CHỈ KHI Q0-Q3 = KHÔNG
+  ```
 
-## CODE DISCIPLINE (v4.75)
-- Test local TRƯỚC push: `cd web && npx nuxt build`
-- Gộp fix vào 1 commit — KHÔNG push commit lẻ
-- Mỗi vòng CI+deploy ~10 phút. Sửa lắt nhắt = lãng phí user time
-- Nghĩ kỹ, sửa đúng 1 lần
+- [ ] **CP-04: TUYÊN NGÔN.** Tự hỏi 3 câu:
+  - "Nếu ngày mai thay đổi, vấn đề còn xảy ra không?" CÒN = sọt rác.
+  - "Agent mới vào, có thể làm nhầm không?" CÓ = chặn hạ tầng.
+  - "Đang fix triệu chứng hay fix gốc?" Triệu chứng = CẤM.
 
-## ⚡ AUTO MODE — GIẢM PERMISSION PROMPTS
-Chạy với auto mode: `claude --enable-auto-mode` hoặc Shift+Tab chuyển mode.
-Auto mode = AI tự đánh giá rủi ro, chỉ hỏi khi nguy hiểm thật.
-User KHÔNG hiểu kỹ thuật, bấm Yes vô nghĩa, lãng phí thời gian.
-Hệ thống đã có post-deploy E2E bắt lỗi — rủi ro thấp.
+- [ ] **CP-05: KHÔNG CHẮC = DỪNG.** Nếu không chắc bước nào → DỪNG + hỏi user. KHÔNG "cứ làm đi".
 
-## NGUYÊN TẮC SỐ 1: LẮP RÁP, KHÔNG CODE
+### TRONG KHI LÀM (CP-06 → CP-13)
 
-**LUÔN ưu tiên lắp ráp. Code là lựa chọn CUỐI CÙNG.**
+- [ ] **CP-06: PG TRƯỚC.** Mọi logic/data = PG function/view/trigger. KHÔNG code Nuxt logic.
+- [ ] **CP-07: DIRECTUS API.** Schema change = Directus Fields/Collections API qua DOT Cấp B. CẤM ALTER TABLE.
+- [ ] **CP-08: NUXT = MÀN HÌNH.** readItems ONLY. KHÔNG reduce(), KHÔNG synthetic rows, KHÔNG hardcode.
+- [ ] **CP-09: DOT 100%.** Mọi thao tác qua DOT. KHÔNG INSERT/UPDATE SQL tay. KHÔNG thao tác Directus Admin tay.
+- [ ] **CP-10: DUAL-TRIGGER.** Mỗi data path = trigger chính (PG trigger/webhook) + trigger phụ (cron/DOT).
+- [ ] **CP-11: 5 TẦNG.** Thay đổi phải đồng bộ: PG → Directus → Nuxt → Agent Data → Qdrant.
+- [ ] **CP-12: KHAI SINH.** Entity mới → birth_registry (Điều 0-G). Collection mới → collection_registry (Điều 2).
+- [ ] **CP-13: DOT THEO CẶP.** DOT ghi (Cấp B) PHẢI có DOT kiểm tra (Cấp A) tương ứng.
 
-Hệ thống đã cài Nuxt UI v2.22.3 (125+ components), Directus SDK, đầy đủ công cụ.
-Không có lý do gì để viết custom component khi đã có sẵn.
+### SAU KHI LÀM (CP-14 → CP-18)
 
-## TRƯỚC KHI LÀM BẤT CỨ GÌ — ĐỌC TÀI LIỆU
+- [ ] **CP-14: VERIFY PRODUCTION.** URL production → data KHỚP PG. Ghi evidence: "URL: [url] — hiện [giá trị]. PG: [giá trị]. KHỚP."
+- [ ] **CP-15: DOT HEALTH.** Chạy DOT kiểm tra liên quan → PASS. DOT kiểm tra IDLE = thiết kế tốt.
+- [ ] **CP-16: REPORT.** Lưu tại knowledge/current-state/reports/. Ghi rõ CP nào PASS.
+- [ ] **CP-17: UPDATE SSOT.** OR + TD + handoff cập nhật. Version OR tăng.
+- [ ] **CP-18: TUYÊN NGÔN CUỐI.** "Thêm entity mới ngày mai → cần sửa code không?" KHÔNG = ✅. CẦN = thiết kế SAI → làm lại.
 
+---
+
+## 9 NGUYÊN TẮC NỀN TẢNG
+
+| # | Tên | Checkpoint liên quan |
+|---|-----|---------------------|
+| 1 | SSOT | CP-06 (PG trước) |
+| 2 | Tự động 100% | CP-09 (DOT 100%) |
+| 3 | DOT 100% | CP-09, CP-13 |
+| 4 | Sẵn sàng thay đổi | CP-04, CP-18 |
+| 5 | Tự phát hiện | CP-13 (DOT theo cặp), CP-15 |
+| 6 | 5 tầng — CẤM code Nuxt | CP-08, CP-11 |
+| 7 | Dual-trigger | CP-10 |
+| 8 | Assembly First | CP-03, CP-06 |
+| 9 | Không chắc = Sai | CP-05 |
+
+## QUICK REF
+
+- Hiến pháp: knowledge/dev/laws/constitution.md
+- 9 Nguyên tắc: knowledge/dev/laws/law-01-foundation-principles.md
+- OR SSOT: knowledge/dev/ssot/operating-rules.md
+- Điều 26 Pivot: knowledge/dev/architecture/dieu26-new-registries-counting-law-draft.md
+- Anti-patterns: knowledge/dev/ssot/anti-patterns.md
+- Reports: knowledge/current-state/reports/
+
+## QUY TRÌNH 2 MŨ (§0-W) — BẮT BUỘC MỌI MISSION
+
+### MŨ 1 — CODER
+1. Viết mã (test local trước)
+2. Push → Tạo PR
+3. Đợi 4 required checks XANH
+   - ĐỎ → tự fix → commit thêm vào CÙNG PR → đợi lại
+   - KHÔNG tạo PR mới
+
+### MŨ 2 — REVIEWER
+4. Chuyển mũ: xem lại logic lần cuối (self-review)
+5. Merge (deploy tự động qua CI/CD)
+6. Đợi deploy CI XANH
+   - ĐỎ → tự fix → commit thêm
+7. Verify production: curl/browser kiểm tra trên vps.incomexsaigoncorp.vn
+   - KHÔNG ĐẠT → tự fix theo mục tiêu của prompt gốc → quay lại bước 2
+8. Báo cáo tại reports/
+
+> MERGE ≠ DONE. Chỉ DONE khi verify production PASS.
+> Agent thực hiện TOÀN BỘ 8 bước. KHÔNG dừng giữa chừng chờ user.
+
+### 2 MŨ PHÂN CÔNG
 ```
-search_knowledge("operating rules SSOT")
-search_knowledge("assembly module SSOT")
-search_knowledge("tech debt")
-search_knowledge("current state system")
+Mũ 1 — SOẠN: Desktop đọc luật + thiết kế + soạn prompt
+Mũ 2 — LÀM: CLI đọc prompt + thực thi + verify + report
 ```
+Desktop KHÔNG code. CLI KHÔNG thiết kế. Mỗi lần 1 prompt duy nhất.
 
-Đọc xong mới bắt đầu. Không đọc = không làm.
+## GỘP BƯỚC
 
-## ASSEMBLY GATE — 6 CÂU HỎI BẮT BUỘC TRƯỚC KHI CODE
+Khi có thể: gộp nhiều bước vào 1 PR. Verify local trước push. CI/CD 1 lần.
+Fail → commit thêm KHÔNG PR mới.
 
-Trước khi viết BẤT KỲ dòng code nào, DỪNG LẠI và trả lời:
+## PROMPT TEMPLATE (mẫu S153)
 
-```
-┌──────────────────────────────────────────────────────────┐
-│ ASSEMBLY GATE v2 — Không qua = KHÔNG ĐƯỢC CODE           │
-├──────────────────────────────────────────────────────────┤
-│ 0. PostgreSQL đã có sẵn (VIEW/FUNCTION/TRIGGER/CTE)?    │
-│    Kiểm tra: psql \df, \dv, pg_trigger — dùng PG trước  │
-│                                                          │
-│ 1. Nuxt UI đã có component cho việc này chưa?            │
-│    Tìm trong: UTable, UTimeline, UStepper, UModal,       │
-│    UCheckbox, UTabs, UBadge, UTooltip, UPopover,         │
-│    USkeleton, UPagination, UAccordion, UInput,            │
-│    UTextarea, USelect, UForm, USlideover, UDropdown,      │
-│    UBreadcrumb, UProgress, UNavigationMenu, UAvatar,      │
-│    UAlert, UChip, UDivider, URadio, UToggle              │
-│                                                          │
-│ 2. Codebase đã có component tương tự chưa?               │
-│    grep -r "ComponentName" web/ --include="*.vue" -l     │
-│                                                          │
-│ 3. CÓ SẴN → Dùng NGUYÊN hoặc WRAP. KHÔNG viết lại.     │
-│                                                          │
-│ 4. KHÔNG CÓ → Ghi rõ: đã tìm ở đâu, tại sao không có. │
-│    XIN Ý KIẾN trước khi code. KHÔNG ngẫu hứng code bừa. │
-│                                                          │
-│ 5. Code mới (nếu được duyệt) đăng ký                    │
-│    custom-code-registry.md                               │
-└──────────────────────────────────────────────────────────┘
-```
+Khi Desktop soạn prompt cho CLI agent, dùng cấu trúc:
 
-GHI câu trả lời vào ĐẦU báo cáo/output. Không có Assembly Gate = reject.
+### [MÃ MISSION] — [TÊN NGẮN]
 
-## NGUYÊN TẮC FIX GỐC
+#### CHECKPOINT
+> [Quote OR hoặc nguyên tắc liên quan]
+> Đọc: [danh sách files agent PHẢI đọc trước khi code]
 
-Khi phát hiện data bất thường:
-1. **LIỆT KÊ** — bao nhiêu, loại gì, từ đâu
-2. **ĐIỀU TRA** — tại sao xảy ra (root cause)
-3. **PHÂN LOẠI** — cũ/mới, nghiêm trọng/nhẹ
-4. **FIX QUY TRÌNH** — sửa process để không tái diễn
-5. **MỚI DỌN** — chỉ dọn data SAU KHI hiểu gốc
+#### MỤC TIÊU
+[1-2 câu: việc gì, kết quả mong đợi]
 
-**KHÔNG BAO GIỜ xoá/sửa data để số đẹp mà chưa điều tra.**
-**KHÔNG BAO GIỜ nới threshold để health check xanh mà chưa fix gốc.**
+#### CÁC BƯỚC
+[Liệt kê cụ thể từng bước. Bao gồm cả quy trình 2 mũ ở cuối]
 
-## COLLECTION CREATION CHECKLIST — 8 BƯỚC BẮT BUỘC
+#### VERIFY
+[Điều kiện PASS cụ thể: URL nào, giá trị gì, khớp PG hay không]
 
-Khi tạo collection MỚI trong Directus/PG, PHẢI hoàn thành TẤT CẢ:
+#### SAU KHI DONE
+- Update OR nếu cần
+- Upload report tại reports/
+- Handoff nếu context > 60%
 
-```
-┌─────────────────────────────────────────────────────────┐
-│ COLLECTION CREATION CHECKLIST — Thiếu = ĐIỂM MÙ         │
-├─────────────────────────────────────────────────────────┤
-│ 1. PG table tạo xong (Directus API hoặc ALTER TABLE)   │
-│ 2. meta_catalog entry (CAT-NNN, name, entity_type...)   │
-│ 3. v_registry_counts entry + code_column đúng           │
-│ 4. PG TRIGGER đếm (trg_count_xxx) → refresh counts     │
-│ 5. Changelog flows (3: create + update + delete)        │
-│ 6. AI Agent READ permission                             │
-│ 7. v_all_entity_codes VIEW cập nhật (nếu managed)      │
-│ 8. Auto-label trigger (trg_label_assign_xxx)            │
-└─────────────────────────────────────────────────────────┘
-```
+---
 
-Chạy `dot-coverage-inspector` sau khi tạo → 0 blind spots.
+## CẤM
 
-## QUY TẮC CỤ THỂ
-
-### Bảng/Table:
-- KHÔNG viết `<table>`, `<tr>`, `<thead>`, `<td>`, `<th>`
-- Dùng `<UTable>` hoặc `<DirectusTable>` (wrapper UTable)
-- Bảng mới = config DirectusTable props. Tối đa 20 dòng.
-
-### Timeline/Stepper:
-- KHÔNG viết custom timeline
-- Dùng `<UTimeline>` hoặc `<UStepper>`
-
-### Form elements:
-- KHÔNG viết raw `<input>`, `<select>`, `<textarea>`, `<input type="checkbox">`
-- Dùng `<UInput>`, `<USelect>`, `<UTextarea>`, `<UCheckbox>`
-
-### Popup/Modal:
-- KHÔNG viết custom positioned popup
-- Dùng `<UPopover>`, `<UModal>`, `<UTooltip>`, `<USlideover>`
-
-### Directus = DOT 100%:
-- MỌI thao tác schema Directus (tạo/sửa collection, field, permission, flow) → PHẢI dùng DOT tools.
-- KHÔNG dùng Directus API trực tiếp cho schema. KHÔNG dùng curl. KHÔNG dùng MCP cho schema (MCP = data CRUD only).
-- TRƯỚC KHI thao tác Directus, LUÔN kiểm tra DOT có sẵn:
-```bash
-# Bắt buộc chạy TRƯỚC:
-ls dot/bin/dot-* | grep KEYWORD        # Tìm tool liên quan
-ls dot/bin/dot-schema-* | grep KEYWORD  # Tìm schema tool cụ thể
-ls dot/bin/dot-permission-*             # Tìm permission tool
-ls dot/bin/dot-flow-*                   # Tìm flow tool
-```
-- CÓ tool → đọc nó (`cat dot/bin/dot-TÊN`) → dùng ngay
-- KHÔNG CÓ tool → ĐỀ XUẤT viết thêm, ghi rõ cần tool gì, làm gì. KHÔNG tự viết DOT mới mà không kiểm tra trước.
-- Khi viết DOT mới (sau khi được duyệt): ghi dòng đầu `# CHECKED-NO-DUPLICATE: [đã grep, không có tool tương tự]`
-
-## QUY TRÌNH 2 MŨ — CHẠY 1 LÈO
-
-**KHÔNG BAO GIỜ dừng giữa chừng. Không "chờ review". Không "ready for deploy".**
-
-Mũ 1: Code → push → PR → CI GREEN (fix nếu đỏ, lặp đến xanh)
-Mũ 2: Merge squash → Deploy VPS → Đợi 60s → Verify production → Báo cáo
-
-```bash
-# Mũ 1:
-git checkout -b feat/BRANCH
-git add -A && git commit -m "feat: MÔ TẢ"
-git push origin HEAD
-gh pr create --title "TITLE" --body "BODY"
-gh pr checks PR_NUMBER  # Chờ xanh. Đỏ → fix → push → chờ lại.
-
-# Mũ 2:
-gh pr merge PR_NUMBER --squash
-ssh root@38.242.240.89 "cd /opt/incomex/docker && docker compose pull nuxt && docker compose up -d nuxt"
-sleep 60
-curl -sI https://vps.incomexsaigoncorp.vn/ĐƯỜNG_DẪN  # Phải 200
-```
-
-## VERIFY TRỰC QUAN
-
-**SAI:** grep class name → thấy → báo "Working"
-**ĐÚNG:**
-- Data thật render (không empty)?
-- Tương tác hoạt động (click, sort, hover)?
-- Component ĐÚNG được dùng (không phải component cũ)?
-
-Ghi PASS/FAIL từng mục. Chưa verify = CHƯA DONE.
-
-## BÁO CÁO
-
-Sau MỌI mission:
-```
-upload_document path="knowledge/current-state/reports/TÊN-report.md"
-```
-Nội dung bắt buộc: Assembly Gate answers + changes + verify results (PASS/FAIL)
-
-## KIỂM TRA TRƯỚC KHI BÁO CÁO "COMPLETE"
-
-```
-[ ] Assembly Gate 6 câu đã trả lời (bao gồm câu 0 PostgreSQL)?
-[ ] Không có custom <table>/<tr>/<thead> mới?
-[ ] 2 mũ đã chạy hết (không dừng giữa)?
-[ ] Verify trực quan trên production PASS?
-[ ] Báo cáo đã upload Agent Data?
-[ ] Tech debt đã cập nhật (nếu có)?
-```
-
-## HIẾN PHÁP KIẾN TRÚC — CHECKLIST BẮT BUỘC
-
-Trước MỌI tác vụ, verify:
-- [ ] Mọi thực thể TẠO MỚI phải có ID (PREFIX-NNN) + nằm trong registry (Điều 2)
-- [ ] Mọi thực thể phải có metadata (name, description, classification, owner) (Điều 3)
-- [ ] TẠO qua DOT/script. KHÔNG code trực tiếp. KHÔNG tạo ngoài quy trình (Điều 4)
-- [ ] KHÔNG xây tầng trên khi tầng dưới chưa vững (Điều 5)
-- [ ] Khi thấy bất đồng bộ → tư duy kiến trúc, KHÔNG chỉ fix 1 chỗ (Điều 6)
-- [ ] Khai thác Directus/Nuxt UI có sẵn TRƯỚC. Code mới = lựa chọn CUỐI CÙNG (Điều 7)
-- [ ] Script PHẢI idempotent + verify step cuối (Điều 11)
-- [ ] Lifecycle đầy đủ: sinh + sửa + xoá (Điều 12)
-- [ ] Tạo = tự xuất hiện trong danh mục. Xoá = tự biến mất (Điều 13)
-- [ ] KHÔNG 2 thực thể cùng bản chất (Điều 14)
-
-Chi tiết: search_knowledge("hiến pháp kiến trúc")
-
-## BẢNG MÃ PREFIX
-
-```
-COL=Collection  FLD=Field       TBL=Bảng UI     MOD=Module
-WF=Workflow     WCR=Đề xuất     SCR=Schema      TP=Table proposal
-DOT=DOT tool    PG=Page         API=API endpoint CMP=Component
-EVT=Event       DEP=Dependency  AGT=Agent       CAT=Catalog entry
-Format: PREFIX-NNN (3+ số tự tăng)
-```
-
-## TD-111: CODE = UNIQUE ID TOÀN HỆ THỐNG
-
-- **code (PREFIX-NNN) = unique ID duy nhất** cho cross-reference giữa các collection.
-- **KHÔNG dùng integer id** (auto-increment) làm foreign key hoặc cross-reference.
-- Integer id chỉ dùng nội bộ trong 1 collection (primary key).
-- Collections MỚI **PHẢI dùng UUID** làm primary key (không dùng auto-increment integer).
-- Khi tham chiếu entity khác: dùng code field (VD: `workflow_code = "WF-001"`), KHÔNG dùng `workflow_id = 1`.
+- CẤM --admin bypass CI
+- CẤM ALTER TABLE trực tiếp
+- CẤM code logic trong Nuxt
+- CẤM INSERT/UPDATE SQL tay (phải qua DOT)
+- CẤM background agent / Task
+- CẤM "cứ làm đi sai thì sửa"
+- CẤM viện dẫn DFL v1.1 hoặc Hiến pháp v3.9
