@@ -1,170 +1,25 @@
-# AGENTS.md — Multi-Agent MCP Configuration
+# INCOMEX — AGENTS.md
 
-> **⛔ FIRST: `search_knowledge('operating rules SSOT')` before any work.**
+## BẮT BUỘC
+1. Đọc OR: search_knowledge("operating rules SSOT")
+2. Đọc Hiến pháp: search_knowledge("hiến pháp v4.0 constitution")
+3. Đọc luật liên quan đến mission
+4. Tuân thủ 18 checkpoints trong .claude/skills/incomex-rules.md
+5. Report tại knowledge/current-state/reports/
 
-## Overview
+## QUY TRÌNH
+Quy trình 2 mũ (§0-W) = BẮT BUỘC. MERGE ≠ DONE.
+Chi tiết 8 bước: xem .claude/skills/incomex-rules.md
 
-Three AI agents share the same MCP server for knowledge-base CRUD. This file defines the shared protocol, tool inventory, and enforcement layers.
+## CẤM
+- ALTER TABLE trực tiếp
+- Code logic trong Nuxt
+- INSERT SQL tay (phải qua DOT)
+- Viện dẫn DFL v1.1 hoặc Hiến pháp v3.9
 
-## Agents
-
-| Agent | IDE | Transport | Config File |
-|-------|-----|-----------|-------------|
-| Claude Code | Terminal / VS Code | stdio | `.mcp.json` |
-| Claude Desktop | Desktop app | stdio | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-| OpenAI Codex | Terminal | stdio | `.codex/config.toml` |
-
-All agents connect to the **same MCP server** (`../agent-data-test/mcp_server/stdio_server.py`) which proxies to VPS Agent Data API.
-
-### Agent Profiles
-
-**Claude Code** — Primary development agent
-- Vai trò: Code + deploy + fix CI. Chạy DOT tools. Git workflow 2 mũ.
-- MCP: HTTP (Agent Data) + STDIO (stdio_server.py). Directus MCP cho data CRUD.
-- Báo cáo: upload Agent Data sau mỗi mission.
-
-**OpenAI Codex** — Secondary development agent
-- Vai trò: Code + deploy. Quick-task protocol cho tác vụ nhỏ.
-- MCP: OPS Proxy HTTP cho Directus. Agent Data qua MCP tools.
-- Báo cáo: upload Agent Data sau mỗi mission.
-
-## MCP Server
-
-- **Entry point**: `../agent-data-test/mcp_server/stdio_server.py` (shared from agent-data-test repo)
-- **Transport**: stdio (stdin/stdout JSON-RPC)
-- **Backend**: VPS Agent Data API at `https://vps.incomexsaigoncorp.vn/api`
-- **Fallback**: Hybrid — tries local first, then cloud
-- **Auth**: `X-API-Key` header + optional `gcloud auth print-identity-token` for Cloud Run
-
-## Tools (11)
-
-### Read Tools (5)
-1. **`search_knowledge`** — Semantic/RAG search. Input: `query` (string). Returns relevant docs + sources.
-2. **`list_documents`** — List by prefix. Input: `path` (string, optional). Returns document IDs + tags.
-3. **`get_document`** — Truncated content + related docs via vector search. Input: `document_id`. Use for reading/reference.
-4. **`get_document_for_rewrite`** — Full content. Input: `path`. Use ONLY when rewriting entire document.
-5. **`batch_read`** — Read multiple docs. Input: `paths` (array, max 20), `full` (boolean). Returns all contents.
-
-### Write Tools (6)
-6. **`upload_document`** — Create new doc. Input: `path`, `content`, optional `title`, `tags`.
-7. **`update_document`** — Replace content. Input: `path`, `content`, optional `title`, `tags`.
-8. **`patch_document`** — Find-and-replace. Input: `path`, `old_str`, `new_str`. Returns 409 if ambiguous.
-9. **`delete_document`** — Delete doc. Input: `path`.
-10. **`move_document`** — Move to new parent. Input: `path`, `new_path`. Use `root` for top level.
-11. **`ingest_document`** — Ingest from URI. Input: `source` (GCS URI or URL).
-
-## Enforcement Layers
-
-### Layer 1: Pre-push Hook (TD-019)
-`.githooks/pre-push` blocks direct push to `main`. Requires feature branch + PR workflow.
-```
-git config core.hooksPath .githooks
-```
-
-### Layer 2: Embedding Cost Filter (TD-018)
-In agent-data-test: `agent_data/directus_sync.py` — `_SYNC_PREFIXES = ("knowledge/",)` ensures only knowledge docs trigger Directus sync and embedding.
-
-### Layer 3: CLAUDE.md Rules
-6 mandatory rules loaded at session start. Agents must call `search_knowledge('operating rules SSOT')` before any work.
-
-### Layer 4: MCP-Only CRUD
-All document operations go through MCP tools. No raw HTTP, no direct DB access. This ensures consistent auth, logging, and vector sync.
-
-## Environment Variables
-
-| Variable | Purpose |
-|----------|---------|
-| `AGENT_DATA_URL` | Primary API endpoint (default: `https://vps.incomexsaigoncorp.vn/api`) |
-| `AGENT_DATA_API_KEY` | API key for X-API-Key header |
-| `NUXT_DIRECTUS_INTERNAL_URL` | Directus URL for SSR (Docker network) |
-| `NUXT_PUBLIC_DIRECTUS_URL` | Public Directus URL (build-time baked) |
-
----
-
-## Codex CLI — Tool Priority (BAT BUOC)
-
-**Codex PHAI uu tien dung MCP tools co san. KHONG tu viet Python/shell scripts thay the.**
-
-### Duong ket noi Codex (da verify PASS):
-
-| Service | Transport | Cach goi DUNG | KHONG LAM |
-|---------|-----------|---------------|-----------|
-| Agent Data | HTTP MCP | Goi MCP tool: `upload_document`, `search_knowledge`, `patch_document`... | KHONG viet Python requests/httpx |
-| Directus doc | OPS Proxy HTTP | `curl ops.incomexsaigoncorp.vn/items/{collection}` voi X-API-Key tu env | KHONG import directus_stdio_server |
-| Directus ghi | OPS Proxy HTTP | `curl -X POST ops.incomexsaigoncorp.vn/items/{collection}` | KHONG viet Python wrapper |
-
-### Bao cao sau mission → Viet thang Agent Data:
-
-Sau moi mission, Codex PHAI ghi bao cao vao Agent Data:
-```
-upload_document(
-  path="knowledge/other/sessions/{mission-name}-report.md",
-  content="# Report\n\n..."
-)
-```
-KHONG chi print ra terminal. KHONG tao file local roi quen push.
-
-### Comment vao Directus → OPS Proxy 1 lenh:
-
-```bash
-curl -s -X POST "https://ops.incomexsaigoncorp.vn/items/task_comments" \
-  -H "X-API-Key: $OPS_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"task_id": 7, "content": "Noi dung", "action": "comment", "agent_type": "codex"}'
-```
-1 lenh, 2 giay. KHONG viet Python asyncio wrapper.
-
----
-
-## Quick-Task Protocol — Tac vu nho, quy trinh gon
-
-### Phan loai tac vu
-
-| Loai | Vi du | Quy trinh |
-|------|-------|-----------|
-| **Quick** | Tao comment, upload 1 file, doc data, patch 1 doan | Goi MCP tool truc tiep → bao ket qua 1 dong |
-| **Standard** | Fix bug, them feature nho, seed data, sua config | Branch → commit → CI → merge → verify |
-| **Mission** | Audit, tich hop moi, refactor, multi-phase | Full mission template + verify checklist |
-
-### Quick-Task: Goi truc tiep, khong ceremony
-
-Khi nhan yeu cau don gian (tao comment, upload doc, doc data):
-
-1. **KHONG can** khao sat schema truoc (tru lan dau dung collection moi)
-2. **KHONG can** full verify chain — confirm ket qua 1 buoc la du
-3. **KHONG can** tao report file
-4. **Goi MCP tool truc tiep** → tra ket qua ngan gon
-
-Vi du Quick-Task — tao comment:
-```
-directus_create_item(collection="task_comments", data={
-  "task_id": 7,
-  "content": "Noi dung comment",
-  "action": "comment"
-})
-→ Tra: "Comment #ID tao thanh cong tren task 7"
-```
-
-Vi du Quick-Task — upload document:
-```
-upload_document(path="knowledge/...", content="# Title\n...")
-→ Tra: "Document tao tai path X, revision 1"
-```
-
-### Khi nao PHAI dung full process
-
-- Thay doi schema Directus
-- Sua code (bat ky .ts/.vue/.py file)
-- Thay doi infrastructure/config
-- Tao hoac sua nhieu items cung luc (>5)
-- Bat ky thay doi nao can CI/CD
-
-### Common Quick-Task references
-
-| Task | Tool | Key fields |
-|------|------|------------|
-| Comment tren task | `directus_create_item("task_comments", {...})` | task_id, content, action="comment" |
-| Upload knowledge doc | `upload_document(path, content)` | path theo KS-LAW 4 folders |
-| Patch document | `patch_document(path, old_str, new_str)` | exact match old_str |
-| Search knowledge | `search_knowledge("query")` | — |
-| Doc Directus items | `directus_get_items(collection, fields, limit)` | tasks dung `name` (khong phai title) |
+## TECH STACK
+- PG 16 DUY NHẤT (MySQL RETIRED)
+- Directus CMS + API
+- Nuxt 3 (chỉ đọc)
+- Agent Data + Qdrant
+- VPS Contabo EU, Docker
