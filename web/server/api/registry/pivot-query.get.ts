@@ -48,30 +48,24 @@ export default defineEventHandler(async (event) => {
 
 		const definitions = resp?.data || [];
 
-		// For each definition with group_spec, try to read from warm-tier VIEW
-		const VIEW_MAP: Record<string, string> = {
-			'PIV-101': 'v_pivot_by_level',
-			'PIV-103': 'v_pivot_species_by_level',
-			'PIV-104': 'v_pivot_dot_by_category',
-		};
-
+		// Read rows from pivot_results (populated by refresh_pivot_results cron)
+		// No VIEW_MAP hardcode — all pivots served from same table (§0-AU, TD-437)
 		const results: any[] = [];
 
 		for (const def of definitions) {
-			const viewName = VIEW_MAP[def.code];
 			let rows: any[] = [];
-
-			if (viewName) {
-				// Read from warm-tier VIEW via Directus
-				try {
-					const viewResp = await $fetch<any>(`${baseUrl}/items/${viewName}`, {
-						params: { limit: -1 },
-						headers,
-					});
-					rows = viewResp?.data || [];
-				} catch {
-					// VIEW not accessible, skip
-				}
+			try {
+				const prResp = await $fetch<any>(`${baseUrl}/items/pivot_results`, {
+					params: {
+						'filter': JSON.stringify({ pivot_code: { _eq: def.code } }),
+						'fields': 'pivot_code,source_object,group_values,metric_values,refreshed_at',
+						'limit': -1,
+					},
+					headers,
+				});
+				rows = prResp?.data || [];
+			} catch {
+				// pivot_results not accessible for this code
 			}
 
 			results.push({
