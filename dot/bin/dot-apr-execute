@@ -169,8 +169,86 @@ main() {
     log_err "Authentication failed"; exit 1
   fi
 
-  # Fetch approved but not yet applied
-  log_info "Fetching approved APRs pending execution..."
+  # ═══════════════════════════════════════════
+  # PHASE 1: Process classify APRs (domain classification via dot_domain_rules)
+  # ═══════════════════════════════════════════
+  log_info "Phase 1: Classify APRs (domain classification)..."
+
+  local CLASSIFY_RESP
+  CLASSIFY_RESP=$(curl -sS --globoff -k -X GET \
+    "${BASE_URL}/items/approval_requests?filter[request_type][_eq]=classify&filter[target_collection][_eq]=dot_tools&filter[status][_eq]=pending&sort=id&limit=100" \
+    -H "Authorization: Bearer $DOT_TOKEN")
+
+  local CLASSIFY_ITEMS CLASSIFY_COUNT
+  CLASSIFY_ITEMS=$(echo "$CLASSIFY_RESP" | jq -r '.data // []')
+  CLASSIFY_COUNT=$(echo "$CLASSIFY_ITEMS" | jq 'length')
+
+  if [[ "${CLASSIFY_COUNT:-0}" -gt 0 ]]; then
+    log_info "Found ${CLASSIFY_COUNT} classify APRs"
+
+    echo "$CLASSIFY_ITEMS" | jq -c '.[]' | while read -r CAPR; do
+      local CAPR_ID CAPR_CODE DOT_CODE
+      CAPR_ID=$(echo "$CAPR" | jq -r '.id')
+      CAPR_CODE=$(echo "$CAPR" | jq -r '.code')
+      DOT_CODE=$(echo "$CAPR" | jq -r '.target_entity_code')
+
+      # Check current domain
+      local CUR_DOMAIN
+      CUR_DOMAIN=$(run_pg "SELECT domain FROM dot_tools WHERE code = '${DOT_CODE}';")
+
+      if [[ "${CUR_DOMAIN}" != "unclassified" && -n "${CUR_DOMAIN}" ]]; then
+        # Already classified by another process → close APR
+        if [[ -z "$DRY_RUN" ]]; then
+          curl -sS --globoff -k -X PATCH \
+            "${BASE_URL}/items/approval_requests/${CAPR_ID}" \
+            -H "Authorization: Bearer $DOT_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"status":"applied","applied_at":"'$(date -u +%Y-%m-%dT%H:%M:%S)'","review_note":"Already classified: domain='${CUR_DOMAIN}'"}' > /dev/null 2>&1
+        fi
+        log_ok "  ${CAPR_CODE}: already classified (${CUR_DOMAIN}) → closed"
+        continue
+      fi
+
+      # Lookup dot_domain_rules (match by DOT name, rules use name prefix patterns like 'dot-schema-%')
+      local DOT_NAME
+      DOT_NAME=$(run_pg "SELECT name FROM dot_tools WHERE code = '${DOT_CODE}';")
+      local MATCHED_DOMAIN
+      MATCHED_DOMAIN=$(run_pg "
+        SELECT target_domain FROM dot_domain_rules
+        WHERE '${DOT_NAME}' LIKE pattern AND status = 'active'
+        ORDER BY priority ASC LIMIT 1;
+      ")
+
+      if [[ -n "${MATCHED_DOMAIN}" ]]; then
+        # Validate domain exists
+        local DOMAIN_EXISTS
+        DOMAIN_EXISTS=$(run_pg "SELECT count(*) FROM dot_domains WHERE code = '${MATCHED_DOMAIN}';")
+        if [[ "${DOMAIN_EXISTS:-0}" -gt 0 ]]; then
+          if [[ -z "$DRY_RUN" ]]; then
+            run_pg "UPDATE dot_tools SET domain = '${MATCHED_DOMAIN}' WHERE code = '${DOT_CODE}';" > /dev/null 2>&1
+            curl -sS --globoff -k -X PATCH \
+              "${BASE_URL}/items/approval_requests/${CAPR_ID}" \
+              -H "Authorization: Bearer $DOT_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{"status":"applied","applied_at":"'$(date -u +%Y-%m-%dT%H:%M:%S)'","review_note":"Classified: domain='${MATCHED_DOMAIN}' via rule"}' > /dev/null 2>&1
+          fi
+          log_ok "  ${CAPR_CODE}: ${DOT_CODE} → ${MATCHED_DOMAIN}"
+        else
+          log_warn "  ${CAPR_CODE}: matched domain '${MATCHED_DOMAIN}' not in dot_domains → keep pending"
+        fi
+      else
+        # No matching rule → keep APR pending (prevents infinite loop)
+        log_warn "  ${CAPR_CODE}: no rule matches ${DOT_NAME} → keep pending (add rule to dot_domain_rules)"
+      fi
+    done
+  else
+    log_ok "No classify APRs pending."
+  fi
+
+  # ═══════════════════════════════════════════
+  # PHASE 2: Process approved APRs (original logic)
+  # ═══════════════════════════════════════════
+  log_info "Phase 2: Approved APRs..."
 
   local RESP
   RESP=$(curl -sS --globoff -k -X GET \

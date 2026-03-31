@@ -129,16 +129,37 @@ main() {
     log_ok "CHECK 1 PASS: All DOTs have tier"
   fi
 
-  # === CHECK 2: domain NULL ===
-  log_info "Check 2: domain NULL..."
+  # === CHECK 2: domain unclassified or NULL ===
+  log_info "Check 2: domain unclassified/NULL..."
   local C2
-  C2=$(run_pg "SELECT count(*) FROM dot_tools WHERE domain IS NULL;")
+  C2=$(run_pg "SELECT count(*) FROM dot_tools WHERE domain IS NULL OR domain = 'unclassified';")
   if [[ "${C2:-0}" -gt 0 ]]; then
-    log_warn "CHECK 2 FAIL: ${C2} DOTs with NULL domain"
-    log_system_issue "DOT health: ${C2} NULL domain" "dot_null_domain" "warning" "${C2} DOTs missing domain" "$BASE_URL"
+    log_warn "CHECK 2 FAIL: ${C2} DOTs with unclassified/NULL domain"
+    log_system_issue "DOT health: ${C2} unclassified domain" "dot_unclassified_domain" "warning" "${C2} DOTs need domain classification" "$BASE_URL"
     ISSUES=$((ISSUES + 1))
+
+    # Create APR for each unclassified DOT (dedupe via issue_signature UNIQUE index)
+    local UNCLASS_DOTS
+    UNCLASS_DOTS=$(run_pg "SELECT code, name FROM dot_tools WHERE domain IS NULL OR domain = 'unclassified';")
+    while IFS='|' read -r dot_code dot_name; do
+      [[ -z "$dot_code" ]] && continue
+      local SIG="domain_unclassified_${dot_code}"
+      curl -sS --globoff -k -X POST \
+        "${BASE_URL}/items/approval_requests" \
+        -H "Authorization: Bearer $DOT_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "$(jq -n \
+          --arg rt "classify" \
+          --arg tc "dot_tools" \
+          --arg tec "$dot_code" \
+          --arg title "Classify domain for ${dot_name}" \
+          --arg sig "$SIG" \
+          --arg src "dot-dot-health" \
+          '{request_type:$rt, action:"modify", target_collection:$tc, target_entity_code:$tec, title:$title, issue_signature:$sig, source:$src, priority:"normal"}')" > /dev/null 2>&1 || true
+    done <<< "$UNCLASS_DOTS"
+    log_info "  APRs created/deduped for ${C2} DOTs"
   else
-    log_ok "CHECK 2 PASS: All DOTs have domain"
+    log_ok "CHECK 2 PASS: All DOTs have classified domain"
   fi
 
   # === CHECK 3: Unpaired DOT B ===

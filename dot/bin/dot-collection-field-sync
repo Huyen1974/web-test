@@ -133,7 +133,12 @@ main() {
       JOIN information_schema.columns ic
         ON ic.column_name = cfs.field_name AND ic.table_name = '${col}' AND ic.table_schema = 'public'
       WHERE cfs.field_type IS NOT NULL
-        AND ic.data_type != cfs.field_type;
+        AND ic.data_type != cfs.field_type
+        AND NOT EXISTS (
+          SELECT 1 FROM field_type_equivalences fte
+          WHERE (fte.type_a = cfs.field_type AND fte.type_b = ic.data_type)
+             OR (fte.type_a = ic.data_type AND fte.type_b = cfs.field_type)
+        );
     ")
 
     if [[ -n "${CONFLICTS:-}" ]]; then
