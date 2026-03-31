@@ -1,0 +1,297 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-migration-s155-p1b — Bổ sung đầu vào Điều 35+36
+# =============================================================================
+# VERSION: 1.0.0
+# IDEMPOTENT: Yes — safe to re-run
+# 4 VIỆC:
+#   1. ALTER approval_requests + issue_signature + UNIQUE dedupe
+#   2. CREATE dot_domain_rules + seed + đăng ký
+#   3. BACKFILL 91 DOT domain NULL (backup + transaction)
+#   4. Field-sync equivalence table + path normalize
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+run_pg() {
+  local SQL="$1"
+  if command -v docker &>/dev/null && docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${PG_CONTAINER}$"; then
+    docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A <<< "$SQL" 2>/dev/null
+  else
+    ssh -i "$VPS_KEY" -o ConnectTimeout=10 -o StrictHostKeyChecking=no "root@${VPS_HOST}" \
+      "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A" <<< "$SQL" 2>/dev/null
+  fi
+}
+
+run_pg_verbose() {
+  local SQL="$1"
+  if command -v docker &>/dev/null && docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${PG_CONTAINER}$"; then
+    docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} <<< "$SQL"
+  else
+    ssh -i "$VPS_KEY" -o ConnectTimeout=10 -o StrictHostKeyChecking=no "root@${VPS_HOST}" \
+      "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB}" <<< "$SQL"
+  fi
+}
+
+main() {
+  echo "========================================="
+  echo "Migration S155-P1b v${VERSION}"
+  echo "4 việc — Idempotent"
+  echo "========================================="
+
+  # ═══════════════════════════════════════════
+  # VIỆC 1: issue_signature + UNIQUE dedupe
+  # ═══════════════════════════════════════════
+  log_info "VIỆC 1: ALTER approval_requests + issue_signature"
+
+  run_pg_verbose "
+    ALTER TABLE approval_requests ADD COLUMN IF NOT EXISTS issue_signature TEXT;
+
+    -- UNIQUE partial index for APR dedupe (Điều 35 §8)
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_apr_dedupe
+    ON approval_requests (request_type, target_collection, target_entity_code, issue_signature)
+    WHERE status = 'pending';
+
+    -- Backfill issue_signature for existing pending APRs
+    UPDATE approval_requests
+    SET issue_signature = request_type || '_' || COALESCE(target_entity_code, 'null') || '_' || id::text
+    WHERE issue_signature IS NULL AND status = 'pending';
+  "
+  log_ok "VIỆC 1 DONE"
+
+  # ═══════════════════════════════════════════
+  # VIỆC 2: dot_domain_rules + seed + đăng ký
+  # ═══════════════════════════════════════════
+  log_info "VIỆC 2: CREATE dot_domain_rules + seed"
+
+  run_pg_verbose "
+    -- Add 'unclassified' domain
+    INSERT INTO dot_domains (code, name, parent_domain)
+    VALUES ('unclassified', 'Chưa phân loại', NULL)
+    ON CONFLICT (code) DO NOTHING;
+
+    -- Create dot_domain_rules
+    CREATE TABLE IF NOT EXISTS dot_domain_rules (
+      id SERIAL PRIMARY KEY,
+      pattern TEXT NOT NULL,
+      target_domain TEXT NOT NULL REFERENCES dot_domains(code),
+      priority INTEGER NOT NULL DEFAULT 100,
+      description TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      UNIQUE(pattern)
+    );
+
+    -- Seed rules (prefix → domain mapping)
+    INSERT INTO dot_domain_rules (pattern, target_domain, priority, description) VALUES
+      ('dot-schema-%',     'infrastructure.schema', 10, 'Schema & field management'),
+      ('dot-pg-%',         'infrastructure.schema', 10, 'PG direct operations'),
+      ('dot-flow-%',       'infrastructure.sync',   10, 'Directus flow setup'),
+      ('dot-backup%',      'infrastructure.backup', 10, 'Backup operations'),
+      ('dot-deploy%',      'infrastructure.deploy', 10, 'Deploy operations'),
+      ('dot-hook-%',       'infrastructure.deploy', 20, 'Deploy hooks'),
+      ('dot-local-%',      'infrastructure.deploy', 20, 'Local dev environment'),
+      ('dot-start-%',      'infrastructure.deploy', 20, 'Service start'),
+      ('dot-apr-%',        'governance.approval',   10, 'Approval system'),
+      ('dot-audit-%',      'governance.audit',      10, 'Audit operations'),
+      ('dot-permission%',  'governance.audit',      20, 'Permission management'),
+      ('dot-birth-%',      'birth.register',        10, 'Birth registry'),
+      ('dot-orphan-%',     'birth.orphan',          10, 'Orphan detection'),
+      ('dot-misclass-%',   'classification.species', 10, 'Misclassification'),
+      ('dot-species-%',    'classification.species', 10, 'Species management'),
+      ('dot-label-%',      'classification.label',  10, 'Label management'),
+      ('dot-dot-%',        'monitoring.dot',        10, 'DOT self-governance'),
+      ('dot-coverage-%',   'monitoring.integrity',  10, 'Coverage inspection'),
+      ('dot-accuracy-%',   'monitoring.integrity',  10, 'Accuracy verification'),
+      ('dot-production-%', 'monitoring.integrity',  10, 'Production truth gate'),
+      ('dot-health-%',     'monitoring.health',     10, 'Health check'),
+      ('dot-inspect-%',    'monitoring.integrity',  10, 'Inspection'),
+      ('dot-selftest-%',   'monitoring.integrity',  10, 'Self-test'),
+      ('dot-verify%',      'monitoring.integrity',  20, 'Verification'),
+      ('dot-pivot-%',      'pivot',                 10, 'Pivot definitions'),
+      ('dot-cron-pivot-%', 'pivot',                 10, 'Pivot cron'),
+      ('dot-catalog-%',    'sync',                  10, 'Catalog sync'),
+      ('dot-sync-%',       'sync',                  10, 'Sync operations'),
+      ('dot-knowledge-%',  'sync',                  10, 'Knowledge sync'),
+      ('dot-reconcile-%',  'sync',                  10, 'Reconcile operations'),
+      ('dot-entity-%',     'lifecycle',             10, 'Entity lifecycle'),
+      ('dot-migration-%',  'lifecycle',             10, 'Migration operations'),
+      ('dot-collection-%', 'collection',            10, 'Collection protocol'),
+      ('dot-registry-%',   'collection',            20, 'Registry management'),
+      ('dot-registries-%', 'collection',            20, 'Registry verification'),
+      ('dot-content-%',    'workflow',              10, 'Content management'),
+      ('dot-task-%',       'workflow',              10, 'Task management'),
+      ('dot-ai-%',         'infrastructure.sync',   20, 'AI integration'),
+      ('dot-agent-%',      'infrastructure.sync',   20, 'Agent management'),
+      ('dot-mcp-%',        'infrastructure.sync',   20, 'MCP connectivity'),
+      ('dot-gpt-%',        'infrastructure.sync',   20, 'GPT integration'),
+      ('dot-gemini-%',     'infrastructure.sync',   20, 'Gemini integration'),
+      ('dot-claude-%',     'infrastructure.sync',   20, 'Claude integration'),
+      ('dot-vector-%',     'data_quality',          10, 'Vector operations'),
+      ('dot-metadata-%',   'data_quality',          10, 'Metadata quality'),
+      ('dot-field-%',      'data_quality',          10, 'Field operations'),
+      ('dot-fill-%',       'data_quality',          10, 'Data fill'),
+      ('dot-layer%',       'monitoring.integrity',  10, 'Layer audit'),
+      ('dot-dependency-%', 'monitoring.integrity',  10, 'Dependency scan'),
+      ('dot-env-%',        'infrastructure.deploy', 20, 'Environment management'),
+      ('dot-seed-%',       'infrastructure.deploy', 20, 'Seed data'),
+      ('dot-clean-%',      'infrastructure.deploy', 20, 'Clean operations'),
+      ('dot-rollback%',    'infrastructure.deploy', 20, 'Rollback operations'),
+      ('dot-web28-%',      'lifecycle',             99, 'Legacy migration'),
+      ('dot-e2e-%',        'monitoring.health',     10, 'E2E testing'),
+      ('dot-test-%',       'monitoring.health',     10, 'Testing'),
+      ('dot-id-%',         'data_quality',          10, 'ID management'),
+      ('dot-fix-%',        'lifecycle',             20, 'Fix operations'),
+      ('dot-nav-%',        'workflow',              20, 'Navigation'),
+      ('dot-ops-%',        'monitoring.health',     20, 'Operations status'),
+      ('dot-cost-%',       'governance.audit',      20, 'Cost audit'),
+      ('dot-spider%',      'monitoring.health',     20, 'Spider crawl'),
+      ('dot-arch-%',       'monitoring.integrity',  20, 'Architecture check'),
+      ('dot-apply%',       'infrastructure.schema', 20, 'Schema apply'),
+      ('dot-token%',       'infrastructure.deploy', 20, 'Token management'),
+      ('dot-auth%',        'infrastructure.deploy', 20, 'Auth management'),
+      ('dot-update-%',     'data_quality',          20, 'Update operations')
+    ON CONFLICT (pattern) DO NOTHING;
+  "
+  log_ok "VIỆC 2: dot_domain_rules created + seeded"
+
+  # ═══════════════════════════════════════════
+  # VIỆC 3: BACKFILL domain (backup + transaction)
+  # ═══════════════════════════════════════════
+  log_info "VIỆC 3: BACKFILL 91 DOT domain NULL"
+
+  # 3a: Backup
+  run_pg_verbose "
+    DROP TABLE IF EXISTS dot_tools_domain_backup;
+    CREATE TABLE dot_tools_domain_backup AS
+    SELECT code, name, category, domain FROM dot_tools;
+  "
+  log_ok "Backup created: dot_tools_domain_backup"
+
+  # 3b: Backfill using rules
+  run_pg_verbose "
+    -- Apply domain rules: match name LIKE pattern, highest priority (lowest number) wins
+    UPDATE dot_tools dt SET domain = sub.target_domain
+    FROM (
+      SELECT DISTINCT ON (dt2.code) dt2.code, r.target_domain
+      FROM dot_tools dt2
+      JOIN dot_domain_rules r ON dt2.name LIKE r.pattern AND r.status = 'active'
+      WHERE dt2.domain IS NULL
+      ORDER BY dt2.code, r.priority ASC
+    ) sub
+    WHERE dt.code = sub.code AND dt.domain IS NULL;
+
+    -- Remaining NULL → 'unclassified'
+    UPDATE dot_tools SET domain = 'unclassified' WHERE domain IS NULL;
+  "
+
+  # 3c: Verify
+  local NULL_COUNT
+  NULL_COUNT=$(run_pg "SELECT COUNT(*) FROM dot_tools WHERE domain IS NULL;")
+  if [[ "${NULL_COUNT:-0}" -ne 0 ]]; then
+    log_err "STILL ${NULL_COUNT} NULL domains! Aborting NOT NULL constraint."
+    exit 1
+  fi
+  log_ok "Domain NULL = 0"
+
+  # 3d: SET NOT NULL + DEFAULT
+  run_pg_verbose "
+    ALTER TABLE dot_tools ALTER COLUMN domain SET NOT NULL;
+    ALTER TABLE dot_tools ALTER COLUMN domain SET DEFAULT 'unclassified';
+  "
+  log_ok "VIỆC 3 DONE: domain NOT NULL + DEFAULT 'unclassified'"
+
+  # Domain distribution
+  log_info "Domain distribution:"
+  run_pg_verbose "SELECT domain, COUNT(*) as cnt FROM dot_tools GROUP BY domain ORDER BY cnt DESC;"
+
+  # ═══════════════════════════════════════════
+  # VIỆC 4a: Field-sync equivalence table
+  # ═══════════════════════════════════════════
+  log_info "VIỆC 4a: Field-type equivalence table"
+
+  run_pg_verbose "
+    CREATE TABLE IF NOT EXISTS field_type_equivalences (
+      id SERIAL PRIMARY KEY,
+      type_a TEXT NOT NULL,
+      type_b TEXT NOT NULL,
+      UNIQUE(type_a, type_b)
+    );
+
+    INSERT INTO field_type_equivalences (type_a, type_b) VALUES
+      ('character varying', 'text'),
+      ('text', 'character varying'),
+      ('timestamp without time zone', 'timestamp with time zone'),
+      ('timestamp with time zone', 'timestamp without time zone')
+    ON CONFLICT DO NOTHING;
+  "
+  log_ok "VIỆC 4a DONE: field_type_equivalences created"
+
+  # ═══════════════════════════════════════════
+  # VIỆC 4b: Path normalize at source
+  # ═══════════════════════════════════════════
+  log_info "VIỆC 4b: Path normalize trigger + backfill"
+
+  run_pg_verbose "
+    -- Normalize trigger for dot_tools.file_path
+    CREATE OR REPLACE FUNCTION fn_normalize_dot_filepath()
+    RETURNS TRIGGER AS \$\$
+    BEGIN
+      IF NEW.file_path IS NOT NULL AND NEW.file_path LIKE '/%' THEN
+        NEW.file_path := ltrim(NEW.file_path, '/');
+      END IF;
+      RETURN NEW;
+    END;
+    \$\$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS trg_normalize_dot_filepath ON dot_tools;
+    CREATE TRIGGER trg_normalize_dot_filepath
+      BEFORE INSERT OR UPDATE OF file_path ON dot_tools
+      FOR EACH ROW EXECUTE FUNCTION fn_normalize_dot_filepath();
+
+    -- Backfill: normalize existing paths
+    UPDATE dot_tools SET file_path = ltrim(file_path, '/') WHERE file_path LIKE '/%';
+
+    -- Verify
+    SELECT COUNT(*) as abs_paths FROM dot_tools WHERE file_path LIKE '/%';
+  "
+  log_ok "VIỆC 4b DONE: path trigger + backfill"
+
+  # ═══════════════════════════════════════════
+  # VERIFY ALL
+  # ═══════════════════════════════════════════
+  log_info "=== FINAL VERIFICATION ==="
+
+  run_pg_verbose "
+    SELECT '1. issue_signature' as check,
+      EXISTS(SELECT 1 FROM information_schema.columns
+        WHERE table_name='approval_requests' AND column_name='issue_signature') as result;
+
+    SELECT '2. dot_domain_rules' as check, COUNT(*) as rules FROM dot_domain_rules WHERE status='active';
+
+    SELECT '3. domain NULL' as check, COUNT(*) as null_count FROM dot_tools WHERE domain IS NULL;
+
+    SELECT '4. field_type_equivalences' as check, COUNT(*) as rows FROM field_type_equivalences;
+
+    SELECT '5. abs paths' as check, COUNT(*) as bad_paths FROM dot_tools WHERE file_path LIKE '/%';
+  "
+
+  echo "========================================="
+  echo "Migration S155-P1b COMPLETE"
+  echo "========================================="
+}
+
+main "$@"
