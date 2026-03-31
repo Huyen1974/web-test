@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-dot-coverage — DOT coverage report per domain (Cấp A)
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-03-31): Coverage report — domain x operation pivot
+#
+# Usage:
+#   dot-dot-coverage [--cloud|--local]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-dot-coverage v${VERSION} — DOT coverage report (Cấp A)
+
+Queries dot_coverage_required JOIN dot_tools, calculates coverage % per domain.
+
+Usage:
+  dot-dot-coverage [--cloud|--local]
+EOF
+  show_environment_help
+}
+
+run_pg() {
+  local SQL="$1"
+  if command -v docker &>/dev/null && docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${PG_CONTAINER}$"; then
+    docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A <<< "$SQL" 2>/dev/null
+  else
+    ssh -i "$VPS_KEY" -o ConnectTimeout=10 -o StrictHostKeyChecking=no "root@${VPS_HOST}" \
+      "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A" <<< "$SQL" 2>/dev/null
+  fi
+}
+
+main() {
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h) show_help; exit 0 ;;
+    esac
+  done
+
+  init_environment "$@"
+
+  echo "========================================="
+  echo "DOT Tool: Coverage Report v${VERSION}"
+  echo "========================================="
+  print_environment_banner "$@"
+
+  # === COVERAGE SUMMARY PER DOMAIN ===
+  log_info "Coverage summary per domain:"
+  echo ""
+  printf "%-25s %8s %8s %8s\n" "DOMAIN" "REQUIRED" "COVERED" "PCT"
+  printf "%-25s %8s %8s %8s\n" "-------------------------" "--------" "--------" "--------"
+
+  local SUMMARY
+  SUMMARY=$(run_pg "
+    SELECT
+      dcr.domain,
+      count(*) AS required,
+      count(dt.id) AS covered,
+      CASE WHEN count(*) > 0
+        THEN round(100.0 * count(dt.id) / count(*), 1)
+        ELSE 0
+      END AS pct
+    FROM dot_coverage_required dcr
+    LEFT JOIN dot_tools dt
+      ON dt.domain = dcr.domain AND dt.operation = dcr.operation
+    GROUP BY dcr.domain
+    ORDER BY dcr.domain;
+  ")
+
+  local TOTAL_REQ=0 TOTAL_COV=0
+  while IFS='|' read -r domain required covered pct; do
+    [[ -z "$domain" ]] && continue
+    printf "%-25s %8s %8s %7s%%\n" "$domain" "$required" "$covered" "$pct"
+    TOTAL_REQ=$((TOTAL_REQ + required))
+    TOTAL_COV=$((TOTAL_COV + covered))
+  done <<< "$SUMMARY"
+
+  echo ""
+  local TOTAL_PCT=0
+  if [[ "$TOTAL_REQ" -gt 0 ]]; then
+    TOTAL_PCT=$(echo "scale=1; 100 * $TOTAL_COV / $TOTAL_REQ" | bc)
+  fi
+  printf "%-25s %8s %8s %7s%%\n" "TOTAL" "$TOTAL_REQ" "$TOTAL_COV" "$TOTAL_PCT"
+
+  # === GAPS DETAIL ===
+  echo ""
+  log_info "Uncovered requirements (gaps):"
+  echo ""
+
+  local GAPS
+  GAPS=$(run_pg "
+    SELECT dcr.domain, dcr.operation
+    FROM dot_coverage_required dcr
+    WHERE NOT EXISTS (
+      SELECT 1 FROM dot_tools dt
+      WHERE dt.domain = dcr.domain AND dt.operation = dcr.operation
+    )
+    ORDER BY dcr.domain, dcr.operation;
+  ")
+
+  local GAP_COUNT=0
+  if [[ -n "${GAPS:-}" ]]; then
+    printf "%-25s %-20s\n" "DOMAIN" "OPERATION"
+    printf "%-25s %-20s\n" "-------------------------" "--------------------"
+    while IFS='|' read -r domain operation; do
+      [[ -z "$domain" ]] && continue
+      printf "%-25s %-20s\n" "$domain" "$operation"
+      GAP_COUNT=$((GAP_COUNT + 1))
+    done <<< "$GAPS"
+  fi
+
+  echo ""
+  if [[ "$GAP_COUNT" -eq 0 ]]; then
+    log_ok "No coverage gaps — full coverage"
+  else
+    log_warn "${GAP_COUNT} gap(s) found"
+  fi
+
+  # === PIVOT: domain x operation ===
+  echo ""
+  log_info "Pivot — DOTs per domain x tier:"
+  echo ""
+  run_pg "
+    SELECT
+      COALESCE(domain, '(null)') AS domain,
+      tier,
+      count(*) AS cnt
+    FROM dot_tools
+    GROUP BY domain, tier
+    ORDER BY domain, tier;
+  " | while IFS='|' read -r domain tier cnt; do
+    [[ -z "$domain" ]] && continue
+    printf "  %-25s tier=%-4s count=%s\n" "$domain" "$tier" "$cnt"
+  done
+
+  echo ""
+  echo "========================================="
+  log_ok "Coverage report complete"
+  echo "========================================="
+}
+
+main "$@"

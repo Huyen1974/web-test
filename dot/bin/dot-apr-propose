@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-apr-propose — Tạo đề xuất phê duyệt (Cấp A)
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-03-31): S151 Phase 1 — Điều 32 approval_requests
+#
+# Usage:
+#   dot-apr-propose [--cloud|--local] \
+#     --request-type <type> --action <add|modify|delete|review> \
+#     --title "Mô tả ngắn" \
+#     [--target-collection <col>] [--target-entity <code>] \
+#     [--proposed-action '<json>'] [--source-context '<json>'] \
+#     [--evidence "lý do"] [--source "dot-name"] [--priority <normal|high|critical|low>]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+
+# Defaults
+REQUEST_TYPE="general"
+ACTION="add"
+TITLE=""
+TARGET_COLLECTION=""
+TARGET_ENTITY=""
+PROPOSED_ACTION="{}"
+SOURCE_CONTEXT="{}"
+EVIDENCE=""
+SOURCE="unknown"
+PRIORITY="normal"
+
+VALID_REQUEST_TYPES="schema_add schema_delete schema_modify birth_orphan reclassify retire new_dot rule_change user_feedback process_improvement accuracy_drift general other"
+VALID_ACTIONS="add modify delete review"
+VALID_PRIORITIES="critical high normal low"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-apr-propose v${VERSION} — Tạo đề xuất phê duyệt (Cấp A)
+
+Điều 32: INSERT approval_requests qua Directus API.
+Action='add' → auto-approved by PG trigger.
+Action='delete' → pending, chờ duyệt.
+
+Usage:
+  dot-apr-propose [--cloud|--local] --title "..." --request-type <type> --action <action> [options]
+
+Options:
+  --request-type    ${VALID_REQUEST_TYPES}
+  --action          ${VALID_ACTIONS}
+  --title           Mô tả ngắn (bắt buộc)
+  --target-collection  Collection mục tiêu
+  --target-entity   Mã entity cụ thể
+  --proposed-action JSON payload thực thi
+  --source-context  JSON ngữ cảnh nguồn
+  --evidence        Lý do, data hỗ trợ
+  --source          DOT/AI/User nào tạo
+  --priority        ${VALID_PRIORITIES}
+
+EOF
+  show_environment_help
+}
+
+validate_in_list() {
+  local value="$1" list="$2" label="$3"
+  if ! echo "$list" | tr ' ' '\n' | grep -qx "$value"; then
+    log_err "Invalid ${label}: '${value}'. Valid: ${list}"
+    exit 1
+  fi
+}
+
+main() {
+  # Parse args
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --request-type) REQUEST_TYPE="$2"; shift 2 ;;
+      --action) ACTION="$2"; shift 2 ;;
+      --title) TITLE="$2"; shift 2 ;;
+      --target-collection) TARGET_COLLECTION="$2"; shift 2 ;;
+      --target-entity) TARGET_ENTITY="$2"; shift 2 ;;
+      --proposed-action) PROPOSED_ACTION="$2"; shift 2 ;;
+      --source-context) SOURCE_CONTEXT="$2"; shift 2 ;;
+      --evidence) EVIDENCE="$2"; shift 2 ;;
+      --source) SOURCE="$2"; shift 2 ;;
+      --priority) PRIORITY="$2"; shift 2 ;;
+      --help|-h) show_help; exit 0 ;;
+      --cloud|--local) shift ;;
+      *) shift ;;
+    esac
+  done
+
+  init_environment "$@"
+  local BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: APR Propose v${VERSION}"
+  echo "S151 Phase 1: Điều 32 — Tạo đề xuất"
+  echo "========================================="
+
+  # Auth
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    source "${SCRIPT_DIR}/dot-auth" "$@"
+  fi
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "Authentication failed"; exit 1
+  fi
+
+  # Validate
+  if [[ -z "$TITLE" ]]; then
+    log_err "Title is required (--title)"
+    exit 1
+  fi
+  validate_in_list "$REQUEST_TYPE" "$VALID_REQUEST_TYPES" "request_type"
+  validate_in_list "$ACTION" "$VALID_ACTIONS" "action"
+  validate_in_list "$PRIORITY" "$VALID_PRIORITIES" "priority"
+
+  # Build payload
+  local PAYLOAD
+  PAYLOAD=$(jq -n \
+    --arg rt "$REQUEST_TYPE" \
+    --arg act "$ACTION" \
+    --arg title "$TITLE" \
+    --arg tc "$TARGET_COLLECTION" \
+    --arg te "$TARGET_ENTITY" \
+    --argjson pa "$PROPOSED_ACTION" \
+    --argjson sc "$SOURCE_CONTEXT" \
+    --arg ev "$EVIDENCE" \
+    --arg src "$SOURCE" \
+    --arg pri "$PRIORITY" \
+    '{
+      request_type: $rt,
+      action: $act,
+      title: $title,
+      source: $src,
+      priority: $pri,
+      proposed_action: $pa,
+      source_context: $sc
+    }
+    + (if $tc != "" then {target_collection: $tc} else {} end)
+    + (if $te != "" then {target_entity_code: $te} else {} end)
+    + (if $ev != "" then {evidence: $ev} else {} end)
+    ')
+
+  log_info "Creating APR: ${TITLE}"
+  log_info "  request_type=${REQUEST_TYPE} action=${ACTION} priority=${PRIORITY}"
+
+  # POST to Directus
+  local RESP HTTP_CODE BODY
+  RESP=$(curl -sS --globoff -k -X POST \
+    "${BASE_URL}/items/approval_requests" \
+    -H "Authorization: Bearer $DOT_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "$PAYLOAD" \
+    -w "\n%{http_code}")
+
+  BODY="${RESP%$'\n'*}"
+  HTTP_CODE="${RESP##*$'\n'}"
+
+  if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "204" ]]; then
+    local APR_CODE APR_STATUS
+    APR_CODE=$(echo "$BODY" | jq -r '.data.code // "?"')
+    APR_STATUS=$(echo "$BODY" | jq -r '.data.status // "?"')
+    log_ok "Created: ${APR_CODE} (status=${APR_STATUS})"
+    echo "$BODY" | jq '{code: .data.code, id: .data.id, status: .data.status, reviewed_by: .data.reviewed_by}'
+  else
+    log_err "Failed to create APR (HTTP ${HTTP_CODE})"
+    echo "$BODY" | head -c 500 >&2
+    exit 1
+  fi
+}
+
+main "$@"
