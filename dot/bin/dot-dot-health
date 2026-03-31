@@ -1,0 +1,279 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-dot-health — Kiểm tra DOT tools integrity (Cấp A)
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-03-31): 9 checks for DOT tools health
+#
+# 9 checks:
+#   1. tier NULL
+#   2. domain NULL
+#   3. Unpaired DOT B (paired_dot NULL)
+#   4. Phantom (file_path doesn't exist on disk)
+#   5. Orphan file (file in bin/ not in dot_tools)
+#   6. Duplicate code (2+ DOTs same code)
+#   7. Missing file_path (NULL)
+#   8. Stale (last_executed > 7 days for cron DOTs)
+#   9. Coverage gap (domain in dot_coverage_required without matching DOT)
+#
+# Usage:
+#   dot-dot-health [--cloud|--local]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_crit() { echo "[CRIT] $1" >&2; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-dot-health v${VERSION} — Kiểm tra DOT tools integrity (Cấp A)
+9 checks. Health IDLE = thiết kế hoàn hảo.
+
+Usage:
+  dot-dot-health [--cloud|--local]
+EOF
+  show_environment_help
+}
+
+run_pg() {
+  local SQL="$1"
+  if command -v docker &>/dev/null && docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${PG_CONTAINER}$"; then
+    docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A <<< "$SQL" 2>/dev/null
+  else
+    ssh -i "$VPS_KEY" -o ConnectTimeout=10 -o StrictHostKeyChecking=no "root@${VPS_HOST}" \
+      "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A" <<< "$SQL" 2>/dev/null
+  fi
+}
+
+run_remote() {
+  local CMD="$1"
+  if command -v docker &>/dev/null && docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${PG_CONTAINER}$"; then
+    eval "$CMD"
+  else
+    ssh -i "$VPS_KEY" -o ConnectTimeout=10 -o StrictHostKeyChecking=no "root@${VPS_HOST}" "$CMD" 2>/dev/null
+  fi
+}
+
+log_system_issue() {
+  local TITLE="$1" ISSUE_TYPE="$2" SEVERITY="$3" DETAIL="$4" BASE_URL="$5"
+  curl -sS --globoff -k -X POST \
+    "${BASE_URL}/items/system_issues" \
+    -H "Authorization: Bearer $DOT_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "$(jq -n \
+      --arg title "$TITLE" \
+      --arg it "$ISSUE_TYPE" \
+      --arg sev "$SEVERITY" \
+      --arg desc "$DETAIL" \
+      '{
+        title: $title,
+        issue_type: $it,
+        description: $desc,
+        source: "dot-dot-health",
+        severity: $sev,
+        status: "open",
+        detected_at: (now | todate)
+      }')" > /dev/null 2>&1 || true
+}
+
+main() {
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h) show_help; exit 0 ;;
+    esac
+  done
+
+  init_environment "$@"
+  local BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: DOT Health v${VERSION}"
+  echo "9 checks — Cấp A"
+  echo "========================================="
+  print_environment_banner "$@"
+
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    source "${SCRIPT_DIR}/dot-auth" "$@"
+  fi
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "Authentication failed"; exit 1
+  fi
+
+  local ISSUES=0 CRITICAL=0 CHECKS=9
+
+  # === CHECK 1: tier NULL ===
+  log_info "Check 1: tier NULL..."
+  local C1
+  C1=$(run_pg "SELECT count(*) FROM dot_tools WHERE tier IS NULL;")
+  if [[ "${C1:-0}" -gt 0 ]]; then
+    log_warn "CHECK 1 FAIL: ${C1} DOTs with NULL tier"
+    log_system_issue "DOT health: ${C1} NULL tier" "dot_null_tier" "warning" "${C1} DOTs missing tier classification" "$BASE_URL"
+    ISSUES=$((ISSUES + 1))
+  else
+    log_ok "CHECK 1 PASS: All DOTs have tier"
+  fi
+
+  # === CHECK 2: domain NULL ===
+  log_info "Check 2: domain NULL..."
+  local C2
+  C2=$(run_pg "SELECT count(*) FROM dot_tools WHERE domain IS NULL;")
+  if [[ "${C2:-0}" -gt 0 ]]; then
+    log_warn "CHECK 2 FAIL: ${C2} DOTs with NULL domain"
+    log_system_issue "DOT health: ${C2} NULL domain" "dot_null_domain" "warning" "${C2} DOTs missing domain" "$BASE_URL"
+    ISSUES=$((ISSUES + 1))
+  else
+    log_ok "CHECK 2 PASS: All DOTs have domain"
+  fi
+
+  # === CHECK 3: Unpaired DOT B ===
+  log_info "Check 3: Unpaired DOT B (paired_dot NULL)..."
+  local C3
+  C3=$(run_pg "SELECT count(*) FROM dot_tools WHERE tier = 'B' AND paired_dot IS NULL;")
+  if [[ "${C3:-0}" -gt 0 ]]; then
+    log_warn "CHECK 3 FAIL: ${C3} tier-B DOTs without paired_dot"
+    log_system_issue "DOT health: ${C3} unpaired B" "dot_unpaired_b" "warning" "${C3} tier-B DOTs need paired health DOT" "$BASE_URL"
+    ISSUES=$((ISSUES + 1))
+  else
+    log_ok "CHECK 3 PASS: All tier-B DOTs paired"
+  fi
+
+  # === CHECK 4: Phantom (file_path doesn't exist on disk) ===
+  log_info "Check 4: Phantom DOTs (file missing on disk)..."
+  local PATHS
+  PATHS=$(run_pg "SELECT file_path FROM dot_tools WHERE file_path IS NOT NULL;")
+  local C4=0
+  while IFS= read -r fp; do
+    [[ -z "$fp" ]] && continue
+    local EXISTS
+    EXISTS=$(run_remote "test -f '$fp' && echo 1 || echo 0")
+    if [[ "${EXISTS:-0}" == "0" ]]; then
+      log_warn "  Phantom: $fp"
+      C4=$((C4 + 1))
+    fi
+  done <<< "$PATHS"
+  if [[ "$C4" -gt 0 ]]; then
+    log_warn "CHECK 4 FAIL: ${C4} phantom DOTs"
+    log_system_issue "DOT health: ${C4} phantom" "dot_phantom" "warning" "${C4} DOTs reference non-existent files" "$BASE_URL"
+    ISSUES=$((ISSUES + 1))
+  else
+    log_ok "CHECK 4 PASS: All file_paths exist"
+  fi
+
+  # === CHECK 5: Orphan files (in bin/ but not registered) ===
+  log_info "Check 5: Orphan files (not registered)..."
+  local DISK_FILES
+  DISK_FILES=$(run_remote "ls /opt/incomex/dot/bin/dot-* 2>/dev/null" || true)
+  local REGISTERED
+  REGISTERED=$(run_pg "SELECT file_path FROM dot_tools WHERE file_path IS NOT NULL;")
+  local C5=0
+  while IFS= read -r f; do
+    [[ -z "$f" ]] && continue
+    if ! echo "$REGISTERED" | grep -qF "$f"; then
+      log_warn "  Orphan: $f"
+      C5=$((C5 + 1))
+    fi
+  done <<< "$DISK_FILES"
+  if [[ "$C5" -gt 0 ]]; then
+    log_warn "CHECK 5 FAIL: ${C5} orphan files"
+    log_system_issue "DOT health: ${C5} orphan files" "dot_orphan_file" "warning" "${C5} files in bin/ not in dot_tools" "$BASE_URL"
+    ISSUES=$((ISSUES + 1))
+  else
+    log_ok "CHECK 5 PASS: No orphan files"
+  fi
+
+  # === CHECK 6: Duplicate code (CRITICAL) ===
+  log_info "Check 6: Duplicate code..."
+  local C6
+  C6=$(run_pg "SELECT count(*) FROM (SELECT code FROM dot_tools WHERE code IS NOT NULL GROUP BY code HAVING count(*) > 1) sub;")
+  if [[ "${C6:-0}" -gt 0 ]]; then
+    log_crit "CHECK 6 FAIL: ${C6} duplicate code(s)!"
+    local DUPS
+    DUPS=$(run_pg "SELECT code, count(*) FROM dot_tools WHERE code IS NOT NULL GROUP BY code HAVING count(*) > 1;")
+    log_crit "  Duplicates: $DUPS"
+    log_system_issue "DOT health: ${C6} duplicate codes" "dot_duplicate_code" "critical" "Duplicate DOT codes found: ${DUPS}" "$BASE_URL"
+    ISSUES=$((ISSUES + 1))
+    CRITICAL=$((CRITICAL + 1))
+  else
+    log_ok "CHECK 6 PASS: No duplicate codes"
+  fi
+
+  # === CHECK 7: Missing file_path ===
+  log_info "Check 7: Missing file_path (NULL)..."
+  local C7
+  C7=$(run_pg "SELECT count(*) FROM dot_tools WHERE file_path IS NULL;")
+  if [[ "${C7:-0}" -gt 0 ]]; then
+    log_warn "CHECK 7 FAIL: ${C7} DOTs with NULL file_path"
+    log_system_issue "DOT health: ${C7} NULL file_path" "dot_null_filepath" "warning" "${C7} DOTs missing file_path" "$BASE_URL"
+    ISSUES=$((ISSUES + 1))
+  else
+    log_ok "CHECK 7 PASS: All DOTs have file_path"
+  fi
+
+  # === CHECK 8: Stale (cron DOTs last_executed > 7 days) ===
+  log_info "Check 8: Stale cron DOTs..."
+  local C8
+  C8=$(run_pg "
+    SELECT count(*) FROM dot_tools
+    WHERE trigger_type = 'cron'
+      AND last_executed IS NOT NULL
+      AND last_executed < NOW() - INTERVAL '7 days';
+  ")
+  if [[ "${C8:-0}" -gt 0 ]]; then
+    log_warn "CHECK 8 FAIL: ${C8} stale cron DOTs (>7 days)"
+    log_system_issue "DOT health: ${C8} stale cron" "dot_stale_cron" "warning" "${C8} cron DOTs not executed in 7+ days" "$BASE_URL"
+    ISSUES=$((ISSUES + 1))
+  else
+    log_ok "CHECK 8 PASS: No stale cron DOTs"
+  fi
+
+  # === CHECK 9: Coverage gap ===
+  log_info "Check 9: Coverage gap..."
+  local C9
+  C9=$(run_pg "
+    SELECT count(*) FROM dot_coverage_required dcr
+    WHERE NOT EXISTS (
+      SELECT 1 FROM dot_tools dt
+      WHERE dt.domain = dcr.domain AND dt.operation = dcr.operation
+    );
+  ")
+  if [[ "${C9:-0}" -gt 0 ]]; then
+    log_warn "CHECK 9 FAIL: ${C9} coverage gaps"
+    log_system_issue "DOT health: ${C9} coverage gaps" "dot_coverage_gap" "warning" "${C9} required domain/operation combos without DOT" "$BASE_URL"
+    ISSUES=$((ISSUES + 1))
+  else
+    log_ok "CHECK 9 PASS: Full coverage"
+  fi
+
+  # === SUMMARY ===
+  echo ""
+  echo "========================================="
+  echo "${CHECKS} checks, ${ISSUES} issue(s)"
+  if [[ "$CRITICAL" -gt 0 ]]; then
+    log_crit "${CRITICAL} CRITICAL issue(s) — exit 1"
+    echo "========================================="
+    exit 1
+  elif [[ "$ISSUES" -gt 0 ]]; then
+    log_warn "${ISSUES} warning(s) — exit 0"
+  else
+    log_ok "ALL ${CHECKS} CHECKS PASS — DOT system healthy"
+  fi
+  echo "========================================="
+}
+
+main "$@"

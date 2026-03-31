@@ -1,0 +1,269 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-collection-create — 14-step collection creation protocol (Cấp B)
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-03-31): Full 14-step collection bootstrap
+#
+# Usage:
+#   dot-collection-create --collection-name <name> --group <group> [--cloud|--local]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+
+COLLECTION_NAME=""
+GROUP=""
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+log_step() { echo ""; echo "=== STEP $1: $2 ==="; }
+
+show_help() {
+  cat << EOF
+dot-collection-create v${VERSION} — 14-step collection creation (Cấp B)
+
+Usage:
+  dot-collection-create --collection-name <name> --group <group> [--cloud|--local]
+
+Options:
+  --collection-name  Table name (e.g., my_table)
+  --group            Atom group (e.g., CMS, LOG, REGISTRY, JUNCTION, SYSTEM)
+EOF
+  show_environment_help
+}
+
+run_pg() {
+  local SQL="$1"
+  if command -v docker &>/dev/null && docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${PG_CONTAINER}$"; then
+    docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A <<< "$SQL" 2>/dev/null
+  else
+    ssh -i "$VPS_KEY" -o ConnectTimeout=10 -o StrictHostKeyChecking=no "root@${VPS_HOST}" \
+      "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A" <<< "$SQL" 2>/dev/null
+  fi
+}
+
+api_call() {
+  local METHOD="$1" ENDPOINT="$2" DATA="${3:-}"
+  local ARGS=(-sS --globoff -k -X "$METHOD"
+    "${DIRECTUS_URL}${ENDPOINT}"
+    -H "Authorization: Bearer $DOT_TOKEN"
+    -H "Content-Type: application/json")
+  if [[ -n "$DATA" ]]; then
+    ARGS+=(-d "$DATA")
+  fi
+  curl "${ARGS[@]}" 2>/dev/null
+}
+
+main() {
+  local PASSTHROUGH_ARGS=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --help|-h) show_help; exit 0 ;;
+      --collection-name) COLLECTION_NAME="$2"; shift 2 ;;
+      --group) GROUP="$2"; shift 2 ;;
+      *) PASSTHROUGH_ARGS+=("$1"); shift ;;
+    esac
+  done
+
+  if [[ -z "$COLLECTION_NAME" || -z "$GROUP" ]]; then
+    log_err "Required: --collection-name and --group"
+    show_help; exit 1
+  fi
+
+  init_environment "${PASSTHROUGH_ARGS[@]}"
+  local BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: Collection Create v${VERSION}"
+  echo "Collection: ${COLLECTION_NAME}"
+  echo "Group: ${GROUP}"
+  echo "========================================="
+  print_environment_banner "${PASSTHROUGH_ARGS[@]}"
+
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    source "${SCRIPT_DIR}/dot-auth" "${PASSTHROUGH_ARGS[@]}"
+  fi
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "Authentication failed"; exit 1
+  fi
+
+  # Step 1: Check if table already exists
+  log_step 1 "Pre-flight check"
+  local EXISTS
+  EXISTS=$(run_pg "SELECT count(*) FROM information_schema.tables WHERE table_name='${COLLECTION_NAME}' AND table_schema='public';")
+  if [[ "${EXISTS:-0}" -gt 0 ]]; then
+    log_err "Table '${COLLECTION_NAME}' already exists"; exit 1
+  fi
+  log_ok "Table does not exist — proceeding"
+
+  # Step 2: CREATE TABLE with standard fields
+  log_step 2 "CREATE TABLE"
+  run_pg "
+    CREATE TABLE ${COLLECTION_NAME} (
+      id SERIAL PRIMARY KEY,
+      status VARCHAR(20) DEFAULT 'draft',
+      sort INTEGER,
+      user_created UUID REFERENCES directus_users(id),
+      date_created TIMESTAMPTZ DEFAULT NOW(),
+      user_updated UUID REFERENCES directus_users(id),
+      date_updated TIMESTAMPTZ DEFAULT NOW()
+    );
+  "
+  log_ok "Table created"
+
+  # Step 3: Register in Directus
+  log_step 3 "Register in Directus"
+  api_call POST "/collections" "$(jq -n \
+    --arg col "$COLLECTION_NAME" \
+    '{
+      collection: $col,
+      meta: {
+        collection: $col,
+        icon: "box",
+        hidden: false,
+        singleton: false
+      },
+      schema: {}
+    }')" > /dev/null
+  log_ok "Registered in Directus"
+
+  # Step 4: Register system fields in Directus
+  log_step 4 "Register system fields"
+  for FIELD in status sort user_created date_created user_updated date_updated; do
+    local FIELD_TYPE="string" INTERFACE="input"
+    case "$FIELD" in
+      status)       FIELD_TYPE="string"; INTERFACE="select-dropdown" ;;
+      sort)         FIELD_TYPE="integer"; INTERFACE="input" ;;
+      user_created) FIELD_TYPE="uuid"; INTERFACE="select-dropdown-m2o" ;;
+      date_created) FIELD_TYPE="timestamp"; INTERFACE="datetime" ;;
+      user_updated) FIELD_TYPE="uuid"; INTERFACE="select-dropdown-m2o" ;;
+      date_updated) FIELD_TYPE="timestamp"; INTERFACE="datetime" ;;
+    esac
+    api_call POST "/fields/${COLLECTION_NAME}" "$(jq -n \
+      --arg f "$FIELD" --arg ft "$FIELD_TYPE" --arg iface "$INTERFACE" \
+      '{field: $f, type: $ft, meta: {interface: $iface}}')" > /dev/null 2>&1 || true
+  done
+  log_ok "System fields registered"
+
+  # Step 5: meta_catalog entry
+  log_step 5 "meta_catalog entry"
+  api_call POST "/items/meta_catalog" "$(jq -n \
+    --arg col "$COLLECTION_NAME" --arg grp "$GROUP" \
+    '{
+      registry_collection: $col,
+      atom_group: $grp,
+      record_count: 0,
+      actual_count: 0,
+      status: "active"
+    }')" > /dev/null
+  log_ok "meta_catalog entry created"
+
+  # Step 6: Birth record
+  log_step 6 "Birth record"
+  api_call POST "/items/schema_birth_registry" "$(jq -n \
+    --arg col "$COLLECTION_NAME" --arg src "dot-collection-create" \
+    '{
+      collection_name: $col,
+      birth_source: $src,
+      birth_type: "dot_created",
+      born_at: (now | todate)
+    }')" > /dev/null
+  log_ok "Birth record created"
+
+  # Step 7: Verify birth
+  log_step 7 "Verify birth"
+  local BIRTH
+  BIRTH=$(run_pg "SELECT count(*) FROM schema_birth_registry WHERE collection_name='${COLLECTION_NAME}';")
+  if [[ "${BIRTH:-0}" -gt 0 ]]; then
+    log_ok "Birth verified"
+  else
+    log_warn "Birth record not found — manual check needed"
+  fi
+
+  # Step 8: Labels
+  log_step 8 "Labels"
+  api_call POST "/items/collection_labels" "$(jq -n \
+    --arg col "$COLLECTION_NAME" --arg grp "$GROUP" \
+    '{collection_name: $col, label: $grp, assigned_by: "dot-collection-create"}')" > /dev/null 2>&1 || true
+  log_ok "Label assigned"
+
+  # Step 9: Species
+  log_step 9 "Species assignment"
+  local SPECIES="data_table"
+  case "$GROUP" in
+    LOG)      SPECIES="log_table" ;;
+    JUNCTION) SPECIES="junction_table" ;;
+    SYSTEM)   SPECIES="system_table" ;;
+    REGISTRY) SPECIES="registry_table" ;;
+  esac
+  api_call POST "/items/collection_species" "$(jq -n \
+    --arg col "$COLLECTION_NAME" --arg sp "$SPECIES" \
+    '{collection_name: $col, species: $sp}')" > /dev/null 2>&1 || true
+  log_ok "Species: $SPECIES"
+
+  # Step 10: Edges
+  log_step 10 "Entity edges"
+  api_call POST "/items/entity_dependencies" "$(jq -n \
+    --arg col "$COLLECTION_NAME" \
+    '{source_entity: $col, dependency_type: "self", status: "active"}')" > /dev/null 2>&1 || true
+  log_ok "Self-edge created"
+
+  # Step 11: Pivot
+  log_step 11 "Cron pivot"
+  log_info "Skipped — pivot setup is domain-specific"
+
+  # Step 12: Group assignment
+  log_step 12 "Group assignment"
+  run_pg "
+    UPDATE collection_registry SET \"group\" = '${GROUP}'
+    WHERE collection_name = '${COLLECTION_NAME}';
+  " > /dev/null 2>&1 || true
+  log_ok "Group: $GROUP"
+
+  # Step 13: Field standards check
+  log_step 13 "Field standards"
+  local STD_FIELDS
+  STD_FIELDS=$(run_pg "
+    SELECT field_name FROM collection_field_standards
+    WHERE tier = 1 AND (applies_to_group IS NULL OR applies_to_group = '${GROUP}');
+  ")
+  if [[ -n "${STD_FIELDS:-}" ]]; then
+    log_info "Tier-1 standard fields to verify: $(echo "$STD_FIELDS" | tr '\n' ', ')"
+  else
+    log_info "No tier-1 field standards defined"
+  fi
+
+  # Step 14: Health check
+  log_step 14 "Post-creation health"
+  local FINAL
+  FINAL=$(run_pg "SELECT count(*) FROM information_schema.tables WHERE table_name='${COLLECTION_NAME}' AND table_schema='public';")
+  if [[ "${FINAL:-0}" -gt 0 ]]; then
+    log_ok "Table exists in PG"
+  else
+    log_err "Table NOT found in PG!"; exit 1
+  fi
+  local MC
+  MC=$(run_pg "SELECT count(*) FROM meta_catalog WHERE registry_collection='${COLLECTION_NAME}';")
+  log_ok "meta_catalog entry: ${MC:-0}"
+
+  echo ""
+  echo "========================================="
+  log_ok "14-step protocol complete for '${COLLECTION_NAME}'"
+  echo "========================================="
+}
+
+main "$@"

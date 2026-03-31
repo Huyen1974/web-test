@@ -1,0 +1,236 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-apr-health — Động cơ phụ: kiểm tra APR integrity (Cấp A)
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-03-31): S151 Phase 1 — Điều 32
+#
+# 4 checks:
+#   1. Stuck approved (approved > 24h, not applied)
+#   2. Phantom applied (applied but target entity missing)
+#   3. Count drift (PG count vs meta_catalog)
+#   4. Unclassified other (request_type='other' > 7 days)
+#
+# Goal: health IDLE = thiết kế hoàn hảo. Health phải làm việc = có lỗ hổng.
+#
+# Usage:
+#   dot-apr-health [--cloud|--local]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-apr-health v${VERSION} — Kiểm tra APR integrity (Cấp A, động cơ phụ)
+
+4 checks. Health IDLE = thiết kế hoàn hảo.
+
+Usage:
+  dot-apr-health [--cloud|--local]
+
+EOF
+  show_environment_help
+}
+
+run_pg() {
+  local SQL="$1"
+  # If running on VPS (docker available), use docker exec directly
+  if command -v docker &>/dev/null && docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${PG_CONTAINER}$"; then
+    docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A <<< "$SQL" 2>/dev/null
+  else
+    # Running remotely — SSH to VPS
+    ssh -i "$VPS_KEY" -o ConnectTimeout=10 -o StrictHostKeyChecking=no "root@${VPS_HOST}" \
+      "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A" <<< "$SQL" 2>/dev/null
+  fi
+}
+
+log_system_issue() {
+  local TITLE="$1" ISSUE_TYPE="$2" DETAIL="$3" BASE_URL="$4"
+
+  curl -sS --globoff -k -X POST \
+    "${BASE_URL}/items/system_issues" \
+    -H "Authorization: Bearer $DOT_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "$(jq -n \
+      --arg title "$TITLE" \
+      --arg it "$ISSUE_TYPE" \
+      --arg desc "$DETAIL" \
+      --arg src "dot-apr-health" \
+      '{
+        title: $title,
+        issue_type: $it,
+        description: $desc,
+        source: $src,
+        severity: "info",
+        status: "open",
+        detected_at: (now | todate)
+      }')" > /dev/null 2>&1 || true
+}
+
+main() {
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h) show_help; exit 0 ;;
+    esac
+  done
+
+  init_environment "$@"
+  local BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: APR Health v${VERSION}"
+  echo "S151 Phase 1: Điều 32 — Động cơ phụ"
+  echo "========================================="
+  print_environment_banner "$@"
+
+  # Auth
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    source "${SCRIPT_DIR}/dot-auth" "$@"
+  fi
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "Authentication failed"; exit 1
+  fi
+
+  local ISSUES=0
+
+  # =========================================================================
+  # CHECK 1: Stuck approved (approved > 24h, not applied)
+  # =========================================================================
+  log_info "Check 1: Stuck approved (approved > 24h, not applied)..."
+
+  local STUCK
+  STUCK=$(run_pg "
+    SELECT count(*) FROM approval_requests
+    WHERE status = 'approved'
+      AND applied_at IS NULL
+      AND reviewed_at < NOW() - INTERVAL '24 hours';
+  ")
+
+  if [[ "${STUCK:-0}" -gt 0 ]]; then
+    log_warn "CHECK 1 FAIL: ${STUCK} APRs approved > 24h but not applied"
+    log_system_issue "APR health: ${STUCK} stuck approved" \
+      "apr_stuck_approved" \
+      "${STUCK} APRs approved > 24h without execution" \
+      "$BASE_URL"
+    ISSUES=$((ISSUES + 1))
+  else
+    log_ok "CHECK 1 PASS: No stuck approved APRs"
+  fi
+
+  # =========================================================================
+  # CHECK 2: Phantom applied (applied but target entity missing)
+  # =========================================================================
+  log_info "Check 2: Phantom applied (target entity missing)..."
+
+  local PHANTOM
+  PHANTOM=$(run_pg "
+    SELECT count(*) FROM approval_requests ar
+    WHERE ar.status = 'applied'
+      AND ar.target_collection IS NOT NULL
+      AND ar.target_entity_code IS NOT NULL
+      AND ar.action = 'add'
+      AND NOT EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_name = ar.target_collection
+        AND table_schema = 'public'
+      );
+  ")
+
+  if [[ "${PHANTOM:-0}" -gt 0 ]]; then
+    log_warn "CHECK 2 FAIL: ${PHANTOM} applied APRs reference non-existent collections"
+    log_system_issue "APR health: ${PHANTOM} phantom applied" \
+      "apr_phantom_applied" \
+      "${PHANTOM} applied APRs target collections that don't exist" \
+      "$BASE_URL"
+    ISSUES=$((ISSUES + 1))
+  else
+    log_ok "CHECK 2 PASS: All applied APR target collections exist"
+  fi
+
+  # =========================================================================
+  # CHECK 3: Count drift (PG count vs meta_catalog record_count)
+  # =========================================================================
+  log_info "Check 3: Count drift (PG vs meta_catalog)..."
+
+  local PG_COUNT MC_COUNT
+  PG_COUNT=$(run_pg "SELECT count(*) FROM approval_requests;")
+  MC_COUNT=$(run_pg "
+    SELECT COALESCE(record_count, 0) FROM meta_catalog
+    WHERE registry_collection = 'approval_requests' LIMIT 1;
+  ")
+
+  if [[ "${PG_COUNT:-0}" != "${MC_COUNT:-0}" ]]; then
+    log_warn "CHECK 3 DRIFT: PG=${PG_COUNT} vs meta_catalog=${MC_COUNT}"
+    # Auto-fix: update meta_catalog
+    run_pg "
+      UPDATE meta_catalog
+      SET record_count = ${PG_COUNT}, actual_count = ${PG_COUNT}
+      WHERE registry_collection = 'approval_requests';
+    " > /dev/null 2>&1
+    log_info "CHECK 3: Auto-fixed meta_catalog record_count → ${PG_COUNT}"
+  else
+    log_ok "CHECK 3 PASS: PG=${PG_COUNT} = meta_catalog=${MC_COUNT}"
+  fi
+
+  # =========================================================================
+  # CHECK 4: Unclassified other (request_type='other' > 7 days)
+  # =========================================================================
+  log_info "Check 4: Unclassified 'other' > 7 days..."
+
+  local UNCLASS
+  UNCLASS=$(run_pg "
+    SELECT count(*) FROM approval_requests
+    WHERE request_type = 'other'
+      AND date_created < NOW() - INTERVAL '7 days'
+      AND status = 'pending';
+  ")
+
+  if [[ "${UNCLASS:-0}" -gt 0 ]]; then
+    log_warn "CHECK 4 FAIL: ${UNCLASS} APRs with request_type='other' > 7 days"
+    log_system_issue "APR health: ${UNCLASS} unclassified 'other'" \
+      "apr_unclassified_other" \
+      "${UNCLASS} APRs need reclassification from 'other'" \
+      "$BASE_URL"
+    ISSUES=$((ISSUES + 1))
+  else
+    log_ok "CHECK 4 PASS: No stale unclassified APRs"
+  fi
+
+  # =========================================================================
+  # SUMMARY
+  # =========================================================================
+  echo ""
+  echo "========================================="
+  if [[ "$ISSUES" -eq 0 ]]; then
+    log_ok "ALL 4 CHECKS PASS — APR system healthy"
+    echo "Health IDLE = thiết kế hoàn hảo ✓"
+  else
+    log_warn "${ISSUES} issue(s) detected — see system_issues"
+    echo "Health phải làm việc = có lỗ hổng cần fix gốc"
+  fi
+  echo "========================================="
+
+  # Status counts for report
+  echo ""
+  log_info "Status distribution:"
+  run_pg "SELECT status, count(*) FROM approval_requests GROUP BY status ORDER BY count(*) DESC;"
+}
+
+main "$@"

@@ -1,0 +1,226 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-collection-field-sync — Sync standard fields to collections (Cấp B)
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-03-31): Field sync with conflict detection
+#
+# Usage:
+#   dot-collection-field-sync [--cloud|--local] [--dry-run]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+LOCK_ID=35360001
+
+DRY_RUN=false
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-collection-field-sync v${VERSION} — Sync standard fields (Cấp B)
+
+For each collection where group.sync_field_standards=true:
+  - Check missing standard fields
+  - Skip collection on field_type conflict
+  - Add missing fields via Directus Fields API
+
+Usage:
+  dot-collection-field-sync [--cloud|--local] [--dry-run]
+EOF
+  show_environment_help
+}
+
+run_pg() {
+  local SQL="$1"
+  if command -v docker &>/dev/null && docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${PG_CONTAINER}$"; then
+    docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A <<< "$SQL" 2>/dev/null
+  else
+    ssh -i "$VPS_KEY" -o ConnectTimeout=10 -o StrictHostKeyChecking=no "root@${VPS_HOST}" \
+      "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A" <<< "$SQL" 2>/dev/null
+  fi
+}
+
+map_field_type_to_directus() {
+  local PG_TYPE="$1"
+  case "$PG_TYPE" in
+    varchar|"character varying"|text)   echo "string" ;;
+    integer|int|int4)                   echo "integer" ;;
+    bigint|int8)                        echo "bigInteger" ;;
+    boolean|bool)                       echo "boolean" ;;
+    timestamp*|timestamptz)             echo "timestamp" ;;
+    date)                               echo "date" ;;
+    uuid)                               echo "uuid" ;;
+    json|jsonb)                         echo "json" ;;
+    float|double*|numeric|decimal)      echo "float" ;;
+    *)                                  echo "string" ;;
+  esac
+}
+
+main() {
+  local PASSTHROUGH_ARGS=()
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h) show_help; exit 0 ;;
+      --dry-run) DRY_RUN=true ;;
+      *) PASSTHROUGH_ARGS+=("$arg") ;;
+    esac
+  done
+
+  init_environment "${PASSTHROUGH_ARGS[@]}"
+  local BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: Field Sync v${VERSION}"
+  echo "Cấp B — event"
+  [[ "$DRY_RUN" == true ]] && echo "MODE: DRY RUN"
+  echo "========================================="
+  print_environment_banner "${PASSTHROUGH_ARGS[@]}"
+
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    source "${SCRIPT_DIR}/dot-auth" "${PASSTHROUGH_ARGS[@]}"
+  fi
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "Authentication failed"; exit 1
+  fi
+
+  # Advisory lock
+  local LOCK
+  LOCK=$(run_pg "SELECT pg_try_advisory_lock(${LOCK_ID});")
+  if [[ "$LOCK" != "t" ]]; then
+    log_err "Another instance running (lock ${LOCK_ID})"; exit 1
+  fi
+  log_info "Advisory lock acquired"
+
+  # Get sync-enabled collections
+  local SYNC_COLS
+  SYNC_COLS=$(run_pg "
+    SELECT cr.collection_name, cr.\"group\"
+    FROM collection_registry cr
+    JOIN collection_groups cg ON cg.code = cr.\"group\"
+    WHERE cg.sync_field_standards = true AND cr.status = 'active'
+    ORDER BY cr.collection_name;
+  ")
+
+  local SYNCED=0 TOTAL=0 SKIPPED=0
+
+  while IFS='|' read -r col group; do
+    [[ -z "$col" ]] && continue
+    TOTAL=$((TOTAL + 1))
+
+    log_info "Processing: ${col} (group=${group})"
+
+    # Check for field_type conflicts first
+    local CONFLICTS
+    CONFLICTS=$(run_pg "
+      SELECT cfs.field_name, cfs.field_type, ic.data_type
+      FROM collection_field_standards cfs
+      JOIN information_schema.columns ic
+        ON ic.column_name = cfs.field_name AND ic.table_name = '${col}' AND ic.table_schema = 'public'
+      WHERE cfs.field_type IS NOT NULL
+        AND ic.data_type != cfs.field_type;
+    ")
+
+    if [[ -n "${CONFLICTS:-}" ]]; then
+      log_warn "  SKIP ${col}: field_type conflicts detected"
+      while IFS='|' read -r fname expected actual; do
+        log_warn "    ${fname}: expected=${expected}, actual=${actual}"
+      done <<< "$CONFLICTS"
+      SKIPPED=$((SKIPPED + 1))
+      continue
+    fi
+
+    # Find missing standard fields
+    local MISSING
+    MISSING=$(run_pg "
+      SELECT cfs.field_name, cfs.field_type, cfs.default_value
+      FROM collection_field_standards cfs
+      WHERE (cfs.applies_to_group IS NULL OR cfs.applies_to_group = '${group}')
+        AND NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = '${col}' AND column_name = cfs.field_name AND table_schema = 'public'
+        )
+      ORDER BY cfs.tier, cfs.field_name;
+    ")
+
+    if [[ -z "${MISSING:-}" ]]; then
+      log_ok "  ${col}: all standard fields present"
+      continue
+    fi
+
+    local COL_ADDED=0
+    while IFS='|' read -r fname ftype fdefault; do
+      [[ -z "$fname" ]] && continue
+
+      local DIRECTUS_TYPE
+      DIRECTUS_TYPE=$(map_field_type_to_directus "${ftype:-varchar}")
+
+      log_info "  Adding: ${fname} (${DIRECTUS_TYPE}) to ${col}"
+
+      if [[ "$DRY_RUN" == false ]]; then
+        local PAYLOAD
+        PAYLOAD=$(jq -n \
+          --arg f "$fname" \
+          --arg t "$DIRECTUS_TYPE" \
+          --arg d "${fdefault:-}" \
+          '{
+            field: $f,
+            type: $t,
+            meta: {interface: "input"},
+            schema: {}
+          } + (if $d != "" then {schema: {default_value: $d}} else {} end)')
+
+        local RESP
+        RESP=$(curl -sS --globoff -k -X POST \
+          "${BASE_URL}/fields/${col}" \
+          -H "Authorization: Bearer $DOT_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d "$PAYLOAD" -w "\n%{http_code}" 2>/dev/null)
+
+        local HTTP_CODE
+        HTTP_CODE=$(echo "$RESP" | tail -1)
+        if [[ "$HTTP_CODE" =~ ^2 ]]; then
+          log_ok "    Added ${fname} to ${col}"
+          COL_ADDED=$((COL_ADDED + 1))
+        else
+          log_warn "    Failed to add ${fname} to ${col} (HTTP ${HTTP_CODE})"
+        fi
+      else
+        COL_ADDED=$((COL_ADDED + 1))
+      fi
+    done <<< "$MISSING"
+
+    if [[ "$COL_ADDED" -gt 0 ]]; then
+      SYNCED=$((SYNCED + 1))
+      log_ok "  ${col}: ${COL_ADDED} field(s) added"
+    fi
+  done <<< "$SYNC_COLS"
+
+  # Release lock
+  run_pg "SELECT pg_advisory_unlock(${LOCK_ID});" > /dev/null 2>&1
+
+  # Summary
+  echo ""
+  echo "========================================="
+  echo "Synced: ${SYNCED}/${TOTAL} collections, skipped: ${SKIPPED}"
+  [[ "$DRY_RUN" == true ]] && log_info "(dry-run — no changes made)"
+  log_ok "Field sync complete"
+  echo "========================================="
+}
+
+main "$@"

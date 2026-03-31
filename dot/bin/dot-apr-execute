@@ -1,0 +1,261 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-apr-execute — Thực thi APR đã approved (Cấp B + SYNC_SECRET)
+# =============================================================================
+# VERSION: 1.0.0
+# CHANGELOG:
+#   v1.0.0 (2026-03-31): S151 Phase 1 — Điều 32
+#
+# WHITELIST action types: create_item, update_item, add_field
+# Unknown action → SKIP + INSERT system_issues
+#
+# Usage:
+#   SYNC_SECRET=xxx dot-apr-execute [--cloud|--local] [--dry-run]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+DRY_RUN=""
+
+# Whitelist of allowed action types in proposed_action
+WHITELIST_ACTIONS="create_item update_item add_field"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-apr-execute v${VERSION} — Thực thi APR đã approved (Cấp B)
+
+Điều 32: Đọc approved requests → thực thi qua Directus API → UPDATE applied.
+Requires SYNC_SECRET environment variable.
+
+WHITELIST: ${WHITELIST_ACTIONS}
+Unknown action type → SKIP + INSERT system_issues.
+
+Usage:
+  SYNC_SECRET=xxx dot-apr-execute [--cloud|--local] [--dry-run]
+
+EOF
+  show_environment_help
+}
+
+execute_create_item() {
+  local COLLECTION="$1" DATA="$2" BASE_URL="$3"
+  local RESP HTTP_CODE BODY
+
+  RESP=$(curl -sS --globoff -k -X POST \
+    "${BASE_URL}/items/${COLLECTION}" \
+    -H "Authorization: Bearer $DOT_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "$DATA" \
+    -w "\n%{http_code}")
+
+  BODY="${RESP%$'\n'*}"
+  HTTP_CODE="${RESP##*$'\n'}"
+
+  if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "204" ]]; then
+    echo "OK"
+  else
+    echo "FAIL:${HTTP_CODE}:$(echo "$BODY" | head -c 200)"
+  fi
+}
+
+execute_update_item() {
+  local COLLECTION="$1" ITEM_ID="$2" DATA="$3" BASE_URL="$4"
+  local RESP HTTP_CODE BODY
+
+  RESP=$(curl -sS --globoff -k -X PATCH \
+    "${BASE_URL}/items/${COLLECTION}/${ITEM_ID}" \
+    -H "Authorization: Bearer $DOT_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "$DATA" \
+    -w "\n%{http_code}")
+
+  BODY="${RESP%$'\n'*}"
+  HTTP_CODE="${RESP##*$'\n'}"
+
+  if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "204" ]]; then
+    echo "OK"
+  else
+    echo "FAIL:${HTTP_CODE}:$(echo "$BODY" | head -c 200)"
+  fi
+}
+
+execute_add_field() {
+  local COLLECTION="$1" FIELD_DEF="$2" BASE_URL="$3"
+  local RESP HTTP_CODE BODY
+
+  RESP=$(curl -sS --globoff -k -X POST \
+    "${BASE_URL}/fields/${COLLECTION}" \
+    -H "Authorization: Bearer $DOT_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "$FIELD_DEF" \
+    -w "\n%{http_code}")
+
+  BODY="${RESP%$'\n'*}"
+  HTTP_CODE="${RESP##*$'\n'}"
+
+  if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "204" ]]; then
+    echo "OK"
+  else
+    echo "FAIL:${HTTP_CODE}:$(echo "$BODY" | head -c 200)"
+  fi
+}
+
+log_system_issue() {
+  local APR_CODE="$1" ISSUE_TYPE="$2" DETAIL="$3" BASE_URL="$4"
+
+  curl -sS --globoff -k -X POST \
+    "${BASE_URL}/items/system_issues" \
+    -H "Authorization: Bearer $DOT_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "$(jq -n \
+      --arg title "APR execute: ${ISSUE_TYPE}" \
+      --arg ec "$APR_CODE" \
+      --arg it "$ISSUE_TYPE" \
+      --arg desc "$DETAIL" \
+      --arg src "dot-apr-execute" \
+      '{
+        title: $title,
+        entity_code: $ec,
+        issue_type: $it,
+        description: $desc,
+        source: $src,
+        severity: "warning",
+        status: "open",
+        detected_at: (now | todate)
+      }')" > /dev/null 2>&1 || true
+}
+
+main() {
+  for arg in "$@"; do
+    case "$arg" in
+      --dry-run) DRY_RUN="1" ;;
+      --help|-h) show_help; exit 0 ;;
+    esac
+  done
+
+  # Validate SYNC_SECRET
+  if [[ -z "${SYNC_SECRET:-}" ]]; then
+    log_err "SYNC_SECRET is required. Set env var or pass via environment."
+    log_err "This is a Cấp B tool — requires authorization."
+    exit 1
+  fi
+
+  init_environment "$@"
+  local BASE_URL="$DIRECTUS_URL"
+
+  echo "========================================="
+  echo "DOT Tool: APR Execute v${VERSION}"
+  echo "S151 Phase 1: Điều 32 — Thực thi approved"
+  echo "Whitelist: ${WHITELIST_ACTIONS}"
+  if [[ -n "$DRY_RUN" ]]; then
+    echo "MODE: DRY-RUN (no changes)"
+  fi
+  echo "========================================="
+
+  # Auth
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    source "${SCRIPT_DIR}/dot-auth" "$@"
+  fi
+  if [[ -z "${DOT_TOKEN:-}" ]]; then
+    log_err "Authentication failed"; exit 1
+  fi
+
+  # Fetch approved but not yet applied
+  log_info "Fetching approved APRs pending execution..."
+
+  local RESP
+  RESP=$(curl -sS --globoff -k -X GET \
+    "${BASE_URL}/items/approval_requests?filter[status][_eq]=approved&filter[applied_at][_null]=true&sort=id&limit=100" \
+    -H "Authorization: Bearer $DOT_TOKEN")
+
+  local ITEMS
+  ITEMS=$(echo "$RESP" | jq -r '.data // []')
+  local COUNT
+  COUNT=$(echo "$ITEMS" | jq 'length')
+
+  if [[ "$COUNT" == "0" ]]; then
+    log_ok "No approved APRs pending execution. All clear."
+    exit 0
+  fi
+
+  log_info "Found ${COUNT} APRs to execute"
+
+  local EXECUTED=0 SKIPPED=0 FAILED=0
+
+  # Process each APR
+  echo "$ITEMS" | jq -c '.[]' | while read -r APR; do
+    local APR_ID APR_CODE PA_ACTION PA_COLLECTION PA_DATA PA_ITEM_ID
+    APR_ID=$(echo "$APR" | jq -r '.id')
+    APR_CODE=$(echo "$APR" | jq -r '.code')
+    PA_ACTION=$(echo "$APR" | jq -r '.proposed_action.action // "none"')
+    PA_COLLECTION=$(echo "$APR" | jq -r '.proposed_action.collection // .target_collection // "unknown"')
+
+    log_info "Processing ${APR_CODE}: action=${PA_ACTION} collection=${PA_COLLECTION}"
+
+    # Check whitelist
+    if ! echo "$WHITELIST_ACTIONS" | tr ' ' '\n' | grep -qx "$PA_ACTION"; then
+      log_warn "SKIP ${APR_CODE}: action '${PA_ACTION}' not in whitelist"
+      if [[ -z "$DRY_RUN" ]]; then
+        log_system_issue "$APR_CODE" "apr_unknown_action" \
+          "Action '${PA_ACTION}' not in whitelist [${WHITELIST_ACTIONS}]" "$BASE_URL"
+      fi
+      SKIPPED=$((SKIPPED + 1))
+      continue
+    fi
+
+    if [[ -n "$DRY_RUN" ]]; then
+      log_info "DRY-RUN: would execute ${PA_ACTION} on ${PA_COLLECTION}"
+      continue
+    fi
+
+    # Execute based on action type
+    local RESULT=""
+    case "$PA_ACTION" in
+      create_item)
+        PA_DATA=$(echo "$APR" | jq -r '.proposed_action.data // {}')
+        RESULT=$(execute_create_item "$PA_COLLECTION" "$PA_DATA" "$BASE_URL")
+        ;;
+      update_item)
+        PA_ITEM_ID=$(echo "$APR" | jq -r '.proposed_action.item_id // "unknown"')
+        PA_DATA=$(echo "$APR" | jq -r '.proposed_action.data // {}')
+        RESULT=$(execute_update_item "$PA_COLLECTION" "$PA_ITEM_ID" "$PA_DATA" "$BASE_URL")
+        ;;
+      add_field)
+        PA_DATA=$(echo "$APR" | jq -c '.proposed_action.field_definition // {}')
+        RESULT=$(execute_add_field "$PA_COLLECTION" "$PA_DATA" "$BASE_URL")
+        ;;
+    esac
+
+    if [[ "$RESULT" == "OK" ]]; then
+      # Mark as applied
+      curl -sS --globoff -k -X PATCH \
+        "${BASE_URL}/items/approval_requests/${APR_ID}" \
+        -H "Authorization: Bearer $DOT_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{"status": "applied", "applied_at": "'$(date -u +%Y-%m-%dT%H:%M:%S)'", "review_note": "Executed by dot-apr-execute v'${VERSION}'"}' > /dev/null
+
+      log_ok "APPLIED: ${APR_CODE} (${PA_ACTION} on ${PA_COLLECTION})"
+      EXECUTED=$((EXECUTED + 1))
+    else
+      log_err "FAILED: ${APR_CODE}: ${RESULT}"
+      log_system_issue "$APR_CODE" "apr_execute_failed" \
+        "Execute failed: ${RESULT}" "$BASE_URL"
+      FAILED=$((FAILED + 1))
+    fi
+  done
+
+  echo "========================================="
+  echo "SUMMARY: executed=${EXECUTED} skipped=${SKIPPED} failed=${FAILED}"
+  echo "========================================="
+}
+
+main "$@"
