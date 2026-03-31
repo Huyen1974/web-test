@@ -121,6 +121,28 @@ Desktop ghi các mục đã kiểm tra vào prompt:
 
 > Khi thiết kế feature/collection MỚI. Fix bug/edit config → N/A + lý do.
 
+### ★ CHECKPOINT: QUY TRÌNH 4 BƯỚC (HP v4.1.0) — TRƯỚC KHI THIẾT KẾ
+
+Trước khi thiết kế hoặc lên roadmap bất kỳ mission nào, ĐI QUA 4 BƯỚC:
+
+| Bước | Câu hỏi | Nếu thiếu |
+|------|---------|-----------|
+| ① Mục tiêu | Việc này giải quyết vấn đề gì? | Không biết đi đâu |
+| ② Phương pháp | Giải quyết bằng cách nào? | Không biết đi bằng gì |
+| ③ Điều kiện cần | Hạ tầng đầu vào ĐÃ ĐỦ chưa? | **Roadmap thiếu khả thi** |
+| ④ Roadmap | Thứ tự? Phụ thuộc? Chia nhỏ? | Không biết bắt đầu từ đâu |
+
+**Bước ③ checklist điều kiện cần:**
+- Collection/table đầu vào đã tồn tại?
+- Dữ liệu đầu vào đã có? Ai tạo ra nó?
+- DOT liên quan đã deploy + có cron?
+- Pivot dòng hiển thị đã có?
+- APR flow cho action này đã hoạt động?
+- 5 tầng đồng bộ cho đầu vào sẵn sàng?
+- Dual-trigger: DOT A kiểm tra đã có?
+
+Nếu bước ③ phát hiện thiếu → DỪNG. Bổ sung điều kiện cần TRƯỚC hoặc điều chỉnh roadmap.
+
 ### #14 — TRẢ LỜI 3 CÂU TUYÊN NGÔN CHO MISSION (Cả hai)
 1. Vĩnh viễn: giải pháp fix gốc thế nào?
 2. Nhầm: hạ tầng chặn cách nào?
