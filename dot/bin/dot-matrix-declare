@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-matrix-declare — Khai báo matrix definition (2D pivot)
+# =============================================================================
+# VERSION: 1.0.0
+# Điều 26 §II-QUINQUIES — Matrix multi-dimensional pivot
+#
+# Usage:
+#   dot-matrix-declare --code MTX-L1-OVERVIEW --name "Ma trận L1" \
+#     --source birth_registry --row-axis composition_level --col-axis governance_role \
+#     --agg count --filter '{"status":"born"}' --group matrix_l1 --layers '["L1"]'
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+pg_sql() {
+  local _on_vps=false
+  { docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${PG_CONTAINER}$"; } && _on_vps=true
+  if [[ "$_on_vps" == "true" ]]; then
+    docker exec -i "${PG_CONTAINER}" psql -U "${PG_USER}" -d "${PG_DB}" -t -A <<< "$1"
+  else
+    ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+      "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A" <<< "$1"
+  fi
+}
+
+# Parse args
+CODE="" NAME="" SOURCE="" ROW_AXIS="" COL_AXIS="" AGG="count" FILTER="{}" GROUP="matrix" LAYERS='["L1"]'
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --code) CODE="$2"; shift 2 ;;
+    --name) NAME="$2"; shift 2 ;;
+    --source) SOURCE="$2"; shift 2 ;;
+    --row-axis) ROW_AXIS="$2"; shift 2 ;;
+    --col-axis) COL_AXIS="$2"; shift 2 ;;
+    --agg) AGG="$2"; shift 2 ;;
+    --filter) FILTER="$2"; shift 2 ;;
+    --group) GROUP="$2"; shift 2 ;;
+    --layers) LAYERS="$2"; shift 2 ;;
+    --help|-h)
+      echo "dot-matrix-declare v${VERSION}"
+      echo "Usage: dot-matrix-declare --code MTX-xxx --name \"...\" --source <table> --row-axis <field> [--col-axis <field>] [--agg count] [--filter '{...}'] [--group <g>] [--layers '[\"L1\"]']"
+      exit 0 ;;
+    *) log_err "Unknown arg: $1"; exit 1 ;;
+  esac
+done
+
+# Validate required
+if [[ -z "$CODE" || -z "$NAME" || -z "$SOURCE" || -z "$ROW_AXIS" ]]; then
+  log_err "Required: --code, --name, --source, --row-axis"
+  exit 1
+fi
+
+# 1. Validate source in collection_registry (NT4)
+IN_REG=$(pg_sql "SELECT COUNT(*) FROM collection_registry WHERE collection_name = '${SOURCE}';" | tr -d '[:space:]')
+if [[ "$IN_REG" == "0" ]]; then
+  log_err "Table '${SOURCE}' not in collection_registry. Add it first."
+  exit 1
+fi
+log_info "Source '${SOURCE}' in collection_registry ✅"
+
+# 2. Validate columns exist
+ROW_EXISTS=$(pg_sql "SELECT COUNT(*) FROM information_schema.columns WHERE table_name = '${SOURCE}' AND column_name = '${ROW_AXIS}';" | tr -d '[:space:]')
+if [[ "$ROW_EXISTS" == "0" ]]; then
+  log_err "Column '${ROW_AXIS}' not on table '${SOURCE}'"
+  exit 1
+fi
+
+if [[ -n "$COL_AXIS" ]]; then
+  COL_EXISTS=$(pg_sql "SELECT COUNT(*) FROM information_schema.columns WHERE table_name = '${SOURCE}' AND column_name = '${COL_AXIS}';" | tr -d '[:space:]')
+  if [[ "$COL_EXISTS" == "0" ]]; then
+    log_err "Column '${COL_AXIS}' not on table '${SOURCE}'"
+    exit 1
+  fi
+fi
+log_info "Columns validated ✅"
+
+# 3. Check duplicate
+DUP=$(pg_sql "SELECT code FROM pivot_definitions WHERE code = '${CODE}';" | tr -d '[:space:]')
+if [[ -n "$DUP" ]]; then
+  log_err "Code '${CODE}' already exists"
+  exit 1
+fi
+
+# 4. Build matrix_spec JSON
+COL_AXIS_SQL="null"
+if [[ -n "$COL_AXIS" ]]; then
+  COL_AXIS_SQL="'${COL_AXIS}'"
+fi
+
+MATRIX_SPEC=$(python3 -c "
+import json
+spec = {
+    'row_axis': '${ROW_AXIS}',
+    'col_axis': '${COL_AXIS}' if '${COL_AXIS}' else None,
+    'source_table': '${SOURCE}',
+    'agg': '${AGG}',
+    'filter': json.loads('${FILTER}'),
+    'display_at_layers': json.loads('${LAYERS}')
+}
+print(json.dumps(spec))
+")
+
+# 5. INSERT pivot_definitions with matrix_spec
+pg_sql "
+  INSERT INTO pivot_definitions (code, name, source_object, filter_spec, registry_group, composition_level, is_active, display_order, matrix_spec)
+  VALUES (
+    '${CODE}',
+    '${NAME}',
+    '${SOURCE}',
+    '{\"filters\":[]}'::jsonb,
+    '${GROUP}',
+    'matrix',
+    true,
+    COALESCE((SELECT MAX(display_order) FROM pivot_definitions), 0) + 1,
+    '${MATRIX_SPEC}'::json
+  );
+" > /dev/null
+
+# 6. Verify: test pivot_matrix()
+if [[ -n "$COL_AXIS" ]]; then
+  RESULT=$(pg_sql "SELECT pivot_matrix('${SOURCE}', '${ROW_AXIS}', '${COL_AXIS}', '${AGG}', '${FILTER}'::jsonb);" | tr -d '[:space:]')
+else
+  RESULT=$(pg_sql "SELECT pivot_matrix('${SOURCE}', '${ROW_AXIS}', NULL, '${AGG}', '${FILTER}'::jsonb);" | tr -d '[:space:]')
+fi
+
+ROW_COUNT=$(python3 -c "import json; print(len(json.loads('${RESULT}')))" 2>/dev/null || echo "0")
+
+# 7. Create corresponding pivot_results record with needs_refresh=true
+pg_sql "
+  INSERT INTO pivot_results (pivot_code, pivot_name, source_object, group_values, metric_values, refreshed_at, needs_refresh)
+  VALUES ('${CODE}', '${NAME}', '${SOURCE}', '{}'::jsonb, '{}'::jsonb, NOW(), true)
+  ON CONFLICT (pivot_code, source_object, group_values) DO UPDATE SET needs_refresh = true;
+" > /dev/null 2>&1 || true
+
+log_ok "CREATED: ${CODE} | source: ${SOURCE} | row: ${ROW_AXIS} | col: ${COL_AXIS:-NULL} | matrix rows: ${ROW_COUNT}"

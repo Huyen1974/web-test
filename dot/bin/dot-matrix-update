@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-matrix-update — Update matrix definition config
+# =============================================================================
+# VERSION: 1.0.0
+# Điều 26 §II-QUINQUIES — Matrix multi-dimensional pivot
+#
+# Usage:
+#   dot-matrix-update --code MTX-L1-OVERVIEW --row-axis composition_level --col-axis governance_role
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+pg_sql() {
+  local _on_vps=false
+  { docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${PG_CONTAINER}$"; } && _on_vps=true
+  if [[ "$_on_vps" == "true" ]]; then
+    docker exec -i "${PG_CONTAINER}" psql -U "${PG_USER}" -d "${PG_DB}" -t -A <<< "$1"
+  else
+    ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+      "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A" <<< "$1"
+  fi
+}
+
+CODE="" ROW_AXIS="" COL_AXIS="" AGG="" FILTER="" LAYERS="" NAME=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --code) CODE="$2"; shift 2 ;;
+    --name) NAME="$2"; shift 2 ;;
+    --row-axis) ROW_AXIS="$2"; shift 2 ;;
+    --col-axis) COL_AXIS="$2"; shift 2 ;;
+    --agg) AGG="$2"; shift 2 ;;
+    --filter) FILTER="$2"; shift 2 ;;
+    --layers) LAYERS="$2"; shift 2 ;;
+    --help|-h)
+      echo "dot-matrix-update v${VERSION}"
+      echo "Usage: dot-matrix-update --code MTX-xxx [--row-axis <f>] [--col-axis <f>] [--agg <a>] [--filter '{...}'] [--layers '[...]']"
+      exit 0 ;;
+    *) log_err "Unknown arg: $1"; exit 1 ;;
+  esac
+done
+
+if [[ -z "$CODE" ]]; then
+  log_err "Required: --code"
+  exit 1
+fi
+
+# 1. Check exists
+EXISTS=$(pg_sql "SELECT COUNT(*) FROM pivot_definitions WHERE code = '${CODE}' AND is_active = true;" | tr -d '[:space:]')
+if [[ "$EXISTS" == "0" ]]; then
+  log_err "Matrix '${CODE}' not found or inactive"
+  exit 1
+fi
+
+# 2. Read current matrix_spec
+CURRENT=$(pg_sql "SELECT matrix_spec::text FROM pivot_definitions WHERE code = '${CODE}';" | tr -d '[:space:]')
+if [[ -z "$CURRENT" || "$CURRENT" == "" ]]; then
+  log_err "Matrix '${CODE}' has no matrix_spec"
+  exit 1
+fi
+
+# 3. Build updated spec
+NEW_SPEC=$(python3 -c "
+import json, sys
+current = json.loads('''${CURRENT}''')
+if '${ROW_AXIS}': current['row_axis'] = '${ROW_AXIS}'
+if '${COL_AXIS}': current['col_axis'] = '${COL_AXIS}'
+if '${AGG}': current['agg'] = '${AGG}'
+if '${FILTER}': current['filter'] = json.loads('${FILTER}')
+if '${LAYERS}': current['display_at_layers'] = json.loads('${LAYERS}')
+print(json.dumps(current))
+")
+
+# 4. Validate source in collection_registry
+SOURCE=$(python3 -c "import json; print(json.loads('${NEW_SPEC}')['source_table'])")
+IN_REG=$(pg_sql "SELECT COUNT(*) FROM collection_registry WHERE collection_name = '${SOURCE}';" | tr -d '[:space:]')
+if [[ "$IN_REG" == "0" ]]; then
+  log_err "Source '${SOURCE}' not in collection_registry"
+  exit 1
+fi
+
+# 5. UPDATE
+SET_CLAUSES="matrix_spec = '${NEW_SPEC}'::json"
+if [[ -n "$NAME" ]]; then
+  SET_CLAUSES="${SET_CLAUSES}, name = '${NAME}'"
+fi
+
+pg_sql "UPDATE pivot_definitions SET ${SET_CLAUSES}, updated_at = NOW() WHERE code = '${CODE}';" > /dev/null
+
+# 6. Test pivot_matrix with new config
+NEW_ROW=$(python3 -c "import json; print(json.loads('${NEW_SPEC}')['row_axis'])")
+NEW_COL=$(python3 -c "import json; c=json.loads('${NEW_SPEC}').get('col_axis'); print(c if c else '')")
+NEW_AGG=$(python3 -c "import json; print(json.loads('${NEW_SPEC}')['agg'])")
+NEW_FILTER=$(python3 -c "import json; print(json.dumps(json.loads('${NEW_SPEC}').get('filter',{})))")
+
+if [[ -n "$NEW_COL" ]]; then
+  RESULT=$(pg_sql "SELECT pivot_matrix('${SOURCE}', '${NEW_ROW}', '${NEW_COL}', '${NEW_AGG}', '${NEW_FILTER}'::jsonb);")
+else
+  RESULT=$(pg_sql "SELECT pivot_matrix('${SOURCE}', '${NEW_ROW}', NULL, '${NEW_AGG}', '${NEW_FILTER}'::jsonb);")
+fi
+
+ROW_COUNT=$(echo "$RESULT" | python3 -c "import sys,json; print(len(json.loads(sys.stdin.read().strip())))" 2>/dev/null || echo "?")
+
+log_ok "UPDATED: ${CODE} | matrix rows: ${ROW_COUNT} | spec: ${NEW_SPEC}"
