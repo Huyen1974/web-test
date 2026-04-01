@@ -149,7 +149,7 @@ function formatNumber(n: number | undefined): string {
 			Chua co du lieu ma tran cho {{ code }}
 		</div>
 
-		<!-- 2D Matrix table -->
+		<!-- TABLE-EXCEPTION: TPL-002 requires native HTML table for 2D matrix (row × col) layout. UTable cannot render dynamic columns from JSONB. -->
 		<div v-else class="overflow-x-auto">
 			<table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
 				<thead class="bg-gray-50 dark:bg-gray-800">
