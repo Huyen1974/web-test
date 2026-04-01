@@ -24,6 +24,18 @@ const columns = [
 	{ key: 'species_count', label: 'Số loài' },
 	{ key: 'orphan_count', label: 'Mồ côi' },
 ];
+
+// TPL-002: Load matrix definitions (pivot_definitions with matrix_spec)
+const { data: matrices } = useAsyncData('pivot-matrices', () =>
+	$directus.request(
+		readItems('pivot_definitions' as any, {
+			filter: { matrix_spec: { _nnull: true }, is_active: { _eq: true } },
+			fields: ['id', 'code', 'name', 'matrix_spec'],
+			sort: ['display_order'],
+			limit: 20,
+		}),
+	), { default: () => [] },
+);
 </script>
 
 <template>
@@ -33,5 +45,17 @@ const columns = [
 		<p class="mb-4 text-sm text-gray-500">Điều 0-B: 6 lớp cấu tạo + Điều 29: Species meta-layer. PG tính, Directus serve, đây chỉ hiện.</p>
 		<UTable v-if="status !== 'pending'" :rows="(items as any[])" :columns="columns" />
 		<div v-else class="py-8 text-center text-gray-400">Đang tải...</div>
+
+		<!-- TPL-002: Ma trận hiện SAU bảng 9 dòng L1 (Điều 26 §II-QUATER) -->
+		<div v-if="(matrices as any[])?.length" class="mt-8 border-t border-gray-200 pt-6 dark:border-gray-700">
+			<h2 class="mb-4 text-xl font-bold text-gray-900 dark:text-white">Ma trận đa chiều</h2>
+			<TemplatesMatrixView
+				v-for="m in (matrices as any[])"
+				:key="m.code"
+				:code="m.code"
+				:config="m.matrix_spec"
+				:name="m.name"
+			/>
+		</div>
 	</div>
 </template>
