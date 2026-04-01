@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-cron-matrix-setup — Add matrix refresh cron on VPS
+# =============================================================================
+# VERSION: 1.0.0
+# Adds cron entry: refresh_matrix_results() every 10 min (piggyback existing)
+# Adds cron entry: dot-matrix-health daily 4AM
+# =============================================================================
+
+set -euo pipefail
+
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+
+echo "[INFO] Adding matrix cron entries on VPS..."
+
+ssh -i "$VPS_KEY" "root@${VPS_HOST}" bash -s <<'REMOTE_EOF'
+# Check if already exists
+if crontab -l 2>/dev/null | grep -q "refresh_matrix_results"; then
+  echo "[OK] Matrix refresh cron already exists"
+else
+  # Add matrix refresh every 10 min
+  (crontab -l 2>/dev/null; echo "# S150-P1 — Matrix results refresh every 10 min") | crontab -
+  (crontab -l 2>/dev/null; echo "*/10 * * * * docker exec postgres psql -U directus -d directus -c \"SELECT refresh_matrix_results();\" >> /var/log/incomex/matrix-refresh.log 2>&1") | crontab -
+  echo "[OK] Added matrix refresh cron (*/10 min)"
+fi
+
+if crontab -l 2>/dev/null | grep -q "dot-matrix-health"; then
+  echo "[OK] Matrix health cron already exists"
+else
+  # Add matrix health daily 4AM (offset 5 min from pivot-health)
+  (crontab -l 2>/dev/null; echo "# S150-P1 — Matrix health daily 4:05 AM") | crontab -
+  (crontab -l 2>/dev/null; echo "5 4 * * * /opt/incomex/dot/bin/dot-matrix-health >> /var/log/incomex/matrix-health.log 2>&1") | crontab -
+  echo "[OK] Added matrix health cron (4:05 AM)"
+fi
+
+# Verify
+echo ""
+echo "Current matrix cron entries:"
+crontab -l | grep -i matrix
+REMOTE_EOF

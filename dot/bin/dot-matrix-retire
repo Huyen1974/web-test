@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-matrix-retire — Soft-delete matrix definition (set status deprecated)
+# =============================================================================
+# VERSION: 1.0.0
+# Điều 26 §II-QUINQUIES — Matrix lifecycle: retire (NOT delete)
+#
+# Usage:
+#   dot-matrix-retire --code MTX-TEST
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+pg_sql() {
+  local _on_vps=false
+  { docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${PG_CONTAINER}$"; } && _on_vps=true
+  if [[ "$_on_vps" == "true" ]]; then
+    docker exec -i "${PG_CONTAINER}" psql -U "${PG_USER}" -d "${PG_DB}" -t -A <<< "$1"
+  else
+    ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+      "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A" <<< "$1"
+  fi
+}
+
+CODE=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --code) CODE="$2"; shift 2 ;;
+    --help|-h)
+      echo "dot-matrix-retire v${VERSION}"
+      echo "Usage: dot-matrix-retire --code MTX-xxx"
+      exit 0 ;;
+    *) log_err "Unknown arg: $1"; exit 1 ;;
+  esac
+done
+
+if [[ -z "$CODE" ]]; then
+  log_err "Required: --code"
+  exit 1
+fi
+
+# 1. Check exists
+EXISTS=$(pg_sql "SELECT is_active FROM pivot_definitions WHERE code = '${CODE}';" | tr -d '[:space:]')
+if [[ -z "$EXISTS" ]]; then
+  log_err "Matrix '${CODE}' not found"
+  exit 1
+fi
+if [[ "$EXISTS" == "f" ]]; then
+  log_info "Matrix '${CODE}' already retired"
+  exit 0
+fi
+
+# 2. Soft delete: set is_active=false, superseded_by='deprecated'
+pg_sql "
+  UPDATE pivot_definitions
+  SET is_active = false, superseded_by = 'deprecated', updated_at = NOW()
+  WHERE code = '${CODE}';
+" > /dev/null
+
+# 3. Remove from active pivot_results refresh cycle
+pg_sql "
+  UPDATE pivot_results SET needs_refresh = false
+  WHERE pivot_code = '${CODE}';
+" > /dev/null 2>&1 || true
+
+# 4. Verify
+IS_ACTIVE=$(pg_sql "SELECT is_active FROM pivot_definitions WHERE code = '${CODE}';" | tr -d '[:space:]')
+log_ok "RETIRED: ${CODE} | is_active: ${IS_ACTIVE}"

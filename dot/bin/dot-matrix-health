@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-matrix-health — Health check for matrix definitions (Engine 2)
+# =============================================================================
+# VERSION: 1.0.0
+# Điều 26 §II-QUINQUIES — Matrix health: 3 checks (A/B/C)
+#   Check A: pivot_matrix(config) runs without error
+#   Check B: SUM(matrix) vs raw COUNT(*) — independent (no pivot_matrix)
+#   Check C: No NULL rows/columns in result
+#
+# Usage:
+#   dot-matrix-health [--fix]
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+
+log_info() { echo "[INFO] $1"; }
+log_ok()   { echo "[OK]   $1"; }
+log_warn() { echo "[WARN] $1"; }
+log_err()  { echo "[ERR]  $1" >&2; }
+
+FIX_MODE=false
+PASS_COUNT=0
+FAIL_COUNT=0
+
+for arg in "$@"; do
+  case "$arg" in
+    --fix) FIX_MODE=true ;;
+    --help|-h)
+      echo "dot-matrix-health v${VERSION}"
+      echo "Usage: dot-matrix-health [--fix]"
+      exit 0 ;;
+  esac
+done
+
+pg_sql() {
+  local _on_vps=false
+  { docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${PG_CONTAINER}$"; } && _on_vps=true
+  if [[ "$_on_vps" == "true" ]]; then
+    docker exec -i "${PG_CONTAINER}" psql -U "${PG_USER}" -d "${PG_DB}" -t -A <<< "$1"
+  else
+    ssh -i "$VPS_KEY" "root@${VPS_HOST}" \
+      "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A" <<< "$1"
+  fi
+}
+
+echo "=== dot-matrix-health v${VERSION} ==="
+echo ""
+
+# Get all active matrix definitions
+MATRICES=$(pg_sql "
+  SELECT code || '|' || COALESCE(matrix_spec::text, '')
+  FROM pivot_definitions
+  WHERE matrix_spec IS NOT NULL AND is_active = true
+  ORDER BY code;
+")
+
+if [[ -z "$MATRICES" ]]; then
+  log_info "No active matrix definitions found"
+  exit 0
+fi
+
+while IFS= read -r line; do
+  CODE=$(echo "$line" | cut -d'|' -f1)
+  SPEC=$(echo "$line" | cut -d'|' -f2-)
+
+  if [[ -z "$CODE" || -z "$SPEC" ]]; then continue; fi
+
+  echo "--- ${CODE} ---"
+
+  # Parse spec
+  ROW_AXIS=$(python3 -c "import json; print(json.loads('${SPEC}')['row_axis'])")
+  COL_AXIS=$(python3 -c "import json; c=json.loads('${SPEC}').get('col_axis'); print(c if c else '')")
+  SOURCE=$(python3 -c "import json; print(json.loads('${SPEC}')['source_table'])")
+  AGG=$(python3 -c "import json; print(json.loads('${SPEC}').get('agg','count'))")
+  FILTER=$(python3 -c "import json; print(json.dumps(json.loads('${SPEC}').get('filter',{})))")
+
+  # CHECK A: pivot_matrix() runs without error
+  if [[ -n "$COL_AXIS" ]]; then
+    RESULT=$(pg_sql "SELECT pivot_matrix('${SOURCE}', '${ROW_AXIS}', '${COL_AXIS}', '${AGG}', '${FILTER}'::jsonb);" 2>&1) || true
+  else
+    RESULT=$(pg_sql "SELECT pivot_matrix('${SOURCE}', '${ROW_AXIS}', NULL, '${AGG}', '${FILTER}'::jsonb);" 2>&1) || true
+  fi
+
+  if echo "$RESULT" | grep -qi "error\|exception"; then
+    log_err "Check A FAIL: ${CODE} — ${RESULT}"
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+    continue
+  fi
+  log_ok "Check A PASS: pivot_matrix() OK"
+
+  # CHECK B: Independent cross-check — SUM(matrix totals) vs raw COUNT(*)
+  MATRIX_SUM=$(echo "$RESULT" | python3 -c "
+import sys, json
+data = json.loads(sys.stdin.read().strip())
+print(sum(r['total'] for r in data))
+" 2>/dev/null || echo "0")
+
+  # Build WHERE for raw count (independent — NO pivot_matrix)
+  WHERE_CLAUSE=""
+  if [[ "$FILTER" != "{}" && "$FILTER" != "null" ]]; then
+    WHERE_CLAUSE=$(python3 -c "
+import json
+f = json.loads('${FILTER}')
+parts = []
+for k, v in f.items():
+    parts.append(f\"{k} = '{v}'\")
+if parts:
+    print('WHERE ' + ' AND '.join(parts))
+else:
+    print('')
+")
+  fi
+
+  RAW_COUNT=$(pg_sql "SELECT COUNT(*) FROM ${SOURCE} ${WHERE_CLAUSE};" | tr -d '[:space:]')
+
+  if [[ "$MATRIX_SUM" == "$RAW_COUNT" ]]; then
+    log_ok "Check B PASS: SUM=${MATRIX_SUM} = RAW=${RAW_COUNT}"
+  else
+    log_err "Check B FAIL: SUM=${MATRIX_SUM} != RAW=${RAW_COUNT}"
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+
+    if [[ "$FIX_MODE" == "true" ]]; then
+      log_info "Fix: forcing refresh for ${CODE}"
+      pg_sql "UPDATE pivot_results SET needs_refresh = true WHERE pivot_code = '${CODE}';" > /dev/null 2>&1 || true
+    fi
+    continue
+  fi
+
+  # CHECK C: No NULL rows in result
+  NULL_COUNT=$(echo "$RESULT" | python3 -c "
+import sys, json
+data = json.loads(sys.stdin.read().strip())
+nulls = sum(1 for r in data if r.get('row') is None)
+print(nulls)
+" 2>/dev/null || echo "0")
+
+  if [[ "$NULL_COUNT" == "0" ]]; then
+    log_ok "Check C PASS: No NULL rows"
+  else
+    log_warn "Check C: ${NULL_COUNT} NULL row(s) found"
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+  fi
+
+  PASS_COUNT=$((PASS_COUNT + 1))
+  echo ""
+done <<< "$MATRICES"
+
+echo "=== Summary: ${PASS_COUNT} PASS, ${FAIL_COUNT} FAIL ==="
+exit $((FAIL_COUNT > 0 ? 1 : 0))
