@@ -1,6 +1,17 @@
 <script setup lang="ts">
 const { params } = useRoute();
-const folderId = '3545f8b9-d7a4-449c-86e1-5353bd69101a';
+const { $directus } = useNuxtApp();
+const { readItems } = await import('@directus/sdk');
+
+// Query project's folder from DB instead of hardcoded UUID
+const { data: project } = await useAsyncData(`project-${params.id}`, () =>
+	$directus.request(readItems('os_projects', {
+		filter: { id: { _eq: params.id as string } },
+		fields: ['files_folder'],
+		limit: 1,
+	}))
+);
+const folderId = computed(() => project.value?.[0]?.files_folder || '');
 </script>
 <template>
 	<UCard

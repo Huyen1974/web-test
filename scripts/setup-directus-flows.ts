@@ -11,7 +11,8 @@
  *   DIRECTUS_ADMIN_TOKEN - Admin token for Directus
  */
 
-const DIRECTUS_URL = process.env.DIRECTUS_URL || 'https://directus.incomexsaigoncorp.vn';
+const DIRECTUS_URL = process.env.DIRECTUS_URL;
+if (!DIRECTUS_URL) throw new Error('Missing required env: DIRECTUS_URL');
 const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN || '';
 
 interface FlowPayload {

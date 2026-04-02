@@ -6,7 +6,9 @@ import urllib.error
 
 # Config
 REPORT_PATH = "reports/CLAUDE__FRONTEND_AUTOPSY_SCHEMA_SPEC_REPORT.md"
-API_URL = "https://directus.incomexsaigoncorp.vn"
+API_URL = os.environ.get("DIRECTUS_URL")
+if not API_URL:
+    print("[ERROR] Missing DIRECTUS_URL environment variable"); sys.exit(1)
 
 def get_access_token_via_login():
     import ssl

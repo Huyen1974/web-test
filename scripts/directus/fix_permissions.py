@@ -75,8 +75,10 @@ PUBLIC_READ_COLLECTIONS = [
     "testimonials",
 ]
 
-# Smoke test asset ID (from ops-smoke.yml)
-SMOKE_ASSET_ID = "b18f3792-bd31-43e5-8a7d-b25d76f41dd9"
+# Smoke test asset ID — MUST be set via env var
+SMOKE_ASSET_ID = os.environ.get("SMOKE_ASSET_ID", "")
+if not SMOKE_ASSET_ID:
+    print("[WARN] SMOKE_ASSET_ID not set — smoke asset permission will be skipped")
 # Use 600x400 for visibility in smoke tests (not 1x1 which may cause issues)
 SMOKE_ASSET_URL = "https://placehold.co/600x400.png"
 

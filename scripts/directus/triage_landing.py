@@ -7,7 +7,9 @@ import subprocess
 import ssl
 import sys
 
-API_URL = "https://directus.incomexsaigoncorp.vn"
+API_URL = os.environ.get("DIRECTUS_URL")
+if not API_URL:
+    print("[ERROR] Missing DIRECTUS_URL environment variable"); sys.exit(1)
 
 def get_access_token_via_login():
     def fetch_secret(name):

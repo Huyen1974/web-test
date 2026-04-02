@@ -165,7 +165,7 @@ async function createSitesCollection() {
 			body: JSON.stringify({
 				code: 'main',
 				name: 'Agency OS Main',
-				domain: 'vps.incomexsaigoncorp.vn',
+				domain: process.env.SITE_DOMAIN || 'localhost',
 				description: 'Website chính',
 				is_active: true,
 			}),

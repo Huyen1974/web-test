@@ -28,15 +28,15 @@ module.exports = {
   // Agent Data endpoints
   agentData: {
     local: 'http://localhost:8000',
-    vps: 'https://vps.incomexsaigoncorp.vn/api',
-    default: process.env.AGENT_DATA_URL || 'https://vps.incomexsaigoncorp.vn/api',
+    vps: process.env.AGENT_DATA_VPS_URL || '',
+    default: process.env.AGENT_DATA_URL || credentials.agentDataUrl || '',
   },
 
   // Directus endpoints (direct access — for admin operations like POST)
   directus: {
     local: 'http://localhost:8055',
-    vps: 'https://directus.incomexsaigoncorp.vn',
-    default: process.env.DIRECTUS_URL || credentials.directusUrl || 'https://directus.incomexsaigoncorp.vn',
+    vps: process.env.DIRECTUS_VPS_URL || '',
+    default: process.env.DIRECTUS_URL || credentials.directusUrl || '',
     adminEmail: process.env.DIRECTUS_ADMIN_EMAIL || adminProfile.username || '',
     adminPassword: process.env.DIRECTUS_ADMIN_PASSWORD || adminProfile.password || '',
     aiAgentToken: process.env.DIRECTUS_AI_TOKEN || aiAgentProfile.staticToken || '',
@@ -44,9 +44,9 @@ module.exports = {
 
   // OPS Proxy (Directus CRUD for AI Agents — GET/PATCH for ai_tasks)
   ops: {
-    vps: 'https://ops.incomexsaigoncorp.vn',
-    default: process.env.OPS_URL || 'https://ops.incomexsaigoncorp.vn',
-    apiKey: process.env.OPS_API_KEY || 'C38FE9FA-2BC6-4FBB-BA0C-981E8FB89450',
+    vps: process.env.OPS_URL || '',
+    default: process.env.OPS_URL || '',
+    apiKey: process.env.OPS_API_KEY || '',
   },
 
   // Playwright settings

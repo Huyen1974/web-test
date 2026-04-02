@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
 	if (!subClass) throw createError({ statusCode: 400, message: 'sub_class required' });
 
 	const config = useRuntimeConfig();
-	const baseUrl = config.directusInternalUrl || config.public?.directusUrl || 'https://directus.incomexsaigoncorp.vn';
+	const baseUrl = config.directusInternalUrl || config.public?.directusUrl || '';
 	const token = config.directusServiceToken || process.env.NUXT_DIRECTUS_SERVICE_TOKEN;
 	if (!token) return { sub_class: subClass, issues: [], total: 0, page, limit, pages: 0 };
 

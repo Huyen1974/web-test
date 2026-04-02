@@ -16,7 +16,8 @@
 import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 
-const API_URL = process.env.DIRECTUS_URL || "https://directus-test-812872501910.asia-southeast1.run.app";
+const API_URL = process.env.DIRECTUS_URL;
+if (!API_URL) throw new Error('Missing required env: DIRECTUS_URL');
 const OUTPUT_FILE = resolve(__dirname, '../../reports/SETUP_FLOWS_REPORT.md');
 
 interface SetupResults {

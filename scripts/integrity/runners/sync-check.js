@@ -3,8 +3,10 @@
  * For directus_vs_vector contracts
  */
 
-const DIRECTUS_URL = process.env.DIRECTUS_URL || 'https://directus.incomexsaigoncorp.vn';
-const AGENT_DATA_URL = process.env.AGENT_DATA_URL || 'https://vps.incomexsaigoncorp.vn/api';
+const DIRECTUS_URL = process.env.DIRECTUS_URL;
+if (!DIRECTUS_URL) throw new Error('Missing required env: DIRECTUS_URL');
+const AGENT_DATA_URL = process.env.AGENT_DATA_URL;
+if (!AGENT_DATA_URL) throw new Error('Missing required env: AGENT_DATA_URL');
 const DIRECTUS_TOKEN = process.env.DIRECTUS_TOKEN || '';
 
 async function runSyncCheck(contract, check) {

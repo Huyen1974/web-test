@@ -6,7 +6,9 @@ import subprocess
 import ssl
 import sys
 
-API_URL = "https://directus.incomexsaigoncorp.vn"
+API_URL = os.environ.get("DIRECTUS_URL")
+if not API_URL:
+    print("[ERROR] Missing DIRECTUS_URL environment variable"); sys.exit(1)
 REQUIRED_PUBLIC_COLLECTIONS = [
     "pages", "navigation", "navigation_items", "globals", "forms", "seo",
     "pages_blocks", "block_hero", "block_faqs", "block_richtext", "block_testimonials", 

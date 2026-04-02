@@ -22,8 +22,10 @@ config({ path: resolve(__dirname, '../.env') });
 
 const DIRECTUS_URL = process.env.NUXT_PUBLIC_DIRECTUS_URL;
 const WEB_URL = process.env.NUXT_PUBLIC_WEB_URL || DIRECTUS_URL; // Fallback to Directus URL if web URL not set
-const ADMIN_EMAIL = process.env.DIRECTUS_ADMIN_EMAIL || 'admin@example.com';
-const ADMIN_PASSWORD = process.env.DIRECTUS_ADMIN_PASSWORD || 'Directus@2025!';
+const ADMIN_EMAIL = process.env.DIRECTUS_ADMIN_EMAIL;
+if (!ADMIN_EMAIL) throw new Error('Missing required env: DIRECTUS_ADMIN_EMAIL');
+const ADMIN_PASSWORD = process.env.DIRECTUS_ADMIN_PASSWORD;
+if (!ADMIN_PASSWORD) throw new Error('Missing required env: DIRECTUS_ADMIN_PASSWORD');
 
 interface VerificationResult {
 	check: string;
