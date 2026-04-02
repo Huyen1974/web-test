@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dot-nrm-draft — Import normative documents from manifest (Cấp B)
+# =============================================================================
+# VERSION: 1.0.0
+# Điều 38 §7 | Trigger chính: on-demand | Trigger phụ: DOT-NRM-DISCOVER
+#
+# Usage:
+#   dot-nrm-draft --manifest /path/to/manifest.json [--cloud|--local]
+#
+# Bootstrap mode: INSERT enacted allowed (one-time exception Điều 37 §10)
+# Normal mode: After trigger gate, INSERT only draft/review
+# =============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../config/environment.sh"
+
+VERSION="1.0.0"
+
+VPS_HOST="38.242.240.89"
+VPS_KEY="${HOME}/.ssh/contabo_vps"
+PG_CONTAINER="postgres"
+PG_USER="directus"
+PG_DB="directus"
+
+MANIFEST_PATH=""
+
+log_info() { echo "[DOT-NRM-DRAFT] $1"; }
+log_ok()   { echo "[DOT-NRM-DRAFT] OK: $1"; }
+log_warn() { echo "[DOT-NRM-DRAFT] WARN: $1"; }
+log_err()  { echo "[DOT-NRM-DRAFT] ERR: $1" >&2; }
+
+show_help() {
+  cat << EOF
+dot-nrm-draft v${VERSION} — Import normative documents from manifest (Cấp B)
+
+Usage:
+  dot-nrm-draft --manifest <path> [--cloud|--local]
+
+Options:
+  --manifest    Path to JSON manifest file
+EOF
+  show_environment_help
+}
+
+run_pg() {
+  local SQL="$1"
+  if command -v docker &>/dev/null && docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${PG_CONTAINER}$"; then
+    docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A <<< "$SQL" 2>/dev/null
+  else
+    ssh -i "$VPS_KEY" -o ConnectTimeout=10 -o StrictHostKeyChecking=no "root@${VPS_HOST}" \
+      "docker exec -i ${PG_CONTAINER} psql -U ${PG_USER} -d ${PG_DB} -t -A" <<< "$SQL" 2>/dev/null
+  fi
+}
+
+main() {
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h) show_help; exit 0 ;;
+    esac
+  done
+
+  # Save passthrough args for environment functions
+  local -a ENV_ARGS=()
+  local -a ALL_ARGS=("$@")
+
+  # Parse args
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --manifest) MANIFEST_PATH="$2"; shift 2 ;;
+      --cloud|--local) ENV_ARGS+=("$1"); shift ;;
+      *) shift ;;
+    esac
+  done
+
+  init_environment "${ENV_ARGS[@]:-}"
+
+  if [[ -z "$MANIFEST_PATH" || ! -f "$MANIFEST_PATH" ]]; then
+    log_err "Manifest file required: --manifest /path/to/manifest.json"
+    exit 1
+  fi
+
+  echo "========================================="
+  echo "DOT-NRM-DRAFT v${VERSION} — Normative Import"
+  echo "========================================="
+  print_environment_banner "${ENV_ARGS[@]:-}"
+
+  # Validate manifest
+  local TOTAL
+  TOTAL=$(jq 'length' "$MANIFEST_PATH" 2>/dev/null)
+  if [[ -z "$TOTAL" || "$TOTAL" -eq 0 ]]; then
+    log_err "Empty or invalid manifest"; exit 1
+  fi
+  log_info "Reading manifest: ${TOTAL} entries"
+
+  # Validate doc_types against nrm_doc_type_config
+  local VALID_TYPES
+  VALID_TYPES=$(run_pg "SELECT doc_type FROM nrm_doc_type_config;")
+  log_info "Valid doc_types: $(echo "$VALID_TYPES" | tr '\n' ', ')"
+
+  local IMPORTED=0 ENACTED=0 DRAFT=0 ERRORS=0 CONSTITUTIONS=0
+
+  # Process each entry
+  for i in $(seq 0 $((TOTAL - 1))); do
+    local CODE ARTICLE NAME VER STATUS DOC_TYPE CATEGORY KB_PATH
+    CODE=$(jq -r ".[$i].code" "$MANIFEST_PATH")
+    ARTICLE=$(jq -r ".[$i].article_number" "$MANIFEST_PATH")
+    NAME=$(jq -r ".[$i].name" "$MANIFEST_PATH")
+    VER=$(jq -r ".[$i].version" "$MANIFEST_PATH")
+    STATUS=$(jq -r ".[$i].status" "$MANIFEST_PATH")
+    DOC_TYPE=$(jq -r ".[$i].doc_type" "$MANIFEST_PATH")
+    CATEGORY=$(jq -r ".[$i].category" "$MANIFEST_PATH")
+    KB_PATH=$(jq -r ".[$i].kb_path" "$MANIFEST_PATH")
+
+    # Validate doc_type
+    if ! echo "$VALID_TYPES" | grep -qx "$DOC_TYPE"; then
+      log_err "SKIP ${CODE}: invalid doc_type '${DOC_TYPE}'"
+      ERRORS=$((ERRORS + 1))
+      continue
+    fi
+
+    # Check if already exists
+    local EXISTS
+    EXISTS=$(run_pg "SELECT count(*) FROM normative_registry WHERE code='${CODE}';")
+    if [[ "${EXISTS:-0}" -gt 0 ]]; then
+      log_warn "SKIP ${CODE}: already exists"
+      continue
+    fi
+
+    # Build sections JSONB — single legacy section
+    # Content will be a reference to KB path (not full content — NT11 khai tối thiểu)
+    local SECTIONS_JSON
+    SECTIONS_JSON=$(jq -n \
+      --arg sid "legacy-full" \
+      --arg kb "$KB_PATH" \
+      '[{section_id: $sid, order: 1, type: "text", schema_version: "2.3", content: ("Xem KB: " + $kb), binding_code: null}]')
+
+    # INSERT via run_pg — use dollar-quoting for safety
+    local ENACTED_AT="NULL"
+    if [[ "$STATUS" == "enacted" ]]; then
+      ENACTED_AT="NOW()"
+    fi
+
+    local INSERT_RESULT
+    INSERT_RESULT=$(run_pg "
+      INSERT INTO normative_registry (
+        code, article_number, name, version, status, doc_type,
+        category, kb_path, is_legacy_import, sections, enacted_at
+      ) VALUES (
+        '${CODE}', '${ARTICLE}', '$(echo "$NAME" | sed "s/'/''/g")', '${VER}', '${STATUS}', '${DOC_TYPE}',
+        '${CATEGORY}', '${KB_PATH}', true, '${SECTIONS_JSON}'::jsonb, ${ENACTED_AT}
+      ) RETURNING code;
+    " 2>&1)
+
+    if echo "$INSERT_RESULT" | grep -q "^${CODE}$"; then
+      log_ok "IMPORTED: ${CODE} — $(echo "$NAME" | head -c 50) (${STATUS})"
+      IMPORTED=$((IMPORTED + 1))
+      [[ "$STATUS" == "enacted" ]] && ENACTED=$((ENACTED + 1))
+      [[ "$STATUS" == "draft" ]] && DRAFT=$((DRAFT + 1))
+      [[ "$DOC_TYPE" == "constitution" ]] && CONSTITUTIONS=$((CONSTITUTIONS + 1))
+    else
+      log_err "FAILED: ${CODE} — ${INSERT_RESULT}"
+      ERRORS=$((ERRORS + 1))
+    fi
+  done
+
+  echo ""
+  echo "========================================="
+  echo "DONE: ${IMPORTED} imported (${ENACTED} enacted, ${DRAFT} draft, ${CONSTITUTIONS} constitution), ${ERRORS} errors"
+  echo "========================================="
+}
+
+main "$@"
