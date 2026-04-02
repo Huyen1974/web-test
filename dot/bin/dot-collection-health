@@ -2,8 +2,10 @@
 # =============================================================================
 # dot-collection-health — Collection integrity checks (Cấp A, auto-counted)
 # =============================================================================
-# VERSION: 2.1.1
+# VERSION: 2.2.0
 # CHANGELOG:
+#   v2.2.0 (2026-04-02): +governance_role 'locked' support. H15 skips locked (auto).
+#     H17 covers locked (no DELETE). Governance warning recognizes 4 roles.
 #   v2.1.1 (2026-04-02): Checks 1,2,11 bulk SQL (eliminate per-collection loops).
 #   v2.1.0 (2026-04-02): H14+H15 PG-only (0 API calls), H17 retroactive Luật Bảo toàn
 #     on ALL governed collections, H16 bulk species mapping, governance_role validation.
@@ -20,7 +22,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="2.1.1"
+VERSION="2.2.0"
 
 VPS_HOST="38.242.240.89"
 VPS_KEY="${HOME}/.ssh/contabo_vps"
@@ -301,14 +303,14 @@ main() {
   [[ "${C12:-0}" -gt 0 ]] && log_info "CHECK 12 INFO: ${C12} CMS/LOG/JUNCTION/SYSTEM with sync=false (verify intentional)" || log_ok "CHECK 12 PASS"
 
   # === Governance scope: detect unknown governance_roles ===
-  # Three stable roles: governed (full checks + no DELETE), observed (monitoring),
-  # excluded (opted out of governance). A new role beyond these 3 = a change in
-  # governance law — must be flagged, not silently skipped.
+  # Four stable roles: governed (full checks + no DELETE), observed (monitoring),
+  # excluded (opted out of governance), locked (read-only — no agent create/update/delete).
+  # A new role beyond these 4 = a change in governance law — must be flagged.
   local UNKNOWN_GOV_ROLES
   UNKNOWN_GOV_ROLES=$(run_pg "
     SELECT DISTINCT governance_role FROM collection_registry
     WHERE governance_role IS NOT NULL
-      AND governance_role NOT IN ('governed','observed','excluded')
+      AND governance_role NOT IN ('governed','observed','excluded','locked')
       AND status IS DISTINCT FROM 'retired';
   ")
   if [[ -n "${UNKNOWN_GOV_ROLES:-}" ]]; then
@@ -510,10 +512,10 @@ main() {
   # governed = NO DELETE. No exceptions. Want to "delete" → retire (status='retired').
   # If removing DELETE permission causes errors → the error is a clue → the process
   # violates Luật Bảo toàn → fix the process, not the permission.
-  log_info "Check 17: No DELETE on ALL governed collections (Luật Bảo toàn, retroactive)..."
+  log_info "Check 17: No DELETE on governed+locked collections (Luật Bảo toàn, retroactive)..."
   CHECKS=$((CHECKS+1))
   local C17=0
-  # Single query: find ALL DELETE permissions on governed collections
+  # Single query: find ALL DELETE permissions on governed + locked collections
   local DEL_PERMS
   DEL_PERMS=$(run_pg "
     SELECT dp.id || '|' || dp.collection || '|' || COALESCE(pol.name, 'unknown')
@@ -522,7 +524,7 @@ main() {
     WHERE dp.action = 'delete'
       AND dp.collection IN (
         SELECT collection_name FROM collection_registry
-        WHERE governance_role = 'governed'
+        WHERE governance_role IN ('governed','locked')
           AND status IS DISTINCT FROM 'retired'
       );
   ")
@@ -535,13 +537,13 @@ main() {
       log_system_issue "DELETE permission found: ${del_col}" "collection_onboarding_gap" \
         "Removed DELETE permission from governed collection ${del_col} (policy: ${pol_name})" "$BASE_URL"
     done <<< "$DEL_PERMS"
-    # Bulk delete ALL DELETE permissions on governed collections
+    # Bulk delete ALL DELETE permissions on governed + locked collections
     run_pg "
       DELETE FROM directus_permissions
       WHERE action = 'delete'
         AND collection IN (
           SELECT collection_name FROM collection_registry
-          WHERE governance_role = 'governed'
+          WHERE governance_role IN ('governed','locked')
             AND status IS DISTINCT FROM 'retired'
         );
     " 2>/dev/null && {
@@ -549,7 +551,7 @@ main() {
       log_ok "  FIXED: removed ${C17} DELETE permissions"
     }
   fi
-  [[ "$C17" -gt 0 ]] && { log_warn "CHECK 17: ${C17} governed collections had DELETE permissions (removed)"; ISSUES=$((ISSUES+1)); } || log_ok "CHECK 17 PASS"
+  [[ "$C17" -gt 0 ]] && { log_warn "CHECK 17: ${C17} governed/locked collections had DELETE permissions (removed)"; ISSUES=$((ISSUES+1)); } || log_ok "CHECK 17 PASS"
 
   # === CHECK 13: compliance_pct calculation ===
   log_info "Check 13: Compliance percentage..."
