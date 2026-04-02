@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# dot-collection-create — 18-step collection creation protocol (Cấp B)
+# dot-collection-create — multi-step collection creation protocol (Cấp B)
 # =============================================================================
 # VERSION: 2.0.0
 # CHANGELOG:
@@ -38,7 +38,7 @@ log_step() { echo ""; echo "=== STEP $1: $2 ==="; }
 
 show_help() {
   cat << EOF
-dot-collection-create v${VERSION} — 14-step collection creation (Cấp B)
+dot-collection-create v${VERSION} — multi-step collection creation (Cấp B)
 
 Usage:
   dot-collection-create --collection-name <name> --group <group> [options]
@@ -357,7 +357,7 @@ main() {
 
   echo ""
   echo "========================================="
-  log_ok "18-step protocol complete for '${COLLECTION_NAME}'"
+  log_ok "multi-step protocol complete for '${COLLECTION_NAME}'"
   echo "========================================="
 }
 

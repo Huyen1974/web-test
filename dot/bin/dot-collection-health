@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# dot-collection-health — Collection integrity checks (Cấp A, 17 checks)
+# dot-collection-health — Collection integrity checks (Cấp A, auto-counted)
 # =============================================================================
 # VERSION: 2.0.0
 # CHANGELOG:
@@ -86,7 +86,7 @@ main() {
 
   echo "========================================="
   echo "DOT Tool: Collection Health v${VERSION}"
-  echo "17 checks — Cấp A (self-healing)"
+  echo "Cấp A (self-healing) — checks auto-counted"
   echo "========================================="
   print_environment_banner "$@"
 
@@ -105,7 +105,7 @@ main() {
   fi
   log_info "Advisory lock acquired"
 
-  local ISSUES=0 CHECKS=17 FIXES=0
+  local ISSUES=0 CHECKS=0 FIXES=0
 
   # Get all collections from meta_catalog
   local COLLECTIONS
@@ -113,6 +113,7 @@ main() {
 
   # === CHECK 1: Missing Tier 1 fields ===
   log_info "Check 1: Missing Tier-1 standard fields..."
+  CHECKS=$((CHECKS+1))
   local C1=0
   while IFS= read -r col; do
     [[ -z "$col" ]] && continue
@@ -137,6 +138,7 @@ main() {
 
   # === CHECK 2: Missing Tier 2 fields (informational) ===
   log_info "Check 2: Missing Tier-2 fields (informational)..."
+  CHECKS=$((CHECKS+1))
   local C2=0
   while IFS= read -r col; do
     [[ -z "$col" ]] && continue
@@ -158,6 +160,7 @@ main() {
 
   # === CHECK 3: Status mismatch ===
   log_info "Check 3: Status mismatch (meta_catalog vs PG)..."
+  CHECKS=$((CHECKS+1))
   local C3
   C3=$(run_pg "
     SELECT count(*) FROM meta_catalog mc
@@ -171,6 +174,7 @@ main() {
 
   # === CHECK 4: Orphan in registry but not in PG ===
   log_info "Check 4: Orphan in table_registry but not in PG..."
+  CHECKS=$((CHECKS+1))
   local C4
   C4=$(run_pg "
     SELECT count(*) FROM table_registry tr
@@ -183,6 +187,7 @@ main() {
 
   # === CHECK 5: No birth record ===
   log_info "Check 5: Collections without birth record..."
+  CHECKS=$((CHECKS+1))
   local C5
   C5=$(run_pg "
     SELECT count(*) FROM meta_catalog mc
@@ -196,6 +201,7 @@ main() {
 
   # === CHECK 6: No species assignment ===
   log_info "Check 6: No species assignment..."
+  CHECKS=$((CHECKS+1))
   local C6
   C6=$(run_pg "
     SELECT count(*) FROM meta_catalog mc
@@ -209,6 +215,7 @@ main() {
 
   # === CHECK 7: No labels ===
   log_info "Check 7: No labels..."
+  CHECKS=$((CHECKS+1))
   local C7
   C7=$(run_pg "
     SELECT count(*) FROM meta_catalog mc
@@ -222,6 +229,7 @@ main() {
 
   # === CHECK 8: field_type conflict ===
   log_info "Check 8: field_type conflicts..."
+  CHECKS=$((CHECKS+1))
   local C8
   C8=$(run_pg "
     SELECT count(*) FROM (
@@ -237,6 +245,7 @@ main() {
 
   # === CHECK 9: Group invalid ===
   log_info "Check 9: Invalid group..."
+  CHECKS=$((CHECKS+1))
   local C9
   C9=$(run_pg "
     SELECT count(*) FROM meta_catalog mc
@@ -247,12 +256,14 @@ main() {
 
   # === CHECK 10: Group NULL ===
   log_info "Check 10: Group NULL..."
+  CHECKS=$((CHECKS+1))
   local C10
   C10=$(run_pg "SELECT count(*) FROM meta_catalog WHERE atom_group IS NULL AND status='active';")
   [[ "${C10:-0}" -gt 0 ]] && { log_warn "CHECK 10: ${C10} collections with NULL atom_group"; ISSUES=$((ISSUES+1)); } || log_ok "CHECK 10 PASS"
 
   # === CHECK 11: sync=true but missing standard fields ===
   log_info "Check 11: sync=true but missing standard fields..."
+  CHECKS=$((CHECKS+1))
   local C11=0
   local SYNC_COLS
   SYNC_COLS=$(run_pg "
@@ -277,6 +288,7 @@ main() {
 
   # === CHECK 12: sync=false verification for certain groups ===
   log_info "Check 12: sync=false for CMS/LOG/JUNCTION/SYSTEM verify..."
+  CHECKS=$((CHECKS+1))
   local C12
   C12=$(run_pg "
     SELECT count(*) FROM collection_registry cr
@@ -289,6 +301,7 @@ main() {
 
   # === CHECK 14: FK constraints match (self-healing) ===
   log_info "Check 14: FK constraints match Directus meta..."
+  CHECKS=$((CHECKS+1))
   local C14=0
   # Get collections from collection_registry (governed + observed)
   local GOV_COLS
@@ -326,6 +339,7 @@ main() {
 
   # === CHECK 15: Permissions complete (self-healing) ===
   log_info "Check 15: Permissions complete..."
+  CHECKS=$((CHECKS+1))
   local C15=0
   # Get policy IDs dynamically
   local AI_POLICY AGENT_POLICY PUBLIC_LABEL PUBLIC_ACCESS EDITOR_POLICY
@@ -390,6 +404,7 @@ main() {
 
   # === CHECK 16: Species mapping (self-healing for governed) ===
   log_info "Check 16: Species mapping..."
+  CHECKS=$((CHECKS+1))
   local C16=0
   while IFS= read -r col; do
     [[ -z "$col" ]] && continue
@@ -419,6 +434,7 @@ main() {
 
   # === CHECK 17: No DELETE permission (Luật Bảo toàn) ===
   log_info "Check 17: No DELETE permission on governance collections..."
+  CHECKS=$((CHECKS+1))
   local C17=0
   while IFS= read -r col; do
     [[ -z "$col" ]] && continue
@@ -438,6 +454,7 @@ main() {
 
   # === CHECK 13: compliance_pct calculation ===
   log_info "Check 13: Compliance percentage..."
+  CHECKS=$((CHECKS+1))
   local TOTAL_COLS COMPLIANT
   TOTAL_COLS=$(echo "$COLLECTIONS" | grep -c '.' || echo "0")
   COMPLIANT=$((TOTAL_COLS - ISSUES))
