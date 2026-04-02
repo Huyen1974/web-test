@@ -2,8 +2,9 @@
 # =============================================================================
 # dot-collection-health — Collection integrity checks (Cấp A, auto-counted)
 # =============================================================================
-# VERSION: 2.1.0
+# VERSION: 2.1.1
 # CHANGELOG:
+#   v2.1.1 (2026-04-02): Checks 1,2,11 bulk SQL (eliminate per-collection loops).
 #   v2.1.0 (2026-04-02): H14+H15 PG-only (0 API calls), H17 retroactive Luật Bảo toàn
 #     on ALL governed collections, H16 bulk species mapping, governance_role validation.
 #   v2.0.0 (2026-04-02): +H14 FK constraints, +H15 permissions, +H16 species mapping,
@@ -19,7 +20,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="2.1.0"
+VERSION="2.1.1"
 
 VPS_HOST="38.242.240.89"
 VPS_KEY="${HOME}/.ssh/contabo_vps"
@@ -114,51 +115,45 @@ main() {
   COLLECTIONS=$(run_pg "SELECT registry_collection FROM meta_catalog WHERE status='active' ORDER BY registry_collection;")
 
   # === CHECK 1: Missing Tier 1 fields ===
+  # Bulk SQL: one query instead of per-collection loop
   log_info "Check 1: Missing Tier-1 standard fields..."
   CHECKS=$((CHECKS+1))
-  local C1=0
-  while IFS= read -r col; do
-    [[ -z "$col" ]] && continue
-    local MISSING
-    MISSING=$(run_pg "
-      SELECT cfs.field_name FROM collection_field_standards cfs
-      WHERE cfs.tier = 1
-        AND (cfs.applies_to_group IS NULL OR cfs.applies_to_group = (
-          SELECT atom_group FROM meta_catalog WHERE registry_collection = '${col}' LIMIT 1
-        ))
-        AND NOT EXISTS (
-          SELECT 1 FROM information_schema.columns
-          WHERE table_name = '${col}' AND column_name = cfs.field_name AND table_schema = 'public'
-        );
-    ")
-    if [[ -n "${MISSING:-}" ]]; then
-      log_warn "  ${col}: missing tier-1 fields: $(echo "$MISSING" | tr '\n' ', ')"
-      C1=$((C1 + 1))
-    fi
-  done <<< "$COLLECTIONS"
-  [[ "$C1" -gt 0 ]] && { log_warn "CHECK 1: ${C1} collections missing tier-1 fields"; ISSUES=$((ISSUES+1)); } || log_ok "CHECK 1 PASS"
+  local C1
+  C1=$(run_pg "
+    SELECT count(DISTINCT mc.registry_collection)
+    FROM meta_catalog mc
+    CROSS JOIN collection_field_standards cfs
+    WHERE mc.status = 'active'
+      AND cfs.tier = 1
+      AND (cfs.applies_to_group IS NULL OR cfs.applies_to_group = mc.atom_group)
+      AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns ic
+        WHERE ic.table_name = mc.registry_collection
+          AND ic.column_name = cfs.field_name
+          AND ic.table_schema = 'public'
+      );
+  ")
+  [[ "${C1:-0}" -gt 0 ]] && { log_warn "CHECK 1: ${C1} collections missing tier-1 fields"; ISSUES=$((ISSUES+1)); } || log_ok "CHECK 1 PASS"
 
   # === CHECK 2: Missing Tier 2 fields (informational) ===
   log_info "Check 2: Missing Tier-2 fields (informational)..."
   CHECKS=$((CHECKS+1))
-  local C2=0
-  while IFS= read -r col; do
-    [[ -z "$col" ]] && continue
-    local MISSING2
-    MISSING2=$(run_pg "
-      SELECT cfs.field_name FROM collection_field_standards cfs
-      WHERE cfs.tier = 2
-        AND (cfs.applies_to_group IS NULL OR cfs.applies_to_group = (
-          SELECT atom_group FROM meta_catalog WHERE registry_collection = '${col}' LIMIT 1
-        ))
-        AND NOT EXISTS (
-          SELECT 1 FROM information_schema.columns
-          WHERE table_name = '${col}' AND column_name = cfs.field_name AND table_schema = 'public'
-        );
-    ")
-    [[ -n "${MISSING2:-}" ]] && C2=$((C2 + 1))
-  done <<< "$COLLECTIONS"
-  [[ "$C2" -gt 0 ]] && log_info "CHECK 2 INFO: ${C2} collections missing tier-2 fields" || log_ok "CHECK 2 PASS"
+  local C2
+  C2=$(run_pg "
+    SELECT count(DISTINCT mc.registry_collection)
+    FROM meta_catalog mc
+    CROSS JOIN collection_field_standards cfs
+    WHERE mc.status = 'active'
+      AND cfs.tier = 2
+      AND (cfs.applies_to_group IS NULL OR cfs.applies_to_group = mc.atom_group)
+      AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns ic
+        WHERE ic.table_name = mc.registry_collection
+          AND ic.column_name = cfs.field_name
+          AND ic.table_schema = 'public'
+      );
+  ")
+  [[ "${C2:-0}" -gt 0 ]] && log_info "CHECK 2 INFO: ${C2} collections missing tier-2 fields" || log_ok "CHECK 2 PASS"
 
   # === CHECK 3: Status mismatch ===
   log_info "Check 3: Status mismatch (meta_catalog vs PG)..."
@@ -271,29 +266,26 @@ main() {
   [[ "${C10:-0}" -gt 0 ]] && { log_warn "CHECK 10: ${C10} collections with NULL atom_group"; ISSUES=$((ISSUES+1)); } || log_ok "CHECK 10 PASS"
 
   # === CHECK 11: sync=true but missing standard fields ===
+  # Bulk SQL: one query instead of per-collection loop
   log_info "Check 11: sync=true but missing standard fields..."
   CHECKS=$((CHECKS+1))
-  local C11=0
-  local SYNC_COLS
-  SYNC_COLS=$(run_pg "
-    SELECT cr.collection_name FROM collection_registry cr
+  local C11
+  C11=$(run_pg "
+    SELECT count(DISTINCT cr.collection_name)
+    FROM collection_registry cr
     JOIN collection_groups cg ON cg.code = cr.\"group\"
-    WHERE cg.sync_field_standards = true AND cr.status = 'active';
-  " 2>/dev/null || true)
-  while IFS= read -r col; do
-    [[ -z "$col" ]] && continue
-    local MISS
-    MISS=$(run_pg "
-      SELECT count(*) FROM collection_field_standards cfs
-      WHERE cfs.tier = 1
-        AND NOT EXISTS (
-          SELECT 1 FROM information_schema.columns
-          WHERE table_name = '${col}' AND column_name = cfs.field_name AND table_schema = 'public'
-        );
-    ")
-    [[ "${MISS:-0}" -gt 0 ]] && C11=$((C11 + 1))
-  done <<< "$SYNC_COLS"
-  [[ "$C11" -gt 0 ]] && { log_warn "CHECK 11: ${C11} sync collections missing std fields"; ISSUES=$((ISSUES+1)); } || log_ok "CHECK 11 PASS"
+    CROSS JOIN collection_field_standards cfs
+    WHERE cg.sync_field_standards = true
+      AND cr.status = 'active'
+      AND cfs.tier = 1
+      AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns ic
+        WHERE ic.table_name = cr.collection_name
+          AND ic.column_name = cfs.field_name
+          AND ic.table_schema = 'public'
+      );
+  " 2>/dev/null || echo "0")
+  [[ "${C11:-0}" -gt 0 ]] && { log_warn "CHECK 11: ${C11} sync collections missing std fields"; ISSUES=$((ISSUES+1)); } || log_ok "CHECK 11 PASS"
 
   # === CHECK 12: sync=false verification for certain groups ===
   log_info "Check 12: sync=false for CMS/LOG/JUNCTION/SYSTEM verify..."
