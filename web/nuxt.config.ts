@@ -86,7 +86,7 @@ export default defineNuxtConfig({
 			process.env.NUXT_DIRECTUS_URL ||
 			process.env.DIRECTUS_INTERNAL_URL ||
 			process.env.NUXT_PUBLIC_DIRECTUS_URL ||
-			'https://directus.incomexsaigoncorp.vn',
+			'',
 		directusServiceToken:
 			process.env.NUXT_DIRECTUS_SERVICE_TOKEN ||
 			process.env.DIRECTUS_ADMIN_TOKEN ||
@@ -96,20 +96,20 @@ export default defineNuxtConfig({
 			apiKey: process.env.AGENT_DATA_API_KEY || '',
 		},
 		public: {
-			siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://github-chatgpt-ggcloud.web.app',
+			siteUrl: process.env.NUXT_PUBLIC_SITE_URL || '',
 			// Standard Directus runtime config (env-first, golden fallback)
 			directus: {
 				url:
-					process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus.incomexsaigoncorp.vn',
+					process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || '',
 				rest: {
 					baseUrl:
-						process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus.incomexsaigoncorp.vn',
-					nuxtBaseUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://github-chatgpt-ggcloud.web.app',
+						process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || '',
+					nuxtBaseUrl: process.env.NUXT_PUBLIC_SITE_URL || '',
 				},
 			},
 			// Legacy key kept for compatibility
 			directusUrl:
-				process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus.incomexsaigoncorp.vn',
+				process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || '',
 			agentData: {
 				baseUrl: process.env.NUXT_PUBLIC_AGENT_DATA_BASE_URL || '',
 				enabled: process.env.NUXT_PUBLIC_AGENT_DATA_ENABLED === 'true',
@@ -138,7 +138,7 @@ export default defineNuxtConfig({
 				process.env.NUXT_DIRECTUS_URL ||
 				process.env.NUXT_PUBLIC_DIRECTUS_URL ||
 				process.env.DIRECTUS_URL ||
-				'https://directus.incomexsaigoncorp.vn',
+				'',
 			nuxtBaseUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
 		},
 		auth: {
@@ -157,7 +157,7 @@ export default defineNuxtConfig({
 
 	// Sitemap — dynamic knowledge pages (WEB-80d)
 	site: {
-		url: process.env.NUXT_PUBLIC_SITE_URL || 'https://vps.incomexsaigoncorp.vn',
+		url: process.env.NUXT_PUBLIC_SITE_URL || '',
 	},
 	sitemap: {
 		sources: ['/__sitemap__/urls'],
@@ -175,7 +175,7 @@ export default defineNuxtConfig({
 	image: {
 		provider: 'directus',
 		directus: {
-			baseURL: `${process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || 'https://directus.incomexsaigoncorp.vn'}/assets/`,
+			baseURL: `${process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL || ''}/assets/`,
 		},
 	},
 

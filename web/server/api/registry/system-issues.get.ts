@@ -20,7 +20,7 @@ export default defineEventHandler(async () => {
 	}
 
 	const config = useRuntimeConfig();
-	const baseUrl = config.directusInternalUrl || config.public?.directusUrl || 'https://directus.incomexsaigoncorp.vn';
+	const baseUrl = config.directusInternalUrl || config.public?.directusUrl || '';
 	const token = config.directusServiceToken || process.env.NUXT_DIRECTUS_SERVICE_TOKEN;
 
 	if (!token) {

@@ -37,10 +37,11 @@ if (!DIRECTUS_URL) {
 const ADMIN_EMAIL = requireEnv('DIRECTUS_ADMIN_EMAIL');
 const ADMIN_PASSWORD = requireEnv('DIRECTUS_ADMIN_PASSWORD');
 
-const TARGET_WEBSITE = 'incomexsaigoncorp.vn';
+const TARGET_WEBSITE = process.env.BRAND_DOMAIN || 'incomexsaigoncorp.vn';
 const CLEARBIT_LOGO_URL = `https://logo.clearbit.com/${TARGET_WEBSITE}`;
 const FALLBACK_LOGO_URL = 'https://placehold.co/400x100/ffffff/000000/png?text=INCOMEX+SAIGON';
-const SMOKE_ASSET_ID = 'b18f3792-bd31-43e5-8a7d-b25d76f41dd9';
+const SMOKE_ASSET_ID = process.env.SMOKE_ASSET_ID;
+if (!SMOKE_ASSET_ID) throw new Error('Missing required env: SMOKE_ASSET_ID (UUID of smoke test asset in Directus)');
 const SMOKE_ASSET_URL = 'https://placehold.co/1x1.png';
 
 interface DirectusFile {

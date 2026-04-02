@@ -5,7 +5,8 @@
 
 const crypto = require('crypto');
 
-const DIRECTUS_URL = process.env.DIRECTUS_URL || 'https://directus.incomexsaigoncorp.vn';
+const DIRECTUS_URL = process.env.DIRECTUS_URL;
+if (!DIRECTUS_URL) throw new Error('Missing required env: DIRECTUS_URL');
 const DIRECTUS_TOKEN = process.env.DIRECTUS_TOKEN || '';
 
 function computeHashes(contractId, checkId, issueClass) {

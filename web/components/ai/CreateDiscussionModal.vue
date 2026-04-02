@@ -152,7 +152,7 @@ const handleSubmit = async () => {
         max_rounds: 3,
         draft_content: form.value.content || `## ${form.value.topic}\n\n${form.value.description}`,
         // Store full role assignments for reference
-        executor_ai_webhook: executor?.id ? `https://vps.incomexsaigoncorp.vn/api/agent-webhook/${executor.id}` : null
+        executor_ai_webhook: executor?.id ? `${useRuntimeConfig().public.agentData.baseUrl}/agent-webhook/${executor.id}` : null
       }
     })
 

@@ -2,12 +2,14 @@
  * Link Public Access E1v2 policy to Public role
  */
 
-const API_URL = process.env.DIRECTUS_URL || "https://directus-test-812872501910.asia-southeast1.run.app";
+const API_URL = process.env.DIRECTUS_URL;
+if (!API_URL) throw new Error('Missing required env: DIRECTUS_URL');
 
 async function main() {
 	// Login
 	const email = process.env.DIRECTUS_ADMIN_EMAIL || process.env.ADMIN_EMAIL;
 	const password = process.env.DIRECTUS_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD;
+	if (!email || !password) throw new Error('Missing required env: DIRECTUS_ADMIN_EMAIL / DIRECTUS_ADMIN_PASSWORD');
 
 	const loginRes = await fetch(`${API_URL}/auth/login`, {
 		method: 'POST',
@@ -17,8 +19,20 @@ async function main() {
 	const { data } = await loginRes.json();
 	const token = data.access_token;
 
-	const publicRoleId = '728b6b9b-a902-47d1-85fa-e7188ed2b78b';
-	const policyId = 'bb3bb45f-e962-4ad9-b6c6-747f4e616f8c';
+	// Query role and policy by name instead of hardcoded UUIDs
+	const rolesRes = await fetch(`${API_URL}/roles?filter[name][_eq]=Public&fields[]=id`, {
+		headers: { Authorization: `Bearer ${token}` }
+	});
+	const rolesData = await rolesRes.json();
+	const publicRoleId = rolesData.data?.[0]?.id;
+	if (!publicRoleId) throw new Error('Public role not found in Directus');
+
+	const policiesRes = await fetch(`${API_URL}/policies?filter[name][_eq]=Public Access E1v2&fields[]=id`, {
+		headers: { Authorization: `Bearer ${token}` }
+	});
+	const policiesData = await policiesRes.json();
+	const policyId = policiesData.data?.[0]?.id;
+	if (!policyId) throw new Error('Policy "Public Access E1v2" not found in Directus');
 
 	console.log('Creating access record to link Public role to policy...');
 

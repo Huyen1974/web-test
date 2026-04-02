@@ -10,7 +10,9 @@ import argparse
 # Config
 PLAN_PATH = "scripts/directus/schema_plan.json"
 SPEC_PATH = "scripts/directus/schema_spec.extracted.json"
-API_URL = os.environ.get("DIRECTUS_URL", "https://directus.incomexsaigoncorp.vn")
+API_URL = os.environ.get("DIRECTUS_URL")
+if not API_URL:
+    print("[ERROR] Missing DIRECTUS_URL environment variable"); sys.exit(1)
 
 REQUIRED_BLOCKS = {
     "block_hero", "block_faqs", "block_richtext", "block_testimonials", "block_quote",

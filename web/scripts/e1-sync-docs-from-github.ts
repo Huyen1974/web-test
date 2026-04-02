@@ -18,8 +18,10 @@
 import { createDirectus, rest, authentication, readItems, createItem, updateItem } from '@directus/sdk';
 
 // Configuration
-const DIRECTUS_URL = process.env.NUXT_PUBLIC_DIRECTUS_URL || 'https://directus.incomexsaigoncorp.vn';
-const AGENT_DATA_URL = process.env.AGENT_DATA_URL || 'https://vps.incomexsaigoncorp.vn/api';
+const DIRECTUS_URL = process.env.NUXT_PUBLIC_DIRECTUS_URL || process.env.DIRECTUS_URL;
+if (!DIRECTUS_URL) throw new Error('Missing required env: NUXT_PUBLIC_DIRECTUS_URL or DIRECTUS_URL');
+const AGENT_DATA_URL = process.env.AGENT_DATA_URL;
+if (!AGENT_DATA_URL) throw new Error('Missing required env: AGENT_DATA_URL');
 const DIRECTUS_EMAIL = process.env.DIRECTUS_ADMIN_EMAIL || '';
 const DIRECTUS_PASSWORD = process.env.DIRECTUS_ADMIN_PASSWORD || '';
 

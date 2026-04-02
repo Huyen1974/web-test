@@ -5,7 +5,8 @@
  */
 
 const { executeSourceQuery } = require('../pg-client');
-const BASE_URL = process.env.SITE_URL || 'https://vps.incomexsaigoncorp.vn';
+const BASE_URL = process.env.SITE_URL;
+if (!BASE_URL) throw new Error('Missing required env: SITE_URL');
 
 /**
  * Run a single method=2 measurement.

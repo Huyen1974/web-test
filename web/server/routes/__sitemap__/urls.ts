@@ -12,7 +12,7 @@ export default defineSitemapEventHandler(async () => {
 	const directusUrl =
 		config.directusInternalUrl ||
 		config.public.directusUrl ||
-		'https://directus.incomexsaigoncorp.vn';
+		'';
 
 	try {
 		const data = await $fetch<{ data: any[] }>(

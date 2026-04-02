@@ -112,7 +112,7 @@ function getDirectusBaseUrl() {
 		config.directusInternalUrl ||
 		config.public.directus?.rest?.baseUrl ||
 		config.public.directusUrl ||
-		'https://directus.incomexsaigoncorp.vn'
+		''
 	);
 }
 

@@ -3,7 +3,8 @@
  * For v1 pilot: fetches HTML and checks for data-testid or keywords
  */
 
-const BASE_URL = process.env.SITE_URL || 'https://vps.incomexsaigoncorp.vn';
+const BASE_URL = process.env.SITE_URL;
+if (!BASE_URL) throw new Error('Missing required env: SITE_URL');
 
 async function runExistsCheck(contract, check) {
 	const pageUrl = contract.page_url || `${BASE_URL}${contract.route || '/'}`;

@@ -1,7 +1,7 @@
 # =============================================================================
 # INCOMEX VPS DOCKER STACK — Production
 # =============================================================================
-# VPS: Contabo 38.242.240.89
+# VPS: Contabo (see VPS_HOST env var)
 # Services: PostgreSQL, Qdrant, Directus, Agent Data, Nuxt, Nginx
 #
 # Deploy: DEPLOY_MODE=direct (S109b). Build on GitHub → rsync → VPS.

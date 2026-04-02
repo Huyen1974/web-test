@@ -31,7 +31,7 @@ interface CountResult {
 
 export default defineEventHandler(async (event) => {
 	const config = useRuntimeConfig();
-	const directusUrl = config.directusInternalUrl || config.public?.directusUrl || 'https://directus.incomexsaigoncorp.vn';
+	const directusUrl = config.directusInternalUrl || config.public?.directusUrl || '';
 	const token = config.directusServiceToken || process.env.NUXT_DIRECTUS_SERVICE_TOKEN;
 
 	// Optional Model B counts from request body (passed by CI deploy step)

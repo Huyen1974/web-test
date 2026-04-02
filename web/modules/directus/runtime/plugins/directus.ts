@@ -15,10 +15,10 @@ export default defineNuxtPlugin((nuxtApp) => {
 		config.public.directus?.rest?.baseUrl ||
 		config.public.directus?.url ||
 		config.public.directusUrl ||
-		'https://directus.incomexsaigoncorp.vn';
+		'';
 
 	// Client uses absolute proxy URL (SDK needs absolute URL for `new URL()`)
-	// window.location.origin provides the current domain (e.g., https://vps.incomexsaigoncorp.vn)
+	// window.location.origin provides the current domain
 	const clientDirectusUrl = import.meta.client
 		? window.location.origin + '/api/directus'
 		: '/api/directus';

@@ -28,9 +28,9 @@ COPY . .
 ENV NITRO_PRESET=node-server
 ENV NODE_ENV=production
 
-# Build-time env vars (will be overridden at runtime)
-ARG NUXT_PUBLIC_SITE_URL=https://ai.incomexsaigoncorp.vn
-ARG NUXT_PUBLIC_DIRECTUS_URL=https://directus.incomexsaigoncorp.vn
+# Build-time env vars — MUST be provided via --build-arg or CI env
+ARG NUXT_PUBLIC_SITE_URL
+ARG NUXT_PUBLIC_DIRECTUS_URL
 
 RUN pnpm run build
 
