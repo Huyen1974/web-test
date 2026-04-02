@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # =============================================================================
-# dot-collection-create — 14-step collection creation protocol (Cấp B)
+# dot-collection-create — multi-step collection creation protocol (Cấp B)
 # =============================================================================
-# VERSION: 1.0.0
+# VERSION: 2.0.0
 # CHANGELOG:
+#   v2.0.0 (2026-04-02): +Step 15-18: Auto FK constraints, permissions,
+#     species mapping, birth trigger. Accepts --species-code, --governance-role.
 #   v1.0.0 (2026-03-31): Full 14-step collection bootstrap
 #
 # Usage:
@@ -15,7 +17,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="1.0.0"
+VERSION="2.0.0"
 
 VPS_HOST="38.242.240.89"
 VPS_KEY="${HOME}/.ssh/contabo_vps"
@@ -25,6 +27,8 @@ PG_DB="directus"
 
 COLLECTION_NAME=""
 GROUP=""
+SPECIES_CODE=""
+GOVERNANCE_ROLE="governed"
 
 log_info() { echo "[INFO] $1"; }
 log_ok()   { echo "[OK]   $1"; }
@@ -34,14 +38,16 @@ log_step() { echo ""; echo "=== STEP $1: $2 ==="; }
 
 show_help() {
   cat << EOF
-dot-collection-create v${VERSION} — 14-step collection creation (Cấp B)
+dot-collection-create v${VERSION} — multi-step collection creation (Cấp B)
 
 Usage:
-  dot-collection-create --collection-name <name> --group <group> [--cloud|--local]
+  dot-collection-create --collection-name <name> --group <group> [options]
 
 Options:
-  --collection-name  Table name (e.g., my_table)
-  --group            Atom group (e.g., CMS, LOG, REGISTRY, JUNCTION, SYSTEM)
+  --collection-name    Table name (e.g., my_table)
+  --group              Atom group (e.g., CMS, LOG, REGISTRY, JUNCTION, SYSTEM)
+  --species-code       Species code for birth mapping (required for governed)
+  --governance-role    governed (default) or observed
 EOF
   show_environment_help
 }
@@ -75,6 +81,8 @@ main() {
       --help|-h) show_help; exit 0 ;;
       --collection-name) COLLECTION_NAME="$2"; shift 2 ;;
       --group) GROUP="$2"; shift 2 ;;
+      --species-code) SPECIES_CODE="$2"; shift 2 ;;
+      --governance-role) GOVERNANCE_ROLE="$2"; shift 2 ;;
       *) PASSTHROUGH_ARGS+=("$1"); shift ;;
     esac
   done
@@ -260,9 +268,96 @@ main() {
   MC=$(run_pg "SELECT count(*) FROM meta_catalog WHERE registry_collection='${COLLECTION_NAME}';")
   log_ok "meta_catalog entry: ${MC:-0}"
 
+  # Step 15: Auto FK constraints
+  log_step 15 "Auto FK constraints"
+  local FK_FIELDS
+  FK_FIELDS=$(curl -sS --globoff -k -X GET \
+    "${BASE_URL}/fields/${COLLECTION_NAME}" \
+    -H "Authorization: Bearer $DOT_TOKEN" 2>/dev/null | jq -r '.data[] | select(.schema.foreign_key_table != null) | "\(.field)|\(.schema.foreign_key_table)|\(.schema.foreign_key_column)"' 2>/dev/null)
+  local FK_COUNT=0
+  while IFS='|' read -r fld fk_table fk_col; do
+    [[ -z "$fld" ]] && continue
+    local FK_EXISTS
+    FK_EXISTS=$(run_pg "SELECT count(*) FROM information_schema.table_constraints tc JOIN information_schema.key_column_usage kcu ON tc.constraint_name=kcu.constraint_name JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name=ccu.constraint_name WHERE tc.constraint_type='FOREIGN KEY' AND tc.table_name='${COLLECTION_NAME}' AND kcu.column_name='${fld}';")
+    if [[ "${FK_EXISTS:-0}" -eq 0 ]]; then
+      run_pg "ALTER TABLE ${COLLECTION_NAME} ADD CONSTRAINT fk_${COLLECTION_NAME}_${fld} FOREIGN KEY (${fld}) REFERENCES ${fk_table}(${fk_col}) ON DELETE RESTRICT;" 2>/dev/null && FK_COUNT=$((FK_COUNT+1))
+    fi
+  done <<< "$FK_FIELDS"
+  log_ok "FK constraints: ${FK_COUNT} created"
+
+  # Step 16: Auto permissions
+  log_step 16 "Auto permissions"
+  local AI_POL AGENT_POL PL_POL PA_POL ED_POL
+  AI_POL=$(run_pg "SELECT id FROM directus_policies WHERE name='AI Agent Policy' LIMIT 1;")
+  AGENT_POL=$(run_pg "SELECT id FROM directus_policies WHERE name='Agent Policy' LIMIT 1;")
+  PL_POL=$(run_pg "SELECT id FROM directus_policies WHERE name='\$t:public_label' LIMIT 1;")
+  PA_POL=$(run_pg "SELECT id FROM directus_policies WHERE name='Public Access' LIMIT 1;")
+  ED_POL=$(run_pg "SELECT id FROM directus_policies WHERE name='Editor Policy' LIMIT 1;")
+  local PERM_COUNT=0
+  # Read for all policies
+  for POL_ID in "$PL_POL" "$PA_POL" "$ED_POL" "$AI_POL" "$AGENT_POL"; do
+    [[ -z "$POL_ID" ]] && continue
+    local HAS
+    HAS=$(run_pg "SELECT count(*) FROM directus_permissions WHERE collection='${COLLECTION_NAME}' AND action='read' AND policy='${POL_ID}';")
+    if [[ "${HAS:-0}" -eq 0 ]]; then
+      run_pg "INSERT INTO directus_permissions (collection,action,permissions,fields,policy) VALUES ('${COLLECTION_NAME}','read','{}','{\"*\"}','${POL_ID}');" 2>/dev/null && PERM_COUNT=$((PERM_COUNT+1))
+    fi
+  done
+  # Create for agent policies
+  for POL_ID in "$AI_POL" "$AGENT_POL"; do
+    [[ -z "$POL_ID" ]] && continue
+    local HAS
+    HAS=$(run_pg "SELECT count(*) FROM directus_permissions WHERE collection='${COLLECTION_NAME}' AND action='create' AND policy='${POL_ID}';")
+    if [[ "${HAS:-0}" -eq 0 ]]; then
+      run_pg "INSERT INTO directus_permissions (collection,action,permissions,fields,policy) VALUES ('${COLLECTION_NAME}','create','{}','{\"*\"}','${POL_ID}');" 2>/dev/null && PERM_COUNT=$((PERM_COUNT+1))
+    fi
+  done
+  # Update for agent policies IF governed
+  if [[ "$GOVERNANCE_ROLE" == "governed" ]]; then
+    for POL_ID in "$AI_POL" "$AGENT_POL"; do
+      [[ -z "$POL_ID" ]] && continue
+      local HAS
+      HAS=$(run_pg "SELECT count(*) FROM directus_permissions WHERE collection='${COLLECTION_NAME}' AND action='update' AND policy='${POL_ID}';")
+      if [[ "${HAS:-0}" -eq 0 ]]; then
+        run_pg "INSERT INTO directus_permissions (collection,action,permissions,fields,policy) VALUES ('${COLLECTION_NAME}','update','{}','{\"*\"}','${POL_ID}');" 2>/dev/null && PERM_COUNT=$((PERM_COUNT+1))
+      fi
+    done
+  fi
+  log_ok "Permissions: ${PERM_COUNT} created (NO DELETE)"
+
+  # Step 17: Auto species mapping
+  log_step 17 "Species mapping"
+  if [[ -n "$SPECIES_CODE" ]]; then
+    # Update collection_registry with species_code
+    run_pg "UPDATE collection_registry SET species_code='${SPECIES_CODE}' WHERE collection_name='${COLLECTION_NAME}';" 2>/dev/null
+    local MAP_EXISTS
+    MAP_EXISTS=$(run_pg "SELECT count(*) FROM species_collection_map WHERE collection_name='${COLLECTION_NAME}' AND species_code='${SPECIES_CODE}';")
+    if [[ "${MAP_EXISTS:-0}" -eq 0 ]]; then
+      run_pg "INSERT INTO species_collection_map (species_code, collection_name, is_primary) VALUES ('${SPECIES_CODE}','${COLLECTION_NAME}',true) ON CONFLICT DO NOTHING;" 2>/dev/null
+      log_ok "Species mapped: ${SPECIES_CODE}"
+    else
+      log_ok "Species mapping already exists"
+    fi
+  else
+    if [[ "$GOVERNANCE_ROLE" == "governed" ]]; then
+      log_warn "No --species-code provided for governed collection!"
+    else
+      log_info "No species-code (observed collection — OK)"
+    fi
+  fi
+
+  # Step 18: Birth trigger
+  log_step 18 "Birth trigger setup"
+  if [[ -x "${SCRIPT_DIR}/dot-birth-trigger-setup" ]]; then
+    "${SCRIPT_DIR}/dot-birth-trigger-setup" "${PASSTHROUGH_ARGS[@]}" 2>/dev/null || true
+    log_ok "Birth trigger setup ran"
+  else
+    log_info "dot-birth-trigger-setup not found — skipping"
+  fi
+
   echo ""
   echo "========================================="
-  log_ok "14-step protocol complete for '${COLLECTION_NAME}'"
+  log_ok "multi-step protocol complete for '${COLLECTION_NAME}'"
   echo "========================================="
 }
 

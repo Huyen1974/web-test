@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # =============================================================================
-# dot-collection-health — Collection integrity checks (Cấp A, 13 checks)
+# dot-collection-health — Collection integrity checks (Cấp A, auto-counted)
 # =============================================================================
-# VERSION: 1.0.0
+# VERSION: 2.0.0
 # CHANGELOG:
+#   v2.0.0 (2026-04-02): +H14 FK constraints, +H15 permissions, +H16 species mapping,
+#     +H17 no DELETE permission. Self-healing: auto-fix + log system_issues.
 #   v1.0.0 (2026-03-31): 13 checks for collection health
 #
 # Usage:
@@ -15,7 +17,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../config/environment.sh"
 
-VERSION="1.0.0"
+VERSION="2.0.0"
 
 VPS_HOST="38.242.240.89"
 VPS_KEY="${HOME}/.ssh/contabo_vps"
@@ -84,7 +86,7 @@ main() {
 
   echo "========================================="
   echo "DOT Tool: Collection Health v${VERSION}"
-  echo "13 checks — Cấp A"
+  echo "Cấp A (self-healing) — checks auto-counted"
   echo "========================================="
   print_environment_banner "$@"
 
@@ -103,7 +105,7 @@ main() {
   fi
   log_info "Advisory lock acquired"
 
-  local ISSUES=0 CHECKS=13
+  local ISSUES=0 CHECKS=0 FIXES=0
 
   # Get all collections from meta_catalog
   local COLLECTIONS
@@ -111,6 +113,7 @@ main() {
 
   # === CHECK 1: Missing Tier 1 fields ===
   log_info "Check 1: Missing Tier-1 standard fields..."
+  CHECKS=$((CHECKS+1))
   local C1=0
   while IFS= read -r col; do
     [[ -z "$col" ]] && continue
@@ -135,6 +138,7 @@ main() {
 
   # === CHECK 2: Missing Tier 2 fields (informational) ===
   log_info "Check 2: Missing Tier-2 fields (informational)..."
+  CHECKS=$((CHECKS+1))
   local C2=0
   while IFS= read -r col; do
     [[ -z "$col" ]] && continue
@@ -156,6 +160,7 @@ main() {
 
   # === CHECK 3: Status mismatch ===
   log_info "Check 3: Status mismatch (meta_catalog vs PG)..."
+  CHECKS=$((CHECKS+1))
   local C3
   C3=$(run_pg "
     SELECT count(*) FROM meta_catalog mc
@@ -169,6 +174,7 @@ main() {
 
   # === CHECK 4: Orphan in registry but not in PG ===
   log_info "Check 4: Orphan in table_registry but not in PG..."
+  CHECKS=$((CHECKS+1))
   local C4
   C4=$(run_pg "
     SELECT count(*) FROM table_registry tr
@@ -181,6 +187,7 @@ main() {
 
   # === CHECK 5: No birth record ===
   log_info "Check 5: Collections without birth record..."
+  CHECKS=$((CHECKS+1))
   local C5
   C5=$(run_pg "
     SELECT count(*) FROM meta_catalog mc
@@ -194,6 +201,7 @@ main() {
 
   # === CHECK 6: No species assignment ===
   log_info "Check 6: No species assignment..."
+  CHECKS=$((CHECKS+1))
   local C6
   C6=$(run_pg "
     SELECT count(*) FROM meta_catalog mc
@@ -207,6 +215,7 @@ main() {
 
   # === CHECK 7: No labels ===
   log_info "Check 7: No labels..."
+  CHECKS=$((CHECKS+1))
   local C7
   C7=$(run_pg "
     SELECT count(*) FROM meta_catalog mc
@@ -220,6 +229,7 @@ main() {
 
   # === CHECK 8: field_type conflict ===
   log_info "Check 8: field_type conflicts..."
+  CHECKS=$((CHECKS+1))
   local C8
   C8=$(run_pg "
     SELECT count(*) FROM (
@@ -235,6 +245,7 @@ main() {
 
   # === CHECK 9: Group invalid ===
   log_info "Check 9: Invalid group..."
+  CHECKS=$((CHECKS+1))
   local C9
   C9=$(run_pg "
     SELECT count(*) FROM meta_catalog mc
@@ -245,12 +256,14 @@ main() {
 
   # === CHECK 10: Group NULL ===
   log_info "Check 10: Group NULL..."
+  CHECKS=$((CHECKS+1))
   local C10
   C10=$(run_pg "SELECT count(*) FROM meta_catalog WHERE atom_group IS NULL AND status='active';")
   [[ "${C10:-0}" -gt 0 ]] && { log_warn "CHECK 10: ${C10} collections with NULL atom_group"; ISSUES=$((ISSUES+1)); } || log_ok "CHECK 10 PASS"
 
   # === CHECK 11: sync=true but missing standard fields ===
   log_info "Check 11: sync=true but missing standard fields..."
+  CHECKS=$((CHECKS+1))
   local C11=0
   local SYNC_COLS
   SYNC_COLS=$(run_pg "
@@ -275,6 +288,7 @@ main() {
 
   # === CHECK 12: sync=false verification for certain groups ===
   log_info "Check 12: sync=false for CMS/LOG/JUNCTION/SYSTEM verify..."
+  CHECKS=$((CHECKS+1))
   local C12
   C12=$(run_pg "
     SELECT count(*) FROM collection_registry cr
@@ -285,8 +299,162 @@ main() {
   " 2>/dev/null || echo "0")
   [[ "${C12:-0}" -gt 0 ]] && log_info "CHECK 12 INFO: ${C12} CMS/LOG/JUNCTION/SYSTEM with sync=false (verify intentional)" || log_ok "CHECK 12 PASS"
 
+  # === CHECK 14: FK constraints match (self-healing) ===
+  log_info "Check 14: FK constraints match Directus meta..."
+  CHECKS=$((CHECKS+1))
+  local C14=0
+  # Get collections from collection_registry (governed + observed)
+  local GOV_COLS
+  GOV_COLS=$(run_pg "SELECT collection_name FROM collection_registry WHERE governance_role IN ('governed','observed') AND status IS DISTINCT FROM 'retired' ORDER BY collection_name;")
+  while IFS= read -r col; do
+    [[ -z "$col" ]] && continue
+    # Get fields with foreign_key metadata from Directus
+    local FK_FIELDS
+    FK_FIELDS=$(curl -sS --globoff -k -X GET \
+      "${BASE_URL}/fields/${col}" \
+      -H "Authorization: Bearer $DOT_TOKEN" 2>/dev/null | jq -r '.data[] | select(.schema.foreign_key_table != null) | "\(.field)|\(.schema.foreign_key_table)|\(.schema.foreign_key_column)"' 2>/dev/null)
+    while IFS='|' read -r fld fk_table fk_col; do
+      [[ -z "$fld" ]] && continue
+      local FK_EXISTS
+      FK_EXISTS=$(run_pg "
+        SELECT count(*) FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+        JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
+        WHERE tc.constraint_type = 'FOREIGN KEY'
+          AND tc.table_name = '${col}' AND kcu.column_name = '${fld}'
+          AND ccu.table_name = '${fk_table}' AND ccu.column_name = '${fk_col}';
+      ")
+      if [[ "${FK_EXISTS:-0}" -eq 0 ]]; then
+        log_warn "  ${col}.${fld} → ${fk_table}.${fk_col}: FK MISSING — auto-fixing..."
+        run_pg "ALTER TABLE ${col} ADD CONSTRAINT fk_${col}_${fld} FOREIGN KEY (${fld}) REFERENCES ${fk_table}(${fk_col}) ON DELETE RESTRICT;" 2>/dev/null && {
+          log_ok "  FIXED: FK ${col}.${fld}"
+          FIXES=$((FIXES+1))
+          log_system_issue "FK missing: ${col}.${fld}" "collection_onboarding_gap" "Auto-fixed FK ${col}.${fld} → ${fk_table}.${fk_col}" "$BASE_URL"
+        } || log_warn "  CANNOT FIX: FK ${col}.${fld} (may need manual intervention)"
+        C14=$((C14+1))
+      fi
+    done <<< "$FK_FIELDS"
+  done <<< "$GOV_COLS"
+  [[ "$C14" -gt 0 ]] && { log_warn "CHECK 14: ${C14} FK gaps found (${FIXES} auto-fixed)"; ISSUES=$((ISSUES+1)); } || log_ok "CHECK 14 PASS"
+
+  # === CHECK 15: Permissions complete (self-healing) ===
+  log_info "Check 15: Permissions complete..."
+  CHECKS=$((CHECKS+1))
+  local C15=0
+  # Get policy IDs dynamically
+  local AI_POLICY AGENT_POLICY PUBLIC_LABEL PUBLIC_ACCESS EDITOR_POLICY
+  AI_POLICY=$(run_pg "SELECT id FROM directus_policies WHERE name = 'AI Agent Policy' LIMIT 1;")
+  AGENT_POLICY=$(run_pg "SELECT id FROM directus_policies WHERE name = 'Agent Policy' LIMIT 1;")
+  PUBLIC_LABEL=$(run_pg "SELECT id FROM directus_policies WHERE name = '\$t:public_label' LIMIT 1;")
+  PUBLIC_ACCESS=$(run_pg "SELECT id FROM directus_policies WHERE name = 'Public Access' LIMIT 1;")
+  EDITOR_POLICY=$(run_pg "SELECT id FROM directus_policies WHERE name = 'Editor Policy' LIMIT 1;")
+
+  while IFS= read -r col; do
+    [[ -z "$col" ]] && continue
+    local GOV_ROLE
+    GOV_ROLE=$(run_pg "SELECT governance_role FROM collection_registry WHERE collection_name = '${col}' LIMIT 1;")
+    [[ -z "$GOV_ROLE" ]] && continue
+
+    # Expected: read for 5 policies
+    for POL_ID in "$PUBLIC_LABEL" "$PUBLIC_ACCESS" "$EDITOR_POLICY" "$AI_POLICY" "$AGENT_POLICY"; do
+      [[ -z "$POL_ID" ]] && continue
+      local HAS_READ
+      HAS_READ=$(run_pg "SELECT count(*) FROM directus_permissions WHERE collection='${col}' AND action='read' AND policy='${POL_ID}';")
+      if [[ "${HAS_READ:-0}" -eq 0 ]]; then
+        run_pg "INSERT INTO directus_permissions (collection, action, permissions, fields, policy) VALUES ('${col}','read','{}','{\"*\"}','${POL_ID}');" 2>/dev/null && {
+          FIXES=$((FIXES+1))
+          C15=$((C15+1))
+        }
+      fi
+    done
+    # Expected: create for agent policies
+    for POL_ID in "$AI_POLICY" "$AGENT_POLICY"; do
+      [[ -z "$POL_ID" ]] && continue
+      local HAS_CREATE
+      HAS_CREATE=$(run_pg "SELECT count(*) FROM directus_permissions WHERE collection='${col}' AND action='create' AND policy='${POL_ID}';")
+      if [[ "${HAS_CREATE:-0}" -eq 0 ]]; then
+        run_pg "INSERT INTO directus_permissions (collection, action, permissions, fields, policy) VALUES ('${col}','create','{}','{\"*\"}','${POL_ID}');" 2>/dev/null && {
+          FIXES=$((FIXES+1))
+          C15=$((C15+1))
+        }
+      fi
+    done
+    # Expected: update for agent policies IF governed
+    if [[ "$GOV_ROLE" == "governed" ]]; then
+      for POL_ID in "$AI_POLICY" "$AGENT_POLICY"; do
+        [[ -z "$POL_ID" ]] && continue
+        local HAS_UPDATE
+        HAS_UPDATE=$(run_pg "SELECT count(*) FROM directus_permissions WHERE collection='${col}' AND action='update' AND policy='${POL_ID}';")
+        if [[ "${HAS_UPDATE:-0}" -eq 0 ]]; then
+          run_pg "INSERT INTO directus_permissions (collection, action, permissions, fields, policy) VALUES ('${col}','update','{}','{\"*\"}','${POL_ID}');" 2>/dev/null && {
+            FIXES=$((FIXES+1))
+            C15=$((C15+1))
+          }
+        fi
+      done
+    fi
+  done <<< "$GOV_COLS"
+  if [[ "$C15" -gt 0 ]]; then
+    log_warn "CHECK 15: ${C15} permission gaps found (auto-fixed)"
+    log_system_issue "Permissions gaps" "collection_onboarding_gap" "Auto-fixed ${C15} missing permissions across governance collections" "$BASE_URL"
+    ISSUES=$((ISSUES+1))
+  else
+    log_ok "CHECK 15 PASS"
+  fi
+
+  # === CHECK 16: Species mapping (self-healing for governed) ===
+  log_info "Check 16: Species mapping..."
+  CHECKS=$((CHECKS+1))
+  local C16=0
+  while IFS= read -r col; do
+    [[ -z "$col" ]] && continue
+    local GOV_ROLE SP_CODE
+    GOV_ROLE=$(run_pg "SELECT governance_role FROM collection_registry WHERE collection_name = '${col}' LIMIT 1;")
+    [[ "$GOV_ROLE" != "governed" ]] && continue
+    SP_CODE=$(run_pg "SELECT species_code FROM collection_registry WHERE collection_name = '${col}' LIMIT 1;")
+    if [[ -z "$SP_CODE" || "$SP_CODE" == "" ]]; then
+      log_warn "  ${col}: governed but species_code NULL in collection_registry"
+      log_system_issue "Species code missing: ${col}" "collection_onboarding_gap" "${col} is governed but has no species_code in collection_registry" "$BASE_URL"
+      C16=$((C16+1))
+      continue
+    fi
+    local MAP_EXISTS
+    MAP_EXISTS=$(run_pg "SELECT count(*) FROM species_collection_map WHERE collection_name = '${col}' AND species_code = '${SP_CODE}';")
+    if [[ "${MAP_EXISTS:-0}" -eq 0 ]]; then
+      log_warn "  ${col}: species mapping MISSING for ${SP_CODE} — auto-fixing..."
+      run_pg "INSERT INTO species_collection_map (species_code, collection_name, is_primary) VALUES ('${SP_CODE}', '${col}', true) ON CONFLICT DO NOTHING;" 2>/dev/null && {
+        log_ok "  FIXED: species mapping ${col} → ${SP_CODE}"
+        FIXES=$((FIXES+1))
+        log_system_issue "Species mapping missing: ${col}" "collection_onboarding_gap" "Auto-fixed species mapping ${col} → ${SP_CODE}" "$BASE_URL"
+      }
+      C16=$((C16+1))
+    fi
+  done <<< "$GOV_COLS"
+  [[ "$C16" -gt 0 ]] && { log_warn "CHECK 16: ${C16} species gaps (auto-fixed where possible)"; ISSUES=$((ISSUES+1)); } || log_ok "CHECK 16 PASS"
+
+  # === CHECK 17: No DELETE permission (Luật Bảo toàn) ===
+  log_info "Check 17: No DELETE permission on governance collections..."
+  CHECKS=$((CHECKS+1))
+  local C17=0
+  while IFS= read -r col; do
+    [[ -z "$col" ]] && continue
+    local DEL_COUNT
+    DEL_COUNT=$(run_pg "SELECT count(*) FROM directus_permissions WHERE collection='${col}' AND action='delete';")
+    if [[ "${DEL_COUNT:-0}" -gt 0 ]]; then
+      log_warn "  ${col}: HAS ${DEL_COUNT} DELETE permissions — removing..."
+      run_pg "DELETE FROM directus_permissions WHERE collection='${col}' AND action='delete';" 2>/dev/null && {
+        log_ok "  FIXED: removed DELETE permissions from ${col}"
+        FIXES=$((FIXES+1))
+        log_system_issue "DELETE permission found: ${col}" "collection_onboarding_gap" "Removed DELETE permission from governed collection ${col}" "$BASE_URL"
+      }
+      C17=$((C17+1))
+    fi
+  done <<< "$GOV_COLS"
+  [[ "$C17" -gt 0 ]] && { log_warn "CHECK 17: ${C17} collections had DELETE permissions (removed)"; ISSUES=$((ISSUES+1)); } || log_ok "CHECK 17 PASS"
+
   # === CHECK 13: compliance_pct calculation ===
   log_info "Check 13: Compliance percentage..."
+  CHECKS=$((CHECKS+1))
   local TOTAL_COLS COMPLIANT
   TOTAL_COLS=$(echo "$COLLECTIONS" | grep -c '.' || echo "0")
   COMPLIANT=$((TOTAL_COLS - ISSUES))
@@ -303,7 +471,7 @@ main() {
   # Summary
   echo ""
   echo "========================================="
-  echo "${CHECKS} checks, ${ISSUES} issue(s), compliance ${PCT}%"
+  echo "${CHECKS} checks, ${ISSUES} issue(s), ${FIXES} auto-fix(es), compliance ${PCT}%"
   if [[ "$ISSUES" -eq 0 ]]; then
     log_ok "ALL CHECKS PASS"
   else
