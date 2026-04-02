@@ -376,7 +376,8 @@ main() {
   CHECKS=$((CHECKS+1))
   local C15=0
 
-  # 15a: Read permissions — 5 policies on ALL governed/observed collections
+  # 15a: Read permissions — 5 policies on governed/observed/locked collections
+  # locked = read-only (viewable in Directus, but no create/update/delete)
   local READ_GAPS
   READ_GAPS=$(run_pg "
     WITH inserted AS (
@@ -384,7 +385,7 @@ main() {
       SELECT cr.collection_name, 'read', '{}', '{\"*\"}', pol.id
       FROM collection_registry cr
       CROSS JOIN directus_policies pol
-      WHERE cr.governance_role IN ('governed','observed')
+      WHERE cr.governance_role IN ('governed','observed','locked')
         AND cr.status IS DISTINCT FROM 'retired'
         AND pol.name IN ('AI Agent Policy','Agent Policy','\$t:public_label','Public Access','Editor Policy')
         AND NOT EXISTS (
